@@ -1,0 +1,7 @@
+kivy==2.3.1
+https://github.com/kivymd/KivyMD/archive/master.zip
+spotipy
+pandas
+openpyxl
+requests
+pillow
