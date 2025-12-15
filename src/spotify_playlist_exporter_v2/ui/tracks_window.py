@@ -13,7 +13,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
-from kivymd.uix.datatables import MDDataTable
+from kivymd.uix.datatables.datatables import MDDataTable
 
 from ..logging_config import logger
 from ..auth.login_screen import create_spotify_client_with_refresh
