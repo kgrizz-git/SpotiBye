@@ -407,33 +407,34 @@ class MainScreen(Screen):
         self.progress_bar = ProgressBar(max=100, value=0, size_hint_y=None, height=dp(18))
         export_section.add_widget(self.progress_bar)
 
-        self.status_label = Label(text='Ready to export', font_size=dp(14), size_hint_y=None, height=dp(30))
-        
-        # Create status bar container with buttons
-        status_bar_container = BoxLayout(
-            orientation='horizontal', 
+        # Create status bar container with RelativeLayout for proper overlay
+        from kivy.uix.relativelayout import RelativeLayout
+        status_bar_container = RelativeLayout(
             size_hint_y=None, 
-            height=dp(30),
-            spacing=dp(10)
+            height=dp(30)
         )
         
-        # Left spacer for centering
-        left_spacer = Widget(size_hint_x=0.4)
-        status_bar_container.add_widget(left_spacer)
-        
-        # Centered status label
+        # Centered status label with adjusted positioning for perfect center
+        self.status_label = Label(
+            text='Ready to export', 
+            font_size=dp(14), 
+            size_hint=(None, None),
+            width=dp(400),  # Fixed width
+            height=dp(30),
+            halign='center',  # Center text within the label
+            valign='middle',  # Vertically center text
+            pos_hint={'center_x': 0.51, 'center_y': 0.5}  # Center
+        )
         status_bar_container.add_widget(self.status_label)
         
-        # Right spacer for centering
-        right_spacer = Widget(size_hint_x=0.2)
-        status_bar_container.add_widget(right_spacer)
-        
-        # Button container on the far right
+        # Button container positioned on the right
         button_container = BoxLayout(
             orientation='horizontal',
-            size_hint_x=None,
+            size_hint=(None, None),
             width=dp(200),
-            spacing=dp(5)
+            height=dp(30),
+            spacing=dp(5),
+            pos_hint={'right': 1, 'top': 1}  # Position on the right
         )
         
         # Clear Cache button

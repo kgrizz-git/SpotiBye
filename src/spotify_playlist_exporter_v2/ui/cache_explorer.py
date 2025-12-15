@@ -621,30 +621,26 @@ class CacheExplorerPopup(Popup):
         # Always show features column (even if no ReccoBeats data)
         Clock.schedule_once(lambda _: self.show_features_column(track))
 
-    def _create_detail_item(self, label: str, value: str) -> BoxLayout:
-        """Create a detail item with label and value."""
-        widget = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(30), spacing=dp(5))
+    def _create_detail_item(self, label: str, value: str) -> Button:
+        """Create a detail item with label and value using Button for consistent styling."""
+        # Truncate long values to fit within column width
+        max_value_length = 35
+        if len(value) > max_value_length:
+            value = value[:max_value_length-3] + '...'
         
-        label_widget = Label(
-            text=f"{label}:",
-            font_size=dp(12),
-            bold=True,
-            size_hint_x=None,
-            width=dp(100),
-            halign='left',
-            color=(0.7, 0.7, 0.7, 1)
+        text = f"{label}:\n{value}"
+        
+        btn = Button(
+            text=text,
+            size_hint_y=None,
+            height=dp(60),  # Same height as playlist/track widgets
+            background_color=[0.3, 0.3, 0.3, 1],  # Neutral gray like unselected items
+            font_size=dp(11),  # Same font size as playlist/track widgets
+            halign='left',    # Same alignment as playlist/track widgets
+            padding=(dp(15), dp(5)),  # Same padding as playlist/track widgets
+            text_size=(dp(270), None)  # Same text width constraint as playlist/track widgets
         )
-        widget.add_widget(label_widget)
-        
-        value_widget = Label(
-            text=value,
-            font_size=dp(12),
-            halign='left',
-            text_size=(None, None)
-        )
-        widget.add_widget(value_widget)
-        
-        return widget
+        return btn
 
     def show_features_column(self, track: Dict[str, Any]) -> None:
         """Show the ReccoBeats features column."""
@@ -715,31 +711,28 @@ class CacheExplorerPopup(Popup):
             error_label = Label(text=f'Error loading features: {exc}', font_size=dp(14))
             self.features_content.add_widget(error_label)
 
-    def _create_feature_item(self, name: str, value: Any, format_str: str) -> BoxLayout:
-        """Create a feature item with name and formatted value."""
-        widget = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(25), spacing=dp(5))
-        
-        name_widget = Label(
-            text=f"{name}:",
-            font_size=dp(12),
-            bold=True,
-            size_hint_x=None,
-            width=dp(120),
-            halign='left',
-            color=(0.7, 0.7, 0.7, 1)
-        )
-        widget.add_widget(name_widget)
-        
+    def _create_feature_item(self, name: str, value: Any, format_str: str) -> Button:
+        """Create a feature item with name and formatted value using Button for consistent styling."""
         formatted_value = format_str.format(value) if value is not None else "N/A"
-        value_widget = Label(
-            text=formatted_value,
-            font_size=dp(12),
-            halign='left',
-            text_size=(None, None)
-        )
-        widget.add_widget(value_widget)
         
-        return widget
+        # Truncate long values to fit within column width
+        max_value_length = 25
+        if len(formatted_value) > max_value_length:
+            formatted_value = formatted_value[:max_value_length-3] + '...'
+        
+        text = f"{name}:\n{formatted_value}"
+        
+        btn = Button(
+            text=text,
+            size_hint_y=None,
+            height=dp(60),  # Same height as playlist/track widgets
+            background_color=[0.3, 0.3, 0.3, 1],  # Neutral gray like unselected items
+            font_size=dp(11),  # Same font size as playlist/track widgets
+            halign='left',    # Same alignment as playlist/track widgets
+            padding=(dp(15), dp(5)),  # Same padding as playlist/track widgets
+            text_size=(dp(270), None)  # Same text width constraint as playlist/track widgets
+        )
+        return btn
 
     def close_tracks_column(self) -> None:
         """Close the tracks column."""
