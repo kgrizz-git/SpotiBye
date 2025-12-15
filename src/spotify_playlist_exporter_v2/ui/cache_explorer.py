@@ -387,8 +387,8 @@ class CacheExplorerPopup(Popup):
             background_color=[0.2, 0.4, 0.2, 1] if playlist == self.selected_playlist else [0.3, 0.3, 0.3, 1],
             font_size=dp(11),
             halign='left',
-            padding=(dp(5), dp(5)),
-            text_size=(dp(290), None)  # Constrain width for consistent alignment
+            padding=(dp(15), dp(5)),  # Further increased left padding
+            text_size=(dp(270), None)  # Further reduced width to prevent overflow
         )
         btn.bind(on_press=lambda _: self.select_playlist(playlist))
         return btn
@@ -546,8 +546,8 @@ class CacheExplorerPopup(Popup):
             background_color=[0.2, 0.4, 0.4, 1] if track == self.selected_track else [0.3, 0.3, 0.3, 1],
             font_size=dp(11),  # Exactly same as playlist widgets
             halign='left',    # Exactly same as playlist widgets
-            padding=(dp(5), dp(5)),  # Exactly same as playlist widgets
-            text_size=(dp(290), None)  # Constrain width for consistent alignment
+            padding=(dp(15), dp(5)),  # Further increased left padding
+            text_size=(dp(270), None)  # Further reduced width to prevent overflow
         )
         btn.bind(on_press=lambda _: self.select_track(track))
         return btn

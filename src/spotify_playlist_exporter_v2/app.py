@@ -121,6 +121,14 @@ class SpotifyExporterApp(MDApp):
     def _try_auto_login(self) -> None:
         """Attempt to log in using cached token if available."""
         try:
+            # Check if we should force fresh OAuth (user logged out)
+            from . import state
+            if getattr(state, 'force_fresh_oauth', False):
+                logger.info("Force fresh OAuth requested - skipping auto-login")
+                state.force_fresh_oauth = False
+                return
+            
+            # Use standard cache handler for normal token persistence
             cache_handler = CacheFileHandler(cache_path=CACHE_PATH)
             sp_oauth = SpotifyOAuth(
                 client_id=CLIENT_ID,
@@ -137,6 +145,9 @@ class SpotifyExporterApp(MDApp):
                 self.token_info = token_info
                 self.username = user.get('display_name', user.get('id', 'User'))
                 self.screen_manager.current = 'main'
+                logger.info("Auto-login successful")
+            else:
+                logger.info("No valid cached token found - showing login screen")
         except Exception as e:
             logger.error(f"Auto-login failed: {e}")
             # Clear invalid token

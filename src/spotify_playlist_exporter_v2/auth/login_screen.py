@@ -56,10 +56,23 @@ def find_available_port() -> int:
 def clear_all_auth_state() -> None:
     """Clear all authentication state including cached tokens and OAuth managers."""
     try:
-        # Clear token cache file
+        # Clear token cache file (our app's cache)
         if os.path.exists(CACHE_PATH):
             os.remove(CACHE_PATH)
             logger.info("Token cache file removed")
+        
+        # Clear default spotipy cache file in user home directory
+        default_cache_path = os.path.expanduser("~/.cache")
+        if os.path.exists(default_cache_path):
+            try:
+                with open(default_cache_path, 'r') as f:
+                    content = f.read()
+                    # Only remove if it looks like a Spotify token cache
+                    if 'access_token' in content and 'refresh_token' in content:
+                        os.remove(default_cache_path)
+                        logger.info("Default spotipy cache file removed")
+            except Exception as e:
+                logger.warning(f"Could not check/remove default cache file: {e}")
         
         # Clear any in-memory cache in cache handlers
         try:
@@ -252,12 +265,8 @@ class LoginScreen(Screen):
             # Create cache directory if it doesn't exist
             os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
             
-            # Always use NoCacheHandler to bypass Spotipy's internal caching issues
-            # This ensures that logout actually works and tokens aren't secretly cached
-            logger.info("Using NoCacheHandler to prevent persistent token caching")
-            cache_handler = NoCacheHandler(cache_path=CACHE_PATH)
-            
-            # Create OAuth manager with no cache handler
+            # Use standard cache handler for normal token persistence
+            cache_handler = CacheFileHandler(cache_path=CACHE_PATH)
             sp_oauth = SpotifyOAuth(
                 client_id=CLIENT_ID,
                 client_secret=CLIENT_SECRET,
@@ -267,15 +276,21 @@ class LoginScreen(Screen):
                 show_dialog=True  # Always show dialog to ensure fresh login
             )
             
-            # Try to get cached token first (should always return None with NoCacheHandler)
-            token_info = sp_oauth.get_cached_token()
-            if token_info and not sp_oauth.is_token_expired(token_info):
-                logger.info("Found valid cached token - logging in automatically")
-                sp = spotipy.Spotify(auth=token_info['access_token'])
-                user = sp.current_user()
-                username = user.get('display_name', user.get('id', 'User'))
-                Clock.schedule_once(lambda dt, info=token_info, name=username: self.login_success(info, name), 0)
-                return
+            # Try to get cached token first (normal behavior)
+            # But skip this check if we've logged out and want to force fresh OAuth
+            if not getattr(state, 'force_fresh_oauth', False):
+                token_info = sp_oauth.get_cached_token()
+                if token_info and not sp_oauth.is_token_expired(token_info):
+                    logger.info("Found valid cached token - logging in automatically")
+                    sp = spotipy.Spotify(auth=token_info['access_token'])
+                    user = sp.current_user()
+                    username = user.get('display_name', user.get('id', 'User'))
+                    Clock.schedule_once(lambda dt, info=token_info, name=username: self.login_success(info, name), 0)
+                    return
+            else:
+                # Reset the force_fresh_oauth flag since we're proceeding with fresh OAuth
+                state.force_fresh_oauth = False
+                logger.info("Force fresh OAuth requested - skipping cached token check")
 
             # If no valid cached token, proceed with OAuth flow
             auth_url = sp_oauth.get_authorize_url()
@@ -338,7 +353,7 @@ class LoginScreen(Screen):
         app.token_info = token_info
         app.username = username
         
-        # Save token to file manually since we're using NoCacheHandler
+        # Save token to file for normal persistence (not NoCacheHandler)
         try:
             import json
             with open(CACHE_PATH, 'w') as f:

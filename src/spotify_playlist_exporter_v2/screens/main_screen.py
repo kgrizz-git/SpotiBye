@@ -2424,11 +2424,8 @@ class MainScreen(Screen):
     def _perform_logout(self) -> None:
         try:
             app = App.get_running_app()
-            app.token_info = None
-            app.username = None
-            login_screen = app.screen_manager.get_screen('login')
-            login_screen.status_label.text = ''
-            app.switch_to_login()
+            # Use the comprehensive auth state clearing function from the app
+            app.logout()
         except Exception as exc:
             logger.error("Error performing logout: %s", exc)
 
