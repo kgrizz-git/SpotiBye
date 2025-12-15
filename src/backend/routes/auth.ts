@@ -6,13 +6,12 @@ import type { Env } from '../types/env';
 import type { AuthTokens } from '../types/auth';
 
 const app = new Hono<{ Bindings: Env }>();
-const spotifyAuth = new SpotifyAuthService();
-const jwtService = new JWTService();
 
 // POST /auth/spotify/login - Initiate OAuth flow
 app.post('/spotify/login', async (c) => {
   try {
     const { redirect_uri } = await c.req.json();
+    const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     
     if (!redirect_uri) {
       return c.json({ error: { code: 'MISSING_REDIRECT_URI', message: 'redirect_uri is required' } }, 400);
@@ -47,6 +46,7 @@ app.get('/spotify/callback', async (c) => {
     }
     
     // Exchange code for tokens
+    const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     const tokens: AuthTokens = await spotifyAuth.exchangeCodeForTokens(code);
     
     // Get user profile
@@ -63,6 +63,7 @@ app.get('/spotify/callback', async (c) => {
     }), { expirationTtl: tokens.expires_in });
     
     // Generate JWT
+    const jwtService = new JWTService(c.env.JWT_SECRET);
     const jwtToken = await jwtService.generateToken({
       sub: userProfile.id,
       email: userProfile.email,
@@ -96,6 +97,7 @@ app.post('/spotify/refresh', authMiddleware, async (c) => {
     const session = JSON.parse(sessionData);
     
     // Refresh the access token
+    const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     const newTokens = await spotifyAuth.refreshAccessToken(session.refresh_token);
     
     // Update session

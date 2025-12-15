@@ -9,20 +9,44 @@ ENVIRONMENT = "development"
 # KV Namespaces
 [[kv_namespaces]]
 binding = "CACHE_KV"
-id = "cache_kv_namespace_id"
-preview_id = "cache_kv_preview_id"
+id = "f7c8b2527ab540548210382ac94514e7"
+preview_id = "93fe695dd3b4494dbb566e316031d431"
 
 [[kv_namespaces]]
 binding = "SESSIONS_KV"
-id = "sessions_kv_namespace_id"
-preview_id = "sessions_kv_preview_id"
+id = "656074c3b2dd4400ba74f888b3337d40"
+preview_id = "df6d2b4394de4335a385f97003fa986d"
 
 # Environment-specific configuration
 [env.development]
 vars = { ENVIRONMENT = "development" }
 
+[[env.development.kv_namespaces]]
+binding = "CACHE_KV"
+id = "f7c8b2527ab540548210382ac94514e7"
+preview_id = "93fe695dd3b4494dbb566e316031d431"
+
+[[env.development.kv_namespaces]]
+binding = "SESSIONS_KV"
+id = "656074c3b2dd4400ba74f888b3337d40"
+preview_id = "df6d2b4394de4335a385f97003fa986d"
+
 [env.production]
 vars = { ENVIRONMENT = "production" }
+
+[[env.production.kv_namespaces]]
+binding = "CACHE_KV"
+id = "f7c8b2527ab540548210382ac94514e7"
+preview_id = "93fe695dd3b4494dbb566e316031d431"
+
+[[env.production.kv_namespaces]]
+binding = "SESSIONS_KV"
+id = "656074c3b2dd4400ba74f888b3337d40"
+preview_id = "df6d2b4394de4335a385f97003fa986d"
+
+# Workers.dev configuration
+workers_dev = true
+preview_urls = true
 
 # Secrets (to be set via wrangler secret put)
 # SPOTIFY_CLIENT_ID

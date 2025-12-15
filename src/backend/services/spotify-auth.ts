@@ -4,11 +4,11 @@ import type { SpotifyUser } from '../types/spotify';
 export class SpotifyAuthService {
   private clientId: string;
   private clientSecret: string;
-  private redirectUri: string;
+  private redirectUri: string = '';
   
   constructor(clientId?: string, clientSecret?: string) {
-    this.clientId = clientId || process.env.SPOTIFY_CLIENT_ID || '';
-    this.clientSecret = clientSecret || process.env.SPOTIFY_CLIENT_SECRET || '';
+    this.clientId = clientId || '';
+    this.clientSecret = clientSecret || '';
   }
   
   getAuthUrl(redirectUri: string, state?: string): string {

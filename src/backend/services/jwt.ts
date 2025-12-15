@@ -4,7 +4,7 @@ export class JWTService {
   private secret: string;
   
   constructor(secret?: string) {
-    this.secret = secret || process.env.JWT_SECRET || 'default-secret';
+    this.secret = secret || 'default-secret';
   }
   
   async generateToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promise<string> {
@@ -24,7 +24,7 @@ export class JWTService {
     return `${encodedHeader}.${encodedPayload}.${signature}`;
   }
   
-  verifyToken(token: string): JWTPayload {
+  async verifyToken(token: string): Promise<JWTPayload> {
     const parts = token.split('.');
     if (parts.length !== 3) {
       throw new Error('Invalid token format');
@@ -33,7 +33,7 @@ export class JWTService {
     const [header, payload, signature] = parts;
     
     // Verify signature
-    const expectedSignature = this.sign(`${header}.${payload}`, this.secret);
+    const expectedSignature = await this.sign(`${header}.${payload}`, this.secret);
     if (signature !== expectedSignature) {
       throw new Error('Invalid signature');
     }

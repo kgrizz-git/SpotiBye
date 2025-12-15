@@ -10,6 +10,7 @@ export interface JWTPayload {
   sub: string;
   email: string;
   name: string;
+  session_id: string;
   iat: number;
   exp: number;
 }

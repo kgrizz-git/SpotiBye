@@ -3,10 +3,9 @@ import { HTTPException } from 'hono/http-exception';
 import { JWTService } from '../services/jwt';
 import type { Env } from '../types/env';
 import type { JWTPayload } from '../types/auth';
+import type { Variables } from '../types/variables';
 
-const jwtService = new JWTService();
-
-export const authMiddleware = async (c: Context<{ Bindings: Env }>, next: Next) => {
+export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) => {
   const authHeader = c.req.header('Authorization');
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -14,9 +13,10 @@ export const authMiddleware = async (c: Context<{ Bindings: Env }>, next: Next) 
   }
   
   const token = authHeader.substring(7);
+  const jwtService = new JWTService(c.env.JWT_SECRET);
   
   try {
-    const payload = jwtService.verifyToken(token) as JWTPayload;
+    const payload = await jwtService.verifyToken(token) as JWTPayload;
     
     // Get session data
     const sessionData = await c.env.SESSIONS_KV.get(payload.session_id);

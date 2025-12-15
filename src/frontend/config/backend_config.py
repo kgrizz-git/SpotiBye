@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Final
 
 # Backend API configuration
-BACKEND_URL: Final[str] = os.environ.get("SPOTIBYE_BACKEND_URL", "http://localhost:8787")
+BACKEND_URL: Final[str] = os.environ.get("SPOTIBYE_BACKEND_URL", "https://spotibye-backend-development.kevin-grizzard.workers.dev")
 PRODUCTION_BACKEND_URL: Final[str] = os.environ.get("SPOTIBYE_PRODUCTION_BACKEND_URL", "https://spotibye-api.your-domain.com")
 
 # Determine which backend URL to use
