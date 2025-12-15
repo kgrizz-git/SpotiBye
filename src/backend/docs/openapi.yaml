@@ -1,0 +1,1038 @@
+openapi: 3.0.3
+info:
+  title: SpotiBye API
+  description: Cloudflare Workers backend for Spotify playlist analysis and export functionality
+  version: 1.0.0
+  contact:
+    name: SpotiBye Team
+    email: support@spotibye.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://spotibye-api.workers.dev
+    description: Production server
+  - url: https://spotibye-api-dev.workers.dev
+    description: Development server
+  - url: http://localhost:8787
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      tags:
+        - System
+      summary: Health check endpoint
+      description: Returns the current health status of the API
+      operationId: getHealth
+      responses:
+        '200':
+          description: API is healthy and ready to serve requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy:
+                  summary: Healthy response
+                  value:
+                    status: healthy
+                    timestamp: "2023-12-12T23:00:00Z"
+                    version: "1.0.0"
+
+  /auth/spotify/login:
+    post:
+      tags:
+        - Authentication
+      summary: Initiate Spotify OAuth flow
+      description: Starts the OAuth authentication process with Spotify
+      operationId: spotifyLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpotifyLoginRequest'
+            examples:
+              standard:
+                summary: Standard login request
+                value:
+                  redirect_uri: "http://localhost:3000/callback"
+                  state: "random-state-string"
+      responses:
+        '200':
+          description: OAuth URL generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpotifyLoginResponse'
+              examples:
+                success:
+                  summary: Successful login initiation
+                  value:
+                    data:
+                      auth_url: "https://accounts.spotify.com/authorize?response_type=code&client_id=..."
+                      state: "random-state-string"
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/spotify/callback:
+    get:
+      tags:
+        - Authentication
+      summary: Handle Spotify OAuth callback
+      description: Processes the OAuth callback from Spotify and returns JWT tokens
+      operationId: spotifyCallback
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code from Spotify
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+          description: State parameter for CSRF protection
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Error parameter if OAuth failed
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpotifyCallbackResponse'
+              examples:
+                success:
+                  summary: Successful authentication
+                  value:
+                    data:
+                      access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      refresh_token: "refresh-token-string"
+                      expires_in: 3600
+                      user:
+                        id: "user-123"
+                        display_name: "Test User"
+                        email: "test@example.com"
+        '400':
+          description: Invalid callback parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spotify/playlists:
+    get:
+      tags:
+        - Spotify Data
+      summary: Get user's playlists
+      description: Retrieves all playlists for the authenticated user
+      operationId: getUserPlaylists
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 50
+          description: Maximum number of playlists to return
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Offset for pagination
+      responses:
+        '200':
+          description: Playlists retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistsResponse'
+              examples:
+                success:
+                  summary: Successful playlists retrieval
+                  value:
+                    data:
+                      playlists:
+                        - id: "playlist-123"
+                          name: "My Favorite Songs"
+                          tracks_count: 100
+                          owner: "Test User"
+                          images:
+                            - url: "https://example.com/image.jpg"
+                              height: 300
+                              width: 300
+                      total: 1
+                      limit: 50
+                      offset: 0
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spotify/playlists/{id}:
+    get:
+      tags:
+        - Spotify Data
+      summary: Get playlist details
+      description: Retrieves detailed information about a specific playlist
+      operationId: getPlaylist
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist ID
+      responses:
+        '200':
+          description: Playlist details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistResponse'
+              examples:
+                success:
+                  summary: Successful playlist retrieval
+                  value:
+                    data:
+                      playlist:
+                        id: "playlist-123"
+                        name: "My Favorite Songs"
+                        description: "My favorite tracks"
+                        tracks_count: 100
+                        owner: "Test User"
+                        followers: 42
+                        public: true
+                        collaborative: false
+                        images:
+                          - url: "https://example.com/image.jpg"
+                            height: 300
+                            width: 300
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Playlist not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spotify/playlists/{id}/tracks:
+    get:
+      tags:
+        - Spotify Data
+      summary: Get playlist tracks
+      description: Retrieves all tracks from a specific playlist
+      operationId: getPlaylistTracks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist ID
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+          description: Maximum number of tracks to return
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Offset for pagination
+      responses:
+        '200':
+          description: Tracks retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TracksResponse'
+              examples:
+                success:
+                  summary: Successful tracks retrieval
+                  value:
+                    data:
+                      tracks:
+                        - id: "track-123"
+                          name: "Example Song"
+                          artists:
+                            - name: "Example Artist"
+                              id: "artist-123"
+                          album:
+                            name: "Example Album"
+                            id: "album-123"
+                          duration_ms: 180000
+                          track_number: 1
+                          explicit: false
+                          preview_url: "https://example.com/preview.mp3"
+                          external_urls:
+                            spotify: "https://open.spotify.com/track/track-123"
+                      total: 100
+                      limit: 50
+                      offset: 0
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Playlist not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analysis/playlist/{id}:
+    post:
+      tags:
+        - Analysis
+      summary: Analyze playlist
+      description: Performs detailed analysis on a playlist including audio features and statistics
+      operationId: analyzePlaylist
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisRequest'
+            examples:
+              standard:
+                summary: Standard analysis request
+                value:
+                  include_audio_features: true
+                  include_recommendations: false
+      responses:
+        '200':
+          description: Analysis completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResponse'
+              examples:
+                success:
+                  summary: Successful analysis
+                  value:
+                    data:
+                      analysis:
+                        playlist_id: "playlist-123"
+                        total_tracks: 100
+                        duration_minutes: 360
+                        average_bpm: 128.5
+                        energy_score: 0.75
+                        danceability: 0.82
+                        valence: 0.68
+                        acousticness: 0.25
+                        instrumentalness: 0.15
+                        genres:
+                          - "Pop"
+                          - "Electronic"
+                          - "Rock"
+                        top_artists:
+                          - name: "Artist One"
+                            count: 8
+                          - name: "Artist Two"
+                            count: 5
+                        audio_features:
+                          bpm_distribution:
+                            "60-80": 10
+                            "80-100": 20
+                            "100-120": 30
+                            "120-140": 25
+                            "140-160": 10
+                            "160+": 5
+                        recommendations:
+                          similar_playlists:
+                            - id: "similar-123"
+                              name: "Similar Vibes"
+                              similarity_score: 0.85
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Playlist not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Analysis failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /export/playlist/{id}:
+    post:
+      tags:
+        - Export
+      summary: Generate playlist export
+      description: Creates an export file for the specified playlist
+      operationId: exportPlaylist
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+            examples:
+              csv:
+                summary: CSV export request
+                value:
+                  format: "csv"
+                  include_audio_features: true
+                  include_analysis: false
+              json:
+                summary: JSON export request
+                value:
+                  format: "json"
+                  include_audio_features: true
+                  include_analysis: true
+      responses:
+        '200':
+          description: Export generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+              examples:
+                success:
+                  summary: Successful export generation
+                  value:
+                    data:
+                      export_id: "export-123"
+                      format: "csv"
+                      estimated_size: 1024000
+                      expires_at: "2023-12-13T23:00:00Z"
+                      download_url: "/export/playlist/playlist-123/download?export_id=export-123"
+        '400':
+          description: Invalid export parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Playlist not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Export generation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /export/playlist/{id}/download:
+    get:
+      tags:
+        - Export
+      summary: Download export file
+      description: Downloads a previously generated export file
+      operationId: downloadExport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist ID
+        - name: export_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Export file ID
+      responses:
+        '200':
+          description: Export file downloaded successfully
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+              examples:
+                csv:
+                  summary: CSV file download
+                  value:
+                    schema:
+                      type: string
+                      format: binary
+                    headers:
+                      Content-Disposition: "attachment; filename=\"playlist-export.csv\""
+                      Content-Type: "text/csv"
+        '400':
+          description: Invalid export ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Export file not found or expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Export file has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from Spotify OAuth callback
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Health status of the API
+        timestamp:
+          type: string
+          format: date-time
+          description: Current timestamp
+        version:
+          type: string
+          description: API version
+      required:
+        - status
+        - timestamp
+        - version
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              type: object
+              description: Additional error details
+      required:
+        - error
+
+    SpotifyLoginRequest:
+      type: object
+      properties:
+        redirect_uri:
+          type: string
+          format: uri
+          description: URL to redirect to after OAuth completion
+        state:
+          type: string
+          description: State parameter for CSRF protection
+      required:
+        - redirect_uri
+
+    SpotifyLoginResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            auth_url:
+              type: string
+              format: uri
+              description: Spotify authorization URL
+            state:
+              type: string
+              description: State parameter
+      required:
+        - data
+
+    SpotifyCallbackResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+              description: JWT access token
+            refresh_token:
+              type: string
+              description: JWT refresh token
+            expires_in:
+              type: integer
+              description: Token expiration time in seconds
+            user:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Spotify user ID
+                display_name:
+                  type: string
+                  description: User's display name
+                email:
+                  type: string
+                  format: email
+                  description: User's email
+              required:
+                - id
+                - display_name
+      required:
+        - data
+
+    PlaylistsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            playlists:
+              type: array
+              items:
+                $ref: '#/components/schemas/Playlist'
+            total:
+              type: integer
+              description: Total number of playlists
+            limit:
+              type: integer
+              description: Number of playlists returned
+            offset:
+              type: integer
+              description: Offset for pagination
+          required:
+            - playlists
+            - total
+            - limit
+            - offset
+      required:
+        - data
+
+    Playlist:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Spotify playlist ID
+        name:
+          type: string
+          description: Playlist name
+        description:
+          type: string
+          description: Playlist description
+        tracks_count:
+          type: integer
+          description: Number of tracks in playlist
+        owner:
+          type: string
+          description: Playlist owner name
+        followers:
+          type: integer
+          description: Number of followers
+        public:
+          type: boolean
+          description: Whether playlist is public
+        collaborative:
+          type: boolean
+          description: Whether playlist is collaborative
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/Image'
+      required:
+        - id
+        - name
+        - tracks_count
+        - owner
+
+    Image:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Image URL
+        height:
+          type: integer
+          description: Image height in pixels
+        width:
+          type: integer
+          description: Image width in pixels
+      required:
+        - url
+
+    PlaylistResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            playlist:
+              $ref: '#/components/schemas/Playlist'
+      required:
+        - data
+
+    TracksResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            tracks:
+              type: array
+              items:
+                $ref: '#/components/schemas/Track'
+            total:
+              type: integer
+              description: Total number of tracks
+            limit:
+              type: integer
+              description: Number of tracks returned
+            offset:
+              type: integer
+              description: Offset for pagination
+          required:
+            - tracks
+            - total
+            - limit
+            - offset
+      required:
+        - data
+
+    Track:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Spotify track ID
+        name:
+          type: string
+          description: Track name
+        artists:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artist'
+        album:
+          $ref: '#/components/schemas/Album'
+        duration_ms:
+          type: integer
+          description: Track duration in milliseconds
+        track_number:
+          type: integer
+          description: Track number on album
+        explicit:
+          type: boolean
+          description: Whether track is explicit
+        preview_url:
+          type: string
+          format: uri
+          description: Preview URL for track
+        external_urls:
+          type: object
+          properties:
+            spotify:
+              type: string
+              format: uri
+              description: Spotify URL for track
+      required:
+        - id
+        - name
+        - artists
+        - album
+        - duration_ms
+
+    Artist:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Spotify artist ID
+        name:
+          type: string
+          description: Artist name
+      required:
+        - id
+        - name
+
+    Album:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Spotify album ID
+        name:
+          type: string
+          description: Album name
+      required:
+        - id
+        - name
+
+    AnalysisRequest:
+      type: object
+      properties:
+        include_audio_features:
+          type: boolean
+          default: true
+          description: Whether to include audio features analysis
+        include_recommendations:
+          type: boolean
+          default: false
+          description: Whether to include playlist recommendations
+
+    AnalysisResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            analysis:
+              type: object
+              properties:
+                playlist_id:
+                  type: string
+                  description: Analyzed playlist ID
+                total_tracks:
+                  type: integer
+                  description: Total number of tracks
+                duration_minutes:
+                  type: number
+                  description: Total playlist duration in minutes
+                average_bpm:
+                  type: number
+                  description: Average BPM across tracks
+                energy_score:
+                  type: number
+                  description: Average energy score (0-1)
+                danceability:
+                  type: number
+                  description: Average danceability score (0-1)
+                valence:
+                  type: number
+                  description: Average valence score (0-1)
+                acousticness:
+                  type: number
+                  description: Average acousticness score (0-1)
+                instrumentalness:
+                  type: number
+                  description: Average instrumentalness score (0-1)
+                genres:
+                  type: array
+                  items:
+                    type: string
+                  description: Detected genres in playlist
+                top_artists:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/TopArtist'
+                  description: Most frequent artists
+                audio_features:
+                  type: object
+                  properties:
+                    bpm_distribution:
+                      type: object
+                      description: BPM distribution across ranges
+                recommendations:
+                  type: object
+                  properties:
+                    similar_playlists:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/SimilarPlaylist'
+                  description: Playlist recommendations
+              required:
+                - playlist_id
+                - total_tracks
+                - duration_minutes
+      required:
+        - data
+
+    TopArtist:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Artist name
+        count:
+          type: integer
+          description: Number of tracks by this artist
+      required:
+        - name
+        - count
+
+    SimilarPlaylist:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Playlist ID
+        name:
+          type: string
+          description: Playlist name
+        similarity_score:
+          type: number
+          description: Similarity score (0-1)
+      required:
+        - id
+        - name
+        - similarity_score
+
+    ExportRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          enum: [csv, json, xlsx]
+          description: Export format
+        include_audio_features:
+          type: boolean
+          default: true
+          description: Whether to include audio features
+        include_analysis:
+          type: boolean
+          default: false
+          description: Whether to include analysis data
+      required:
+        - format
+
+    ExportResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            export_id:
+              type: string
+              description: Unique export file ID
+            format:
+              type: string
+              description: Export format
+            estimated_size:
+              type: integer
+              description: Estimated file size in bytes
+            expires_at:
+              type: string
+              format: date-time
+              description: When export file expires
+            download_url:
+              type: string
+              description: URL to download the export
+          required:
+            - export_id
+            - format
+            - estimated_size
+            - expires_at
+            - download_url
+      required:
+        - data
+
+tags:
+  - name: System
+    description: System health and status endpoints
+  - name: Authentication
+    description: Spotify OAuth authentication endpoints
+  - name: Spotify Data
+    description: Endpoints for retrieving Spotify data
+  - name: Analysis
+    description: Playlist analysis and insights endpoints
+  - name: Export
+    description: Playlist export functionality endpoints

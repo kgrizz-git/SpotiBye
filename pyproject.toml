@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spotify_playlist_exporter_v2"
+name = "spotibye"
 version = "0.1.0"
 description = "Refactored Spotify Playlist Exporter (Kivy desktop)"
 authors = [{ name = "Kevin Grizzard" }]
