@@ -111,12 +111,13 @@
 - [x] Update local caching to work with backend caching
 - [x] Implement cache invalidation when backend data changes
 - [x] Add offline capability with cached data
-- [ ] Update cache explorer to show backend cache status
+- [x] Update cache explorer to show backend cache status
 - [x] Implement cache warming strategies
 - [x] Handle cache synchronization issues
 
 #### Testing
 - [x] Test cache performance and hit rates (mock) - 4/4 tests passed (cache hit rate, TTL performance, memory usage, concurrent access)
+- [x] Test backend cache explorer functionality (mock) - 9/9 tests passed (backend cache explorer creation, status display, toggle functionality, adapter logic, error handling, metrics calculations, UI interactions)
 - [ ] Test cache performance and hit rates (real)
 
 ### 2.5 UI Component Updates
@@ -168,6 +169,8 @@
 - [ ] Test user experience during loading states (real)
 - [ ] Add integration tests for complete workflows (real)
 
+**See**: [`phase-2-real-integration-testing.md`](phase-2-real-integration-testing.md) for comprehensive automated and manual testing procedures
+
 ### 2.8 Performance Optimization
 
 #### Implementation
@@ -183,13 +186,13 @@
 - [ ] Test performance with various network conditions (real)
 
 ### 2.9 Documentation and User Guide
-- [ ] Update user documentation for cloud backend
-- [ ] Create troubleshooting guide for network issues
-- [ ] Document new authentication flow
-- [ ] Add FAQ for common connectivity issues
-- [ ] Update installation instructions
-- [ ] Create developer guide for backend integration
-- [ ] Document configuration options
+- [x] Update user documentation for cloud backend
+- [x] Create troubleshooting guide for network issues
+- [x] Document new authentication flow
+- [x] Add FAQ for common connectivity issues
+- [x] Update installation instructions
+- [x] Create developer guide for backend integration
+- [x] Document configuration options
 - [x] **Create or update `docs/phase-2-files.md`** with complete list of files and folders created/edited during this phase's implementation, including relevant files that interface with this code and descriptions of their purpose and interactions
 
 ## Key Implementation Details

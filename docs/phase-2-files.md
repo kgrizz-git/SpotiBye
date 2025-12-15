@@ -439,6 +439,158 @@ This document provides a comprehensive list of all files and folders created/mod
 
 **Total Mock Tests:** 33/33 passed ✓
 
+### UI Components
+
+#### `/src/frontend/ui/backend_cache_explorer.py`
+**Purpose**: Enhanced cache explorer with backend cache status display.
+**Key Features**:
+- Backend cache hit rate and size monitoring
+- Toggle switch for backend enable/disable
+- Status bar with real-time backend metrics
+- Detailed backend cache information popup
+- Graceful fallback to standard cache explorer
+**Interactions**: Extends original CacheExplorerPopup with backend capabilities
+**Dependencies**: BackendClient, BackendConfig, original CacheExplorerPopup
+
+#### `/src/frontend/screens/cache_explorer_adapter.py`
+**Purpose**: Smart adapter for choosing appropriate cache explorer based on backend availability.
+**Key Features**:
+- Automatic backend availability detection
+- Graceful fallback to standard cache explorer
+- Configuration-based cache explorer selection
+- Backend status information provider
+**Interactions**: Provides unified interface for cache explorer creation
+**Dependencies**: BackendCacheExplorerPopup, CacheExplorerPopup, BackendConfig
+
+### Modified Files
+
+#### `/src/spotify_playlist_exporter_v2/screens/main_screen.py`
+**Purpose**: Updated main screen to use backend cache explorer adapter.
+**Key Changes**:
+- Added backend cache explorer import with fallback
+- Updated open_cache_explorer method to use adapter
+- Maintained backward compatibility with standard cache explorer
+- Enhanced error handling for cache explorer failures
+**Interactions**: Main screen now automatically uses enhanced cache explorer when backend is available
+**Dependencies**: CacheExplorerAdapter, backend cache explorer components
+
+#### `/src/frontend/tests/test_cache_explorer_mock.py`
+**Purpose**: Mock unit tests for backend cache explorer functionality (no backend dependencies).
+**Key Features**:
+- Backend cache explorer creation and mocking tests
+- Cache status data structure validation
+- Display formatting verification
+- Toggle functionality testing
+- Adapter logic validation
+- Error handling scenarios
+- Cache metrics calculations
+- UI component interactions
+- Details popup content generation
+**Interactions**: Tests backend cache explorer components without requiring actual backend
+**Dependencies**: Mock objects, unittest framework
+**Test Results**: 9/9 tests passed ✓ (mock testing without backend dependencies)
+
+#### `/src/frontend/tests/test_backend_cache_explorer.py`
+**Purpose**: Full integration tests for backend cache explorer functionality.
+**Key Features**:
+- Backend cache explorer initialization tests
+- Backend availability and fallback testing
+- Cache status display and update testing
+- Backend toggle functionality verification
+- Adapter integration testing
+- Complete backend status flow testing
+**Interactions**: Tests actual backend cache explorer integration
+**Dependencies**: BackendClient, BackendConfig, Kivy components
+**Test Results**: 10/10 tests skipped (backend components not available in test environment)
+
+## Testing Documentation
+
+#### `/docs/phase-2-real-integration-testing.md`
+**Purpose**: Comprehensive guide for real integration testing with automated and manual procedures.
+**Key Features**:
+- Detailed automated testing procedures with commands and expected results
+- Step-by-step manual testing checklist for user experience validation
+- Performance benchmarks and success metrics
+- Troubleshooting guide for common testing issues
+**Interactions**: Primary reference for validating frontend-backend integration before Phase 3
+**Dependencies**: None (standalone testing guide)
+
+## Documentation Files Created
+
+### User Documentation
+
+#### `/docs/user-guide-cloud-backend.md`
+**Purpose**: Complete user guide for SpotiBye cloud backend version.
+**Key Features**:
+- Overview of cloud backend changes
+- Getting started instructions
+- Usage guide for playlist loading, analysis, and export
+- Network requirements and performance tips
+**Interactions**: Primary documentation for end users
+**Dependencies**: None (standalone user guide)
+
+#### `/docs/troubleshooting-network.md`
+**Purpose**: Comprehensive troubleshooting guide for network and connectivity issues.
+**Key Features**:
+- Network connection problem solutions
+- Authentication issue troubleshooting
+- Performance problem diagnosis
+- Error message explanations and solutions
+**Interactions**: Support documentation for users experiencing issues
+**Dependencies**: None (standalone troubleshooting guide)
+
+#### `/docs/authentication-flow.md`
+**Purpose**: Detailed documentation of the OAuth authentication flow.
+**Key Features**:
+- Step-by-step authentication process
+- Security features explanation
+- Session management details
+- Common authentication troubleshooting
+**Interactions**: Educational documentation for security-conscious users
+**Dependencies**: None (standalone authentication guide)
+
+#### `/docs/faq-connectivity.md`
+**Purpose**: Frequently asked questions for connectivity and usage issues.
+**Key Features**:
+- General connectivity questions
+- Authentication FAQ
+- Performance and network problem FAQ
+- Error message explanations
+**Interactions**: Quick reference for common user questions
+**Dependencies**: None (standalone FAQ)
+
+#### `/docs/installation-instructions.md`
+**Purpose**: Complete installation guide for all supported platforms.
+**Key Features**:
+- System requirements
+- Step-by-step installation for Windows, macOS, Linux
+- Verification and troubleshooting
+- Update and uninstallation instructions
+**Interactions**: Primary installation documentation
+**Dependencies**: None (standalone installation guide)
+
+### Developer Documentation
+
+#### `/docs/developer-guide-backend.md`
+**Purpose**: Developer guide for backend integration and API usage.
+**Key Features**:
+- API endpoints documentation
+- Authentication flow implementation
+- Error handling patterns
+- Configuration and testing guidance
+**Interactions**: Reference for developers working with SpotiBye backend
+**Dependencies**: None (standalone developer reference)
+
+#### `/docs/configuration-options.md`
+**Purpose**: Comprehensive configuration options documentation.
+**Key Features**:
+- Environment variables reference
+- Configuration file format
+- Runtime configuration options
+- Security and troubleshooting guidance
+**Interactions**: Reference for advanced users and developers
+**Dependencies**: None (standalone configuration reference)
+
 ---
 
 *This document serves as the complete record of Phase 2 implementation. All components are designed for backward compatibility and seamless integration with existing code.*

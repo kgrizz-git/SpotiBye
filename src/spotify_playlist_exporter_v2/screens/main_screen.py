@@ -55,6 +55,13 @@ from ..state import current_export_job
 from ..ui.layouts import ResponsiveGridLayout
 from ..ui.playlist_card import PlaylistCard
 from ..ui.cache_explorer import CacheExplorerPopup
+
+# Import backend cache explorer adapter if available
+try:
+    from ..frontend.screens.cache_explorer_adapter import create_cache_explorer
+    BACKEND_CACHE_EXPLORER_AVAILABLE = True
+except ImportError:
+    BACKEND_CACHE_EXPLORER_AVAILABLE = False
 from ..utils.platform_utils import is_mobile_platform
 
 
@@ -2497,22 +2504,27 @@ class MainScreen(Screen):
             error_popup.open()
 
     def open_cache_explorer(self, *_args) -> None:
-        """Open the cache explorer popup."""
+        """Open the cache explorer popup with backend support."""
         try:
-            explorer_popup = CacheExplorerPopup()
+            if BACKEND_CACHE_EXPLORER_AVAILABLE:
+                # Use backend-aware cache explorer
+                explorer_popup = create_cache_explorer()
+                logger.info("Backend cache explorer opened by user")
+            else:
+                # Use standard cache explorer
+                explorer_popup = CacheExplorerPopup()
+                logger.info("Standard cache explorer opened by user")
+            
             explorer_popup.open()
-            logger.info("Cache explorer opened by user")
         except Exception as exc:
             logger.error("Error opening cache explorer: %s", exc)
             self.status_label.text = f'Error opening cache explorer: {exc}'
             
             # Show error message
             error_popup = Popup(
-                title='Error',
-                content=Label(text=f'Failed to open cache explorer: {exc}'),
+                title='Cache Explorer Error',
+                content=Label(text=f'Failed to open cache explorer:\n{exc}'),
                 size_hint=(0.6, 0.4),
                 auto_dismiss=True
             )
             error_popup.open()
-
-
