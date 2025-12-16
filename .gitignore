@@ -18,3 +18,6 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# API security documentation (keep local, not in repo)
+docs/api_key_security.md
