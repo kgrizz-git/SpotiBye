@@ -18,6 +18,7 @@ The current export system generates CSV-formatted Excel files with the following
 - Popularity
 - Explicit
 - Release Date
+- Spotify URI
 - Added At
 - Acousticness
 - Danceability
@@ -65,13 +66,13 @@ The current export system generates CSV-formatted Excel files with the following
 
 ## Critical Data Requirements
 
-### Missing Data in Current Export
-The current export format **lacks the essential Spotify URI** needed for adding tracks to playlists. This is the most critical missing piece.
+### Available Data in Current Export
+The current export format **now includes the essential Spotify URI** needed for adding tracks to playlists. This critical requirement has been implemented.
 
 ### Recommended Additional Export Fields
 
 **Essential for Import:**
-- **Spotify URI** - `spotify:track:{id}` format (REQUIRED for adding tracks)
+- **Spotify URI** - `spotify:track:{id}` format (NOW INCLUDED in exports)
 - **ISRC** - International Standard Recording Code (alternative identifier)
 - **External IDs** - Other platform identifiers for cross-referencing
 
@@ -85,7 +86,7 @@ The current export format **lacks the essential Spotify URI** needed for adding 
 ### Required Components
 
 #### 1. Enhanced Export Service
-- Add Spotify URI to export data
+- Add Spotify URI to export data - DONE
 - Consider adding ISRC and external IDs
 - Maintain backward compatibility
 
@@ -157,7 +158,7 @@ The current export format **lacks the essential Spotify URI** needed for adding 
 ## Recommendations
 
 ### Phase 1: Enhanced Export (Low Priority)
-- Add Spotify URI to existing export format
+- Add Spotify URI to existing export format - DONE
 - Maintain backward compatibility
 - Minimal development effort
 
@@ -203,13 +204,11 @@ The current export format **lacks the essential Spotify URI** needed for adding 
 
 **Feasibility:** High - The Spotify API fully supports the required operations
 
-**Primary Blocker:** Current export format lacks Spotify URIs, which are essential for reliable track addition
-
 **Recommended Approach:** 
-1. First enhance export to include Spotify URIs
+1. First enhance export to include Spotify URIs - DONE
 2. Then implement import functionality using URIs as primary identifier
 3. Add search-based matching as fallback for legacy exports
 
 **Business Value:** High - Enables playlist sharing between users and backup/restore functionality
 
-The feature is definitely feasible but requires careful attention to the Spotify URI requirement and robust error handling for edge cases.
+The feature is definitely feasible but requires careful attention to the Spotify URI handling logic and robust error handling for edge cases, such as for tracks that may not be available on Spotify or may have regional restrictions.
