@@ -1804,6 +1804,7 @@ class MainScreen(Screen):
             'Track': normalized_track.get('title') or normalized_track.get('name', ''),
             'Duration': self._format_duration_from_ms(duration_ms),
             'Spotify URL': normalized_track.get('spotify_url', ''),
+            'Spotify URI': normalized_track.get('spotify_uri', ''),
             'Tempo': 'N/A',
             'Key': 'N/A',
             'Danceability': 'N/A',
@@ -1991,7 +1992,7 @@ class MainScreen(Screen):
             workbook = load_workbook(output_path)
             if not workbook.sheetnames:
                 worksheet = workbook.create_sheet("Playlist Data")
-                headers = ['Artist', 'Album', 'Track', 'Duration', 'Spotify URL', 'Tempo', 'Key',
+                headers = ['Artist', 'Album', 'Track', 'Duration', 'Spotify URL', 'Spotify URI', 'Tempo', 'Key',
                            'Danceability', 'Energy', 'Valence', 'Acousticness', 'Instrumentalness',
                            'Liveness', 'Speechiness', 'Loudness', 'Time Signature']
                 worksheet.append(headers)
@@ -2003,13 +2004,13 @@ class MainScreen(Screen):
 
                 worksheet = workbook[sheet_name]
                 if worksheet.max_row < 2:
-                    headers = ['Artist', 'Album', 'Track', 'Duration', 'Spotify URL', 'Tempo', 'Key',
+                    headers = ['Artist', 'Album', 'Track', 'Duration', 'Spotify URL', 'Spotify URI', 'Tempo', 'Key',
                                'Danceability', 'Energy', 'Valence', 'Acousticness', 'Instrumentalness',
                                'Liveness', 'Speechiness', 'Loudness', 'Time Signature']
                     if worksheet.max_row == 0:
                         worksheet.append(headers)
                     if worksheet.max_row < 2:
-                        worksheet.append(['No tracks found', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
+                        worksheet.append(['No tracks found', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''])
 
                 header_row = self._format_playlist_sheet(worksheet, auto_resize=True)
                 if header_row:

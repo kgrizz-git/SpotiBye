@@ -11,6 +11,7 @@ interface ExportTrack {
   popularity: number;
   explicit: boolean;
   release_date: string;
+  uri: string;
   added_at?: string;
   audio_features?: {
     acousticness: number;
@@ -103,6 +104,7 @@ export class ExportService {
           popularity: track.popularity,
           explicit: track.explicit,
           release_date: track.album.release_date,
+          uri: track.uri,
           added_at: item.added_at,
           audio_features: audioFeatures ? {
             acousticness: audioFeatures.acousticness,
@@ -147,6 +149,7 @@ export class ExportService {
       'Popularity',
       'Explicit',
       'Release Date',
+      'Spotify URI',
       'Added At',
       'Acousticness',
       'Danceability',
@@ -180,6 +183,7 @@ export class ExportService {
         track.popularity,
         track.explicit,
         this.escapeCsvValue(track.release_date),
+        this.escapeCsvValue(track.uri),
         this.escapeCsvValue(track.added_at || ''),
         track.audio_features?.acousticness || '',
         track.audio_features?.danceability || '',
@@ -200,7 +204,7 @@ export class ExportService {
     
     // Convert to ArrayBuffer
     const encoder = new TextEncoder();
-    return encoder.encode(csvContent).buffer;
+    return encoder.encode(csvContent).buffer as ArrayBuffer;
   }
   
   private formatDuration(ms: number): string {
