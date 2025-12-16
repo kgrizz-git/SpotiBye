@@ -13,11 +13,22 @@ This document outlines the implementation plan for adding CSV and JSON export op
 - Exports to Excel with formatting
 - Handles file naming and directory creation
 - Located in src/spotify_playlist_exporter_v2/screens/main_screen.py
+- **Already includes Spotify URI export** in track data structure
 
 ### Key Functions
 - _export_playlists_worker() - Main export logic
 - _prepare_playlist_track_rows() - Data preparation
 - _format_excel_file() - Excel formatting
+
+### Currently Exported Fields
+The existing implementation already exports the following track information:
+- Track Name
+- Artist
+- Album
+- Duration
+- **Spotify URI** (spotify:track:xxxxxxxx)
+- Spotify URL
+- Audio features (Tempo, Key, Danceability, Energy, etc.)
 
 ## Implementation Difficulty: Low to Medium
 
@@ -60,11 +71,22 @@ This document outlines the implementation plan for adding CSV and JSON export op
    - Add radio buttons or dropdown for export format
    - Update file extension handling
 
+#### CSV Export Columns (Including Spotify URI)
+The CSV export will include all existing fields:
+- Track Name
+- Artist
+- Album
+- Duration
+- **Spotify URI** (spotify:track:xxxxxxxx)
+- Spotify URL
+- Audio features (Tempo, Key, Danceability, Energy, etc.)
+
 #### Advantages:
 - Universal compatibility
 - Small file size
 - Easy to implement
 - Fast export speed
+- **Includes Spotify URIs for cross-platform use**
 
 #### Limitations:
 - No rich formatting
@@ -105,11 +127,39 @@ This document outlines the implementation plan for adding CSV and JSON export op
    - Full metadata format
    - Spotify API response format
 
+#### JSON Export Structure (Including Spotify URI)
+```json
+{
+  "playlist_info": {
+    "name": "Playlist Name",
+    "description": "Description",
+    "total_tracks": 25,
+    "export_date": "2023-12-16T00:00:00Z"
+  },
+  "tracks": [
+    {
+      "name": "Track Name",
+      "artist": "Artist Name",
+      "album": "Album Name",
+      "duration_ms": 180000,
+      "spotify_uri": "spotify:track:xxxxxxxx",
+      "spotify_url": "https://open.spotify.com/track/xxxxxxxx",
+      "audio_features": {
+        "tempo": 120.0,
+        "key": 5,
+        "danceability": 0.8
+      }
+    }
+  ]
+}
+```
+
 #### Advantages:
 - Rich data structure
 - Preserves all metadata
 - Easy to parse programmatically
 - Supports nested data
+- **Includes Spotify URIs for API integration**
 
 #### Limitations:
 - Larger file sizes
