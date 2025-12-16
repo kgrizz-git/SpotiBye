@@ -103,6 +103,10 @@ The current export format **now includes the essential Spotify URI** needed for 
 - [ ] Implement `addTracksToPlaylist(playlistId, trackUris, position)` method
 - [ ] Add batch processing for large playlists (100 tracks per request limit)
 - [ ] Handle rate limiting and retry logic
+- [ ] Implement exponential backoff with Retry-After header
+- [ ] Add track availability validation with market parameter
+- [ ] Implement track relinking detection
+- [ ] Add fallback search functionality
 
 #### 4. Import Service
 - [ ] Implement Excel/CSV file parsing
@@ -112,6 +116,11 @@ The current export format **now includes the essential Spotify URI** needed for 
 - [ ] Create playlist and add tracks in batches
 - [ ] Implement progress tracking
 - [ ] Add comprehensive error handling
+- [ ] Implement track relinking detection and handling
+- [ ] Add fallback search strategy for unavailable tracks
+- [ ] Implement track disambiguation logic
+- [ ] Add user market detection for regional restrictions
+- [ ] Implement partial failure recovery mechanisms
 
 #### 5. New API Endpoints
 - [ ] Implement `POST /import/playlist` - Start import process
@@ -119,6 +128,39 @@ The current export format **now includes the essential Spotify URI** needed for 
 - [ ] Follow existing async pattern from export functionality
 - [ ] Add request validation and rate limiting
 - [ ] Implement proper error responses
+- [ ] Add file size limits and validation
+- [ ] Implement user scope validation
+- [ ] Add import job cancellation endpoint
+
+#### 6. Frontend Components
+- [ ] Design and implement file upload component
+- [ ] Create import progress tracking UI
+- [ ] Build error display and user feedback system
+- [ ] Integrate with existing workflow
+- [ ] Add drag-and-drop file upload functionality
+- [ ] Implement import preview with track matching confidence
+- [ ] Add import history and retry functionality
+- [ ] Create user-friendly error messages and suggestions
+
+#### 7. Testing Strategy
+
+**Automated Tests:**
+- [ ] Write unit tests for import service parsing logic
+- [ ] Create integration tests for API endpoints
+- [ ] Implement error scenario testing (404, 403, 429 responses)
+- [ ] Test file format validation and edge cases
+- [ ] Test rate limiting and retry logic
+- [ ] Validate partial failure recovery mechanisms
+- [ ] Test user scope validation scenarios
+
+**Manual Tests:**
+- [ ] Test track relinking and regional restriction handling (requires different market accounts)
+- [ ] Performance testing for large playlists (>1000 tracks)
+- [ ] Create end-to-end tests for complete import workflow
+- [ ] User acceptance testing with real exported files
+- [ ] Cross-platform file import testing (Excel, CSV from different versions)
+- [ ] Mobile device file upload testing
+- [ ] Accessibility testing for import UI components
 
 ### Key Challenges
 
@@ -134,11 +176,106 @@ The current export format **now includes the essential Spotify URI** needed for 
 - **Search API:** Rate limited for fallback matching
 
 #### Error Scenarios
-- Track not found in catalog
+- Track not found in catalog (404 error)
 - Regional availability differences
-- User lacks required scopes
+- User lacks required scopes (403 error)
 - Invalid file format
 - Network timeouts during large imports
+- Rate limiting exceeded (429 error)
+- Track relinking scenarios
+
+### Detailed Edge Case Handling Strategies
+
+#### Track Availability and Regional Restrictions
+
+**1. Track Relinking Strategy**
+- **Reference:** [Spotify Track Relinking Documentation](https://developer.spotify.com/documentation/web-api/concepts/track-relinking)
+- **Implementation:** Always include `market` parameter in track API calls
+- **Behavior:** When a track is unavailable in user's market, Spotify automatically returns a relinked track
+- **Response Handling:** Check for `linked_from` object in API response to identify original track
+
+**2. Market Parameter Usage**
+```typescript
+// Always include user's market when checking tracks
+const trackData = await getTrack(trackId, { market: userCountry });
+```
+
+**3. Availability Validation**
+- Check `is_playable` property in track response
+- Handle `linked_from` objects for transparency with users
+- Log relinked tracks for user awareness
+
+#### Rate Limiting and Error Recovery
+
+**1. Rate Limit Handling**
+- **Reference:** [Spotify Rate Limits Documentation](https://developer.spotify.com/documentation/web-api/concepts/rate-limits)
+- **Strategy:** Implement exponential backoff with `Retry-After` header
+- **Limits:** Development mode (~100 requests/30s) vs Extended quota mode
+
+**2. Error Response Handling**
+```typescript
+// 429 Too Many Requests
+if (error.status === 429) {
+  const retryAfter = error.headers['Retry-After'];
+  await delay(retryAfter * 1000);
+  // Retry request
+}
+
+// 404 Not Found - Track unavailable
+if (error.status === 404) {
+  // Implement fallback search strategy
+}
+
+// 403 Forbidden - Insufficient scopes
+if (error.status === 403) {
+  // Request additional permissions from user
+}
+```
+
+#### Fallback Track Matching
+
+**1. Primary Strategy: Spotify URIs**
+- Most reliable approach
+- Direct track identification
+
+**2. Secondary Strategy: Search API**
+- When URI fails (404), search by track name + artist + album
+- Use `isrc` parameter if available for precise matching
+- Implement confidence scoring for search results
+
+**3. Disambiguation Logic**
+- Compare track duration (±5 seconds tolerance)
+- Match release date and album name
+- Use ISRC when available for exact matches
+
+#### Batch Processing Considerations
+
+**1. Chunked Processing**
+- Process playlists in chunks of 100 tracks (Spotify API limit)
+- Implement progress tracking via cache
+- Handle partial failures gracefully
+
+**2. Error Recovery**
+- Continue processing remaining tracks on individual failures
+- Provide detailed error report to users
+- Allow retry of failed tracks only
+
+#### User Experience Considerations
+
+**1. Transparency**
+- Inform users when tracks are relinked
+- Show which tracks couldn't be imported and why
+- Provide suggestions for alternative versions
+
+**2. Progress Feedback**
+- Real-time progress updates during import
+- Estimated completion time
+- Ability to cancel long-running imports
+
+**3. Error Reporting**
+- Categorized error messages (regional, unavailable, etc.)
+- Actionable suggestions for users
+- Export of failed tracks for manual review
 
 ## Development Effort Estimate
 

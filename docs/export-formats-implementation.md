@@ -175,15 +175,167 @@ def _prepare_playlist_track_rows(self)  # Potentially enhance for JSON
 
 ## Testing Strategy
 
-### Unit Tests:
-- Test each export format independently
-- Verify data integrity
-- Test error handling
+### Automated Tests (Can be fully automated)
 
-### Integration Tests:
-- Test format selection in UI
-- Verify file creation and naming
-- Test with various playlist sizes
+#### Unit Tests:
+- [ ] **CSV Export**: Test data integrity, encoding, special characters
+- [ ] **JSON Export**: Validate schema correctness, data structure, nested objects
+- [ ] **XLSX Export**: Test file creation, basic formatting, data types
+- [ ] **File Naming**: Test extension handling, special characters in filenames
+- [ ] **Error Handling**: Test exception scenarios, invalid inputs
+- [ ] **Data Preparation**: Test `_prepare_playlist_track_rows()` with various data
+
+#### Integration Tests:
+- [ ] **Format Selection Logic**: Test conditional export paths
+- [ ] **File Creation**: Verify files are created with correct paths and extensions
+- [ ] **Data Flow**: Test end-to-end data transformation from API to file
+- [ ] **Memory Management**: Test with large datasets (1000+ tracks)
+
+#### Performance Tests:
+- [ ] **Export Speed**: Benchmark export times for different playlist sizes
+- [ ] **Memory Usage**: Monitor memory consumption during large exports
+- [ ] **File Size Limits**: Test behavior with very large playlists
+
+### Manual Tests (Require human verification)
+
+#### User Interface Testing:
+- [ ] **Format Selection UI**: Verify radio buttons/dropdown usability
+- [ ] **File Dialog**: Test file picker interaction and default extensions
+- [ ] **Progress Indicators**: Verify loading states and completion notifications
+- [ ] **Error Messages**: Assess clarity and user-friendliness of error dialogs
+- [ ] **Help Text**: Evaluate tooltips and format descriptions
+
+#### File Compatibility Testing:
+- [ ] **CSV Files**: Open in Excel, Google Sheets, LibreOffice Calc
+- [ ] **JSON Files**: Validate parsing in different programming environments
+- [ ] **XLSX Files**: Test in different Excel versions and alternatives
+- [ ] **Special Characters**: Verify display of international characters across platforms
+
+#### Cross-Platform Testing:
+- [ ] **Windows**: Test file creation, permissions, Excel integration
+- [ ] **macOS**: Test file creation, Numbers compatibility, special characters
+- [ ] **Linux**: Test file creation, LibreOffice integration
+
+#### User Experience Validation:
+- [ ] **Export Workflow**: Complete user journey from selection to completion
+- [ ] **Error Recovery**: User response to various error scenarios
+- [ ] **File Organization**: Verify folder structure and naming conventions
+- [ ] **Large Playlist Handling**: User experience with long export processes
+
+## Error Handling Strategy
+
+### Critical Error Scenarios
+
+#### File System Errors
+- **Insufficient Disk Space**: Check available space before export, warn user if insufficient
+- **File Permission Issues**: Handle write permission errors gracefully
+- **Invalid File Paths**: Validate file paths and handle illegal characters
+- **File Already Exists**: Implement overwrite confirmation or auto-renaming
+- **Network Drive Issues**: Handle timeouts and connectivity problems
+
+#### Data Processing Errors
+- **Missing Track Metadata**: Handle null/empty values gracefully
+- **Invalid Data Types**: Type conversion errors for duration, popularity, etc.
+- **Memory Limitations**: Handle out-of-memory errors for large playlists
+- **Encoding Issues**: Handle special characters and international text
+- **Malformed API Responses**: Validate data structure before processing
+
+#### Export Format-Specific Errors
+- **CSV Export**: Handle delimiter conflicts, quote escaping issues
+- **JSON Export**: Handle circular references, non-serializable objects
+- **XLSX Export**: Handle worksheet size limits, formatting errors
+
+#### Network and API Errors
+- **Spotify API Rate Limits**: Implement exponential backoff
+- **Network Timeouts**: Handle connection failures gracefully
+- **Authentication Failures**: Redirect to login flow
+- **Missing Cover Images**: Handle 404s, timeouts, invalid URLs
+
+### Error Handling Implementation
+
+#### Try-Catch Structure
+```python
+def _export_playlists_worker(self, format_type: str):
+    try:
+        # Validate inputs
+        self._validate_export_parameters(format_type)
+        
+        # Check disk space
+        self._check_disk_space_requirements()
+        
+        # Process data
+        playlist_data = self._prepare_playlist_track_rows()
+        
+        # Export based on format
+        if format_type == 'csv':
+            self._export_to_csv(playlist_data, file_path)
+        elif format_type == 'json':
+            self._export_to_json(playlist_data, file_path)
+        elif format_type == 'xlsx':
+            self._export_to_excel(playlist_data, file_path)
+            
+    except InsufficientDiskSpaceError as e:
+        self._show_error_dialog("Insufficient disk space", str(e))
+    except PermissionError as e:
+        self._show_error_dialog("Permission denied", "Cannot write to selected location")
+    except NetworkError as e:
+        self._show_error_dialog("Network error", "Please check your connection")
+    except ExportFormatError as e:
+        self._show_error_dialog("Export failed", f"Format error: {str(e)}")
+    except Exception as e:
+        self._log_error(f"Unexpected export error: {str(e)}")
+        self._show_error_dialog("Export failed", "An unexpected error occurred")
+```
+
+#### Validation Functions
+```python
+def _validate_export_parameters(self, format_type: str):
+    if format_type not in ['csv', 'json', 'xlsx']:
+        raise ValueError(f"Unsupported export format: {format_type}")
+    
+    if not self.selected_playlists:
+        raise ValueError("No playlists selected for export")
+
+def _check_disk_space_requirements(self, estimated_size: int):
+    import shutil
+    free_space = shutil.disk_usage(self.export_path).free
+    if free_space < estimated_size * 2:  # 2x safety margin
+        raise InsufficientDiskSpaceError(free_space, estimated_size)
+```
+
+#### User-Friendly Error Messages
+- **Specific**: Clearly state what went wrong
+- **Actionable**: Suggest what the user can do
+- **Non-Technical**: Avoid technical jargon
+- **Consistent**: Use same tone and format across all errors
+
+### Error Recovery Strategies
+
+#### Automatic Recovery
+- **Retry Logic**: For network-related failures (max 3 retries)
+- **Fallback Formats**: If primary format fails, suggest alternatives
+- **Partial Export**: Save what was successfully processed
+
+#### User-Guided Recovery
+- **Alternative Locations**: Suggest different export paths
+- **Format Selection**: Recommend different export formats
+- **Data Cleanup**: Offer to clean problematic data
+
+### Logging and Monitoring
+
+#### Error Logging
+```python
+import logging
+
+def _log_error(self, error_message: str, context: Dict = None):
+    logging.error(f"Export Error: {error_message}", extra=context)
+    # Send to error tracking service in production
+```
+
+#### Progress Tracking
+- **Export Progress**: Show percentage complete
+- **Current Operation**: Display "Processing track X/Y"
+- **Time Estimates**: Show remaining time for large exports
 
 ## User Experience Considerations
 
