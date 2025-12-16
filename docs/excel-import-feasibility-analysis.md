@@ -86,32 +86,39 @@ The current export format **now includes the essential Spotify URI** needed for 
 ### Required Components
 
 #### 1. Enhanced Export Service
-- Add Spotify URI to export data - DONE
-- Consider adding ISRC and external IDs
-- Maintain backward compatibility
+- [x] Add Spotify URI to export data - DONE
+- [ ] Consider adding ISRC and external IDs
+- [ ] Maintain backward compatibility
 
 #### 2. Excel/CSV Parsing Library
-- **Cloudflare Workers Compatible Options:**
-  - `xlsx` library - Full Excel support
-  - `csv-parse` - Lightweight CSV parsing (current format is CSV)
-  - Custom CSV parser - Simple implementation possible
+- [ ] Evaluate Cloudflare Workers compatible options:
+  - [ ] `xlsx` library - Full Excel support
+  - [ ] `csv-parse` - Lightweight CSV parsing (current format is CSV)
+  - [ ] Custom CSV parser - Simple implementation possible
+- [ ] Implement chosen parsing solution
+- [ ] Add file format validation
 
 #### 3. Extended Spotify Service
-- `createPlaylist(userId, name, description, isPublic)` method
-- `addTracksToPlaylist(playlistId, trackUris, position)` method
-- Batch processing for large playlists (100 tracks per request limit)
+- [ ] Implement `createPlaylist(userId, name, description, isPublic)` method
+- [ ] Implement `addTracksToPlaylist(playlistId, trackUris, position)` method
+- [ ] Add batch processing for large playlists (100 tracks per request limit)
+- [ ] Handle rate limiting and retry logic
 
 #### 4. Import Service
-- Parse Excel/CSV file
-- Extract playlist metadata
-- Validate track URIs
-- Handle missing/unavailable tracks
-- Create playlist and add tracks in batches
+- [ ] Implement Excel/CSV file parsing
+- [ ] Extract playlist metadata from file
+- [ ] Validate track URIs format
+- [ ] Handle missing/unavailable tracks gracefully
+- [ ] Create playlist and add tracks in batches
+- [ ] Implement progress tracking
+- [ ] Add comprehensive error handling
 
 #### 5. New API Endpoints
-- `POST /import/playlist` - Start import process
-- `GET /import/playlist/:id/status` - Check import status
-- Follow existing async pattern from export functionality
+- [ ] Implement `POST /import/playlist` - Start import process
+- [ ] Implement `GET /import/playlist/:id/status` - Check import status
+- [ ] Follow existing async pattern from export functionality
+- [ ] Add request validation and rate limiting
+- [ ] Implement proper error responses
 
 ### Key Challenges
 
