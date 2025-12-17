@@ -205,23 +205,73 @@ To automate the build process for all platforms, we've set up GitHub Actions wor
 
 ## Step 6: Distribution Options
 
-### Option A: Direct File Distribution
-- Upload the executable file to file hosting service
-- Provide download link to users
-- Simple but requires manual updates
+### Option A: Direct File Distribution (GitHub Releases)
+- **Workflow Integration**:
+  - GitHub Actions automatically attaches builds to releases when you push a tag
+  - Each release includes:
+    - Windows: `SpotiBye-Windows.zip`
+    - macOS: `SpotiBye-macOS.dmg`
+    - Linux: `SpotiBye-Linux.tar.gz`
+- **Benefits**:
+  - Automatic versioning with tags (e.g., `v1.0.0`)
+  - Download statistics and release notes
+  - No additional hosting needed
 
-### Option B: Installer Package
-- Create installer for Windows/macOS
-  - Windows: Use Inno Setup or NSIS
-  - macOS: Create DMG with create-dmg
-- Handles dependencies and updates
-- Better user experience
+### Option B: Installer Packages (Automated)
+- **Windows (NSIS/Inno Setup)**:
+  - Extend the GitHub workflow to create installers
+  - Add build steps for `makensis` or Inno Setup
+  - Automatically sign installers using GitHub Secrets
+  
+  Example workflow addition:
+  ```yaml
+  - name: Create Windows Installer
+    if: runner.os == 'Windows'
+    run: |
+      # Install NSIS
+      choco install nsis -y
+      # Build installer
+      makensis installer.nsi
+  ```
 
-### Option C: App Store Distribution
-- **Windows**: Package for Microsoft Store (requires signing)
-- **macOS**: Notarize and distribute via Mac App Store or Developer ID
-- Requires signing and review process
-- Most professional approach
+- **macOS (DMG with create-dmg)**:
+  - Already included in the workflow
+  - Automatically signs and notarizes the app
+  - Generates a professional disk image
+
+### Option C: App Store Distribution (Semi-Automated)
+- **Microsoft Store**:
+  - Workflow can generate the `.msix`/`.appx` package
+  - Manual submission through Partner Center
+  - Example step:
+    ```yaml
+    - name: Package for Microsoft Store
+      if: runner.os == 'Windows'
+      run: |
+        # Build MSIX package
+        # Upload as artifact for manual submission
+    ```
+
+- **Mac App Store**:
+  - Workflow can handle notarization
+  - Manual submission through App Store Connect
+  - Automatic code signing with Developer ID
+
+### Option D: Package Managers (Advanced)
+- **Homebrew (macOS/Linux)**:
+  - Auto-update formula in a tap repository
+  - Users install with: `brew install youruser/tap/spotibye`
+  
+- **Chocolatey (Windows)**:
+  - Automate package updates
+  - Submit to Chocolatey community repository
+
+### Workflow Customization
+Customize the build matrix in `.github/workflows/build.yml` to:
+- Toggle platforms
+- Enable/installers
+- Configure signing
+- Set environment-specific variables
 
 ## Platform-Specific Notes
 
