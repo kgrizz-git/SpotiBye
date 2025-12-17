@@ -1,0 +1,103 @@
+name: Build Executables
+
+on:
+  push:
+    tags: 'v*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build for (windows, macos, linux)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - windows
+        - macos
+        - linux
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        exclude:
+          - os: windows-latest
+            if: ${{ github.event.inputs.platform != 'all' && github.event.inputs.platform != 'windows' && github.event.inputs.platform != '' }}
+          - os: ubuntu-latest
+            if: ${{ github.event.inputs.platform != 'all' && github.event.inputs.platform != 'linux' && github.event.inputs.platform != '' }}
+          - os: macos-latest
+            if: ${{ github.event.inputs.platform != 'all' && github.event.inputs.platform != 'macos' && github.event.inputs.platform != '' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3-dev python3-pip python3-venv \
+          build-essential libssl-dev libffi-dev \
+          libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+          libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev \
+          zlib1g-dev upx
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build executable (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        pyinstaller spotibye.spec --noconfirm --clean --noconsole --onefile
+        Compress-Archive -Path dist\SpotiBye\* -DestinationPath SpotiBye-Windows.zip -Force
+      shell: pwsh
+
+    - name: Build executable (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        pyinstaller spotibye.spec --noconfirm --clean --noconsole --onefile
+        cd dist
+        hdiutil create -volname "SpotiBye" -srcfolder SpotiBye.app -ov -format UDZO SpotiBye-macOS.dmg
+        cd ..
+
+    - name: Build executable (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        pyinstaller spotibye.spec --noconfirm --clean --noconsole --onefile
+        cd dist
+        tar -czvf SpotiBye-Linux.tar.gz SpotiBye/
+        cd ..
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: SpotiBye-${{ runner.os }}
+        path: |
+          ${{ runner.os == 'Windows' && 'SpotiBye-Windows.zip' || '' }}
+          ${{ runner.os == 'macOS' && 'dist/SpotiBye-macOS.dmg' || '' }}
+          ${{ runner.os == 'Linux' && 'dist/SpotiBye-Linux.tar.gz' || '' }}
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ${{ runner.os == 'Windows' && 'SpotiBye-Windows.zip' || '' }}
+          ${{ runner.os == 'macOS' && 'dist/SpotiBye-macOS.dmg' || '' }}
+          ${{ runner.os == 'Linux' && 'dist/SpotiBye-Linux.tar.gz' || '' }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
