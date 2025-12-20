@@ -166,32 +166,43 @@ The CSV export will include all existing fields:
 - Not spreadsheet-friendly
 - Requires JSON viewer for casual users
 
-### XLSX Export Enhancement
+### XLSX Export
 
-#### Difficulty: **Medium** (for improvements)
-- **Complexity**: Medium
-- **Estimated Time**: 6-8 hours
+#### Status: **MOSTLY COMPLETED** 
+- **Complexity**: Medium (completed)
+- **Implementation Time**: 6-8 hours (completed)
 - **Dependencies**: pandas, openpyxl (already available)
 
 #### Current Implementation Review:
-- Basic Excel export exists
-- Limited formatting
-- Single sheet export
+- ✅ Enhanced Excel export with advanced formatting
+- ✅ Comprehensive styling and column width adjustment
+- ✅ Multi-sheet export with summary statistics
+- ✅ Hyperlink support for track URLs
+- ✅ Cover image insertion when available
 
-#### Enhancement Steps:
-1. **Improve formatting**
-   - Add column width auto-adjustment
-   - Apply number formatting for durations
-   - Add header styling
+#### Implemented Features:
+1. **✅ Enhanced formatting**
+   - Column width auto-adjustment
+   - Header styling 
+   - Table styling
 
-2. **Multi-sheet support**
+2. **✅ Multi-sheet support**
    - Separate playlists into different sheets
-   - Add summary sheet with statistics
+   - Summary sheet 
+   - Metadata display on each playlist sheet
 
-3. **Advanced features**
-   - Add hyperlinks for track URLs
-   - Include cover images (if downloaded)
-   - Add data validation
+3. **✅ Advanced features**
+   - Hyperlinks for track URLs (clickable in Excel)
+   - Cover image insertion (120x120 pixels) when available
+   - Comprehensive error handling - NOT YET IMPLEMENTED
+   - Progress indicators for large exports - ? Not sure if implemented
+
+#### Remaining Tasks:
+- [ ] Add data validation for specific columns
+- [ ] Validate file size with large datasets
+- [ ] Test compatibility across different Excel versions
+- [ ] Confirm comprehensive error handling
+- [ ] Confirm progress indicators for large exports 
 
 ## Comparative Analysis
 
@@ -390,9 +401,100 @@ def _log_error(self, error_message: str, context: Dict = None):
 ## User Experience Considerations
 
 ### Format Selection UI:
-- Radio buttons or dropdown menu
-- Show format-specific options
-- Display estimated file sizes
+
+#### Design Requirements:
+- **Compact dropdown** (Spinner widget) for format selection
+- **XLSX as default** format to maintain backward compatibility  
+- **Minimal space usage** in the export section
+- **Integration** with existing filename input and export button
+
+#### Implementation Details:
+
+**UI Component Location:**
+- Add format selector in `_create_export_section()` method
+- Position between filename input and export button
+- Use horizontal layout to maintain compact design
+
+**Dropdown Specification:**
+```python
+# Add to _create_export_section() method
+format_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(40), spacing=dp(8))
+format_layout.add_widget(Label(text='Format:', size_hint_x=None, width=dp(60), font_size=dp(15)))
+
+self.format_spinner = Spinner(
+    text='XLSX',  # Default format
+    values=['XLSX', 'CSV', 'JSON'],
+    size_hint_x=None,
+    width=dp(100),
+    font_size=dp(14),
+    background_color=[0.55, 0.55, 0.55, 1],
+)
+self.format_spinner.bind(text=self.on_format_change)
+format_layout.add_widget(self.format_spinner)
+```
+
+**Format Change Handler:**
+```python
+def on_format_change(self, spinner, text):
+    """Update filename extension when format changes."""
+    current_filename = self.filename_input.text or ''
+    if current_filename:
+        # Remove existing extension and add new one
+        base_name = os.path.splitext(current_filename)[0]
+        extension = self._get_file_extension(text.lower())
+        self.filename_input.text = f"{base_name}{extension}"
+
+def _get_file_extension(self, format_type: str) -> str:
+    """Get file extension for export format."""
+    extensions = {
+        'xlsx': '.xlsx',
+        'csv': '.csv', 
+        'json': '.json'
+    }
+    return extensions.get(format_type, '.xlsx')
+```
+
+**Export Worker Integration:**
+```python
+def start_export(self, instance):
+    """Modified to use selected format."""
+    selected_format = self.format_spinner.text.lower()
+    threading.Thread(
+        target=self._export_playlists_worker, 
+        args=(selected_format,), 
+        daemon=True
+    ).start()
+
+def _export_playlists_worker(self, format_type: str):
+    """Worker thread with format parameter."""
+    # Conditional export logic based on format_type
+    if format_type == 'csv':
+        self._export_to_csv(df, file_path)
+    elif format_type == 'json':
+        json_data = self._prepare_playlist_json_data(playlist_data)
+        self._export_to_json(json_data, file_path)
+    else:  # xlsx (default)
+        df.to_excel(file_path, index=False, engine='openpyxl')
+        self._format_excel_file(file_path, playlist_name)
+```
+
+**Integration Points:**
+- **Filename Generation**: Update `_generate_default_filename()` to use selected format
+- **File Dialog**: Ensure file picker shows correct extension for selected format
+- **Status Messages**: Update export status to show selected format
+- **Error Handling**: Add format-specific error messages
+
+#### UI Layout Impact:
+- **Minimal space increase**: ~dp(40) height added to export section
+- **No width expansion**: Uses existing horizontal layout
+- **Maintains existing flow**: Fits naturally between filename and export button
+- **Responsive design**: Works with existing responsive layout patterns
+
+#### User Experience:
+- **Default behavior**: XLSX format maintains current user experience
+- **Easy discovery**: Dropdown clearly shows available formats
+- **Immediate feedback**: Filename updates automatically when format changes
+- **Consistent styling**: Matches existing UI components in export section
 
 ### File Naming:
 - Consistent naming across formats
@@ -403,113 +505,382 @@ def _log_error(self, error_message: str, context: Dict = None):
 
 ### CSV Export Checklist
 
-#### Pre-Implementation
-- [ ] Review current `_export_playlists_worker()` function structure
-- [ ] Identify existing DataFrame preparation logic
-- [ ] Confirm pandas dependency is available
-- [ ] Design UI components for format selection
+#### Step 1: Preparation and Setup
+1. **Review Current Implementation**
+   - [ ] Examine existing `_export_playlists_worker()` function structure
+   - [ ] Identify current DataFrame preparation logic in `_prepare_playlist_track_rows()`
+   - [ ] Confirm pandas dependency is available in requirements.txt
+   - [ ] Document current data columns and structure
 
-#### Implementation
-- [ ] Add format parameter to `_export_playlists_worker()`
-- [ ] Create `_export_to_csv()` method
-- [ ] Implement conditional export logic based on format
-- [ ] Add `_get_file_extension()` helper method
-- [ ] Update file naming logic to handle CSV extension
+2. **Design CSV Export Architecture**
+   - [ ] Define CSV column order and naming conventions
+   - [ ] Plan special character handling strategy
+   - [ ] Determine encoding requirements (UTF-8 recommended)
+   - [ ] Design file naming pattern for CSV exports
 
-#### UI Updates
-- [ ] Add format selection radio buttons/dropdown
-- [ ] Update file dialog to show correct extension
-- [ ] Add format-specific help text
-- [ ] Test format selection interaction
+#### Step 2: Core Implementation
+1. **Create CSV Export Method**
+   ```python
+   def _export_to_csv(self, df: pd.DataFrame, file_path: str) -> None:
+       """Export DataFrame to CSV with proper encoding."""
+       df.to_csv(file_path, index=False, encoding='utf-8')
+   ```
 
-#### Testing
-- [ ] Create unit test for CSV export
-- [ ] Test with various playlist sizes
-- [ ] Verify CSV file opens correctly in Excel/Google Sheets
-- [ ] Test special characters in CSV output
-- [ ] Validate data integrity
+2. **Modify Export Worker**
+   - [ ] Add `format_type` parameter to `_export_playlists_worker()`
+   - [ ] Implement conditional export logic:
+     ```python
+     if format_type == 'csv':
+         self._export_to_csv(df, file_path)
+     elif format_type == 'xlsx':
+         # Existing XLSX logic
+     ```
+
+3. **Add Helper Methods**
+   - [ ] Create `_get_file_extension(format_type: str) -> str` method
+   - [ ] Update `_generate_default_filename()` to use selected format
+   - [ ] Modify file naming logic to handle CSV extensions
+
+#### Step 3: UI Integration
+1. **Add Format Selection UI**
+   - [ ] Implement format dropdown in `_create_export_section()`
+   - [ ] Add format change handler to update filename extension
+   - [ ] Position format selector between filename and export button
+   - [ ] Style format selector to match existing UI components
+
+2. **Update Export Workflow**
+   - [ ] Modify `start_export()` to pass selected format to worker
+   - [ ] Update status messages to show selected format
+   - [ ] Add format-specific error handling and user feedback
+
+#### Step 4: Testing and Validation
+1. **Unit Testing**
+   - [ ] Create test file: `tests/test_csv_export.py`
+   - [ ] Test CSV export with sample playlist data
+   - [ ] Validate CSV file structure and column order
+   - [ ] Test special character handling (Unicode, emojis, etc.)
+
+2. **Integration Testing**
+   - [ ] Test CSV export with various playlist sizes (1, 10, 100, 1000+ tracks)
+   - [ ] Verify CSV opens correctly in Excel, Google Sheets, LibreOffice
+   - [ ] Test filename generation with different formats
+   - [ ] Validate data integrity between source and CSV output
+
+3. **User Experience Testing**
+   - [ ] Test format selection dropdown interaction
+   - [ ] Verify filename updates when format changes
+   - [ ] Test export workflow end-to-end with CSV format
+   - [ ] Validate error messages for CSV-specific issues
 
 ### JSON Export Checklist
 
-#### Pre-Implementation
-- [ ] Design JSON data structure schema
-- [ ] Decide on JSON format options (simple vs detailed)
-- [ ] Plan metadata inclusion strategy
-- [ ] Review existing track data structure
+#### Step 1: Design and Architecture
+1. **Define JSON Data Structure**
+   - [ ] Design top-level JSON object structure:
+     ```json
+     {
+       "playlist_info": {...},
+       "tracks": [...],
+       "export_metadata": {...}
+     }
+     ```
+   - [ ] Define playlist info object fields (name, description, owner, etc.)
+   - [ ] Design track data object structure with all required fields
+   - [ ] Plan for optional metadata fields (audio features, cover images, etc.)
 
-#### Implementation
-- [ ] Create `_prepare_playlist_json_data()` method
-- [ ] Implement `_export_to_json()` method
-- [ ] Add datetime import for export timestamps
-- [ ] Handle nested data structures properly
-- [ ] Ensure proper JSON encoding (UTF-8)
+2. **Plan JSON Format Options**
+   - [ ] Decide between simple vs detailed JSON format
+   - [ ] Determine nesting strategy for complex data (audio features)
+   - [ ] Plan datetime formatting (ISO 8601 recommended)
+   - [ ] Design handling for missing/empty data fields
 
-#### Data Structure Design
-- [ ] Define playlist info object structure
-- [ ] Design track data object structure
-- [ ] Plan for optional metadata fields
-- [ ] Handle missing data gracefully
+#### Step 2: Core Implementation
+1. **Create JSON Data Preparation Method**
+   ```python
+   def _prepare_playlist_json_data(self, playlist_data: List[Dict]) -> Dict:
+       """Convert playlist data to JSON-serializable format."""
+       return {
+           "playlist_info": {
+               "name": playlist_name,
+               "description": description,
+               "total_tracks": len(tracks),
+               "export_date": datetime.now().isoformat()
+           },
+           "tracks": tracks
+       }
+   ```
 
-#### Testing
-- [ ] Create unit test for JSON export
-- [ ] Validate JSON schema correctness
-- [ ] Test JSON parsing in different languages
-- [ ] Verify special character handling
-- [ ] Test with large playlists
+2. **Implement JSON Export Method**
+   ```python
+   def _export_to_json(self, data: Dict, file_path: str) -> None:
+       """Export data to JSON file with proper formatting."""
+       with open(file_path, 'w', encoding='utf-8') as f:
+           json.dump(data, f, indent=2, ensure_ascii=False)
+   ```
 
-### XLSX Enhancement Checklist
+3. **Handle Data Transformation**
+   - [ ] Add datetime import for export timestamps
+   - [ ] Convert pandas DataFrame to JSON-compatible format
+   - [ ] Handle nested data structures properly
+   - [ ] Ensure proper JSON encoding (UTF-8)
+   - [ ] Handle non-serializable objects (convert to strings if needed)
 
-#### Pre-Implementation
-- [ ] Review current Excel export implementation
-- [ ] Identify formatting limitations
-- [ ] Plan multi-sheet architecture
-- [ ] Design summary sheet layout
+#### Step 3: Integration with Export System
+1. **Modify Export Worker**
+   - [ ] Add JSON export logic to `_export_playlists_worker()`
+   - [ ] Implement format-specific data preparation:
+     ```python
+     if format_type == 'json':
+         json_data = self._prepare_playlist_json_data(playlist_data)
+         self._export_to_json(json_data, file_path)
+     ```
 
-#### Implementation
-- [ ] Enhance `_format_excel_file()` method
-- [ ] Add column width auto-adjustment
-- [ ] Implement number formatting for durations
-- [ ] Add header styling with bold/centering
-- [ ] Create multi-sheet export logic
+2. **Update File Handling**
+   - [ ] Modify file naming logic for JSON extensions
+   - [ ] Update `_get_file_extension()` method
+   - [ ] Ensure JSON files are saved in correct directory structure
 
-#### Advanced Features
-- [ ] Add hyperlink support for track URLs
-- [ ] Implement cover image insertion (if images downloaded)
-- [ ] Add data validation for specific columns
-- [ ] Create summary statistics sheet
+#### Step 4: Testing and Validation
+1. **Unit Testing**
+   - [ ] Create test file: `tests/test_json_export.py`
+   - [ ] Test JSON schema validation with sample data
+   - [ ] Verify JSON structure matches design specification
+   - [ ] Test special character handling in JSON output
 
-#### Testing
-- [ ] Test enhanced formatting in Excel
-- [ ] Verify multi-sheet functionality
-- [ ] Test hyperlink functionality
-- [ ] Validate file size with enhancements
-- [ ] Test compatibility with different Excel versions
+2. **Integration Testing**
+   - [ ] Test JSON export with various playlist sizes
+   - [ ] Validate JSON parsing in different programming environments
+   - [ ] Test with playlists containing missing metadata
+   - [ ] Verify JSON file size and performance with large datasets
+
+3. **Data Integrity Testing**
+   - [ ] Compare JSON output with source data for accuracy
+   - [ ] Test nested object structure (audio features, metadata)
+   - [ ] Validate datetime formatting consistency
+   - [ ] Test Unicode and special character preservation
+
+### XLSX Export Checklist
+
+#### Step 1: Review Current Implementation (Status: Mostly Complete)
+1. **Assess Existing Code**
+   - [x] Review current Excel export implementation in `_export_playlists_worker()`
+   - [x] Identify formatting limitations and enhancement opportunities
+   - [x] Document current multi-sheet architecture
+   - [x] Review summary sheet layout and data structure
+
+2. **Validate Dependencies**
+   - [x] Confirm pandas and openpyxl are available
+   - [x] Check for any version compatibility issues
+   - [x] Verify existing styling and formatting capabilities
+
+#### Step 2: Complete Remaining Implementation
+1. **Enhance Error Handling**
+   - [ ] Add comprehensive error handling to `_format_excel_file()`
+   - [ ] Implement fallback for failed formatting operations
+   - [ ] Add specific error messages for Excel-related issues
+   - [ ] Handle memory errors with large datasets
+
+2. **Add Missing Features**
+   - [ ] Implement data validation for specific columns (duration, popularity)
+   - [ ] Add progress indicators for large Excel exports
+   - [ ] Create backup mechanism for interrupted exports
+   - [ ] Optimize memory usage for very large playlists
+
+#### Step 3: Advanced Features Completion
+1. **Data Validation and Quality**
+   - [ ] Add input validation for numeric columns
+   - [ ] Implement range checking for duration fields
+   - [ ] Add consistency checks for Spotify URIs/URLs
+   - [ ] Create data quality reports in summary sheet
+
+2. **Performance Optimization**
+   - [ ] Optimize Excel file creation speed
+   - [ ] Implement streaming for very large datasets
+   - [ ] Add memory management for big playlists
+   - [ ] Test with 1000+ track playlists
+
+#### Step 4: Testing and Validation
+1. **Compatibility Testing**
+   - [ ] Test Excel files in different Excel versions (2016, 2019, 365)
+   - [ ] Verify compatibility with LibreOffice Calc
+   - [ ] Test on different operating systems (Windows, macOS, Linux)
+   - [ ] Validate file size limits and performance
+
+2. **Feature Validation**
+   - [ ] Test hyperlink functionality in exported files
+   - [ ] Verify multi-sheet navigation and structure
+   - [ ] Test cover image insertion and display
+   - [ ] Validate summary statistics accuracy
+
+3. **Edge Case Testing**
+   - [ ] Test with empty playlists
+   - [ ] Test with playlists containing special characters
+   - [ ] Test with very long track/artist names
+   - [ ] Test with missing metadata fields
+
+#### Step 5: Integration with Format Selection
+1. **Update Export Worker**
+   - [ ] Modify `_export_playlists_worker()` to handle format selection
+   - [ ] Ensure XLSX remains the default format
+   - [ ] Add format-specific progress messages
+   - [ ] Update error handling for XLSX-specific issues
+
+2. **File Management**
+   - [ ] Update filename generation for XLSX format
+   - [ ] Ensure proper file extension handling
+   - [ ] Test file overwrite protection
+   - [ ] Validate organized folder structure
 
 ### General Implementation Checklist
 
-#### Code Quality
-- [ ] Add proper error handling for all formats
-- [ ] Implement progress indicators for large exports
-- [ ] Add logging for debugging export issues
-- [ ] Ensure consistent code style across methods
+#### Step 1: Code Quality and Architecture
+1. **Implement Comprehensive Error Handling**
+   - [ ] Add try-catch blocks around all export operations
+   - [ ] Create specific exception classes for different error types
+   - [ ] Implement user-friendly error messages with actionable guidance
+   - [ ] Add error logging with context information for debugging
 
-#### User Experience
-- [ ] Add loading indicators during export
-- [ ] Show export completion notifications
-- [ ] Provide clear error messages
-- [ ] Add export format tooltips/help text
+2. **Ensure Code Consistency**
+   - [ ] Apply consistent naming conventions across all export methods
+   - [ ] Standardize method signatures and parameter naming
+   - [ ] Add comprehensive docstrings for all new methods
+   - [ ] Implement proper type hints throughout the codebase
 
-#### File Management
-- [ ] Implement file overwrite protection
-- [ ] Add export location selection
-- [ ] Create organized folder structure
-- [ ] Handle long file names gracefully
+3. **Add Logging and Monitoring**
+   - [ ] Implement structured logging for export operations
+   - [ ] Add performance metrics tracking (export time, file size)
+   - [ ] Create debug logging for troubleshooting export issues
+   - [ ] Add export success/failure statistics
 
-#### Performance
-- [ ] Optimize export speed for large playlists
-- [ ] Add memory management for big datasets
-- [ ] Implement streaming for very large exports
-- [ ] Test performance with 1000+ track playlists
+#### Step 2: User Experience Enhancement
+1. **Implement Progress Indicators**
+   - [ ] Add progress bar updates for different export stages
+   - [ ] Show current operation status ("Processing track X/Y")
+   - [ ] Display estimated time remaining for large exports
+   - [ ] Add export completion notifications with file location
+
+2. **Improve User Interface**
+   - [ ] Add loading indicators during export processing
+   - [ ] Implement export cancellation functionality
+   - [ ] Add format-specific tooltips and help text
+   - [ ] Create export format comparison information
+
+3. **Enhance Error Communication**
+   - [ ] Design clear, non-technical error messages
+   - [ ] Add suggested actions for common error scenarios
+   - [ ] Implement error recovery options where possible
+   - [ ] Add context-sensitive help links
+
+#### Step 3: File Management and Organization
+1. **Implement File Safety Features**
+   - [ ] Add file overwrite protection with user confirmation
+   - [ ] Create automatic file naming for conflicts (playlist_2.xlsx)
+   - [ ] Implement file permission checks before export
+   - [ ] Add disk space validation before starting export
+
+2. **Organize Export Structure**
+   - [ ] Create organized folder structure for different formats
+   - [ ] Implement export location selection (user-defined paths)
+   - [ ] Add timestamp-based organization options
+   - [ ] Handle long file names gracefully with truncation
+
+3. **File Format Validation**
+   - [ ] Add file format validation after export
+   - [ ] Implement file integrity checks
+   - [ ] Create format-specific validation rules
+   - [ ] Add file size monitoring and warnings
+
+#### Step 4: Performance Optimization
+1. **Optimize Export Speed**
+   - [ ] Profile export performance for different playlist sizes
+   - [ ] Implement streaming for very large datasets
+   - [ ] Optimize memory usage for big playlists
+   - [ ] Add parallel processing for multiple playlists
+
+2. **Memory Management**
+   - [ ] Implement memory-efficient data processing
+   - [ ] Add garbage collection optimization for large exports
+   - [ ] Create memory usage monitoring
+   - [ ] Test with 1000+ track playlists for memory limits
+
+3. **Resource Optimization**
+   - [ ] Optimize CPU usage during export operations
+   - [ ] Implement efficient file I/O operations
+   - [ ] Add resource cleanup after export completion
+   - [ ] Monitor system resource usage during export
+
+### UI Implementation Checklist
+
+#### Step 1: Format Selection Component Design
+1. **Create Format Dropdown UI**
+   - [ ] Add Spinner widget to `_create_export_section()` method
+   - [ ] Configure dropdown with values: ['XLSX', 'CSV', 'JSON']
+   - [ ] Set default value to 'XLSX' for backward compatibility
+   - [ ] Style dropdown to match existing UI components
+
+2. **Position Format Selector**
+   - [ ] Place format selector between filename input and export button
+   - [ ] Use horizontal layout for compact design
+   - [ ] Ensure proper spacing and alignment with existing elements
+   - [ ] Test responsive behavior on different screen sizes
+
+#### Step 2: Format Change Handling
+1. **Implement Format Change Logic**
+   - [ ] Create `on_format_change()` method to handle dropdown selection
+   - [ ] Update filename extension when format changes
+   - [ ] Preserve base filename while changing extension
+   - [ ] Add validation for format selection
+
+2. **Add Helper Methods**
+   - [ ] Implement `_get_file_extension()` method for format mapping
+   - [ ] Create `_update_filename_extension()` helper method
+   - [ ] Add format validation in `_validate_export_parameters()`
+   - [ ] Create format-specific file naming logic
+
+#### Step 3: Export Workflow Integration
+1. **Modify Export Process**
+   - [ ] Update `start_export()` to pass selected format to worker thread
+   - [ ] Modify `_export_playlists_worker()` to accept format parameter
+   - [ ] Add format-specific progress messages
+   - [ ] Update status labels to show selected format
+
+2. **Enhance User Feedback**
+   - [ ] Add format-specific loading indicators
+   - [ ] Update completion messages with format information
+   - [ ] Create format-specific error messages
+   - [ ] Add tooltips explaining each format's benefits
+
+#### Step 4: UI Testing and Validation
+1. **Component Testing**
+   - [ ] Test dropdown functionality with all format options
+   - [ ] Verify filename updates correctly when format changes
+   - [ ] Test format selection with empty/default filenames
+   - [ ] Validate UI responsiveness during format changes
+
+2. **Integration Testing**
+   - [ ] Test complete export workflow with each format
+   - [ ] Verify UI state management during export process
+   - [ ] Test format persistence across multiple exports
+   - [ ] Validate error handling in UI components
+
+3. **User Experience Testing**
+   - [ ] Test format selection discoverability
+   - [ ] Verify intuitive nature of format dropdown
+   - [ ] Test accessibility features (keyboard navigation, screen readers)
+   - [ ] Validate UI consistency with application design
+
+#### Step 5: Advanced UI Features
+1. **Format Information Display**
+   - [ ] Add format comparison tooltips
+   - [ ] Create format-specific help text
+   - [ ] Implement format preview functionality (if feasible)
+   - [ ] Add estimated file size indicators
+
+2. **UI Polish and Refinement**
+   - [ ] Add smooth transitions for format changes
+   - [ ] Implement hover states for dropdown
+   - [ ] Add visual feedback for format selection
+   - [ ] Create format-specific icon indicators
 
 ### Integration Testing Checklist
 
