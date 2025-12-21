@@ -369,7 +369,7 @@ class MainScreen(Screen):
         filename_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(40), spacing=dp(8))
         filename_layout.add_widget(Label(text='Filename:', size_hint_x=None, width=dp(70), font_size=dp(15)))
         self.filename_input = TextInput(
-            text=self._generate_default_filename(),
+            text=self._generate_default_filename('xlsx'),
             multiline=False,
             size_hint_y=None,
             height=dp(30),
@@ -377,6 +377,22 @@ class MainScreen(Screen):
         )
         filename_layout.add_widget(self.filename_input)
         export_section.add_widget(filename_layout)
+
+        # Add format selection dropdown
+        format_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(40), spacing=dp(8))
+        format_layout.add_widget(Label(text='Format:', size_hint_x=None, width=dp(60), font_size=dp(15)))
+        
+        self.format_spinner = Spinner(
+            text='XLSX',  # Default format
+            values=['XLSX', 'CSV', 'JSON'],
+            size_hint_x=None,
+            width=dp(100),
+            font_size=dp(14),
+            background_color=[0.55, 0.55, 0.55, 1],
+        )
+        self.format_spinner.bind(text=self.on_format_change)
+        format_layout.add_widget(self.format_spinner)
+        export_section.add_widget(format_layout)
 
         save_info = Label(
             text=f'Files will be saved to: {SAVE_DIR}',
@@ -607,19 +623,65 @@ class MainScreen(Screen):
             self.status_label.text = f'Error sorting playlists: {exc}'
 
     # Screen lifecycle ---------------------------------------------------
+    def on_format_change(self, spinner, text):
+        """Update filename extension when format changes."""
+        current_filename = self.filename_input.text or ''
+        if current_filename:
+            # Remove existing extension and add new one
+            base_name = os.path.splitext(current_filename)[0]
+            extension = self._get_file_extension(text.lower())
+            self.filename_input.text = f"{base_name}{extension}"
+        else:
+            # If no filename, generate default with selected format
+            self.filename_input.text = self._generate_default_filename(text.lower())
+
+    def _get_file_extension(self, format_type: str) -> str:
+        """Get file extension for export format."""
+        extensions = {
+            'xlsx': '.xlsx',
+            'csv': '.csv', 
+            'json': '.json'
+        }
+        return extensions.get(format_type, '.xlsx')
+
+    def _export_to_csv(self, df: pd.DataFrame, file_path: str) -> None:
+        """Export DataFrame to CSV with proper encoding."""
+        df.to_csv(file_path, index=False, encoding='utf-8')
+
+    def _export_to_json(self, data: Dict, file_path: str) -> None:
+        """Export data to JSON file with proper formatting."""
+        import json
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+    def _prepare_playlist_json_data(self, playlist_data: List[Dict]) -> Dict:
+        """Convert playlist data to JSON-serializable format."""
+        from datetime import datetime
+        
+        return {
+            "playlist_info": {
+                "name": playlist_data.get('name', 'Unknown'),
+                "description": playlist_data.get('description', ''),
+                "total_tracks": len(playlist_data.get('tracks', [])),
+                "export_date": datetime.now().isoformat()
+            },
+            "tracks": playlist_data.get('tracks', [])
+        }
+
     def export_selected(self, instance):
-        """Export all selected playlists to Excel files."""
+        """Export all selected playlists to selected format files."""
         selected_playlists = [w for w in self.playlist_widgets if w.checkbox.active]
         if not selected_playlists:
             self.status_label.text = 'Please select at least one playlist to export'
             return
 
-        self.status_label.text = f'Preparing to export {len(selected_playlists)} playlists...'
+        selected_format = self.format_spinner.text.lower()
+        self.status_label.text = f'Preparing to export {len(selected_playlists)} playlists as {selected_format.upper()}...'
         
         # Start export in a separate thread to avoid freezing the UI
-        threading.Thread(target=self._export_playlists_worker, args=(selected_playlists,), daemon=True).start()
+        threading.Thread(target=self._export_playlists_worker, args=(selected_playlists, selected_format), daemon=True).start()
 
-    def _export_playlists_worker(self, playlist_widgets):
+    def _export_playlists_worker(self, playlist_widgets, format_type):
         """Worker thread for exporting playlists."""
         try:
             app = App.get_running_app()
@@ -649,10 +711,23 @@ class MainScreen(Screen):
 
                     os.makedirs(SAVE_DIR, exist_ok=True)
                     safe_name = re.sub(r'[\\/*?:"<>|]', "", playlist['name'])
-                    file_path = os.path.join(SAVE_DIR, f"{safe_name}.xlsx")
+                    extension = self._get_file_extension(format_type)
+                    file_path = os.path.join(SAVE_DIR, f"{safe_name}{extension}")
 
-                    df.to_excel(file_path, index=False, engine='openpyxl')
-                    self._format_excel_file(file_path, playlist['name'])
+                    # Export based on format type
+                    if format_type == 'csv':
+                        self._export_to_csv(df, file_path)
+                    elif format_type == 'json':
+                        # For JSON, we need to prepare the data differently
+                        json_data = self._prepare_playlist_json_data({
+                            'name': playlist['name'],
+                            'description': playlist.get('description', ''),
+                            'tracks': rows  # Use the rows data
+                        })
+                        self._export_to_json(json_data, file_path)
+                    else:  # xlsx (default)
+                        df.to_excel(file_path, index=False, engine='openpyxl')
+                        self._format_excel_file(file_path, playlist['name'])
 
                     self._update_export_status(f'Exported: {playlist["name"]} ({len(df)} tracks)')
 
@@ -2114,7 +2189,7 @@ class MainScreen(Screen):
             # No suffix, add _2
             return base + '_2.xlsx'
 
-    def _generate_default_filename(self) -> str:
+    def _generate_default_filename(self, format_type: str = 'xlsx') -> str:
         # Get username from the app with better fallback
         app = App.get_running_app()
         username = getattr(app, 'username', None)
@@ -2126,7 +2201,7 @@ class MainScreen(Screen):
         # Format: YYYY-MM-DD_HH-MM-SSAM/PM
         timestamp = datetime.now().strftime('%Y-%m-%d_%I-%M-%S%p')
         
-        return f'Spotify_Playlists_{username}_{timestamp}.xlsx'
+        return f'Spotify_Playlists_{username}_{timestamp}.{format_type}'
 
     def _sanitize_sheet_name(self, name: str) -> str:
         sanitized = re.sub(r"[\[\]\\/?*:]", "_", name).strip("'")
