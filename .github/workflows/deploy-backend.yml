@@ -27,11 +27,11 @@ jobs:
 
     - name: Run tests
       working-directory: src/backend
-      run: echo "Tests skipped temporarily due to ESM compatibility issue" # npm run test:run
+      run: npm run test:run
 
     - name: Run linting
       working-directory: src/backend
-      run: echo "Linting skipped temporarily - ESLint not installed" # npm run lint
+      run: npm run lint
 
   deploy-dev:
     needs: test
