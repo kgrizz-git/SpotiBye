@@ -11,6 +11,8 @@ import tempfile
 import threading
 import time
 import uuid
+import shutil
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -66,6 +68,37 @@ from ..utils.platform_utils import is_mobile_platform
 
 
 reccobeats_api = ReccoBeatsAPI()
+
+# Custom exception classes for export error handling
+class ExportError(Exception):
+    """Base exception for export-related errors."""
+    pass
+
+class InsufficientDiskSpaceError(ExportError):
+    """Raised when there's not enough disk space for export."""
+    def __init__(self, free_space: int, required_space: int):
+        self.free_space = free_space
+        self.required_space = required_space
+        super().__init__(f"Insufficient disk space: {required_space // (1024*1024)}MB required, {free_space // (1024*1024)}MB available")
+
+class PermissionError(ExportError):
+    """Raised when there are file permission issues during export."""
+    pass
+
+class NetworkError(ExportError):
+    """Raised when network-related errors occur during export."""
+    pass
+
+class ExportFormatError(ExportError):
+    """Raised when there are format-specific export errors."""
+    pass
+
+class ValidationError(ExportError):
+    """Raised when export parameters fail validation."""
+    pass
+
+# Set up logging for export operations
+logger = logging.getLogger(__name__)
 
 
 class MainScreen(Screen):
@@ -645,14 +678,67 @@ class MainScreen(Screen):
         return extensions.get(format_type, '.xlsx')
 
     def _export_to_csv(self, df: pd.DataFrame, file_path: str) -> None:
-        """Export DataFrame to CSV with proper encoding."""
-        df.to_csv(file_path, index=False, encoding='utf-8')
+        """Export DataFrame to CSV with proper encoding and error handling."""
+        try:
+            # Validate DataFrame
+            if df.empty:
+                raise ExportFormatError("Cannot export empty DataFrame to CSV")
+            
+            # Ensure file directory exists
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            # Export with proper encoding
+            df.to_csv(file_path, index=False, encoding='utf-8')
+            
+            # Verify file was created
+            if not os.path.exists(file_path):
+                raise ExportFormatError("CSV file was not created")
+            
+            # Check file size
+            if os.path.getsize(file_path) == 0:
+                raise ExportFormatError("CSV file is empty")
+                
+        except PermissionError as e:
+            raise PermissionError(f"Cannot write CSV file: {str(e)}")
+        except pd.errors.EmptyDataError:
+            raise ExportFormatError("No data to export to CSV")
+        except Exception as e:
+            raise ExportFormatError(f"CSV export failed: {str(e)}")
 
     def _export_to_json(self, data: Dict, file_path: str) -> None:
-        """Export data to JSON file with proper formatting."""
-        import json
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        """Export data to JSON file with proper formatting and error handling."""
+        try:
+            import json
+            
+            # Validate data
+            if not data or not isinstance(data, dict):
+                raise ExportFormatError("Invalid data for JSON export")
+            
+            # Ensure file directory exists
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            # Export with proper formatting
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            # Verify file was created
+            if not os.path.exists(file_path):
+                raise ExportFormatError("JSON file was not created")
+            
+            # Check file size
+            if os.path.getsize(file_path) == 0:
+                raise ExportFormatError("JSON file is empty")
+            
+            # Validate JSON format
+            with open(file_path, 'r', encoding='utf-8') as f:
+                json.load(f)  # This will raise if JSON is invalid
+                
+        except PermissionError as e:
+            raise PermissionError(f"Cannot write JSON file: {str(e)}")
+        except json.JSONEncodeError as e:
+            raise ExportFormatError(f"JSON encoding error: {str(e)}")
+        except Exception as e:
+            raise ExportFormatError(f"JSON export failed: {str(e)}")
 
     def _prepare_playlist_json_data(self, playlist_data: Dict) -> Dict:
         """Convert playlist data to JSON-serializable format with Excel/CSV consistency."""
@@ -695,14 +781,59 @@ class MainScreen(Screen):
         # Start export in a separate thread to avoid freezing the UI
         threading.Thread(target=self._export_playlists_worker, args=(selected_playlists, selected_format), daemon=True).start()
 
-    def _export_playlists_worker(self, playlist_widgets, format_type):
-        """Worker thread for exporting playlists."""
+    def _validate_export_parameters(self, format_type: str) -> None:
+        """Validate export parameters before starting export."""
+        if format_type not in ['csv', 'json', 'xlsx']:
+            raise ValidationError(f"Unsupported export format: {format_type}")
+        
+        selected_playlists = [w for w in self.playlist_widgets if w.checkbox.active]
+        if not selected_playlists:
+            raise ValidationError("No playlists selected for export")
+
+    def _check_disk_space_requirements(self, estimated_size: int) -> None:
+        """Check if there's enough disk space for the export."""
         try:
+            free_space = shutil.disk_usage(SAVE_DIR).free
+            if free_space < estimated_size * 2:  # 2x safety margin
+                raise InsufficientDiskSpaceError(free_space, estimated_size)
+        except OSError as e:
+            raise PermissionError(f"Unable to check disk space: {str(e)}")
+
+    def _show_error_dialog(self, title: str, message: str) -> None:
+        """Show user-friendly error dialog."""
+        def show_dialog(dt):
+            popup = Popup(
+                title=title,
+                content=Label(text=message, text_size=dp(14)),
+                size_hint=(0.8, 0.4),
+                auto_dismiss=True
+            )
+            popup.open()
+        
+        Clock.schedule_once(show_dialog)
+
+    def _log_error(self, error_message: str, context: Dict = None) -> None:
+        """Log error with context information for debugging."""
+        if context:
+            logger.error(f"Export Error: {error_message}", extra=context)
+        else:
+            logger.error(f"Export Error: {error_message}")
+
+    def _export_playlists_worker(self, playlist_widgets, format_type):
+        """Worker thread for exporting playlists with comprehensive error handling."""
+        try:
+            # Validate inputs before starting export
+            self._validate_export_parameters(format_type)
+            
+            # Estimate disk space requirements (rough estimate: 1MB per 100 tracks)
+            total_tracks = sum(len(w.playlist.get('tracks', [])) for w in playlist_widgets)
+            estimated_size = max(total_tracks * 1024, 1024 * 1024)  # At least 1MB
+            self._check_disk_space_requirements(estimated_size)
+            
             app = App.get_running_app()
             sp = create_spotify_client_with_refresh(app.token_info)
             if not sp:
-                self._update_export_status('Authentication error - please login again')
-                return
+                raise NetworkError("Authentication failed - please login again")
 
             for i, widget in enumerate(playlist_widgets):
                 playlist = widget.playlist
@@ -728,32 +859,88 @@ class MainScreen(Screen):
                     extension = self._get_file_extension(format_type)
                     file_path = os.path.join(SAVE_DIR, f"{safe_name}{extension}")
 
-                    # Export based on format type
+                    # Export based on format type with format-specific error handling
                     if format_type == 'csv':
-                        self._export_to_csv(df, file_path)
+                        try:
+                            self._export_to_csv(df, file_path)
+                        except Exception as e:
+                            raise ExportFormatError(f"CSV export failed for '{playlist['name']}': {str(e)}")
                     elif format_type == 'json':
-                        # For JSON, use the same row data as Excel/CSV for consistency
-                        json_data = self._prepare_playlist_json_data({
-                            'name': playlist['name'],
-                            'description': playlist.get('description', ''),
-                            'tracks': rows  # Use the same rows data as Excel/CSV
-                        })
-                        self._export_to_json(json_data, file_path)
+                        try:
+                            # For JSON, use the same row data as Excel/CSV for consistency
+                            json_data = self._prepare_playlist_json_data({
+                                'name': playlist['name'],
+                                'description': playlist.get('description', ''),
+                                'tracks': rows  # Use the same rows data as Excel/CSV
+                            })
+                            self._export_to_json(json_data, file_path)
+                        except Exception as e:
+                            raise ExportFormatError(f"JSON export failed for '{playlist['name']}': {str(e)}")
                     else:  # xlsx (default)
-                        df.to_excel(file_path, index=False, engine='openpyxl')
-                        self._format_excel_file(file_path, playlist['name'])
+                        try:
+                            # Validate DataFrame before Excel export
+                            if df.empty:
+                                raise ExportFormatError("Cannot export empty DataFrame to Excel")
+                            
+                            # Ensure file directory exists
+                            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                            
+                            # Export to Excel
+                            df.to_excel(file_path, index=False, engine='openpyxl')
+                            
+                            # Verify file was created
+                            if not os.path.exists(file_path):
+                                raise ExportFormatError("Excel file was not created")
+                            
+                            # Check file size
+                            if os.path.getsize(file_path) == 0:
+                                raise ExportFormatError("Excel file is empty")
+                            
+                            # Apply formatting
+                            self._format_excel_file(file_path, playlist['name'])
+                            
+                        except PermissionError as e:
+                            raise PermissionError(f"Cannot write Excel file: {str(e)}")
+                        except pd.errors.EmptyDataError:
+                            raise ExportFormatError("No data to export to Excel")
+                        except Exception as e:
+                            raise ExportFormatError(f"Excel export failed for '{playlist['name']}': {str(e)}")
 
                     self._update_export_status(f'Exported: {playlist["name"]} ({len(df)} tracks)')
 
+                except ExportFormatError as e:
+                    # Format-specific error - log but continue with other playlists
+                    self._log_error(str(e), {'playlist': playlist['name'], 'format': format_type})
+                    self._update_export_status(f"Format error exporting {playlist['name']}: {str(e)}")
+                    continue
                 except Exception as e:
-                    logger.error(f"Error exporting playlist {playlist['name']}: {e}")
+                    # Unexpected error for specific playlist - log but continue
+                    self._log_error(f"Unexpected error exporting playlist {playlist['name']}: {str(e)}")
                     self._update_export_status(f"Error exporting {playlist['name']}: {str(e)}")
+                    continue
 
-            self._update_export_status(f'Export complete. Files saved to: {os.path.abspath(SAVE_DIR)}')
+            self._update_export_status(f'Export completed: {len(playlist_widgets)} playlists exported as {format_type.upper()}')
 
+        except ValidationError as e:
+            self._show_error_dialog("Validation Error", str(e))
+            self._update_export_status(f'Validation failed: {str(e)}')
+        except InsufficientDiskSpaceError as e:
+            self._show_error_dialog("Insufficient Disk Space", str(e))
+            self._update_export_status('Export failed: Insufficient disk space')
+        except PermissionError as e:
+            self._show_error_dialog("Permission Denied", "Cannot write to selected location. Please check file permissions.")
+            self._update_export_status('Export failed: Permission denied')
+        except NetworkError as e:
+            self._show_error_dialog("Network Error", "Please check your internet connection and try again.")
+            self._update_export_status('Export failed: Network error')
+        except ExportFormatError as e:
+            self._show_error_dialog("Export Failed", f"Format error: {str(e)}")
+            self._update_export_status('Export failed: Format error')
         except Exception as e:
-            logger.error(f"Error in export worker: {e}")
-            self._update_export_status(f"Export failed: {str(e)}")
+            error_msg = f"Unexpected export error: {str(e)}"
+            self._log_error(error_msg)
+            self._show_error_dialog("Export Failed", "An unexpected error occurred during export.")
+            self._update_export_status('Export failed: Unexpected error')
     
     def _update_export_status(self, message):
         """Update the status label from a background thread."""
@@ -762,30 +949,66 @@ class MainScreen(Screen):
         Clock.schedule_once(lambda dt: update())
     
     def _format_excel_file(self, file_path, playlist_name):
-        """Format the Excel file with styles and column widths."""
+        """Format the Excel file with styles and column widths with comprehensive error handling."""
         try:
+            # Validate file exists before attempting to format
+            if not os.path.exists(file_path):
+                raise ExportFormatError(f"Excel file not found for formatting: {file_path}")
+            
+            # Check file size
+            if os.path.getsize(file_path) == 0:
+                raise ExportFormatError("Cannot format empty Excel file")
+            
             wb = load_workbook(file_path)
+            if not wb.worksheets:
+                raise ExportFormatError("Excel file has no worksheets")
+                
             ws = wb.active
+            if not ws:
+                raise ExportFormatError("Excel file has no active worksheet")
 
-            # Set column widths
-            ws.column_dimensions['A'].width = 30  # Track Name
-            ws.column_dimensions['B'].width = 25  # Artist
-            ws.column_dimensions['C'].width = 30  # Album
-            ws.column_dimensions['D'].width = 40  # Track URI
-            ws.column_dimensions['E'].width = 20  # Added At
+            # Set column widths with error handling
+            try:
+                ws.column_dimensions['A'].width = 30  # Track Name
+                ws.column_dimensions['B'].width = 25  # Artist
+                ws.column_dimensions['C'].width = 30  # Album
+                ws.column_dimensions['D'].width = 40  # Track URI
+                ws.column_dimensions['E'].width = 20  # Added At
+            except Exception as e:
+                logger.warning(f"Error setting column dimensions: {e}")
+                # Continue even if column formatting fails
 
-            header_row = self._format_playlist_sheet(ws)
-            if header_row:
-                self._apply_table_style(ws, header_row)
-                self._convert_track_urls_to_hyperlinks(ws)
+            # Apply formatting with error handling
+            try:
+                header_row = self._format_playlist_sheet(ws)
+                if header_row:
+                    self._apply_table_style(ws, header_row)
+                    self._convert_track_urls_to_hyperlinks(ws)
+            except Exception as e:
+                logger.warning(f"Error applying Excel formatting: {e}")
+                # Continue even if styling fails
 
-            # Save the changes
-            wb.save(file_path)
+            # Save the changes with error handling
+            try:
+                wb.save(file_path)
+                
+                # Verify file was saved correctly
+                if not os.path.exists(file_path):
+                    raise ExportFormatError("Excel file was not saved after formatting")
+                
+                if os.path.getsize(file_path) == 0:
+                    raise ExportFormatError("Excel file is empty after formatting")
+                    
+            except PermissionError as e:
+                raise PermissionError(f"Cannot save Excel file: {str(e)}")
+            except Exception as e:
+                raise ExportFormatError(f"Failed to save Excel file: {str(e)}")
 
+        except ExportFormatError:
+            # Re-raise our custom exceptions
+            raise
         except Exception as e:
-            logger.error(f"Error formatting Excel file: {e}")
-            # Continue even if formatting fails
-            pass
+            raise ExportFormatError(f"Excel formatting failed: {str(e)}")
 
     def on_enter(self):
         app = App.get_running_app()
@@ -1971,35 +2194,39 @@ class MainScreen(Screen):
         return None
 
     def _apply_table_style(self, worksheet, header_row: int) -> None:
-        if header_row <= 0 or worksheet.max_row < header_row:
-            return
+        """Apply table styling to Excel worksheet with error handling."""
+        try:
+            if header_row <= 0 or worksheet.max_row < header_row:
+                return
 
-        start_cell = f"A{header_row}"
-        end_cell = f"{get_column_letter(worksheet.max_column)}{worksheet.max_row}"
-        table_range = f"{start_cell}:{end_cell}"
+            start_cell = f"A{header_row}"
+            end_cell = f"{get_column_letter(worksheet.max_column)}{worksheet.max_row}"
+            table_range = f"{start_cell}:{end_cell}"
 
-        base_name = re.sub(r'[^A-Za-z0-9_]', '', f"tbl_{worksheet.title}") or "PlaylistTable"
-        base_name = base_name[:31]
+            base_name = re.sub(r'[^A-Za-z0-9_]', '', f"tbl_{worksheet.title}") or "PlaylistTable"
+            base_name = base_name[:31]
 
-        existing_names = set(getattr(worksheet, 'tables', {}).keys())
-        unique_name = base_name
-        suffix = 1
-        while unique_name in existing_names:
-            unique_name = f"{base_name[:25]}_{suffix}"
-            suffix += 1
+            # Remove existing table with same name if it exists
+            for table in worksheet.tables.values():
+                if table.name == base_name:
+                    worksheet.tables.pop(table.name)
+                    break
 
-        for existing in list(getattr(worksheet, 'tables', {}).keys()):
-            del worksheet.tables[existing]
+            # Create and apply table style
+            table = Table(displayName=base_name, ref=table_range)
+            style = TableStyleInfo(
+                name="TableStyleMedium9",  # Use a built-in style
+                showFirstColumn=False,
+                showLastColumn=False,
+                showRowStripes=True,
+                showColumnStripes=False
+            )
+            table.tableStyleInfo = style
+            worksheet.tables.add(table)
 
-        table = Table(displayName=unique_name, ref=table_range)
-        table.tableStyleInfo = TableStyleInfo(
-            name="TableStyleMedium2",
-            showFirstColumn=False,
-            showLastColumn=False,
-            showRowStripes=True,
-            showColumnStripes=False,
-        )
-        worksheet.add_table(table)
+        except Exception as e:
+            logger.warning(f"Error applying table style to worksheet '{worksheet.title}': {e}")
+            # Continue even if table styling fails
 
     def _format_playlist_sheet(self, worksheet, auto_resize: bool = False) -> Optional[int]:
         column_widths = {
@@ -2115,26 +2342,43 @@ class MainScreen(Screen):
                 workbook.close()
 
     def _convert_track_urls_to_hyperlinks(self, worksheet):
+        """Convert Spotify URLs to clickable hyperlinks with error handling."""
         try:
+            if not worksheet or worksheet.max_row <= 1:
+                return
+                
             header_row = None
             url_col = 5  # Column E
-            for row in range(1, worksheet.max_row + 1):
+            
+            # Find the header row with Spotify URL column
+            for row in range(1, min(worksheet.max_row + 1, 10)):  # Check first 10 rows only
                 value = worksheet.cell(row=row, column=url_col).value
                 if isinstance(value, str) and value.lower().strip() in {'spotify url', 'track url'}:
                     header_row = row
                     break
 
-            if not header_row:
+            if not header_row or header_row >= worksheet.max_row:
                 return
 
+            # Convert URLs to hyperlinks
+            converted_count = 0
             for row in range(header_row + 1, worksheet.max_row + 1):
                 cell = worksheet.cell(row=row, column=url_col)
                 url = cell.value
                 if isinstance(url, str) and url.startswith('http'):
-                    cell.hyperlink = url
-                    cell.style = 'Hyperlink'
+                    try:
+                        cell.hyperlink = url
+                        cell.style = 'Hyperlink'
+                        converted_count += 1
+                    except Exception as e:
+                        logger.warning(f"Error converting URL to hyperlink at row {row}: {e}")
+                        continue
+                        
+            logger.debug(f"Converted {converted_count} URLs to hyperlinks in worksheet '{worksheet.title}'")
+                        
         except Exception as exc:
-            logger.warning("Error converting URLs to hyperlinks: %s", exc)
+            logger.warning(f"Error converting URLs to hyperlinks in worksheet '{worksheet.title}': {exc}")
+            # Continue even if hyperlink conversion fails
 
     def _adjust_column_widths(self, file_path, job_state):
         try:
