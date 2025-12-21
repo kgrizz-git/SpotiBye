@@ -103,15 +103,32 @@ The CSV export will include all existing fields:
 #### Implementation Steps:
 1. **Create JSON data structure**
    ```python
-   def _prepare_playlist_json_data(self, playlist_data: List[Dict]) -> Dict:
+   def _prepare_playlist_json_data(self, playlist_data: Dict) -> Dict:
+       """Convert playlist data to JSON-serializable format with Excel/CSV consistency."""
+       from datetime import datetime
+       
+       # Convert 'N/A' strings to None for JSON compatibility
+       def convert_na_to_none(value):
+           if value == 'N/A':
+               return None
+           return value
+       
+       # Process tracks to match Excel/CSV field structure
+       processed_tracks = []
+       for track in playlist_data.get('tracks', []):
+           processed_track = {}
+           for key, value in track.items():
+               processed_track[key] = convert_na_to_none(value)
+           processed_tracks.append(processed_track)
+       
        return {
            "playlist_info": {
-               "name": playlist_name,
-               "description": description,
-               "total_tracks": len(tracks),
+               "name": playlist_data.get('name', 'Unknown'),
+               "description": playlist_data.get('description', ''),
+               "total_tracks": len(processed_tracks),
                "export_date": datetime.now().isoformat()
            },
-           "tracks": tracks
+           "tracks": processed_tracks
        }
    ```
 
@@ -122,10 +139,11 @@ The CSV export will include all existing fields:
            json.dump(data, f, indent=2, ensure_ascii=False)
    ```
 
-3. **Handle different JSON formats**
-   - Simple track list
-   - Full metadata format
-   - Spotify API response format
+3. **Ensure consistency with Excel/CSV formats**
+   - Use same `combined_rows` data structure as Excel/CSV
+   - Maintain PascalCase field naming convention
+   - Convert "N/A" strings to null for JSON compatibility
+   - Use identical data types (numbers for features, strings for basic info)
 
 #### JSON Export Structure (Including Spotify URI)
 ```json
@@ -138,17 +156,23 @@ The CSV export will include all existing fields:
   },
   "tracks": [
     {
-      "name": "Track Name",
-      "artist": "Artist Name",
-      "album": "Album Name",
-      "duration_ms": 180000,
-      "spotify_uri": "spotify:track:xxxxxxxx",
-      "spotify_url": "https://open.spotify.com/track/xxxxxxxx",
-      "audio_features": {
-        "tempo": 120.0,
-        "key": 5,
-        "danceability": 0.8
-      }
+      "Artist": "Artist Name",
+      "Album": "Album Name",
+      "Track": "Track Title",
+      "Duration": "MM:SS",
+      "Spotify URL": "https://open.spotify.com/track/xxxxxxxx",
+      "Spotify URI": "spotify:track:xxxxxxxx",
+      "Tempo": 120.0,
+      "Key": "C major",
+      "Danceability": 0.8,
+      "Energy": 0.7,
+      "Valence": 0.6,
+      "Acousticness": 0.2,
+      "Instrumentalness": 0.1,
+      "Liveness": 0.1,
+      "Speechiness": 0.05,
+      "Loudness": -5.2,
+      "Time Signature": 4
     }
   ]
 }
@@ -656,30 +680,32 @@ The current export system creates rows with the following columns:
 
 #### Step 1: Design and Architecture
 **Define JSON Data Structure**
-   - [ ] Design top-level JSON object structure:
+   - [x] Design JSON object structure matching Excel/CSV consistency:
      ```json
      {
        "playlist_info": {...},
-       "tracks": [...],
-       "export_metadata": {...}
+       "tracks": [...]
      }
      ```
-   - [x] Define playlist info object fields (name, description, owner, etc.)
-   - [x] Design track data object structure with all required fields
-   - [x] Plan for optional metadata fields (audio features, cover images, etc.)
+   - [x] Define playlist info object fields (name, description, total_tracks, export_date)
+   - [x] Design track data object structure with identical field names as Excel/CSV
+   - [x] Plan for all audio features with same naming convention as Excel/CSV
 
 **Plan JSON Format Options**
-   - [x] Decide between simple vs detailed JSON format
-   - [x] Determine nesting strategy for complex data (audio features)
-   - [x] Plan datetime formatting (ISO 8601 recommended)
-   - [x] Design handling for missing/empty data fields
+   - [x] Use flat structure matching Excel/CSV columns (no nested audio_features)
+   - [x] Use PascalCase field names consistent with Excel/CSV exports
+   - [x] Plan datetime formatting (ISO 8601 for export_date)
+   - [x] Handle missing data with null values instead of "N/A" strings
+   - [x] Ensure data types match Excel/CSV (numbers for features, strings for basic info)
 
 #### Step 2: Core Implementation
 **Create JSON Data Preparation Method**
    - [x] Implement `_prepare_playlist_json_data()` method
    - [x] Add datetime import for export timestamps
-   - [x] Handle nested data structures properly
+   - [x] Use same `combined_rows` data structure as Excel/CSV for consistency
    - [x] Ensure proper JSON encoding (UTF-8)
+   - [x] Convert "N/A" strings to null for JSON compatibility
+   - [x] Maintain identical field names and data types as Excel/CSV
 
 **Implement JSON Export Method**
    - [x] Create `_export_to_json()` method
@@ -688,11 +714,11 @@ The current export system creates rows with the following columns:
    - [x] Add error handling for JSON serialization
 
 **Handle Data Transformation**
-   - [x] Add datetime import for export timestamps
-   - [x] Convert pandas DataFrame to JSON-compatible format
-   - [x] Handle nested data structures properly
+   - [x] Use same `combined_rows` data from `_prepare_playlist_track_rows()` as Excel/CSV
+   - [x] Convert "N/A" strings to null for JSON compatibility
+   - [x] Maintain PascalCase field naming consistency with Excel/CSV
    - [x] Ensure proper JSON encoding (UTF-8)
-   - [x] Handle non-serializable objects (convert to strings if needed)
+   - [x] Handle all data types consistently (numbers for features, strings for basic info)
 
 #### Step 3: Integration with Export System
 **Modify Export Worker**

@@ -654,18 +654,32 @@ class MainScreen(Screen):
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-    def _prepare_playlist_json_data(self, playlist_data: List[Dict]) -> Dict:
-        """Convert playlist data to JSON-serializable format."""
+    def _prepare_playlist_json_data(self, playlist_data: Dict) -> Dict:
+        """Convert playlist data to JSON-serializable format with Excel/CSV consistency."""
         from datetime import datetime
+        
+        # Convert 'N/A' strings to None for JSON compatibility
+        def convert_na_to_none(value):
+            if value == 'N/A':
+                return None
+            return value
+        
+        # Process tracks to match Excel/CSV field structure
+        processed_tracks = []
+        for track in playlist_data.get('tracks', []):
+            processed_track = {}
+            for key, value in track.items():
+                processed_track[key] = convert_na_to_none(value)
+            processed_tracks.append(processed_track)
         
         return {
             "playlist_info": {
                 "name": playlist_data.get('name', 'Unknown'),
                 "description": playlist_data.get('description', ''),
-                "total_tracks": len(playlist_data.get('tracks', [])),
+                "total_tracks": len(processed_tracks),
                 "export_date": datetime.now().isoformat()
             },
-            "tracks": playlist_data.get('tracks', [])
+            "tracks": processed_tracks
         }
 
     def export_selected(self, instance):
@@ -718,11 +732,11 @@ class MainScreen(Screen):
                     if format_type == 'csv':
                         self._export_to_csv(df, file_path)
                     elif format_type == 'json':
-                        # For JSON, we need to prepare the data differently
+                        # For JSON, use the same row data as Excel/CSV for consistency
                         json_data = self._prepare_playlist_json_data({
                             'name': playlist['name'],
                             'description': playlist.get('description', ''),
-                            'tracks': rows  # Use the rows data
+                            'tracks': rows  # Use the same rows data as Excel/CSV
                         })
                         self._export_to_json(json_data, file_path)
                     else:  # xlsx (default)
