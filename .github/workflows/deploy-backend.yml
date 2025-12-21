@@ -1,0 +1,108 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'src/backend/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'src/backend/**' ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      working-directory: src/backend
+      run: npm ci
+
+    - name: Run tests
+      working-directory: src/backend
+      run: npm run test:run
+
+    - name: Run linting
+      working-directory: src/backend
+      run: npm run lint
+
+  deploy-dev:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      working-directory: src/backend
+      run: npm ci
+
+    - name: Deploy to Cloudflare Workers (Development)
+      working-directory: src/backend
+      run: npm run deploy --env development
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-prod:
+    needs: test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      working-directory: src/backend
+      run: npm ci
+
+    - name: Deploy to Cloudflare Workers (Production)
+      working-directory: src/backend
+      run: npm run deploy --env production
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    - name: Update worker version
+      working-directory: src/backend
+      run: |
+        # Extract version from tag
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "Deploying version $VERSION"
+        
+        # Update package.json version (optional)
+        npm version $VERSION --no-git-tag-version
+        
+        # Create deployment info
+        echo "Deployment Info:" > deployment-info.txt
+        echo "Version: $VERSION" >> deployment-info.txt
+        echo "Commit: ${{ github.sha }}" >> deployment-info.txt
+        echo "Timestamp: $(date -u)" >> deployment-info.txt
+        echo "Environment: production" >> deployment-info.txt
+
+    - name: Upload deployment info
+      uses: actions/upload-artifact@v4
+      with:
+        name: deployment-info-${{ github.sha }}
+        path: src/backend/deployment-info.txt
+        retention-days: 30
