@@ -53,16 +53,18 @@ describe('Auth Routes', () => {
       RECOCOBEATS_API_KEY: 'test-reccobeats-key',
       CACHE_KV: {
         get: vi.fn().mockResolvedValue(null),
+        getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined),
         list: vi.fn().mockResolvedValue({ keys: [] })
-      } as KVNamespace,
+      } as unknown as KVNamespace,
       SESSIONS_KV: {
         get: vi.fn().mockResolvedValue(null),
+        getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined),
         list: vi.fn().mockResolvedValue({ keys: [] })
-      } as KVNamespace
+      } as unknown as KVNamespace
     };
   });
 
@@ -74,12 +76,12 @@ describe('Auth Routes', () => {
         body: JSON.stringify({ redirect_uri: 'http://localhost:3000/callback' })
       });
 
-      const response = await app.request(request, { env: mockEnv });
-      const data = await response.json();
+      const response = await app.request(request, mockEnv);
+      const data = await response.json() as any;
 
       expect(response.status).toBe(200);
-      expect(data.data).toHaveProperty('auth_url');
-      expect(data.data).toHaveProperty('state');
+      expect(data).toHaveProperty('data.auth_url');
+      expect(data).toHaveProperty('data.state');
       expect(data.data.auth_url).toContain('accounts.spotify.com');
     });
 
@@ -90,8 +92,8 @@ describe('Auth Routes', () => {
         body: JSON.stringify({})
       });
 
-      const response = await app.request(request, { env: mockEnv });
-      const data = await response.json();
+      const response = await app.request(request, mockEnv);
+      const data = await response.json() as any;
 
       expect(response.status).toBe(400);
       expect(data.error).toHaveProperty('code', 'MISSING_REDIRECT_URI');
@@ -104,8 +106,8 @@ describe('Auth Routes', () => {
         method: 'GET'
       });
 
-      const response = await app.request(request, { env: mockEnv });
-      const data = await response.json();
+      const response = await app.request(request, mockEnv);
+      const data = await response.json() as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('tokens');
@@ -117,8 +119,8 @@ describe('Auth Routes', () => {
         method: 'GET'
       });
 
-      const response = await app.request(request, { env: mockEnv });
-      const data = await response.json();
+      const response = await app.request(request, mockEnv);
+      const data = await response.json() as any;
 
       expect(response.status).toBe(400);
       expect(data.error).toHaveProperty('code', 'OAUTH_ERROR');
@@ -129,8 +131,8 @@ describe('Auth Routes', () => {
         method: 'GET'
       });
 
-      const response = await app.request(request, { env: mockEnv });
-      const data = await response.json();
+      const response = await app.request(request, mockEnv);
+      const data = await response.json() as any;
 
       expect(response.status).toBe(400);
       expect(data.error).toHaveProperty('code', 'INVALID_CALLBACK');
@@ -145,8 +147,8 @@ describe('Auth Routes', () => {
         body: JSON.stringify({ refresh_token: 'test-refresh-token' })
       });
 
-      const response = await app.request(request, { env: mockEnv });
-      const data = await response.json();
+      const response = await app.request(request, mockEnv);
+      const data = await response.json() as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('access_token');
@@ -159,8 +161,8 @@ describe('Auth Routes', () => {
         body: JSON.stringify({})
       });
 
-      const response = await app.request(request, { env: mockEnv });
-      const data = await response.json();
+      const response = await app.request(request, mockEnv);
+      const data = await response.json() as any;
 
       expect(response.status).toBe(400);
       expect(data.error).toHaveProperty('code', 'MISSING_REFRESH_TOKEN');
