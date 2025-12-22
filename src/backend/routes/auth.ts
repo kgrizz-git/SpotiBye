@@ -11,12 +11,12 @@ const app = new Hono<{ Bindings: Env }>();
 app.post('/spotify/login', async (c) => {
   try {
     const { redirect_uri } = await c.req.json();
-    const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     
     if (!redirect_uri) {
       return c.json({ error: { code: 'MISSING_REDIRECT_URI', message: 'redirect_uri is required' } }, 400);
     }
     
+    const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     const authUrl = spotifyAuth.getAuthUrl(redirect_uri);
     
     return c.json({ 
