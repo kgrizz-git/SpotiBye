@@ -15,6 +15,11 @@ vi.mock('../services/spotify-auth', () => ({
       token_type: 'Bearer',
       scope: 'playlist-read-private'
     }),
+    getUserProfile: vi.fn().mockResolvedValue({
+      id: 'test-user-id',
+      email: 'test@example.com',
+      name: 'Test User'
+    }),
     refreshAccessToken: vi.fn().mockResolvedValue({
       access_token: 'new-access-token',
       expires_in: 3600,
