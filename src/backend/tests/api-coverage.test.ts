@@ -2,6 +2,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import app from '../index';
 import type { Env } from '../types/env';
 
+// Mock JWT service
+vi.mock('../services/jwt', () => ({
+  JWTService: vi.fn().mockImplementation(() => ({
+    verifyToken: vi.fn().mockReturnValue({
+      sub: 'test-user-id',
+      email: 'test@example.com',
+      name: 'Test User',
+      session_id: 'test-session-id'
+    })
+  }))
+}));
+
 // Mock environment variables
 const mockEnv: Env = {
   ENVIRONMENT: 'test',
@@ -11,12 +23,20 @@ const mockEnv: Env = {
   RECOCOBEATS_API_KEY: 'test-reccobeats-key',
   CACHE_KV: {
     get: vi.fn().mockResolvedValue(null),
+    getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
     put: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     list: vi.fn().mockResolvedValue({ keys: [] })
   } as any,
   SESSIONS_KV: {
-    get: vi.fn().mockResolvedValue(null),
+    get: vi.fn().mockResolvedValue(JSON.stringify({
+      user_id: 'test-user-id',
+      access_token: 'test-access-token',
+      refresh_token: 'test-refresh-token',
+      expires_at: Date.now() + 3600000,
+      spotify_data: { id: 'test-user-id', email: 'test@example.com' }
+    })),
+    getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
     put: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     list: vi.fn().mockResolvedValue({ keys: [] })
@@ -27,15 +47,20 @@ describe('API Coverage Tests', () => {
   describe('All API Endpoints', () => {
     it('should have all authentication endpoints available', async () => {
       const endpoints = [
-        { method: 'POST', path: '/auth/spotify/login' },
-        { method: 'GET', path: '/auth/spotify/callback' },
-        { method: 'POST', path: '/auth/spotify/refresh' }
+        { method: 'POST', path: '/auth/spotify/login', auth: false },
+        { method: 'GET', path: '/auth/spotify/callback', auth: false },
+        { method: 'POST', path: '/auth/spotify/refresh', auth: true }
       ];
 
       for (const endpoint of endpoints) {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (endpoint.auth) {
+          headers['Authorization'] = 'Bearer mock-token';
+        }
+
         const request = new Request(`http://localhost${endpoint.path}`, {
           method: endpoint.method,
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: endpoint.method === 'POST' ? JSON.stringify({}) : undefined
         });
 
@@ -151,7 +176,7 @@ describe('API Coverage Tests', () => {
         const response = await app.fetch(request, mockEnv);
         
         if (response.status >= 400) {
-          const data = await response.json();
+          const data = await response.json() as any;
           
           // Error responses should have consistent structure
           if (response.status === 404) {
