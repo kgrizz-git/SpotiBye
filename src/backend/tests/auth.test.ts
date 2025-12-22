@@ -76,7 +76,7 @@ describe('Auth Routes', () => {
         body: JSON.stringify({ redirect_uri: 'http://localhost:3000/callback' })
       });
 
-      const response = await app.request(request, mockEnv);
+      const response = await app.request(request, {}, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(200);
@@ -92,7 +92,7 @@ describe('Auth Routes', () => {
         body: JSON.stringify({})
       });
 
-      const response = await app.request(request, mockEnv);
+      const response = await app.request(request, {}, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(400);
@@ -106,7 +106,7 @@ describe('Auth Routes', () => {
         method: 'GET'
       });
 
-      const response = await app.request(request, mockEnv);
+      const response = await app.request(request, {}, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(200);
@@ -119,7 +119,7 @@ describe('Auth Routes', () => {
         method: 'GET'
       });
 
-      const response = await app.request(request, mockEnv);
+      const response = await app.request(request, {}, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(400);
@@ -131,7 +131,7 @@ describe('Auth Routes', () => {
         method: 'GET'
       });
 
-      const response = await app.request(request, mockEnv);
+      const response = await app.request(request, {}, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(400);
@@ -147,7 +147,7 @@ describe('Auth Routes', () => {
         body: JSON.stringify({ refresh_token: 'test-refresh-token' })
       });
 
-      const response = await app.request(request, mockEnv);
+      const response = await app.request(request, {}, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(200);
@@ -161,7 +161,7 @@ describe('Auth Routes', () => {
         body: JSON.stringify({})
       });
 
-      const response = await app.request(request, mockEnv);
+      const response = await app.request(request, {}, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(400);
