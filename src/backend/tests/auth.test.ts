@@ -51,8 +51,18 @@ describe('Auth Routes', () => {
       SPOTIFY_CLIENT_SECRET: 'test-client-secret',
       JWT_SECRET: 'test-jwt-secret',
       RECOCOBEATS_API_KEY: 'test-reccobeats-key',
-      CACHE_KV: {} as KVNamespace,
-      SESSIONS_KV: {} as KVNamespace
+      CACHE_KV: {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+        list: vi.fn().mockResolvedValue({ keys: [] })
+      } as KVNamespace,
+      SESSIONS_KV: {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+        list: vi.fn().mockResolvedValue({ keys: [] })
+      } as KVNamespace
     };
   });
 
