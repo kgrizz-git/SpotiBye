@@ -14,7 +14,7 @@ export interface ReccobeatsFeatures {
   time_signature?: number;
 }
 
-export class ReccobeatsService {
+export class ReccoBeatsService {
   private apiKey: string;
 
   constructor(apiKey: string) {
