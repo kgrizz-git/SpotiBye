@@ -32,6 +32,7 @@ vi.mock('../services/spotify-auth', () => ({
 vi.mock('../services/jwt', () => ({
   JWTService: vi.fn().mockImplementation(() => ({
     createToken: vi.fn().mockReturnValue('test-jwt-token'),
+    generateToken: vi.fn().mockReturnValue('test-jwt-token'),
     verifyToken: vi.fn().mockReturnValue({
       sub: 'test-user-id',
       email: 'test@example.com',
