@@ -67,7 +67,7 @@ jobs:
   deploy-prod:
     needs: test
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
     
     steps:
     - name: Checkout code
