@@ -2,6 +2,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import app from '../index';
 import type { Env } from '../types/env';
 
+// Mock JWT service
+vi.mock('../services/jwt', () => ({
+  JWTService: vi.fn().mockImplementation(() => ({
+    verifyToken: vi.fn().mockReturnValue({
+      sub: 'test-user-id',
+      email: 'test@example.com',
+      name: 'Test User',
+      session_id: 'test-session-id'
+    })
+  }))
+}));
+
 // Mock environment variables
 const mockEnv: Env = {
   ENVIRONMENT: 'test',
@@ -11,12 +23,20 @@ const mockEnv: Env = {
   RECOCOBEATS_API_KEY: 'test-reccobeats-key',
   CACHE_KV: {
     get: vi.fn().mockResolvedValue(null),
+    getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
     put: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     list: vi.fn().mockResolvedValue({ keys: [] })
   } as any,
   SESSIONS_KV: {
-    get: vi.fn().mockResolvedValue(null),
+    get: vi.fn().mockResolvedValue(JSON.stringify({
+      user_id: 'test-user-id',
+      access_token: 'test-access-token',
+      refresh_token: 'test-refresh-token',
+      expires_at: Date.now() + 3600000,
+      spotify_data: { id: 'test-user-id', email: 'test@example.com' }
+    })),
+    getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
     put: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     list: vi.fn().mockResolvedValue({ keys: [] })
@@ -101,7 +121,7 @@ describe('Export Functionality Performance Tests', () => {
         // Medium playlists should complete within 5 seconds in test environment
         expect(duration).toBeLessThan(5000);
         
-        const data = await response.json();
+        const data = await response.json() as any;
         expect(data.data).toHaveProperty('export_id');
       }
     });
@@ -132,7 +152,7 @@ describe('Export Functionality Performance Tests', () => {
         // Large playlists might take longer but should still complete
         expect(duration).toBeLessThan(10000);
         
-        const data = await response.json();
+        const data = await response.json() as any;
         expect(data.data).toHaveProperty('export_id');
       }
     });
