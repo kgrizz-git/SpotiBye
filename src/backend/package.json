@@ -23,7 +23,8 @@
     "wrangler": "^3.57.0",
     "eslint": "^8.57.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0"
+    "@typescript-eslint/parser": "^6.0.0",
+    "dotenv": "^16.4.5"
   },
   "dependencies": {
     "hono": "^4.0.0"
