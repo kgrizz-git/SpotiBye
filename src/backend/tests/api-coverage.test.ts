@@ -4,14 +4,19 @@ import type { Env } from '../types/env';
 
 // Mock JWT service
 vi.mock('../services/jwt', () => ({
-  JWTService: vi.fn().mockImplementation(() => ({
-    verifyToken: vi.fn().mockReturnValue({
-      sub: 'test-user-id',
-      email: 'test@example.com',
-      name: 'Test User',
-      session_id: 'test-session-id'
-    })
-  }))
+  JWTService: class {
+    constructor(secret: string) {
+      // Mock constructor
+    }
+    verifyToken() {
+      return {
+        sub: 'test-user-id',
+        email: 'test@example.com',
+        name: 'Test User',
+        session_id: 'test-session-id'
+      };
+    }
+  }
 }));
 
 // Mock environment variables
