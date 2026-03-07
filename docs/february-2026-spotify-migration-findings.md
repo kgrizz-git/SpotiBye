@@ -1,7 +1,17 @@
 # Spotify Web API February 2026 Migration Findings (Development Mode)
 
-## NOTE: POSSIBLE PAUSE OR REVERSAL IN THESE CHANGES
-See the top answers on this thread: https://community.spotify.com/t5/Spotify-for-Developers/February-2026-Spotify-for-Developers-update-thread/td-p/7330564/page/11
+https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide
+
+## NOTE: POSSIBLE PAUSE OR REVERSAL IN SOME OF THESE CHANGES
+Only external_id. Possible developer tier coming. See this thread: https://community.spotify.com/t5/Spotify-for-Developers/February-2026-Spotify-for-Developers-update-thread/td-p/7330564/page/11
+
+Biggest problem is no tier between 5 users and >250k monthly listeners.
+
+
+### Other Options
+Perhaps can use client credentials to get public playlists without users being authenticated? Although that may have changed since 2025 https://developer.spotify.com/documentation/web-api/tutorials/client-credentials-flow
+
+Apple API seems robust.
 
 ## Scope
 This summary is based on a targeted scan of active code paths under `src/backend` and `src/frontend` against the February 2026 Spotify Web API Development Mode migration guide.
