@@ -41,7 +41,7 @@ export class AnalysisService {
           artists: item.track.artists.map((artist: any) => artist.name),
           album: item.track.album.name,
           duration_ms: item.track.duration_ms,
-          popularity: item.track.popularity,
+          popularity: item.track.popularity ?? 0,
           audio_features: audioFeatures[index] || null
         }))
       };

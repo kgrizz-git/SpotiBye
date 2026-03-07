@@ -1,8 +1,8 @@
 export interface SpotifyUser {
   id: string;
   display_name: string;
-  email: string;
-  country: string;
+  email?: string;
+  country?: string;
   images: SpotifyImage[];
 }
 
@@ -19,7 +19,8 @@ export interface SpotifyPlaylist {
   public: boolean;
   collaborative: boolean;
   owner: SpotifyUser;
-  tracks: SpotifyPlaylistTracks;
+  tracks?: SpotifyPlaylistTracks;
+  items?: SpotifyPlaylistItems;
   images: SpotifyImage[];
   external_urls: { spotify: string };
   uri: string;
@@ -31,10 +32,17 @@ export interface SpotifyPlaylistTracks {
   items: SpotifyPlaylistTrackItem[];
 }
 
+export interface SpotifyPlaylistItems {
+  href?: string;
+  total: number;
+  items: SpotifyPlaylistTrackItem[];
+}
+
 export interface SpotifyPlaylistTrackItem {
-  added_at: string;
+  added_at?: string;
   added_by: SpotifyUser | null;
-  track: SpotifyTrack;
+  track?: SpotifyTrack;
+  item?: SpotifyTrack;
 }
 
 export interface SpotifyTrack {
@@ -44,7 +52,7 @@ export interface SpotifyTrack {
   album: SpotifyAlbum;
   duration_ms: number;
   explicit: boolean;
-  popularity: number;
+  popularity?: number;
   external_urls: { spotify: string };
   uri: string;
   preview_url: string | null;

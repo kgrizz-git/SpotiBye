@@ -1,4 +1,15 @@
-import type { SpotifyPlaylist, SpotifyTrack, SpotifyAudioFeatures } from '../types/spotify';
+import type {
+  SpotifyPlaylist,
+  SpotifyTrack,
+  SpotifyAudioFeatures,
+  SpotifyPlaylistTrackItem,
+} from '../types/spotify';
+
+export interface NormalizedPlaylistItemsResponse {
+  href?: string;
+  total: number;
+  items: Array<SpotifyPlaylistTrackItem & { track: SpotifyTrack }>;
+}
 
 export class SpotifyService {
   private accessToken: string;
@@ -24,13 +35,38 @@ export class SpotifyService {
     return await response.json();
   }
   
-  async getPlaylistTracks(playlistId: string, limit: number = 50, offset: number = 0): Promise<any> {
-    const url = new URL(`${this.baseUrl}/playlists/${playlistId}/tracks`);
+  async getPlaylistTracks(playlistId: string, limit: number = 50, offset: number = 0): Promise<NormalizedPlaylistItemsResponse> {
+    const url = new URL(`${this.baseUrl}/playlists/${playlistId}/items`);
     url.searchParams.set('limit', limit.toString());
     url.searchParams.set('offset', offset.toString());
     
     const response = await this.fetchWithRetry(url.toString());
-    return await response.json();
+    const data = await response.json();
+    return this.normalizePlaylistItemsResponse(data);
+  }
+
+  private normalizePlaylistItemsResponse(data: any): NormalizedPlaylistItemsResponse {
+    const rawItems = Array.isArray(data?.items) ? data.items : [];
+
+    const items = rawItems
+      .map((entry: any) => {
+        const normalizedTrack = entry?.track ?? entry?.item;
+        if (!normalizedTrack?.id) {
+          return null;
+        }
+
+        return {
+          ...entry,
+          track: normalizedTrack,
+        };
+      })
+      .filter((entry: any): entry is SpotifyPlaylistTrackItem & { track: SpotifyTrack } => Boolean(entry));
+
+    return {
+      href: data?.href,
+      total: typeof data?.total === 'number' ? data.total : items.length,
+      items,
+    };
   }
   
   async getTrack(trackId: string): Promise<SpotifyTrack> {

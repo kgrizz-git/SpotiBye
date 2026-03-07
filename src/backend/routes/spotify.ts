@@ -64,8 +64,7 @@ app.get('/playlists/:id', async (c) => {
   }
 });
 
-// GET /spotify/playlists/:id/tracks - Get playlist tracks
-app.get('/playlists/:id/tracks', async (c) => {
+const getPlaylistItemsHandler = async (c: any) => {
   try {
     const playlistId = c.req.param('id');
     const accessToken = c.get('access_token');
@@ -92,7 +91,13 @@ app.get('/playlists/:id/tracks', async (c) => {
     console.error('Failed to get playlist tracks:', error);
     return c.json({ error: { code: 'PLAYLIST_TRACKS_FETCH_FAILED', message: 'Failed to fetch playlist tracks' } }, 500);
   }
-});
+};
+
+// GET /spotify/playlists/:id/items - Get playlist items (February 2026 API naming)
+app.get('/playlists/:id/items', getPlaylistItemsHandler);
+
+// GET /spotify/playlists/:id/tracks - Backward-compatible alias
+app.get('/playlists/:id/tracks', getPlaylistItemsHandler);
 
 // GET /spotify/tracks/:id - Get track details
 app.get('/tracks/:id', async (c) => {

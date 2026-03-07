@@ -74,7 +74,8 @@ The API uses JWT tokens for authentication. Follow this flow:
 #### Spotify Data
 - `GET /spotify/playlists` - Get user playlists
 - `GET /spotify/playlists/{id}` - Get playlist details
-- `GET /spotify/playlists/{id}/tracks` - Get playlist tracks
+- `GET /spotify/playlists/{id}/items` - Get playlist items
+- `GET /spotify/playlists/{id}/tracks` - Backward-compatible alias for playlist items
 
 #### Analysis
 - `POST /analysis/playlist/{id}` - Analyze playlist

@@ -8,7 +8,7 @@ export interface AuthTokens {
 
 export interface JWTPayload {
   sub: string;
-  email: string;
+  email?: string;
   name: string;
   session_id: string;
   iat: number;

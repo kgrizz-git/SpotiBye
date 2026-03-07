@@ -1,7 +1,7 @@
 export interface Variables {
   user: {
     id: string;
-    email: string;
+    email?: string;
     name: string;
     session_id: string;
   };

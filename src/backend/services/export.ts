@@ -101,7 +101,7 @@ export class ExportService {
           album: track.album.name,
           duration: this.formatDuration(track.duration_ms),
           duration_ms: track.duration_ms,
-          popularity: track.popularity,
+          popularity: track.popularity ?? 0,
           explicit: track.explicit,
           release_date: track.album.release_date,
           uri: track.uri,
@@ -128,7 +128,7 @@ export class ExportService {
         id: playlist.id,
         name: playlist.name,
         description: playlist.description || '',
-        total_tracks: playlist.tracks.total,
+        total_tracks: playlist.items?.total ?? playlist.tracks?.total ?? exportTracks.length,
         owner: playlist.owner.display_name
       },
       tracks: exportTracks,

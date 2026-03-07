@@ -51,7 +51,8 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
 ### Spotify Data
 - `GET /spotify/playlists` - Get user playlists
 - `GET /spotify/playlists/:id` - Get playlist details
-- `GET /spotify/playlists/:id/tracks` - Get playlist tracks
+- `GET /spotify/playlists/:id/items` - Get playlist items
+- `GET /spotify/playlists/:id/tracks` - Backward-compatible alias for playlist items
 - `GET /spotify/tracks/:id` - Get track details
 - `GET /spotify/tracks/:id/audio-features` - Get track audio features
 

@@ -24,7 +24,7 @@ class MockBackendHandler(BaseHTTPRequestHandler):
             self._handle_health_check()
         elif parsed_path.path == '/spotify/playlists':
             self._handle_get_playlists()
-        elif parsed_path.path.startswith('/spotify/playlists/') and '/tracks' in parsed_path.path:
+        elif parsed_path.path.startswith('/spotify/playlists/') and ('/tracks' in parsed_path.path or '/items' in parsed_path.path):
             playlist_id = parsed_path.path.split('/')[3]
             self._handle_get_playlist_tracks(playlist_id)
         elif parsed_path.path.startswith('/spotify/playlists/'):
@@ -187,7 +187,7 @@ class MockBackendHandler(BaseHTTPRequestHandler):
                 for i in range(track_count)
             ]
         
-        response = {'tracks': tracks}
+        response = {'items': tracks, 'tracks': tracks}
         self._send_json_response(200, response)
     
     def _handle_start_analysis(self, playlist_id: str):
