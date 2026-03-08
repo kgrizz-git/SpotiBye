@@ -11,6 +11,7 @@ import urllib.parse
 import webbrowser
 
 from ..services.backend_client import BackendClient, BackendAPIError
+from ..config.backend_config import OAUTH_CALLBACK_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,9 @@ class BackendAuthenticator:
             backend_client: Backend client instance
         """
         self.backend_client = backend_client or BackendClient()
-        self.callback_port = 8080
+        # Spotify no longer allows localhost redirect URIs; use loopback IP literal.
+        self.callback_host = '127.0.0.1'
+        self.callback_port = OAUTH_CALLBACK_PORT
         self.callback_timeout = 300  # 5 minutes
         self.server_thread: Optional[threading.Thread] = None
         self.http_server: Optional[HTTPServer] = None
@@ -143,7 +146,7 @@ class BackendAuthenticator:
             logger.info("Initiating OAuth login flow")
             
             # Get authorization URL from backend
-            redirect_uri = f"http://localhost:{self.callback_port}/callback"
+            redirect_uri = f"http://{self.callback_host}:{self.callback_port}/callback"
             auth_url = self.backend_client.initiate_spotify_login(redirect_uri)
             logger.info(f"Got authorization URL: {auth_url}")
             
@@ -208,14 +211,14 @@ class BackendAuthenticator:
             def handler(*args, **kwargs):
                 return CallbackHandler(self.auth_result_container, *args, **kwargs)
             
-            self.http_server = HTTPServer(('localhost', self.callback_port), handler)
+            self.http_server = HTTPServer((self.callback_host, self.callback_port), handler)
             
             # Start server in separate thread
             self.server_thread = threading.Thread(target=self.http_server.serve_forever)
             self.server_thread.daemon = True
             self.server_thread.start()
             
-            logger.info(f"Callback server started on port {self.callback_port}")
+            logger.info(f"Callback server started on {self.callback_host}:{self.callback_port}")
             return True
             
         except Exception as e:
