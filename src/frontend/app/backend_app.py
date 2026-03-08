@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from kivy.app import MDApp
+from kivymd.app import MDApp
 from kivy.clock import Clock
 from kivy.config import Config
 from kivy.core.window import Window
@@ -15,14 +15,22 @@ from kivy.lang.builder import Builder
 from kivy.logger import Logger as logger
 from kivy.metrics import dp
 from kivy.uix.label import Label
+from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import ScreenManager
 
 # Import backend components
-from ..services.backend_client import BackendClient, get_backend_client
+from ..services.backend_client import BackendClient, get_backend_client, set_backend_url
 from ..auth.backend_login_screen import BackendLoginScreen, create_backend_login_screen
-from ..caching.backend_cache import BackendCacheManager, get_cache_manager
-from ..config.backend_config import CURRENT_BACKEND_URL, validate_config, get_config_summary
+from ..caching.backend_cache import BackendCacheManager, get_cache_manager, set_cache_manager
+from ..config.backend_config import (
+    ENABLE_BACKEND_SELECTOR,
+    resolve_startup_backend_url,
+    save_backend_url,
+    validate_config,
+    get_config_summary,
+)
 from ..screens.backend_main_screen_adapter import BackendMainScreenAdapter, create_backend_adapter
+from ..ui.backend_selector_popup import BackendSelectorPopup
 
 # Import original components for compatibility
 from ...spotify_playlist_exporter_v2.screens.main_screen import MainScreen
@@ -43,6 +51,8 @@ class BackendSpotifyExporterApp(MDApp):
         self.backend_client: Optional[BackendClient] = None
         self.cache_manager: Optional[BackendCacheManager] = None
         self.backend_adapter: Optional[BackendMainScreenAdapter] = None
+        self.selected_backend_url: str = resolve_startup_backend_url()
+        self.backend_selector_popup: Optional[Popup] = None
         
         # Match previous dark styling
         self.theme_cls.theme_style = "Dark"
@@ -51,28 +61,34 @@ class BackendSpotifyExporterApp(MDApp):
         self.theme_cls.accent_palette = "Blue"
         self.theme_cls.accent_hue = "400"
         
-        # Initialize backend components
-        self._initialize_backend()
+        # Backend components are initialized after runtime backend selection.
 
-    def _initialize_backend(self) -> None:
+    def _initialize_backend(self, backend_url: str) -> None:
         """Initialize backend components."""
         try:
             # Validate configuration
             config_issues = validate_config()
             if config_issues:
                 original_logger.warning(f"Configuration issues: {config_issues}")
+
+            self.selected_backend_url = backend_url.rstrip('/')
+
+            # Initialize backend client and sync global singleton.
+            set_backend_url(self.selected_backend_url)
+            self.backend_client = get_backend_client()
             
-            # Initialize backend client
-            self.backend_client = BackendClient(CURRENT_BACKEND_URL)
-            get_backend_client().base_url = CURRENT_BACKEND_URL
-            
-            # Initialize cache manager
-            self.cache_manager = get_cache_manager()
+            # Initialize cache manager bound to selected backend.
+            self.cache_manager = BackendCacheManager(self.backend_client)
+            set_cache_manager(self.cache_manager)
             
             # Initialize backend adapter
             self.backend_adapter = create_backend_adapter(self.backend_client)
+
+            # Update login screen with selected backend.
+            if hasattr(self, 'login_screen') and self.login_screen:
+                self.login_screen.set_backend_client(self.backend_client)
             
-            original_logger.info(f"Backend initialized with URL: {CURRENT_BACKEND_URL}")
+            original_logger.info(f"Backend initialized with URL: {self.selected_backend_url}")
             
             # Log configuration summary in debug mode
             from ..config.backend_config import FeatureFlags
@@ -93,7 +109,10 @@ class BackendSpotifyExporterApp(MDApp):
             self.screen_manager = ScreenManager()
             
             # Create login screen (backend version)
-            self.login_screen = create_backend_login_screen(self.backend_client)
+            self.login_screen = create_backend_login_screen(
+                self.backend_client,
+                on_change_backend=self.open_backend_selector,
+            )
             self.login_screen.name = 'login'
             
             # Create main screen (original version)
@@ -102,14 +121,47 @@ class BackendSpotifyExporterApp(MDApp):
             self.screen_manager.add_widget(self.login_screen)
             self.screen_manager.add_widget(self.main_screen)
 
-            # Check for cached authentication
-            self._try_auto_login()
+            # Open selector first, or apply resolved default if selector disabled.
+            if ENABLE_BACKEND_SELECTOR:
+                Clock.schedule_once(lambda _dt: self.open_backend_selector(), 0)
+            else:
+                self._initialize_backend(self.selected_backend_url)
+                self._try_auto_login()
             
             return self.screen_manager
             
         except Exception as exc:  # pragma: no cover - UI fallback
             original_logger.error("Error building backend app: %s", exc)
             return Label(text=f'Error starting app: {exc}')
+
+    def open_backend_selector(self) -> None:
+        """Open backend selector popup for runtime backend selection."""
+        if self.backend_selector_popup:
+            return
+
+        self.backend_selector_popup = BackendSelectorPopup(
+            default_url=self.selected_backend_url,
+            on_apply=self.apply_backend_url,
+            on_cancel=self._on_backend_selector_cancel,
+        )
+        self.backend_selector_popup.bind(on_dismiss=lambda _instance: self._clear_backend_selector_popup())
+        self.backend_selector_popup.open()
+
+    def _clear_backend_selector_popup(self) -> None:
+        """Clear popup reference when selector closes."""
+        self.backend_selector_popup = None
+
+    def _on_backend_selector_cancel(self) -> None:
+        """Fallback to resolved startup backend when selector is canceled."""
+        self.apply_backend_url(self.selected_backend_url)
+
+    def apply_backend_url(self, backend_url: str) -> None:
+        """Apply user-selected backend URL and continue startup flow."""
+        self._initialize_backend(backend_url)
+        save_backend_url(self.selected_backend_url)
+
+        # Check for cached authentication after backend is ready.
+        self._try_auto_login()
 
     # ------------------------------------------------------------------
     # Screen switching helpers
@@ -258,7 +310,7 @@ class BackendSpotifyExporterApp(MDApp):
                 'backend_health': health,
                 'cache_stats': cache_stats,
                 'authenticated': self.backend_client.is_authenticated(),
-                'backend_url': CURRENT_BACKEND_URL,
+                'backend_url': self.selected_backend_url,
             }
             
         except Exception as e:

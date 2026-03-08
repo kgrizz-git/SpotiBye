@@ -25,6 +25,31 @@ pyinstaller spotibye.spec --noconfirm --clean
 
 Output is written to `dist/`.
 
+### Choose backend in GUI (startup)
+
+The backend-integrated frontend now prompts for backend target at startup.
+
+Options in the popup:
+- `Localhost` (`http://localhost:8787`)
+- `Cloudflare Dev`
+- `Cloudflare Prod`
+- `Custom` URL
+
+Flow:
+1. Select target backend.
+2. Click `Test Connection`.
+3. Click `Continue`.
+
+The selected backend URL is saved to `~/.spotibye_cache/backend_selection.json` and restored on next launch.
+
+Notes:
+- You can still force defaults with env vars:
+  - `SPOTIBYE_BACKEND_URL`
+  - `SPOTIBYE_PRODUCTION_BACKEND_URL`
+  - `SPOTIBYE_USE_PRODUCTION`
+- Feature flag to disable startup selector:
+  - `SPOTIBYE_ENABLE_BACKEND_SELECTOR=false`
+
 ### macOS DMG packaging
 ```bash
 cd dist

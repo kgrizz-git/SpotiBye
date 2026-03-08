@@ -19,6 +19,13 @@ This guide provides comprehensive testing procedures for validating SpotiBye's f
 - [x] **Modern web browser** for OAuth flow
 - [x] **Terminal/command line** for running automated tests
 
+### Backend Target Selection (GUI)
+- [ ] **Select backend target at app startup**
+  - [ ] Launch app and confirm `Choose Backend` popup appears
+  - [ ] Select `Localhost`, `Cloudflare Dev`, `Cloudflare Prod`, or `Custom`
+  - [ ] Click `Test Connection` and verify health check succeeds
+  - [ ] Click `Continue` and verify login screen shows selected backend URL
+
 ### Automated Testing
 - [x] **Backend Health Check**
   - [x] Run `curl -f https://spotibye-backend-development.kevin-grizzard.workers.dev/health`
@@ -257,9 +264,11 @@ python -m src.frontend.tests.test_real_integration --test-auth-errors
 #### Step 1: Complete OAuth Flow
 **Actions**:
 1. Launch SpotiBye frontend
-2. Click "Login with Spotify"
-3. Complete Spotify authorization in browser
-4. Return to SpotiBye application
+2. In `Choose Backend`, select target backend and click `Test Connection`
+3. Click `Continue` to enter login screen
+4. Click "Login with Spotify"
+5. Complete Spotify authorization in browser
+6. Return to SpotiBye application
 
 **Expected Results**:
 - Browser opens to Spotify login page

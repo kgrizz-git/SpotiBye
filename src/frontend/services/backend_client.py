@@ -100,9 +100,17 @@ class BackendClient:
             
             # Check for error responses
             if response.status_code >= 400:
-                error_message = response_data.get('error', f'HTTP {response.status_code}')
+                error_payload = response_data.get('error', {}) if isinstance(response_data, dict) else {}
+                if isinstance(error_payload, dict):
+                    error_message = error_payload.get('message', error_payload.get('code', f'HTTP {response.status_code}'))
+                else:
+                    error_message = str(error_payload) or f'HTTP {response.status_code}'
                 raise BackendAPIError(error_message, response.status_code, response_data)
-            
+
+            # Most backend routes return { data: ... }, while some utility routes return raw objects.
+            if isinstance(response_data, dict) and 'data' in response_data and isinstance(response_data['data'], dict):
+                return response_data['data']
+
             return response_data
             
         except requests.exceptions.ConnectionError as e:
@@ -119,20 +127,20 @@ class BackendClient:
             raise BackendAPIError("Invalid response from backend.")
     
     # Authentication endpoints
-    def initiate_spotify_login(self) -> str:
+    def initiate_spotify_login(self, redirect_uri: str) -> str:
         """
         Initiate Spotify OAuth login flow.
         
         Returns:
             Authorization URL for user to visit
         """
-        response = self._make_request('POST', '/auth/spotify/login')
+        response = self._make_request('POST', '/auth/spotify/login', json={'redirect_uri': redirect_uri})
         auth_url = response.get('auth_url')
         if not auth_url:
             raise BackendAPIError("No authorization URL received from backend")
         return auth_url
     
-    def handle_spotify_callback(self, code: str) -> Dict[str, Any]:
+    def handle_spotify_callback(self, code: str, state: str) -> Dict[str, Any]:
         """
         Handle Spotify OAuth callback.
         
@@ -142,7 +150,7 @@ class BackendClient:
         Returns:
             JWT token and user information
         """
-        response = self._make_request('POST', '/auth/spotify/callback', json={'code': code})
+        response = self._make_request('GET', f'/auth/spotify/callback?code={code}&state={state}')
         token = response.get('token')
         if not token:
             raise BackendAPIError("No token received from backend")
@@ -153,7 +161,7 @@ class BackendClient:
     def refresh_token(self) -> Dict[str, Any]:
         """Refresh JWT token."""
         response = self._make_request('POST', '/auth/spotify/refresh')
-        token = response.get('token')
+        token = response.get('access_token')
         if not token:
             raise BackendAPIError("No refreshed token received from backend")
         

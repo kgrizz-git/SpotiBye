@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from kivy.app import App
 from kivy.clock import Clock, mainthread
@@ -26,7 +26,12 @@ logger = logging.getLogger(__name__)
 class BackendLoginScreen(Screen):
     """Login screen for Spotify authentication using Cloudflare Worker backend."""
 
-    def __init__(self, backend_client: Optional[BackendClient] = None, **kwargs: Any):
+    def __init__(
+        self,
+        backend_client: Optional[BackendClient] = None,
+        on_change_backend: Optional[Callable[[], None]] = None,
+        **kwargs: Any,
+    ):
         """
         Initialize backend login screen.
         
@@ -35,14 +40,19 @@ class BackendLoginScreen(Screen):
             **kwargs: Additional keyword arguments
         """
         super().__init__(**kwargs)
-        self.backend_client = backend_client or BackendClient()
-        self.authenticator = BackendAuthenticator(self.backend_client)
+        self.backend_client = backend_client
+        self.authenticator = BackendAuthenticator(self.backend_client) if self.backend_client else None
+        self.on_change_backend = on_change_backend
         self.status_label: Label
         self.login_button: Button | None = None
         self.login_in_progress = False
         self.connection_status_label: Optional[Label] = None
+        self.backend_url_label: Optional[Label] = None
         self.build_ui()
-        self.check_backend_connection()
+        if self.backend_client:
+            self.check_backend_connection()
+        else:
+            self._update_connection_status('Choose backend to begin', (0.9, 0.8, 0.3, 1))
 
     def build_ui(self) -> None:
         """Build the login screen UI."""
@@ -69,6 +79,15 @@ class BackendLoginScreen(Screen):
         )
         layout.add_widget(self.connection_status_label)
 
+        self.backend_url_label = Label(
+            text='Backend: not selected',
+            font_size=dp(11),
+            size_hint_y=None,
+            height=dp(20),
+            color=(0.7, 0.7, 0.7, 1),
+        )
+        layout.add_widget(self.backend_url_label)
+
         layout.add_widget(Widget(size_hint_y=0.1))
 
         # Instructions
@@ -94,6 +113,16 @@ class BackendLoginScreen(Screen):
         layout.add_widget(login_btn)
         self.login_button = login_btn
 
+        change_backend_btn = Button(
+            text='Change Backend',
+            size_hint=(None, None),
+            size=(dp(180), dp(38)),
+            pos_hint={'center_x': 0.5},
+            font_size=dp(14),
+        )
+        change_backend_btn.bind(on_press=self._on_change_backend)
+        layout.add_widget(change_backend_btn)
+
         # Status label
         self.status_label = Label(
             text='',
@@ -109,6 +138,10 @@ class BackendLoginScreen(Screen):
 
     def check_backend_connection(self) -> None:
         """Check backend connection in background thread."""
+        if not self.backend_client:
+            self._update_connection_status('Choose backend to begin', (0.9, 0.8, 0.3, 1))
+            return
+
         def check_connection():
             try:
                 health = self.backend_client.health_check()
@@ -130,12 +163,35 @@ class BackendLoginScreen(Screen):
             self.connection_status_label.text = text
             self.connection_status_label.color = color
 
+    @mainthread
+    def _update_backend_url_label(self, url: str) -> None:
+        """Show currently selected backend URL."""
+        if self.backend_url_label:
+            self.backend_url_label.text = f'Backend: {url}'
+
+    def set_backend_client(self, backend_client: BackendClient) -> None:
+        """Set backend client after user picks a backend URL."""
+        self.backend_client = backend_client
+        self.authenticator = BackendAuthenticator(self.backend_client)
+        self._update_backend_url_label(self.backend_client.base_url)
+        self.check_backend_connection()
+
+    def _on_change_backend(self, _instance) -> None:
+        """Re-open backend selector from login screen."""
+        if self.on_change_backend:
+            self.on_change_backend()
+
     def start_login(self, instance) -> None:  # pragma: no cover - UI path
         """Start the login process."""
         logger.info("Backend login button pressed")
 
         if self.login_in_progress:
             self.status_label.text = 'Login already in progress...'
+            return
+
+        if not self.backend_client or not self.authenticator:
+            self.status_label.text = 'Please choose a backend first.'
+            self.status_label.color = (1, 0.3, 0.3, 1)
             return
 
         # Check backend connection first
@@ -188,7 +244,8 @@ class BackendLoginScreen(Screen):
     def _on_login_success(self, token_response: dict) -> None:
         """Handle successful login."""
         try:
-            username = token_response.get('username', 'User')
+            user = token_response.get('user', {}) if isinstance(token_response.get('user'), dict) else {}
+            username = token_response.get('username') or user.get('display_name') or user.get('id') or 'User'
             token = token_response.get('token')
             
             if not token:
@@ -238,6 +295,9 @@ class BackendLoginScreen(Screen):
     def logout(self) -> None:
         """Logout user and clear authentication state."""
         try:
+            if not self.backend_client or not self.authenticator:
+                return
+
             # Logout from backend
             self.authenticator.logout()
             
@@ -260,15 +320,21 @@ class BackendLoginScreen(Screen):
 
     def is_authenticated(self) -> bool:
         """Check if user is authenticated."""
+        if not self.authenticator:
+            return False
         return self.authenticator.is_authenticated()
 
     def refresh_connection_status(self) -> None:
         """Refresh backend connection status."""
-        self.check_backend_connection()
+        if self.backend_client:
+            self.check_backend_connection()
 
 
 # Factory function for easy integration
-def create_backend_login_screen(backend_client: Optional[BackendClient] = None) -> BackendLoginScreen:
+def create_backend_login_screen(
+    backend_client: Optional[BackendClient] = None,
+    on_change_backend: Optional[Callable[[], None]] = None,
+) -> BackendLoginScreen:
     """
     Create a backend login screen instance.
     
@@ -278,7 +344,7 @@ def create_backend_login_screen(backend_client: Optional[BackendClient] = None) 
     Returns:
         Backend login screen instance
     """
-    return BackendLoginScreen(backend_client)
+    return BackendLoginScreen(backend_client, on_change_backend=on_change_backend)
 
 
 # Compatibility function for existing code

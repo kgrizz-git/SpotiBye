@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import os
+import time
 from pathlib import Path
 from typing import Final
 
 # Backend API configuration
 BACKEND_URL: Final[str] = os.environ.get("SPOTIBYE_BACKEND_URL", "https://spotibye-backend-development.kevin-grizzard.workers.dev")
 PRODUCTION_BACKEND_URL: Final[str] = os.environ.get("SPOTIBYE_PRODUCTION_BACKEND_URL", "https://spotibye-api.your-domain.com")
+LOCALHOST_BACKEND_URL: Final[str] = os.environ.get("SPOTIBYE_LOCALHOST_BACKEND_URL", "http://localhost:8787")
 
 # Determine which backend URL to use
 USE_PRODUCTION: Final[bool] = os.environ.get("SPOTIBYE_USE_PRODUCTION", "false").lower() == "true"
 CURRENT_BACKEND_URL: Final[str] = PRODUCTION_BACKEND_URL if USE_PRODUCTION else BACKEND_URL
+
+# Feature flag for startup backend selector UI
+ENABLE_BACKEND_SELECTOR: Final[bool] = os.environ.get("SPOTIBYE_ENABLE_BACKEND_SELECTOR", "true").lower() == "true"
 
 # API timeout configuration
 API_TIMEOUT: Final[int] = int(os.environ.get("SPOTIBYE_API_TIMEOUT", "30"))
@@ -25,6 +31,14 @@ OAUTH_TIMEOUT: Final[int] = int(os.environ.get("SPOTIBYE_OAUTH_TIMEOUT", "300"))
 # Cache configuration
 CACHE_DIR: Final[Path] = Path(os.path.expanduser("~")) / ".spotibye_cache"
 TOKEN_CACHE_PATH: Final[str] = str(CACHE_DIR / "backend_token.json")
+BACKEND_SELECTION_PATH: Final[Path] = CACHE_DIR / "backend_selection.json"
+
+# Backend presets shown in the selector UI
+BACKEND_PRESETS: Final[dict[str, str]] = {
+    "Localhost": LOCALHOST_BACKEND_URL,
+    "Cloudflare Dev": BACKEND_URL,
+    "Cloudflare Prod": PRODUCTION_BACKEND_URL,
+}
 
 # Export configuration
 EXPORT_DIR: Final[str] = os.environ.get("SPOTIBYE_EXPORT_DIR", os.path.expanduser("~/Downloads"))
@@ -89,6 +103,53 @@ def ensure_directories() -> None:
     Path(TOKEN_CACHE_PATH).parent.mkdir(exist_ok=True)
     Path(EXPORT_DIR).mkdir(exist_ok=True)
     Path(TEMP_DIR).mkdir(exist_ok=True)
+
+
+def is_valid_backend_url(url: str) -> bool:
+    """Return True if URL appears valid for backend usage."""
+    return bool(url) and url.startswith(("http://", "https://"))
+
+
+def get_default_backend_url() -> str:
+    """Get backend URL from environment-driven defaults."""
+    return CURRENT_BACKEND_URL
+
+
+def save_backend_url(url: str) -> bool:
+    """Persist selected backend URL for future launches."""
+    if not is_valid_backend_url(url):
+        return False
+
+    try:
+        payload = {
+            "backend_url": url.rstrip('/'),
+            "saved_at": int(time.time()),
+        }
+        with open(BACKEND_SELECTION_PATH, "w", encoding="utf-8") as selection_file:
+            json.dump(payload, selection_file, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def get_saved_backend_url() -> str | None:
+    """Load previously selected backend URL if available."""
+    try:
+        if not BACKEND_SELECTION_PATH.exists():
+            return None
+
+        with open(BACKEND_SELECTION_PATH, "r", encoding="utf-8") as selection_file:
+            payload = json.load(selection_file)
+
+        url = str(payload.get("backend_url", "")).rstrip('/')
+        return url if is_valid_backend_url(url) else None
+    except Exception:
+        return None
+
+
+def resolve_startup_backend_url() -> str:
+    """Resolve backend URL for startup, preferring saved user choice."""
+    return get_saved_backend_url() or get_default_backend_url()
 
 # Configuration validation
 def validate_config() -> list[str]:
@@ -161,7 +222,11 @@ ensure_directories()
 __all__ = [
     "CURRENT_BACKEND_URL",
     "BACKEND_URL", 
+    "LOCALHOST_BACKEND_URL",
     "PRODUCTION_BACKEND_URL",
+    "BACKEND_PRESETS",
+    "BACKEND_SELECTION_PATH",
+    "ENABLE_BACKEND_SELECTOR",
     "API_TIMEOUT",
     "ANALYSIS_TIMEOUT",
     "OAUTH_CALLBACK_PORT",
@@ -173,6 +238,11 @@ __all__ = [
     "UIConstants",
     "FeatureFlags",
     "PerformanceSettings",
+    "is_valid_backend_url",
+    "get_default_backend_url",
+    "save_backend_url",
+    "get_saved_backend_url",
+    "resolve_startup_backend_url",
     "ensure_directories",
     "validate_config",
     "get_config_summary",

@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class CallbackHandler(BaseHTTPRequestHandler):
     """HTTP server handler for OAuth callback."""
     
-    def __init__(self, auth_code_container: Dict[str, str], *args, **kwargs):
-        self.auth_code_container = auth_code_container
+    def __init__(self, auth_result_container: Dict[str, str], *args, **kwargs):
+        self.auth_result_container = auth_result_container
         super().__init__(*args, **kwargs)
     
     def do_GET(self):
@@ -29,9 +29,10 @@ class CallbackHandler(BaseHTTPRequestHandler):
             parsed_url = urllib.parse.urlparse(self.path)
             query_params = urllib.parse.parse_qs(parsed_url.query)
             
-            if 'code' in query_params:
+            if 'code' in query_params and 'state' in query_params:
                 # Store the authorization code
-                self.auth_code_container['code'] = query_params['code'][0]
+                self.auth_result_container['code'] = query_params['code'][0]
+                self.auth_result_container['state'] = query_params['state'][0]
                 
                 # Send success response
                 self.send_response(200)
@@ -77,6 +78,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
                 """
                 self.wfile.write(error_html.encode())
                 logger.error(f"OAuth error: {error} - {error_description}")
+                self.auth_result_container['error'] = f"{error}: {error_description}"
                 
             else:
                 # Missing authorization code
@@ -95,10 +97,12 @@ class CallbackHandler(BaseHTTPRequestHandler):
                 </html>
                 """
                 self.wfile.write(error_html.encode())
-                logger.error("OAuth callback missing authorization code")
+                logger.error("OAuth callback missing authorization code/state")
+                self.auth_result_container['error'] = 'Missing code or state in callback'
                 
         except Exception as e:
             logger.error(f"Error handling OAuth callback: {e}")
+            self.auth_result_container['error'] = str(e)
             self.send_response(500)
             self.end_headers()
     
@@ -139,7 +143,8 @@ class BackendAuthenticator:
             logger.info("Initiating OAuth login flow")
             
             # Get authorization URL from backend
-            auth_url = self.backend_client.initiate_spotify_login()
+            redirect_uri = f"http://localhost:{self.callback_port}/callback"
+            auth_url = self.backend_client.initiate_spotify_login(redirect_uri)
             logger.info(f"Got authorization URL: {auth_url}")
             
             # Start local HTTP server to handle callback
@@ -165,10 +170,10 @@ class BackendAuthenticator:
             # Stop callback server
             self._stop_callback_server()
             
-            if auth_result and 'code' in auth_result:
+            if auth_result and 'code' in auth_result and 'state' in auth_result:
                 # Exchange authorization code for JWT token
                 try:
-                    token_response = self.backend_client.handle_spotify_callback(auth_result['code'])
+                    token_response = self.backend_client.handle_spotify_callback(auth_result['code'], auth_result['state'])
                     logger.info("Successfully exchanged authorization code for JWT token")
                     
                     if on_success:
@@ -181,7 +186,7 @@ class BackendAuthenticator:
                         on_error(f"Authentication failed: {e}")
                     return False
             else:
-                error_msg = auth_result.get('error', 'Authentication failed')
+                error_msg = auth_result.get('error', 'Authentication failed') if auth_result else 'Authentication timed out'
                 logger.error(f"Authentication failed: {error_msg}")
                 if on_error:
                     on_error(error_msg)
@@ -197,11 +202,11 @@ class BackendAuthenticator:
         """Start local HTTP server to handle OAuth callback."""
         try:
             # Container to store authorization code
-            self.auth_code_container: Dict[str, str] = {}
+            self.auth_result_container: Dict[str, str] = {}
             
             # Create HTTP server
             def handler(*args, **kwargs):
-                return CallbackHandler(self.auth_code_container, *args, **kwargs)
+                return CallbackHandler(self.auth_result_container, *args, **kwargs)
             
             self.http_server = HTTPServer(('localhost', self.callback_port), handler)
             
@@ -250,11 +255,14 @@ class BackendAuthenticator:
         logger.info(f"Waiting for OAuth callback (timeout: {timeout}s)")
         
         while time.time() - start_time < timeout:
-            if hasattr(self, 'auth_code_container'):
-                if 'code' in self.auth_code_container:
-                    return {'code': self.auth_code_container['code']}
-                elif 'error' in self.auth_code_container:
-                    return {'error': self.auth_code_container['error']}
+            if hasattr(self, 'auth_result_container'):
+                if 'code' in self.auth_result_container and 'state' in self.auth_result_container:
+                    return {
+                        'code': self.auth_result_container['code'],
+                        'state': self.auth_result_container['state'],
+                    }
+                if 'error' in self.auth_result_container:
+                    return {'error': self.auth_result_container['error']}
             
             time.sleep(1)
         
