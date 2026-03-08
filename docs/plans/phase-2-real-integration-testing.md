@@ -55,17 +55,17 @@ This guide provides comprehensive testing procedures for validating SpotiBye's f
 
 ### Manual Testing
 - [ ] **User Authentication Flow**
-  - [ ] Launch application and click "Login with Spotify"
-  - [ ] Verify redirect to Spotify OAuth page
-  - [ ] Complete Spotify authentication
-  - [ ] Verify redirect back to application
-  - [ ] Check user profile information displays correctly
+  - [x] Launch application and click "Login with Spotify" (tested using run_frontend_backend.py not main.py)
+  - [x] Verify redirect to Spotify OAuth page
+  - [x] Complete Spotify authentication
+  - [x] Verify redirect back to application
+  - [x] Check user profile information displays correctly
   - [ ] Test logout functionality
   - [ ] Verify token refresh works after expiration
   
 - [ ] **Playlist Loading and Display**
-  - [ ] Load user's Spotify playlists
-  - [ ] Verify playlist thumbnails and metadata display
+  - [x] Load user's Spotify playlists
+  - [x] Verify playlist thumbnails and metadata display
   - [ ] Test with small playlists (<50 tracks)
   - [ ] Test with medium playlists (50-500 tracks)
   - [ ] Test with large playlists (>500 tracks)
