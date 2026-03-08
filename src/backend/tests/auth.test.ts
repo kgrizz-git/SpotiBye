@@ -3,44 +3,47 @@ import { Hono } from 'hono';
 import { authRoutes } from '../routes/auth';
 import type { Env } from '../types/env';
 
-// Mock the services
 vi.mock('../services/spotify-auth', () => ({
-  SpotifyAuthService: vi.fn().mockImplementation(() => ({
-    getAuthUrl: vi.fn().mockReturnValue('https://accounts.spotify.com/authorize?test'),
-    generateState: vi.fn().mockReturnValue('test-state'),
-    exchangeCodeForTokens: vi.fn().mockResolvedValue({
-      access_token: 'test-access-token',
-      refresh_token: 'test-refresh-token',
-      expires_in: 3600,
-      token_type: 'Bearer',
-      scope: 'playlist-read-private'
-    }),
-    getUserProfile: vi.fn().mockResolvedValue({
-      id: 'test-user-id',
-      email: 'test@example.com',
-      name: 'Test User'
-    }),
-    refreshAccessToken: vi.fn().mockResolvedValue({
-      access_token: 'new-access-token',
-      expires_in: 3600,
-      token_type: 'Bearer',
-      scope: 'playlist-read-private'
-    })
-  }))
+  SpotifyAuthService: vi.fn().mockImplementation(function () {
+    return {
+      getAuthUrl: vi.fn().mockReturnValue('https://accounts.spotify.com/authorize?test'),
+      generateState: vi.fn().mockReturnValue('test-state'),
+      exchangeCodeForTokens: vi.fn().mockResolvedValue({
+        access_token: 'test-access-token',
+        refresh_token: 'test-refresh-token',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        scope: 'playlist-read-private'
+      }),
+      getUserProfile: vi.fn().mockResolvedValue({
+        id: 'test-user-id',
+        email: 'test@example.com',
+        display_name: 'Test User'
+      }),
+      refreshAccessToken: vi.fn().mockResolvedValue({
+        access_token: 'new-access-token',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        scope: 'playlist-read-private'
+      })
+    };
+  })
 }));
 
 vi.mock('../services/jwt', () => ({
-  JWTService: vi.fn().mockImplementation(() => ({
-    createToken: vi.fn().mockReturnValue('test-jwt-token'),
-    generateToken: vi.fn().mockReturnValue('test-jwt-token'),
-    verifyToken: vi.fn().mockReturnValue({
-      sub: 'test-user-id',
-      email: 'test@example.com',
-      name: 'Test User',
-      iat: Date.now() / 1000,
-      exp: (Date.now() / 1000) + 3600
-    })
-  }))
+  JWTService: vi.fn().mockImplementation(function () {
+    return {
+      generateToken: vi.fn().mockResolvedValue('test-jwt-token'),
+      verifyToken: vi.fn().mockResolvedValue({
+        sub: 'test-user-id',
+        email: 'test@example.com',
+        name: 'Test User',
+        session_id: 'test-session-id',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+    };
+  })
 }));
 
 describe('Auth Routes', () => {
@@ -50,7 +53,7 @@ describe('Auth Routes', () => {
   beforeEach(() => {
     app = new Hono<{ Bindings: Env }>();
     app.route('/auth', authRoutes);
-    
+
     mockEnv = {
       ENVIRONMENT: 'test',
       SPOTIFY_CLIENT_ID: 'test-client-id',
@@ -59,30 +62,26 @@ describe('Auth Routes', () => {
       RECOCOBEATS_API_KEY: 'test-reccobeats-key',
       CACHE_KV: {
         get: vi.fn().mockResolvedValue(null),
-        getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined),
-        list: vi.fn().mockResolvedValue({ keys: [] })
       } as unknown as KVNamespace,
       SESSIONS_KV: {
         get: vi.fn().mockResolvedValue(null),
-        getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined),
-        list: vi.fn().mockResolvedValue({ keys: [] })
-      } as unknown as KVNamespace
+      } as unknown as KVNamespace,
     };
   });
 
   describe('POST /auth/spotify/login', () => {
-    it('should return auth URL and state when redirect_uri is provided', async () => {
+    it('returns auth URL and state when redirect_uri is provided', async () => {
       const request = new Request('http://localhost/auth/spotify/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ redirect_uri: 'http://localhost:3000/callback' })
       });
 
-      const response = await app.request(request, {}, mockEnv);
+      const response = await app.request(request, undefined, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(200);
@@ -91,14 +90,14 @@ describe('Auth Routes', () => {
       expect(data.data.auth_url).toContain('accounts.spotify.com');
     });
 
-    it('should return 400 when redirect_uri is missing', async () => {
+    it('returns 400 when redirect_uri is missing', async () => {
       const request = new Request('http://localhost/auth/spotify/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
       });
 
-      const response = await app.request(request, {}, mockEnv);
+      const response = await app.request(request, undefined, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(400);
@@ -107,37 +106,39 @@ describe('Auth Routes', () => {
   });
 
   describe('GET /auth/spotify/callback', () => {
-    it('should handle successful OAuth callback', async () => {
+    it('handles successful OAuth callback', async () => {
       const request = new Request('http://localhost/auth/spotify/callback?code=test-code&state=test-state', {
         method: 'GET'
       });
 
-      const response = await app.request(request, {}, mockEnv);
+      const response = await app.request(request, undefined, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(200);
-      expect(data.data).toHaveProperty('tokens');
-      expect(data.data).toHaveProperty('jwt_token');
+      expect(data.data).toHaveProperty('token');
+      expect(data.data).toHaveProperty('user');
+      expect(data.data).toHaveProperty('expires_in');
+      expect((mockEnv.SESSIONS_KV.put as any)).toHaveBeenCalled();
     });
 
-    it('should handle OAuth error', async () => {
+    it('handles OAuth error', async () => {
       const request = new Request('http://localhost/auth/spotify/callback?error=access_denied', {
         method: 'GET'
       });
 
-      const response = await app.request(request, {}, mockEnv);
+      const response = await app.request(request, undefined, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(400);
       expect(data.error).toHaveProperty('code', 'OAUTH_ERROR');
     });
 
-    it('should return 400 when code or state is missing', async () => {
+    it('returns 400 when code or state is missing', async () => {
       const request = new Request('http://localhost/auth/spotify/callback?code=test-code', {
         method: 'GET'
       });
 
-      const response = await app.request(request, {}, mockEnv);
+      const response = await app.request(request, undefined, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(400);
@@ -146,32 +147,54 @@ describe('Auth Routes', () => {
   });
 
   describe('POST /auth/spotify/refresh', () => {
-    it('should refresh access token successfully', async () => {
+    it('refreshes access token successfully', async () => {
+      const sessionJson = JSON.stringify({
+        refresh_token: 'test-refresh-token',
+        access_token: 'test-access-token',
+        expires_at: Date.now() + 3600000,
+      });
+      (mockEnv.SESSIONS_KV.get as any)
+        .mockResolvedValueOnce(sessionJson)
+        .mockResolvedValueOnce(sessionJson);
+
       const request = new Request('http://localhost/auth/spotify/refresh', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: 'test-refresh-token' })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-jwt-token',
+        }
       });
 
-      const response = await app.request(request, {}, mockEnv);
+      const response = await app.request(request, undefined, mockEnv);
       const data = await response.json() as any;
 
       expect(response.status).toBe(200);
-      expect(data.data).toHaveProperty('access_token');
+      expect(data.data).toHaveProperty('access_token', 'new-access-token');
     });
 
-    it('should return 400 when refresh_token is missing', async () => {
+    it('returns 404 when session is missing', async () => {
+      const sessionJson = JSON.stringify({
+        refresh_token: 'test-refresh-token',
+        access_token: 'test-access-token',
+        expires_at: Date.now() + 3600000,
+      });
+      (mockEnv.SESSIONS_KV.get as any)
+        .mockResolvedValueOnce(sessionJson)
+        .mockResolvedValueOnce(null);
+
       const request = new Request('http://localhost/auth/spotify/refresh', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-jwt-token',
+        }
       });
 
-      const response = await app.request(request, {}, mockEnv);
+      const response = await app.request(request, undefined, mockEnv);
       const data = await response.json() as any;
 
-      expect(response.status).toBe(400);
-      expect(data.error).toHaveProperty('code', 'MISSING_REFRESH_TOKEN');
+      expect(response.status).toBe(404);
+      expect(data.error).toHaveProperty('code', 'SESSION_NOT_FOUND');
     });
   });
 });
