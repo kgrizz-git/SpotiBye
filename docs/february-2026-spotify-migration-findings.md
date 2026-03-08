@@ -2,6 +2,8 @@
 
 https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide
 
+## Still works for me as of 3/7/26 (but may stop after 3/9?)
+
 ## NOTE: POSSIBLE PAUSE OR REVERSAL IN SOME OF THESE CHANGES
 Only external_id. Possible developer tier coming. See this thread: https://community.spotify.com/t5/Spotify-for-Developers/February-2026-Spotify-for-Developers-update-thread/td-p/7330564/page/11
 
