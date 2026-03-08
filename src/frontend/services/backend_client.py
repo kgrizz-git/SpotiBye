@@ -172,7 +172,11 @@ class BackendClient:
     def get_playlists(self) -> List[Dict[str, Any]]:
         """Get user's Spotify playlists."""
         response = self._make_request('GET', '/spotify/playlists')
-        return response.get('playlists', [])
+        if isinstance(response, list):
+            return response
+        if isinstance(response, dict):
+            return response.get('playlists', response.get('items', []))
+        return []
     
     def get_playlist_details(self, playlist_id: str) -> Dict[str, Any]:
         """Get detailed information about a playlist."""

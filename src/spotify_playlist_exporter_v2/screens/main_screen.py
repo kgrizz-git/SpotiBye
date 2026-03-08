@@ -106,6 +106,7 @@ class MainScreen(Screen):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.backend_adapter = None
         self.playlists: List[dict] = []
         self.playlist_widgets: List[PlaylistCard] = []
         self.filtered_playlists: List[dict] = []
@@ -117,6 +118,21 @@ class MainScreen(Screen):
         self._sort_trigger = None  # For debouncing sort
         self._sort_debounce_seconds = 0.5  # 500ms debounce time for sorting
         self.build_ui()
+
+    def initialize_with_backend(self, backend_adapter) -> None:
+        """Enable backend-integrated mode for playlist loading/export actions."""
+        self.backend_adapter = backend_adapter
+        if self.backend_adapter:
+            self.backend_adapter.set_callbacks(
+                playlists_loaded=self._on_backend_playlists_loaded,
+                error=self._on_backend_error,
+                progress=self._on_backend_progress,
+            )
+
+    @property
+    def backend_mode_enabled(self) -> bool:
+        """Return True when screen should use backend adapter APIs."""
+        return self.backend_adapter is not None
 
     def build_ui(self) -> None:
         main_layout = BoxLayout(orientation='vertical', padding=dp(6), spacing=dp(6))
@@ -1035,8 +1051,32 @@ class MainScreen(Screen):
         self.playlist_layout.clear_widgets()
         self.playlist_widgets = []
         self.update_selection_counter()
+
+        if self.backend_mode_enabled:
+            self.filtered_playlists = []
+            self.backend_adapter.load_playlists(force_refresh=False)
+            return
+
         persistent_cache.cleanup_old_cache()
         threading.Thread(target=self.load_playlists_worker_with_cache, daemon=True).start()
+
+    @mainthread
+    def _on_backend_playlists_loaded(self, playlists: List[Dict[str, Any]]) -> None:
+        """Callback for playlist data loaded via backend adapter."""
+        self.playlists = playlists or []
+        self.display_playlists_with_cache()
+
+    @mainthread
+    def _on_backend_error(self, error_msg: str) -> None:
+        """Callback for backend loading errors."""
+        logger.error("Backend playlist load failed: %s", error_msg)
+        self.status_label.text = f"Error loading playlists: {error_msg}"
+
+    @mainthread
+    def _on_backend_progress(self, status: str) -> None:
+        """Callback for backend progress updates."""
+        if status:
+            self.status_label.text = status
 
     def load_playlists_worker_with_cache(self) -> None:
         try:
