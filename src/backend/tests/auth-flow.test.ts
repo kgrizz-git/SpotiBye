@@ -188,7 +188,13 @@ describe('Authentication Flow Tests', () => {
         delete: vi.fn().mockResolvedValue(undefined)
       } as any;
 
-      const envWithSessions = { ...mockEnv, SESSIONS_KV: mockSessionsKV };
+      const mockCacheKV = {
+        get: vi.fn().mockResolvedValue('http://localhost:3000/callback'),
+        put: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined)
+      } as any;
+
+      const envWithSessions = { ...mockEnv, CACHE_KV: mockCacheKV, SESSIONS_KV: mockSessionsKV };
 
       const callbackRequest = new Request('http://localhost/auth/spotify/callback?code=test-code&state=test-state', {
         method: 'GET'

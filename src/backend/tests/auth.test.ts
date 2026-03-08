@@ -107,6 +107,8 @@ describe('Auth Routes', () => {
 
   describe('GET /auth/spotify/callback', () => {
     it('handles successful OAuth callback', async () => {
+      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce('http://localhost:3000/callback');
+
       const request = new Request('http://localhost/auth/spotify/callback?code=test-code&state=test-state', {
         method: 'GET'
       });
