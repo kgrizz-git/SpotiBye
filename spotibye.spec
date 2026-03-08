@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 # Project root directory
-PROJECT_ROOT = Path(__file__).parent.resolve()
+# PyInstaller may execute spec files without defining __file__.
+PROJECT_ROOT = Path(__file__).parent.resolve() if '__file__' in globals() else Path.cwd().resolve()
 SRC_DIR = PROJECT_ROOT / 'src'
 
 # Platform-specific settings
@@ -54,6 +55,11 @@ else:
     exe_name = 'SpotiBye'
     icon = str(SRC_DIR / 'frontend' / 'assets' / 'icon.icns')
     version_info = None
+
+# Default to unsigned local builds. For release signing/notarization,
+# provide a valid certificate identity, for example:
+#   export SPOTIBYE_CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)"
+release_codesign_identity = os.environ.get('SPOTIBYE_CODESIGN_IDENTITY')
 
 # Ensure the src/ directory is on sys.path
 if str(SRC_DIR) not in sys.path:
@@ -118,7 +124,7 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=sys.platform == 'darwin',  # Enable for macOS
     target_arch=None,
-    codesign_identity=None if sys.platform != 'darwin' else 'Apple Development',
+    codesign_identity=release_codesign_identity if sys.platform == 'darwin' else None,
     entitlements_file=None,
     version=version_info,
     icon=icon if os.path.exists(icon) else None,

@@ -1,5 +1,4 @@
-kivy==1.0.2 # For now due to using DataTables in Show Tracks Window - later will refactor and use newer version
-# https://github.com/kivymd/KivyMD/archive/master.zip
+kivy==2.3.1 
 spotipy
 pandas
 openpyxl

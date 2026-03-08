@@ -60,14 +60,14 @@ jobs:
     - name: Build executable (Windows)
       if: runner.os == 'Windows'
       run: |
-        pyinstaller spotibye.spec --noconfirm --clean --noconsole --onefile
+        pyinstaller spotibye.spec --noconfirm --clean
         Compress-Archive -Path dist\SpotiBye\* -DestinationPath SpotiBye-Windows.zip -Force
       shell: pwsh
 
     - name: Build executable (macOS)
       if: runner.os == 'macOS'
       run: |
-        pyinstaller spotibye.spec --noconfirm --clean --noconsole --onefile
+        pyinstaller spotibye.spec --noconfirm --clean
         cd dist
         hdiutil create -volname "SpotiBye" -srcfolder SpotiBye.app -ov -format UDZO SpotiBye-macOS.dmg
         cd ..
@@ -75,7 +75,7 @@ jobs:
     - name: Build executable (Linux)
       if: runner.os == 'Linux'
       run: |
-        pyinstaller spotibye.spec --noconfirm --clean --noconsole --onefile
+        pyinstaller spotibye.spec --noconfirm --clean
         cd dist
         tar -czvf SpotiBye-Linux.tar.gz SpotiBye/
         cd ..
