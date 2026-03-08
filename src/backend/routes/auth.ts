@@ -17,12 +17,16 @@ app.post('/spotify/login', async (c) => {
     }
     
     const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
-    const authUrl = spotifyAuth.getAuthUrl(redirect_uri);
+    const state = spotifyAuth.generateState();
+    const authUrl = spotifyAuth.getAuthUrl(redirect_uri, state);
+
+    // Persist redirect_uri for callback token exchange.
+    await c.env.CACHE_KV.put(`oauth_state:${state}`, redirect_uri, { expirationTtl: 600 });
     
     return c.json({ 
       data: { 
         auth_url: authUrl,
-        state: spotifyAuth.generateState()
+        state
       } 
     });
   } catch (error) {
@@ -45,9 +49,17 @@ app.get('/spotify/callback', async (c) => {
       return c.json({ error: { code: 'INVALID_CALLBACK', message: 'Missing code or state parameter' } }, 400);
     }
     
+    const redirectUri = await c.env.CACHE_KV.get(`oauth_state:${state}`);
+    if (!redirectUri) {
+      return c.json({ error: { code: 'INVALID_CALLBACK', message: 'Missing or expired OAuth state' } }, 400);
+    }
+
     // Exchange code for tokens
     const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
-    const tokens: AuthTokens = await spotifyAuth.exchangeCodeForTokens(code);
+    const tokens: AuthTokens = await spotifyAuth.exchangeCodeForTokens(code, redirectUri);
+
+    // One-time state usage.
+    await c.env.CACHE_KV.delete(`oauth_state:${state}`);
     
     // Get user profile
     const userProfile = await spotifyAuth.getUserProfile(tokens.access_token);

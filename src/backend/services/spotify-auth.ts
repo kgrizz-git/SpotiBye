@@ -34,7 +34,13 @@ export class SpotifyAuthService {
     return crypto.randomUUID();
   }
   
-  async exchangeCodeForTokens(code: string): Promise<AuthTokens> {
+  async exchangeCodeForTokens(code: string, redirectUri?: string): Promise<AuthTokens> {
+    const callbackUri = redirectUri || this.redirectUri;
+
+    if (!callbackUri) {
+      throw new Error('Missing redirect URI for token exchange');
+    }
+
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -44,7 +50,7 @@ export class SpotifyAuthService {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
-        redirect_uri: this.redirectUri
+        redirect_uri: callbackUri
       })
     });
     
