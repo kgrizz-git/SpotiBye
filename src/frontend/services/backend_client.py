@@ -107,8 +107,8 @@ class BackendClient:
                     error_message = str(error_payload) or f'HTTP {response.status_code}'
                 raise BackendAPIError(error_message, response.status_code, response_data)
 
-            # Most backend routes return { data: ... }, while some utility routes return raw objects.
-            if isinstance(response_data, dict) and 'data' in response_data and isinstance(response_data['data'], dict):
+            # Most backend routes return { data: ... }, where data can be dict or list.
+            if isinstance(response_data, dict) and 'data' in response_data:
                 return response_data['data']
 
             return response_data
@@ -175,6 +175,9 @@ class BackendClient:
         if isinstance(response, list):
             return response
         if isinstance(response, dict):
+            data = response.get('data')
+            if isinstance(data, list):
+                return data
             return response.get('playlists', response.get('items', []))
         return []
     
