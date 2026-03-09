@@ -236,7 +236,8 @@ class BackendSpotifyExporterApp(MDApp):
                 self.username = username
                 
                 original_logger.info(f"Auto-login successful for user: {username}")
-                self.screen_manager.current = 'main'
+                # Use standard transition so backend adapter hooks are initialized.
+                self.switch_to_main()
             else:
                 original_logger.debug("No valid cached token found")
                 
