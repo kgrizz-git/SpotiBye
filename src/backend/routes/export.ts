@@ -11,6 +11,7 @@ app.use('*', authMiddleware);
 
 // POST /export/playlist/:id - Generate Excel export
 app.post('/playlist/:id', async (c) => {
+  const requestId = crypto.randomUUID();
   try {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
@@ -18,15 +19,17 @@ app.post('/playlist/:id', async (c) => {
     
     const exportService = new ExportService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
+    console.info('[export] start', { requestId, userId, playlistId });
     
     // Check if export already exists
     const exportKey = `export:${playlistId}:${userId}`;
     const existingExport = await cacheService.get(exportKey);
     
     if (existingExport && existingExport.status === 'completed') {
+      console.info('[export] using cached completed export', { requestId, userId, playlistId, exportKey });
       return c.json({ 
         data: existingExport,
-        meta: { timestamp: new Date().toISOString() }
+        meta: { timestamp: new Date().toISOString(), request_id: requestId }
       });
     }
     
@@ -60,26 +63,64 @@ app.post('/playlist/:id', async (c) => {
       
       await cacheService.set(exportKey, completedStatus, 3600);
       await cacheService.set(`${exportKey}:data`, exportData, 3600);
+
+      console.info('[export] completed', {
+        requestId,
+        userId,
+        playlistId,
+        trackCount: exportData.tracks.length,
+      });
       
       return c.json({ 
         data: completedStatus,
-        meta: { timestamp: new Date().toISOString() }
+        meta: { timestamp: new Date().toISOString(), request_id: requestId }
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       const failedStatus = {
         ...status,
         status: 'failed',
-        error: error.message,
+        error: errorMessage,
         completed_at: new Date().toISOString()
       };
+
+      console.error('[export] generation failed', {
+        requestId,
+        userId,
+        playlistId,
+        error: errorMessage,
+      });
       
       await cacheService.set(exportKey, failedStatus, 3600);
       
-      return c.json({ error: { code: 'EXPORT_FAILED', message: 'Failed to generate export' } }, 500);
+      return c.json(
+        {
+          error: {
+            code: 'EXPORT_FAILED',
+            message: `Failed to generate export: ${errorMessage}`,
+            request_id: requestId,
+            details: {
+              playlist_id: playlistId,
+              user_id: userId,
+            },
+          },
+        },
+        500
+      );
     }
   } catch (error) {
-    console.error('Failed to start export:', error);
-    return c.json({ error: { code: 'EXPORT_START_FAILED', message: 'Failed to start export' } }, 500);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Failed to start export:', { requestId, error });
+    return c.json(
+      {
+        error: {
+          code: 'EXPORT_START_FAILED',
+          message: `Failed to start export: ${errorMessage}`,
+          request_id: requestId,
+        },
+      },
+      500
+    );
   }
 });
 

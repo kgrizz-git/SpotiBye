@@ -52,6 +52,29 @@ class BackendMainScreenAdapter:
         self.playlists_loaded_callback = playlists_loaded
         self.error_callback = error
         self.progress_callback = progress
+
+    def _format_backend_api_error(self, error: BackendAPIError, fallback_prefix: str) -> str:
+        """Build a user-visible message with backend error code/message/request id when available."""
+        status = f"HTTP {error.status_code}" if error.status_code is not None else "HTTP error"
+        message = str(error)
+
+        error_payload = {}
+        if isinstance(error.response_data, dict):
+            maybe_error = error.response_data.get('error')
+            if isinstance(maybe_error, dict):
+                error_payload = maybe_error
+
+        code = error_payload.get('code')
+        request_id = error_payload.get('request_id')
+
+        parts = [fallback_prefix, status]
+        if code:
+            parts.append(f"code={code}")
+        parts.append(message)
+        if request_id:
+            parts.append(f"request_id={request_id}")
+
+        return " | ".join(parts)
     
     # Playlist management
     def load_playlists(self, force_refresh: bool = False) -> None:
@@ -172,7 +195,7 @@ class BackendMainScreenAdapter:
             return tracks
             
         except BackendAPIError as e:
-            error_msg = format_error_message(NetworkError(str(e)))
+            error_msg = self._format_backend_api_error(e, 'Export generation failed')
             if self.error_callback:
                 self.error_callback(error_msg)
             return None
@@ -299,7 +322,7 @@ class BackendMainScreenAdapter:
             return True
             
         except BackendAPIError as e:
-            error_msg = format_error_message(NetworkError(str(e)))
+            error_msg = self._format_backend_api_error(e, 'Export download failed')
             if self.error_callback:
                 self.error_callback(error_msg)
             return False

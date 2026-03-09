@@ -78,12 +78,21 @@ export class ExportService {
       // Process in batches of 100 (Spotify API limit)
       for (let i = 0; i < trackIds.length; i += 100) {
         const batch = trackIds.slice(i, i + 100);
-        const audioFeatures = await spotifyService.getMultipleAudioFeatures(batch);
-        audioFeatures.forEach(feature => {
-          if (feature) {
-            audioFeaturesMap.set(feature.id, feature);
-          }
-        });
+        try {
+          const audioFeatures = await spotifyService.getMultipleAudioFeatures(batch);
+          audioFeatures.forEach(feature => {
+            if (feature) {
+              audioFeaturesMap.set(feature.id, feature);
+            }
+          });
+        } catch (error) {
+          // Export should still succeed if audio-features API fails for a batch.
+          console.warn('Audio-features batch failed; continuing without those features', {
+            batchStart: i,
+            batchSize: batch.length,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }
     

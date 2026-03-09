@@ -1375,11 +1375,176 @@ class MainScreen(Screen):
                 ).open()
                 return
 
+            if self.backend_mode_enabled:
+                self._start_backend_export(selected)
+                return
+
             # Check cache status before proceeding
             self._check_cache_status_and_proceed(selected)
         except Exception as exc:
             logger.error("Error starting export: %s", exc)
             self.status_label.text = f'Export error: {exc}'
+            Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+
+    def _start_backend_export(self, playlists) -> None:
+        """Start export flow using backend endpoints (no direct Spotify API calls)."""
+        if not self.backend_adapter:
+            self.status_label.text = 'Backend export unavailable'
+            return
+
+        filename = (self.filename_input.text or '').strip() if hasattr(self, 'filename_input') else ''
+        if not filename:
+            filename = self._generate_default_filename()
+        elif not filename.lower().endswith('.xlsx'):
+            filename += '.xlsx'
+
+        output_path = os.path.join(SAVE_DIR, filename)
+
+        if len(playlists) == 1 and os.path.exists(output_path):
+            self._show_backend_overwrite_confirmation(playlists, output_path, filename)
+        else:
+            self.begin_backend_export(playlists, output_path)
+
+    def _show_backend_overwrite_confirmation(self, playlists, output_path, filename) -> None:
+        popup_content = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(20))
+        popup_content.add_widget(Widget(size_hint_y=0.3))
+        popup_content.add_widget(
+            Label(
+                text=f'The file "{filename}" already exists.\n\nDo you want to overwrite it?',
+                font_size=dp(16),
+                size_hint_y=None,
+                height=dp(80),
+                halign='center',
+                valign='center',
+                text_size=(dp(400), dp(80)),
+            )
+        )
+        popup_content.add_widget(Widget(size_hint_y=0.4))
+        buttons = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(50), spacing=dp(15))
+        cancel_btn = Button(text='Cancel', size_hint_x=0.5, font_size=dp(16), background_color=[0.6, 0.6, 0.6, 1])
+        overwrite_btn = Button(text='Overwrite', size_hint_x=0.5, font_size=dp(16), background_color=[0.8, 0.3, 0.3, 1])
+        buttons.add_widget(cancel_btn)
+        buttons.add_widget(overwrite_btn)
+        popup_content.add_widget(buttons)
+        popup = Popup(title='File Already Exists', content=popup_content, size_hint=(0.6, 0.4), auto_dismiss=False)
+        cancel_btn.bind(on_press=lambda *_: popup.dismiss())
+        overwrite_btn.bind(on_press=lambda *_: self._handle_backend_overwrite_confirmed(popup, playlists, output_path))
+        popup.open()
+
+    def _handle_backend_overwrite_confirmed(self, popup, playlists, output_path) -> None:
+        popup.dismiss()
+        self.begin_backend_export(playlists, output_path)
+
+    def begin_backend_export(self, playlists, output_path) -> None:
+        """Begin backend export worker for one or more playlists."""
+        try:
+            self.export_btn.disabled = True
+            self.cancel_btn.opacity = 1
+            self.cancel_btn.disabled = True
+            total = len(playlists) if isinstance(playlists, list) else 1
+            filename = os.path.basename(output_path)
+            self.status_label.text = f'Exporting {total} playlist(s) via backend to: {filename}'
+            self.progress_bar.value = 5
+            threading.Thread(target=self.backend_export_worker, args=(playlists, output_path), daemon=True).start()
+        except Exception as exc:
+            logger.error("Error beginning backend export: %s", exc)
+            self.export_btn.disabled = False
+            self.cancel_btn.opacity = 0
+            self.cancel_btn.disabled = True
+            self.status_label.text = f'Export error: {exc}'
+            Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+
+    def _sanitize_export_filename_component(self, value: str) -> str:
+        """Sanitize playlist/file name component for cross-platform safe filenames."""
+        safe = re.sub(r'[^A-Za-z0-9._ -]+', '_', value or '').strip()
+        return safe[:80] if safe else 'playlist'
+
+    def _build_backend_output_path(self, playlist: dict, base_output_path: str, multiple: bool) -> str:
+        """Build output file path for backend export, generating unique per-playlist files when needed."""
+        if not multiple:
+            return base_output_path
+
+        base_dir = os.path.dirname(base_output_path)
+        base_name = os.path.splitext(os.path.basename(base_output_path))[0]
+        playlist_name = self._sanitize_export_filename_component(playlist.get('name', 'playlist'))
+        playlist_id = self._sanitize_export_filename_component(playlist.get('id', 'unknown'))
+        combined = f"{base_name} - {playlist_name} ({playlist_id}).xlsx"
+        return os.path.join(base_dir, combined)
+
+    def backend_export_worker(self, playlists, output_path) -> None:
+        """Worker that generates and downloads export(s) from backend API."""
+        try:
+            if not self.backend_adapter:
+                Clock.schedule_once(lambda _: setattr(self.status_label, 'text', 'Backend export unavailable'), 0)
+                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
+                return
+
+            selected_playlists = playlists if isinstance(playlists, list) else [playlists]
+            valid_playlists = [p for p in selected_playlists if isinstance(p, dict) and p.get('id')]
+            if not valid_playlists:
+                Clock.schedule_once(lambda _: setattr(self.status_label, 'text', 'No valid playlists selected for export'), 0)
+                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
+                Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+                return
+
+            total = len(valid_playlists)
+            multiple = total > 1
+            completed = 0
+
+            for index, playlist in enumerate(valid_playlists, start=1):
+                playlist_id = playlist.get('id')
+                playlist_name = playlist.get('name', 'Playlist')
+                target_path = self._build_backend_output_path(playlist, output_path, multiple)
+
+                Clock.schedule_once(
+                    lambda _, i=index, t=total, name=playlist_name: setattr(
+                        self.status_label, 'text', f'[{i}/{t}] Generating export on backend for {name}...'
+                    ),
+                    0,
+                )
+                Clock.schedule_once(lambda _, i=index, t=total: setattr(self.progress_bar, 'value', int(((i - 1) / t) * 100) + 10), 0)
+
+                export_info = self.backend_adapter.generate_export(playlist_id, 'xlsx')
+                if not export_info:
+                    Clock.schedule_once(
+                        lambda _, name=playlist_name: setattr(self.status_label, 'text', f'Backend export generation failed for {name}'),
+                        0,
+                    )
+                    Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
+                    Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+                    return
+
+                export_id = export_info.get('job_id', '') if isinstance(export_info, dict) else ''
+
+                Clock.schedule_once(
+                    lambda _, i=index, t=total, name=playlist_name: setattr(
+                        self.status_label, 'text', f'[{i}/{t}] Downloading export for {name}...'
+                    ),
+                    0,
+                )
+                Clock.schedule_once(lambda _, i=index, t=total: setattr(self.progress_bar, 'value', int(((i - 1) / t) * 100) + 60), 0)
+
+                success = self.backend_adapter.download_export(playlist_id, export_id, target_path)
+                if not success:
+                    Clock.schedule_once(
+                        lambda _, name=playlist_name: setattr(self.status_label, 'text', f'Backend export download failed for {name}'),
+                        0,
+                    )
+                    Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
+                    Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+                    return
+
+                completed += 1
+
+            Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 100), 0)
+            Clock.schedule_once(lambda _, c=completed: setattr(self.status_label, 'text', f'Export complete ({c} playlist(s))'), 0)
+            Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
+            Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+
+        except Exception as exc:
+            logger.error("Backend export failed: %s", exc)
+            Clock.schedule_once(lambda _: setattr(self.status_label, 'text', f'Backend export failed: {exc}'), 0)
+            Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
             Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
 
     def _check_cache_status_and_proceed(self, playlists) -> None:

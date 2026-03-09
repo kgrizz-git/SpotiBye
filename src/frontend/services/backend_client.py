@@ -47,7 +47,8 @@ class BackendClient:
             total=3,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET", "POST", "PUT", "DELETE"]
+            # Retry only idempotent read operations; do not retry POST exports.
+            allowed_methods=["GET", "HEAD", "OPTIONS"]
         )
         
         adapter = HTTPAdapter(max_retries=retry_strategy)

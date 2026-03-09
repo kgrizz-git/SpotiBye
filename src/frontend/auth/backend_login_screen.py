@@ -263,6 +263,18 @@ class BackendLoginScreen(Screen):
             # Set backend client token
             self.backend_client.set_auth_token(token)
 
+            # Persist token for startup auto-login
+            cache_manager = getattr(app, 'cache_manager', None)
+            if cache_manager:
+                cache_manager.save_auth_token(
+                    {
+                        'token': token,
+                        'username': username,
+                        'saved_at': int(time.time()),
+                    }
+                )
+                logger.info("Saved backend auth token for auto-login")
+
             logger.info(f"Backend login successful for user: {username}")
             
             # Switch to main screen
@@ -308,6 +320,11 @@ class BackendLoginScreen(Screen):
             app = App.get_running_app()
             app.token_info = None
             app.username = None
+
+            # Clear persisted auth token
+            cache_manager = getattr(app, 'cache_manager', None)
+            if cache_manager:
+                cache_manager.clear_auth_token()
             
             # Reset UI
             self.status_label.text = ''
