@@ -19,13 +19,36 @@ app.get('/playlists', async (c) => {
     const spotifyService = new SpotifyService(accessToken);
     
     // Check cache first
-    const cacheKey = `playlists:${userId}`;
+    const cacheKey = `playlists:v2:${userId}`;
     const cached = await cacheService.get(cacheKey);
     if (cached) {
       return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
     }
-    
-    const playlists = await spotifyService.getUserPlaylists();
+
+    // Spotify returns playlists in pages (max 50); aggregate all pages for UI completeness.
+    const limit = 50;
+    let offset = 0;
+    const playlists: SpotifyPlaylist[] = [];
+
+    while (true) {
+      const page = await spotifyService.getUserPlaylists(limit, offset);
+      if (!Array.isArray(page) || page.length === 0) {
+        break;
+      }
+
+      playlists.push(...page);
+
+      if (page.length < limit) {
+        break;
+      }
+
+      offset += limit;
+
+      // Safety guard against infinite pagination loops caused by malformed upstream responses.
+      if (offset > 10000) {
+        break;
+      }
+    }
     
     // Cache for 5 minutes
     await cacheService.set(cacheKey, playlists, 300);

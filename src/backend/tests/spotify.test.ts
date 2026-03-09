@@ -123,6 +123,64 @@ describe('Spotify Routes', () => {
       expect(data.data[0]).toHaveProperty('id');
       expect(data.data[0]).toHaveProperty('name');
     });
+
+    it('should aggregate multiple playlist pages', async () => {
+      const { SpotifyService } = await import('../services/spotify');
+      const mockGetUserPlaylists = vi
+        .fn()
+        .mockResolvedValueOnce(
+          Array.from({ length: 50 }, (_, i) => ({
+            id: `playlist-${i}`,
+            name: `Playlist ${i}`,
+            description: null,
+            tracks: { total: 1 },
+            images: [],
+            owner: { id: 'test-user-id' },
+            public: true,
+          }))
+        )
+        .mockResolvedValueOnce([
+          {
+            id: 'playlist-50',
+            name: 'Playlist 50',
+            description: null,
+            tracks: { total: 1 },
+            images: [],
+            owner: { id: 'test-user-id' },
+            public: true,
+          },
+        ]);
+
+      vi.mocked(SpotifyService).mockImplementationOnce(
+        function () {
+          return {
+            getUserPlaylists: mockGetUserPlaylists,
+            getPlaylist: vi.fn(),
+            getPlaylistTracks: vi.fn(),
+            getTrack: vi.fn(),
+            getAudioFeatures: vi.fn(),
+          } as any;
+        } as any
+      );
+
+      const request = new Request('http://localhost/spotify/playlists', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(data.data)).toBe(true);
+      expect(data.data.length).toBe(51);
+      expect(mockGetUserPlaylists).toHaveBeenCalledTimes(2);
+      expect(mockGetUserPlaylists).toHaveBeenNthCalledWith(1, 50, 0);
+      expect(mockGetUserPlaylists).toHaveBeenNthCalledWith(2, 50, 50);
+    });
   });
 
   describe('GET /spotify/playlists/:id', () => {
