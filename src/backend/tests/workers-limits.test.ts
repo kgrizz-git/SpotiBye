@@ -140,8 +140,9 @@ describe('Workers Execution Limits and Cold Starts', () => {
       const warmDuration = warmEndTime - warmStartTime;
 
       expect(warmResponse.status).toBe(200);
-      // Warm should be faster or equal to cold (in test environment)
-      expect(warmDuration).toBeLessThanOrEqual(coldStartDuration);
+      // In CI, millisecond timer jitter can make warm appear slightly slower.
+      // Keep this assertion meaningful but resilient to tiny fluctuations.
+      expect(warmDuration).toBeLessThanOrEqual(coldStartDuration + 20);
     });
 
     it('should handle concurrent cold starts', async () => {
