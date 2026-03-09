@@ -17,13 +17,18 @@ app.get('/playlists', async (c) => {
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
+    console.info('[playlists] start', { userId });
     
     // Check cache first
     const cacheKey = `playlists:v2:${userId}`;
     const cached = await cacheService.get(cacheKey);
     if (cached) {
+      const cachedCount = Array.isArray(cached) ? cached.length : 0;
+      console.info('[playlists] cache hit', { userId, cacheKey, cachedCount });
       return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
     }
+
+    console.info('[playlists] cache miss', { userId, cacheKey });
 
     // Spotify returns playlists in pages (max 50); aggregate all pages for UI completeness.
     const limit = 50;
@@ -32,6 +37,8 @@ app.get('/playlists', async (c) => {
 
     while (true) {
       const page = await spotifyService.getUserPlaylists(limit, offset);
+      const pageCount = Array.isArray(page) ? page.length : 0;
+      console.info('[playlists] page fetched', { userId, offset, limit, pageCount });
       if (!Array.isArray(page) || page.length === 0) {
         break;
       }
@@ -46,12 +53,16 @@ app.get('/playlists', async (c) => {
 
       // Safety guard against infinite pagination loops caused by malformed upstream responses.
       if (offset > 10000) {
+        console.warn('[playlists] pagination safety break', { userId, offset });
         break;
       }
     }
+
+    console.info('[playlists] aggregated', { userId, totalCount: playlists.length });
     
     // Cache for 5 minutes
     await cacheService.set(cacheKey, playlists, 300);
+    console.info('[playlists] cache set', { userId, cacheKey, ttlSeconds: 300, totalCount: playlists.length });
     
     return c.json({ data: playlists, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {

@@ -65,14 +65,24 @@ class BackendMainScreenAdapter:
             try:
                 # Check cache first (unless force refresh)
                 if not force_refresh and self.cache_manager.is_playlists_cache_valid():
-                    logger.info("Loading playlists from cache")
+                    logger.info("Playlists cache is valid; attempting cache load")
                     cached_playlists = self.cache_manager.get_cached_playlists()
                     if cached_playlists:
-                        Clock.schedule_once(
-                            lambda dt: self._on_playlists_loaded(cached_playlists),
-                            0
-                        )
-                        return
+                        cached_count = len(cached_playlists)
+                        logger.info(f"Loaded {cached_count} playlists from local cache")
+
+                        # A very common stale state is an old single-page (50-item) cache.
+                        # Prefer a fresh backend pull in this case to confirm full pagination.
+                        if cached_count == 50:
+                            logger.warning("Cached playlist count is exactly 50; forcing backend refresh to verify pagination")
+                        else:
+                            Clock.schedule_once(
+                                lambda dt: self._on_playlists_loaded(cached_playlists),
+                                0
+                            )
+                            return
+
+                        
                 
                 # Check network connection
                 if not self.network_monitor.is_connected():
@@ -91,9 +101,11 @@ class BackendMainScreenAdapter:
                     )
                 
                 playlists = self.backend_client.get_playlists()
+                logger.info(f"Loaded {len(playlists)} playlists from backend API")
                 
                 # Cache the results
                 self.cache_manager.cache_playlists(playlists)
+                logger.info(f"Cached {len(playlists)} playlists from backend response")
                 
                 Clock.schedule_once(
                     lambda dt: self._on_playlists_loaded(playlists),

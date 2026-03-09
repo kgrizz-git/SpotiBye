@@ -100,15 +100,8 @@ class BackendCacheManager:
             playlists: List of playlists to cache
             ttl: Time to live in seconds
         """
-        # Load existing playlists to append
-        existing_playlists = self.get_cached_playlists() or []
-        
-        # Merge with existing playlists, avoiding duplicates by ID
-        existing_ids = {p.get('id') for p in existing_playlists if p.get('id')}
-        new_playlists = [p for p in playlists if p.get('id') not in existing_ids]
-        
-        # Combine existing and new playlists
-        all_playlists = existing_playlists + new_playlists
+        # Playlists endpoint returns a full snapshot; replace cache to avoid stale/missing data.
+        all_playlists = playlists
         
         cache_data = {
             'data': all_playlists,
@@ -116,6 +109,7 @@ class BackendCacheManager:
             'ttl': ttl
         }
         self._save_cache_file('playlists.json', cache_data)
+        logger.info(f"Saved playlists cache snapshot with {len(all_playlists)} items (ttl={ttl}s)")
     
     def is_playlists_cache_valid(self) -> bool:
         """
