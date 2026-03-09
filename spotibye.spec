@@ -68,7 +68,7 @@ if str(SRC_DIR) not in sys.path:
 block_cipher = None
 
 a = Analysis(
-    ['main.py'],
+    ['run_frontend_backend.py'],
     pathex=[str(PROJECT_ROOT)],
     binaries=[],
     datas=[
@@ -78,6 +78,7 @@ a = Analysis(
     hiddenimports=[
         'kivy',
         'kivymd',
+        'kivymd.icon_definitions',
         'requests',
         'spotipy',
         'openpyxl',
@@ -96,7 +97,6 @@ a = Analysis(
         'pdb',
         'distutils',
         'setuptools',
-        'numpy',  # If not used directly
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
