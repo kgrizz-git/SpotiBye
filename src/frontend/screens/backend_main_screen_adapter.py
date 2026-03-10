@@ -75,6 +75,55 @@ class BackendMainScreenAdapter:
             parts.append(f"request_id={request_id}")
 
         return " | ".join(parts)
+
+    def _run_with_transient_retry(self, operation_name: str, func: callable,
+                                  max_attempts: int = 4, base_delay: float = 1.0):
+        """Run an operation with retry/backoff for transient backend failures."""
+        retryable_statuses = {429, 500, 502, 503, 504}
+        last_error: Optional[Exception] = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return func()
+            except BackendAPIError as e:
+                last_error = e
+                status = e.status_code
+                is_retryable = status in retryable_statuses
+
+                if not is_retryable or attempt >= max_attempts:
+                    raise
+
+                delay = base_delay * attempt
+                logger.warning(
+                    "%s failed with transient backend error (status=%s). Retrying in %.1fs (%s/%s)",
+                    operation_name,
+                    status,
+                    delay,
+                    attempt,
+                    max_attempts,
+                )
+                if self.progress_callback:
+                    self.progress_callback(
+                        f"{operation_name} temporary backend error (HTTP {status}), retrying ({attempt}/{max_attempts})..."
+                    )
+                time.sleep(delay)
+            except Exception as e:
+                last_error = e
+                if attempt >= max_attempts:
+                    raise
+                delay = base_delay * attempt
+                logger.warning(
+                    "%s failed with transient error. Retrying in %.1fs (%s/%s): %s",
+                    operation_name,
+                    delay,
+                    attempt,
+                    max_attempts,
+                    e,
+                )
+                time.sleep(delay)
+
+        if last_error:
+            raise last_error
     
     # Playlist management
     def load_playlists(self, force_refresh: bool = False) -> None:
@@ -136,7 +185,7 @@ class BackendMainScreenAdapter:
                 )
                 
             except BackendAPIError as e:
-                error_msg = format_error_message(NetworkError(str(e)))
+                error_msg = self._format_backend_api_error(e, 'Failed to load playlists')
                 Clock.schedule_once(
                     lambda dt: self._on_error(error_msg),
                     0
@@ -278,7 +327,10 @@ class BackendMainScreenAdapter:
             if self.progress_callback:
                 self.progress_callback("Generating export...")
             
-            export_info = self.backend_client.generate_export(playlist_id, format)
+            export_info = self._run_with_transient_retry(
+                "Generating export",
+                lambda: self.backend_client.generate_export(playlist_id, format),
+            )
             
             # Cache export info
             self.cache_manager.cache_export_info(playlist_id, export_info)
@@ -286,7 +338,7 @@ class BackendMainScreenAdapter:
             return export_info
             
         except BackendAPIError as e:
-            error_msg = format_error_message(NetworkError(str(e)))
+            error_msg = self._format_backend_api_error(e, 'Combined export generation failed')
             if self.error_callback:
                 self.error_callback(error_msg)
             return None
@@ -312,7 +364,10 @@ class BackendMainScreenAdapter:
             if self.progress_callback:
                 self.progress_callback("Downloading export...")
             
-            export_data = self.backend_client.download_export(playlist_id, export_id)
+            export_data = self._run_with_transient_retry(
+                "Downloading export",
+                lambda: self.backend_client.download_export(playlist_id, export_id),
+            )
             
             # Save to file
             with open(save_path, 'wb') as f:
@@ -338,10 +393,13 @@ class BackendMainScreenAdapter:
             if self.progress_callback:
                 self.progress_callback("Generating combined export...")
 
-            export_info = self.backend_client.generate_batch_export(playlist_ids, format)
+            export_info = self._run_with_transient_retry(
+                "Generating combined export",
+                lambda: self.backend_client.generate_batch_export(playlist_ids, format),
+            )
             return export_info
         except BackendAPIError as e:
-            error_msg = format_error_message(NetworkError(str(e)))
+            error_msg = self._format_backend_api_error(e, 'Chunked export generation failed')
             if self.error_callback:
                 self.error_callback(error_msg)
             return None
@@ -368,12 +426,17 @@ class BackendMainScreenAdapter:
             last_status: Optional[Dict[str, Any]] = None
 
             for step in range(max_steps):
-                status = self.backend_client.generate_batch_export_chunk(
-                    playlist_ids=playlist_ids,
-                    format=format,
-                    job_id=job_id,
-                    cursor=cursor,
-                    chunk_size=chunk_size,
+                status = self._run_with_transient_retry(
+                    "Generating combined export chunk",
+                    lambda: self.backend_client.generate_batch_export_chunk(
+                        playlist_ids=playlist_ids,
+                        format=format,
+                        job_id=job_id,
+                        cursor=cursor,
+                        chunk_size=chunk_size,
+                    ),
+                    max_attempts=5,
+                    base_delay=1.0,
                 )
                 if not isinstance(status, dict):
                     return None
@@ -414,7 +477,10 @@ class BackendMainScreenAdapter:
             if self.progress_callback:
                 self.progress_callback("Downloading combined export...")
 
-            export_data = self.backend_client.download_batch_export(export_id)
+            export_data = self._run_with_transient_retry(
+                "Downloading combined export",
+                lambda: self.backend_client.download_batch_export(export_id),
+            )
             with open(save_path, 'wb') as f:
                 f.write(export_data)
 

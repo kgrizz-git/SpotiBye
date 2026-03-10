@@ -39,7 +39,22 @@ app.route('/export', exportRoutes);
 
 // 404 handler
 app.notFound((c) => {
-  return c.json({ error: 'Not Found' }, 404);
+  const requestId = crypto.randomUUID();
+  return c.json(
+    {
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Not Found',
+        request_id: requestId,
+        timestamp: new Date().toISOString(),
+        details: {
+          path: c.req.path,
+          method: c.req.method,
+        },
+      },
+    },
+    404
+  );
 });
 
 export default {

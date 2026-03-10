@@ -274,7 +274,19 @@ class BackendClient:
         
         response = self.session.get(url, headers=headers, timeout=60)
         if response.status_code >= 400:
-            raise BackendAPIError(f"Export download failed: HTTP {response.status_code}")
+            response_data: Dict[str, Any] = {}
+            try:
+                if response.headers.get('content-type', '').startswith('application/json'):
+                    response_data = response.json()
+            except Exception:
+                response_data = {}
+
+            error_payload = response_data.get('error', {}) if isinstance(response_data, dict) else {}
+            message = f"Export download failed: HTTP {response.status_code}"
+            if isinstance(error_payload, dict):
+                message = error_payload.get('message', error_payload.get('code', message))
+
+            raise BackendAPIError(message, response.status_code, response_data)
         
         return response.content
 
@@ -285,7 +297,19 @@ class BackendClient:
 
         response = self.session.get(url, headers=headers, timeout=120)
         if response.status_code >= 400:
-            raise BackendAPIError(f"Batch export download failed: HTTP {response.status_code}")
+            response_data: Dict[str, Any] = {}
+            try:
+                if response.headers.get('content-type', '').startswith('application/json'):
+                    response_data = response.json()
+            except Exception:
+                response_data = {}
+
+            error_payload = response_data.get('error', {}) if isinstance(response_data, dict) else {}
+            message = f"Batch export download failed: HTTP {response.status_code}"
+            if isinstance(error_payload, dict):
+                message = error_payload.get('message', error_payload.get('code', message))
+
+            raise BackendAPIError(message, response.status_code, response_data)
 
         return response.content
     

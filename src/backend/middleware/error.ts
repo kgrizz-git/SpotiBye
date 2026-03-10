@@ -4,6 +4,7 @@ import type { ErrorResponse } from '../types/api';
 
 export const errorHandler: ErrorHandler = (err, c) => {
   console.error('Error occurred:', err);
+  const requestId = crypto.randomUUID();
   
   // Default error response
   let status = 500;
@@ -44,6 +45,11 @@ export const errorHandler: ErrorHandler = (err, c) => {
       code,
       message,
       timestamp: new Date().toISOString(),
+      request_id: requestId,
+      details: {
+        path: c.req.path,
+        method: c.req.method,
+      },
     },
   };
   

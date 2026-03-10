@@ -1075,9 +1075,9 @@ class MainScreen(Screen):
     @mainthread
     def _on_backend_error(self, error_msg: str) -> None:
         """Callback for backend loading errors."""
-        logger.error("Backend playlist load failed: %s", error_msg)
+        logger.error("Backend request failed: %s", error_msg)
         message = str(error_msg or '')
-        self.status_label.text = f"Error loading playlists: {message}"
+        self.status_label.text = f"Backend error: {message}"
 
         lowered = message.lower()
         auth_related = (
