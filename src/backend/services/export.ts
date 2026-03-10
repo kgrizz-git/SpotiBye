@@ -69,9 +69,13 @@ export class ExportService {
       .map((item: any) => item.track.id);
     
     const audioFeaturesMap = new Map();
+    let audioFeaturesUnavailable = false;
     if (trackIds.length > 0) {
       // Process in batches of 100 (Spotify API limit)
       for (let i = 0; i < trackIds.length; i += 100) {
+        if (audioFeaturesUnavailable) {
+          break;
+        }
         const batch = trackIds.slice(i, i + 100);
         try {
           const audioFeatures = await spotifyService.getMultipleAudioFeatures(batch);
@@ -81,11 +85,21 @@ export class ExportService {
             }
           });
         } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (/HTTP\s+(401|403)/i.test(message)) {
+            audioFeaturesUnavailable = true;
+            console.warn('Audio-features API unavailable for this token; skipping remaining batches', {
+              batchStart: i,
+              batchSize: batch.length,
+              error: message,
+            });
+            continue;
+          }
           // Export should still succeed if audio-features API fails for a batch.
           console.warn('Audio-features batch failed; continuing without those features', {
             batchStart: i,
             batchSize: batch.length,
-            error: error instanceof Error ? error.message : String(error),
+            error: message,
           });
         }
       }

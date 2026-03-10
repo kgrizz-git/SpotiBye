@@ -37,6 +37,8 @@ class BackendMainScreenAdapter:
         self.playlists_loaded_callback: Optional[callable] = None
         self.error_callback: Optional[callable] = None
         self.progress_callback: Optional[callable] = None
+        self._export_circuit_open_until: float = 0.0
+        self._export_circuit_reason: str = ""
         
     def set_callbacks(self, playlists_loaded: Optional[callable] = None,
                      error: Optional[callable] = None,
@@ -53,6 +55,16 @@ class BackendMainScreenAdapter:
         self.error_callback = error
         self.progress_callback = progress
 
+    def set_trace_id(self, trace_id: Optional[str]) -> None:
+        """Set per-export trace ID propagated by backend client."""
+        self.backend_client.set_trace_id(trace_id)
+
+    def _emit_progress(self, message: str) -> None:
+        """Send progress to UI and terminal logs."""
+        logger.info("[backend-progress] %s", message)
+        if self.progress_callback:
+            self.progress_callback(message)
+
     def _format_backend_api_error(self, error: BackendAPIError, fallback_prefix: str) -> str:
         """Build a user-visible message with backend error code/message/request id when available."""
         status = f"HTTP {error.status_code}" if error.status_code is not None else "HTTP error"
@@ -66,10 +78,23 @@ class BackendMainScreenAdapter:
 
         code = error_payload.get('code')
         request_id = error_payload.get('request_id')
+        details_payload = error_payload.get('details') if isinstance(error_payload.get('details'), dict) else {}
+
+        source = 'backend' if error.status_code is not None else 'transport'
+        if isinstance(error.response_data, dict):
+            source = str(error.response_data.get('origin', source))
+
+        upstream = details_payload.get('upstream') if isinstance(details_payload, dict) else None
+        upstream_status = details_payload.get('upstream_status') if isinstance(details_payload, dict) else None
 
         parts = [fallback_prefix, status]
+        parts.append(f"source={source}")
         if code:
             parts.append(f"code={code}")
+        if upstream:
+            parts.append(f"upstream={upstream}")
+        if upstream_status:
+            parts.append(f"upstream_status={upstream_status}")
         parts.append(message)
         if request_id:
             parts.append(f"request_id={request_id}")
@@ -81,6 +106,17 @@ class BackendMainScreenAdapter:
         """Run an operation with retry/backoff for transient backend failures."""
         retryable_statuses = {429, 500, 502, 503, 504}
         last_error: Optional[Exception] = None
+        consecutive_503 = 0
+
+        is_export_operation = (
+            'export' in operation_name.lower() or 'download' in operation_name.lower()
+        )
+
+        now = time.time()
+        if is_export_operation and now < self._export_circuit_open_until:
+            wait_secs = int(self._export_circuit_open_until - now)
+            msg = f"Backend export temporarily cooling down ({wait_secs}s remaining): {self._export_circuit_reason}"
+            raise BackendAPIError(msg, 503)
 
         for attempt in range(1, max_attempts + 1):
             try:
@@ -89,6 +125,20 @@ class BackendMainScreenAdapter:
                 last_error = e
                 status = e.status_code
                 is_retryable = status in retryable_statuses
+
+                if status == 503:
+                    consecutive_503 += 1
+                else:
+                    consecutive_503 = 0
+
+                if is_export_operation and consecutive_503 >= 3:
+                    self._export_circuit_open_until = time.time() + 25.0
+                    self._export_circuit_reason = "repeated HTTP 503 responses"
+                    raise BackendAPIError(
+                        "Backend export service is unstable (repeated 503). Cooling down for 25s before next attempt.",
+                        503,
+                        e.response_data,
+                    )
 
                 if not is_retryable or attempt >= max_attempts:
                     raise
@@ -325,7 +375,7 @@ class BackendMainScreenAdapter:
         """
         try:
             if self.progress_callback:
-                self.progress_callback("Generating export...")
+                self._emit_progress("Generating export...")
             
             export_info = self._run_with_transient_retry(
                 "Generating export",
@@ -364,7 +414,7 @@ class BackendMainScreenAdapter:
         """
         try:
             if self.progress_callback:
-                self.progress_callback("Downloading export...")
+                self._emit_progress("Downloading export...")
             
             export_data = self._run_with_transient_retry(
                 "Downloading export",
@@ -393,7 +443,7 @@ class BackendMainScreenAdapter:
         """Generate a combined export for multiple playlists."""
         try:
             if self.progress_callback:
-                self.progress_callback("Generating combined export...")
+                self._emit_progress("Generating combined export...")
 
             export_info = self._run_with_transient_retry(
                 "Generating combined export",
@@ -422,7 +472,7 @@ class BackendMainScreenAdapter:
         """Generate combined export via multiple chunked backend invocations."""
         try:
             if self.progress_callback:
-                self.progress_callback("Generating combined export (chunked)...")
+                self._emit_progress("Generating combined export (chunked)...")
 
             cursor = 0
             job_id: Optional[str] = None
@@ -450,8 +500,7 @@ class BackendMainScreenAdapter:
                 processed = int(status.get('processed_count', 0))
                 total = int(status.get('playlist_count', len(playlist_ids)))
 
-                if self.progress_callback:
-                    self.progress_callback(f"Chunked export progress: {processed}/{total} playlists")
+                self._emit_progress(f"Chunked export progress: {processed}/{total} playlists")
 
                 if status.get('status') == 'completed' or not status.get('continuation_required', False):
                     return status
@@ -478,7 +527,7 @@ class BackendMainScreenAdapter:
         """Download combined export file."""
         try:
             if self.progress_callback:
-                self.progress_callback("Downloading combined export...")
+                self._emit_progress("Downloading combined export...")
 
             export_data = self._run_with_transient_retry(
                 "Downloading combined export",

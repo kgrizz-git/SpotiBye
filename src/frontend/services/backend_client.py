@@ -37,18 +37,26 @@ class BackendClient:
         self.base_url = base_url.rstrip('/')
         self.session = self._create_session()
         self.auth_token: Optional[str] = None
+        self.trace_id: Optional[str] = None
+
+    def set_trace_id(self, trace_id: Optional[str]) -> None:
+        """Set per-run trace ID propagated to backend for log correlation."""
+        self.trace_id = trace_id.strip() if isinstance(trace_id, str) and trace_id.strip() else None
         
     def _create_session(self) -> requests.Session:
         """Create a requests session with retry logic and proper configuration."""
         session = requests.Session()
         
-        # Configure retry strategy
+        # Configure conservative adapter retries.
+        # Status retries are disabled so higher-level export retry/circuit-breaker logic
+        # controls backoff behavior and avoids retry amplification under 503 storms.
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
-            # Retry only idempotent read operations; do not retry POST exports.
-            allowed_methods=["GET", "HEAD", "OPTIONS"]
+            total=2,
+            connect=2,
+            read=2,
+            status=0,
+            backoff_factor=0.3,
+            allowed_methods=["GET", "HEAD", "OPTIONS"],
         )
         
         adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -84,6 +92,12 @@ class BackendClient:
         if self.auth_token:
             headers = kwargs.pop('headers', {})
             headers['Authorization'] = f'Bearer {self.auth_token}'
+            if self.trace_id:
+                headers['X-SpotiBye-Trace-Id'] = self.trace_id
+            kwargs['headers'] = headers
+        elif self.trace_id:
+            headers = kwargs.pop('headers', {})
+            headers['X-SpotiBye-Trace-Id'] = self.trace_id
             kwargs['headers'] = headers
         
         try:
@@ -117,16 +131,44 @@ class BackendClient:
             
         except requests.exceptions.ConnectionError as e:
             logger.error(f"Connection error: {e}")
-            raise BackendAPIError("Unable to connect to backend. Check your internet connection.")
+            raise BackendAPIError(
+                "Unable to connect to backend. Check your internet connection.",
+                None,
+                {
+                    'origin': 'transport',
+                    'transport_error': 'connection',
+                },
+            )
         except requests.exceptions.Timeout as e:
             logger.error(f"Request timeout: {e}")
-            raise BackendAPIError("Request timed out. Please try again.")
+            raise BackendAPIError(
+                "Request timed out. Please try again.",
+                None,
+                {
+                    'origin': 'transport',
+                    'transport_error': 'timeout',
+                },
+            )
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error: {e}")
-            raise BackendAPIError(f"Network error: {str(e)}")
+            raise BackendAPIError(
+                f"Network error: {str(e)}",
+                None,
+                {
+                    'origin': 'transport',
+                    'transport_error': 'request',
+                },
+            )
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error: {e}")
-            raise BackendAPIError("Invalid response from backend.")
+            raise BackendAPIError(
+                "Invalid response from backend.",
+                None,
+                {
+                    'origin': 'transport',
+                    'transport_error': 'invalid_json',
+                },
+            )
     
     # Authentication endpoints
     def initiate_spotify_login(self, redirect_uri: str) -> str:
@@ -271,6 +313,8 @@ class BackendClient:
         """Download generated export file."""
         url = f"{self.base_url}/export/playlist/{playlist_id}/download"
         headers = {'Authorization': f'Bearer {self.auth_token}'} if self.auth_token else {}
+        if self.trace_id:
+            headers['X-SpotiBye-Trace-Id'] = self.trace_id
         
         response = self.session.get(url, headers=headers, timeout=60)
         if response.status_code >= 400:
@@ -294,6 +338,8 @@ class BackendClient:
         """Download generated combined export file."""
         url = f"{self.base_url}/export/playlists/{job_id}/download"
         headers = {'Authorization': f'Bearer {self.auth_token}'} if self.auth_token else {}
+        if self.trace_id:
+            headers['X-SpotiBye-Trace-Id'] = self.trace_id
 
         response = self.session.get(url, headers=headers, timeout=120)
         if response.status_code >= 400:

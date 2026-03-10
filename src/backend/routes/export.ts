@@ -29,12 +29,39 @@ function resolveRequestedFormat(body: any): 'xlsx' | 'csv' {
   return body && body.format === 'csv' ? 'csv' : 'xlsx';
 }
 
+function parseUpstreamStatus(errorMessage: string): number | undefined {
+  const match = /HTTP\s+(\d{3})/i.exec(errorMessage);
+  if (!match) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function buildExportErrorPayload(code: string, message: string, requestId: string, details: Record<string, unknown> = {}) {
+  const upstreamStatus = parseUpstreamStatus(message);
+  const upstream = upstreamStatus ? 'spotify' : undefined;
+  return {
+    error: {
+      code,
+      message,
+      request_id: requestId,
+      details: {
+        ...details,
+        upstream,
+        upstream_status: upstreamStatus,
+      },
+    },
+  };
+}
+
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
 
 // POST /export/playlist/:id - Generate playlist export
 app.post('/playlist/:id', async (c) => {
   const requestId = crypto.randomUUID();
+  const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
@@ -44,7 +71,7 @@ app.post('/playlist/:id', async (c) => {
     
     const exportService = new ExportService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
-    console.info('[export] start', { requestId, userId, playlistId });
+    console.info('[export] start', { requestId, traceId, userId, playlistId });
     
     // Check if export already exists
     const exportKey = `export:${playlistId}:${userId}`;
@@ -92,6 +119,7 @@ app.post('/playlist/:id', async (c) => {
 
       console.info('[export] completed', {
         requestId,
+        traceId,
         userId,
         playlistId,
         trackCount: exportData.tracks.length,
@@ -112,6 +140,7 @@ app.post('/playlist/:id', async (c) => {
 
       console.error('[export] generation failed', {
         requestId,
+        traceId,
         userId,
         playlistId,
         error: errorMessage,
@@ -120,17 +149,16 @@ app.post('/playlist/:id', async (c) => {
       await cacheService.set(exportKey, failedStatus, 3600);
       
       return c.json(
-        {
-          error: {
-            code: 'EXPORT_FAILED',
-            message: `Failed to generate export: ${errorMessage}`,
-            request_id: requestId,
-            details: {
-              playlist_id: playlistId,
-              user_id: userId,
-            },
+        buildExportErrorPayload(
+          'EXPORT_FAILED',
+          `Failed to generate export: ${errorMessage}`,
+          requestId,
+          {
+            playlist_id: playlistId,
+            user_id: userId,
+            trace_id: traceId,
           },
-        },
+        ),
         500
       );
     }
@@ -138,13 +166,11 @@ app.post('/playlist/:id', async (c) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('Failed to start export:', { requestId, error });
     return c.json(
-      {
-        error: {
-          code: 'EXPORT_START_FAILED',
-          message: `Failed to start export: ${errorMessage}`,
-          request_id: requestId,
-        },
-      },
+      buildExportErrorPayload(
+        'EXPORT_START_FAILED',
+        `Failed to start export: ${errorMessage}`,
+        requestId,
+      ),
       500
     );
   }
@@ -153,6 +179,7 @@ app.post('/playlist/:id', async (c) => {
 // POST /export/playlists - Generate combined export for multiple playlists
 app.post('/playlists', async (c) => {
   const requestId = crypto.randomUUID();
+  const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
@@ -173,6 +200,7 @@ app.post('/playlists', async (c) => {
 
     console.info('[export-batch] start', {
       requestId,
+      traceId,
       userId,
       playlistCount: playlistIds.length,
       jobId,
@@ -205,6 +233,7 @@ app.post('/playlists', async (c) => {
 
     console.info('[export-batch] completed', {
       requestId,
+      traceId,
       userId,
       playlistCount: exportDataList.length,
       totalTracks,
@@ -219,13 +248,11 @@ app.post('/playlists', async (c) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[export-batch] failed', { requestId, error: errorMessage });
     return c.json(
-      {
-        error: {
-          code: 'EXPORT_BATCH_FAILED',
-          message: `Failed to generate combined export: ${errorMessage}`,
-          request_id: requestId,
-        },
-      },
+      buildExportErrorPayload(
+        'EXPORT_BATCH_FAILED',
+        `Failed to generate combined export: ${errorMessage}`,
+        requestId,
+      ),
       500
     );
   }
@@ -234,6 +261,7 @@ app.post('/playlists', async (c) => {
 // POST /export/playlists/chunk - Generate combined export incrementally across invocations
 app.post('/playlists/chunk', async (c) => {
   const requestId = crypto.randomUUID();
+  const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
@@ -291,6 +319,7 @@ app.post('/playlists/chunk', async (c) => {
 
     console.info('[export-batch-chunk] process', {
       requestId,
+      traceId,
       userId,
       jobId,
       startCursor: effectiveCursor,
@@ -319,6 +348,7 @@ app.post('/playlists/chunk', async (c) => {
       status.continuation_required = false;
       console.info('[export-batch-chunk] completed', {
         requestId,
+        traceId,
         userId,
         jobId,
         playlistCount: exportDataList.length,
@@ -337,13 +367,11 @@ app.post('/playlists/chunk', async (c) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[export-batch-chunk] failed', { requestId, error: errorMessage });
     return c.json(
-      {
-        error: {
-          code: 'EXPORT_BATCH_CHUNK_FAILED',
-          message: `Failed to process combined export chunk: ${errorMessage}`,
-          request_id: requestId,
-        },
-      },
+      buildExportErrorPayload(
+        'EXPORT_BATCH_CHUNK_FAILED',
+        `Failed to process combined export chunk: ${errorMessage}`,
+        requestId,
+      ),
       500
     );
   }
@@ -371,6 +399,7 @@ app.get('/playlists/:jobId/status', async (c) => {
 
 // GET /export/playlists/:jobId/download - Download combined generated file
 app.get('/playlists/:jobId/download', async (c) => {
+  const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
     const jobId = c.req.param('jobId');
     const userId = c.get('user').id;
@@ -413,8 +442,17 @@ app.get('/playlists/:jobId/download', async (c) => {
       },
     });
   } catch (error) {
-    console.error('Failed to download combined export:', error);
-    return c.json({ error: { code: 'EXPORT_DOWNLOAD_FAILED', message: 'Failed to download combined export' } }, 500);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Failed to download combined export:', { error: errorMessage, traceId });
+    return c.json(
+      buildExportErrorPayload(
+        'EXPORT_DOWNLOAD_FAILED',
+        `Failed to download combined export: ${errorMessage}`,
+        crypto.randomUUID(),
+        { trace_id: traceId },
+      ),
+      500
+    );
   }
 });
 
@@ -477,8 +515,16 @@ app.get('/playlist/:id/download', async (c) => {
       },
     });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('Failed to download export:', error);
-    return c.json({ error: { code: 'EXPORT_DOWNLOAD_FAILED', message: 'Failed to download export' } }, 500);
+    return c.json(
+      buildExportErrorPayload(
+        'EXPORT_DOWNLOAD_FAILED',
+        `Failed to download export: ${errorMessage}`,
+        crypto.randomUUID(),
+      ),
+      500
+    );
   }
 });
 
