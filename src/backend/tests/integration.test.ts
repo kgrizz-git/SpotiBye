@@ -161,7 +161,10 @@ describe('API Integration Tests', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data).toHaveProperty('error', 'Not Found');
+      expect(data).toHaveProperty('error');
+      expect(data.error).toHaveProperty('code', 'NOT_FOUND');
+      expect(data.error).toHaveProperty('message', 'Not Found');
+      expect(data.error).toHaveProperty('request_id');
     });
   });
 });

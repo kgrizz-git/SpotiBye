@@ -185,7 +185,10 @@ describe('API Coverage Tests', () => {
           
           // Error responses should have consistent structure
           if (response.status === 404) {
-            expect(data).toHaveProperty('error', 'Not Found');
+            expect(data).toHaveProperty('error');
+            expect(data.error).toHaveProperty('code', 'NOT_FOUND');
+            expect(data.error).toHaveProperty('message', 'Not Found');
+            expect(data.error).toHaveProperty('request_id');
           } else if (response.status >= 400 && response.status < 500) {
             // Client errors should have error object with code and message
             expect(data).toHaveProperty('error');
