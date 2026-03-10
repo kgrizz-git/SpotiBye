@@ -1,5 +1,5 @@
 import { SpotifyService } from './spotify';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 interface ExportTrack {
   Artist: string;
@@ -29,6 +29,7 @@ export interface ExportData {
     owner: string;
     followers: number;
     url: string;
+    cover_image_url?: string;
     created_at?: string;
   };
   tracks: ExportTrack[];
@@ -136,7 +137,8 @@ export class ExportService {
         total_tracks: playlist.items?.total ?? playlist.tracks?.total ?? exportTracks.length,
         owner: playlist.owner?.display_name || 'Unknown',
         followers: playlist.followers?.total || 0,
-        url: playlist.external_urls?.spotify || ''
+        url: playlist.external_urls?.spotify || '',
+        cover_image_url: Array.isArray(playlist.images) && playlist.images.length > 0 ? playlist.images[0]?.url : undefined,
       },
       tracks: exportTracks,
       total_duration_ms: totalDurationMs,
@@ -171,87 +173,147 @@ export class ExportService {
   }
 
   async generateCombinedExcelFile(exportDataList: ExportData[]): Promise<ArrayBuffer> {
-    const workbook = XLSX.utils.book_new();
-    const summaryRows: Array<Array<string | number>> = [
-      ['Playlist Name', 'Owner', 'Track Count', 'Duration']
+    const workbook = new ExcelJS.Workbook();
+    const summarySheet = workbook.addWorksheet('Playlists');
+    summarySheet.columns = [
+      { header: 'Playlist Name', key: 'name', width: 29 },
+      { header: 'Owner', key: 'owner', width: 24 },
+      { header: 'Track Count', key: 'track_count', width: 16 },
+      { header: 'Duration', key: 'duration', width: 19 },
     ];
 
-    for (const exportData of exportDataList) {
-      summaryRows.push([
-        exportData.playlist.name,
-        exportData.playlist.owner,
-        exportData.tracks.length,
-        this.formatDuration(exportData.total_duration_ms),
-      ]);
-    }
+    const summaryHeader = summarySheet.getRow(1);
+    summaryHeader.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 13 };
+    summaryHeader.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4F81BD' },
+    };
 
-    const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
-    summarySheet['!cols'] = [{ wch: 29 }, { wch: 24 }, { wch: 16 }, { wch: 19 }];
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Playlists');
+    for (const exportData of exportDataList) {
+      summarySheet.addRow({
+        name: exportData.playlist.name,
+        owner: exportData.playlist.owner,
+        track_count: exportData.tracks.length,
+        duration: this.formatDuration(exportData.total_duration_ms),
+      });
+    }
 
     const headers = this.getTrackHeaders();
 
     for (const exportData of exportDataList) {
       const sheetName = this.sanitizeSheetName(`${exportData.playlist.name} - ${exportData.playlist.owner}`);
 
-      const rows: Array<Array<string | number>> = [
-        [exportData.playlist.name],
-        [`Created by: ${exportData.playlist.owner}`],
-        [`Followers: ${exportData.playlist.followers}`],
-        [`Tracks exported: ${exportData.tracks.length}`],
-        [`Total duration: ${this.formatDuration(exportData.total_duration_ms)}`],
-        [`Playlist URL: ${exportData.playlist.url || 'N/A'}`],
-        [`Description: ${exportData.playlist.description || 'N/A'}`],
-        [],
-        [],
-        [],
-        headers,
+      const sheet = workbook.addWorksheet(sheetName);
+      sheet.columns = [
+        { key: 'A', width: 30 },
+        { key: 'B', width: 40 },
+        { key: 'C', width: 40 },
+        { key: 'D', width: 15 },
+        { key: 'E', width: 60 },
+        { key: 'F', width: 12 },
+        { key: 'G', width: 14 },
+        { key: 'H', width: 12 },
+        { key: 'I', width: 12 },
+        { key: 'J', width: 12 },
+        { key: 'K', width: 12 },
+        { key: 'L', width: 16 },
+        { key: 'M', width: 12 },
+        { key: 'N', width: 12 },
+        { key: 'O', width: 12 },
+        { key: 'P', width: 14 },
       ];
 
+      sheet.getCell('A1').value = exportData.playlist.name;
+      sheet.getCell('A1').font = { bold: true, size: 16 };
+      sheet.getCell('A2').value = `Created by: ${exportData.playlist.owner}`;
+      sheet.getCell('A3').value = `Followers: ${exportData.playlist.followers}`;
+      sheet.getCell('A4').value = `Tracks exported: ${exportData.tracks.length}`;
+      sheet.getCell('A5').value = `Total duration: ${this.formatDuration(exportData.total_duration_ms)}`;
+      sheet.getCell('A6').value = `Playlist URL: ${exportData.playlist.url || 'N/A'}`;
+      sheet.getCell('A7').value = `Description: ${exportData.playlist.description || 'N/A'}`;
+
+      if (exportData.playlist.url) {
+        sheet.getCell('A6').value = {
+          text: `Playlist URL: ${exportData.playlist.url}`,
+          hyperlink: exportData.playlist.url,
+        };
+      }
+
+      // Try to embed a cover image like legacy desktop export. Failure should never block export.
+      await this.tryAddCoverImage(workbook, sheet, exportData.playlist.cover_image_url);
+
+      sheet.getRow(11).values = headers;
+      const headerRow = sheet.getRow(11);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4F81BD' },
+      };
+
+      let rowNumber = 12;
       for (const track of exportData.tracks) {
-        rows.push(headers.map((header) => (track as any)[header] ?? ''));
-      }
-
-      const sheet = XLSX.utils.aoa_to_sheet(rows);
-      sheet['!cols'] = [
-        { wch: 30 },
-        { wch: 40 },
-        { wch: 40 },
-        { wch: 15 },
-        { wch: 60 },
-        { wch: 12 },
-        { wch: 14 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 16 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 14 },
-      ];
-
-      const startRow = 12;
-      const endRow = rows.length;
-      sheet['!autofilter'] = { ref: `A11:P${Math.max(endRow, 11)}` };
-
-      for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
-        const cellRef = `E${rowIndex}`;
-        const cellValue = sheet[cellRef]?.v;
-        if (typeof cellValue === 'string' && cellValue.startsWith('http')) {
-          sheet[cellRef] = {
-            t: 's',
-            v: cellValue,
-            l: { Target: cellValue },
-          };
+        const rowValues = headers.map((header) => (track as any)[header] ?? '');
+        sheet.getRow(rowNumber).values = rowValues;
+        const urlValue = (track as any)['Spotify URL'];
+        if (typeof urlValue === 'string' && urlValue.startsWith('http')) {
+          sheet.getCell(`E${rowNumber}`).value = { text: urlValue, hyperlink: urlValue };
+          sheet.getCell(`E${rowNumber}`).font = { color: { argb: 'FF0563C1' }, underline: true };
         }
+        rowNumber += 1;
       }
 
-      XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+      if (rowNumber > 12) {
+        sheet.autoFilter = {
+          from: { row: 11, column: 1 },
+          to: { row: rowNumber - 1, column: headers.length },
+        };
+
+        sheet.addTable({
+          name: `tbl_${sheetName.replace(/[^A-Za-z0-9_]/g, '').slice(0, 20)}_${Math.floor(Math.random() * 1000)}`,
+          ref: 'A11',
+          headerRow: true,
+          style: {
+            theme: 'TableStyleMedium9',
+            showRowStripes: true,
+          },
+          columns: headers.map((header) => ({ name: header })),
+          rows: exportData.tracks.map((track) => headers.map((header) => (track as any)[header] ?? '')),
+        });
+      }
+
+      for (let r = 1; r <= rowNumber; r += 1) {
+        const row = sheet.getRow(r);
+        row.alignment = { vertical: 'middle', horizontal: 'left', wrapText: r > 7 };
+      }
     }
 
-    return XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer as ArrayBuffer;
+  }
+
+  private async tryAddCoverImage(workbook: ExcelJS.Workbook, sheet: ExcelJS.Worksheet, imageUrl?: string): Promise<void> {
+    if (!imageUrl) {
+      return;
+    }
+
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        return;
+      }
+      const bytes = await response.arrayBuffer();
+      const contentType = response.headers.get('content-type') || '';
+      const extension = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpeg' : 'png';
+      const imageId = workbook.addImage({ buffer: Buffer.from(bytes), extension });
+      sheet.addImage(imageId, {
+        tl: { col: 1.1, row: 0.1 },
+        ext: { width: 120, height: 120 },
+      });
+    } catch {
+      // Ignore image failures to keep export resilient.
+    }
   }
   
   private formatDuration(ms: number): string {
