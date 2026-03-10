@@ -20,6 +20,7 @@ import pandas as pd
 import requests
 import spotipy
 from kivy.app import App
+from kivy.core.clipboard import Clipboard
 from kivy.clock import Clock, mainthread
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp
@@ -1078,6 +1079,7 @@ class MainScreen(Screen):
         logger.error("Backend request failed: %s", error_msg)
         message = str(error_msg or '')
         self.status_label.text = f"Backend error: {message}"
+        self._show_backend_error_popup(message)
 
         lowered = message.lower()
         auth_related = (
@@ -1095,6 +1097,55 @@ class MainScreen(Screen):
                 Clock.schedule_once(lambda _: app.logout(), 0.2)
             elif app and hasattr(app, 'switch_to_login'):
                 Clock.schedule_once(lambda _: app.switch_to_login(), 0.2)
+
+    def _show_backend_error_popup(self, message: str) -> None:
+        """Show backend error details with one-click copy for diagnostics sharing."""
+        if not message:
+            return
+
+        details = (
+            f"Time: {datetime.now().isoformat()}\n"
+            f"Screen: MainScreen\n"
+            f"Error: {message}"
+        )
+
+        def _open_popup(_dt):
+            content = BoxLayout(orientation='vertical', spacing=dp(8), padding=dp(10))
+
+            details_input = TextInput(
+                text=details,
+                readonly=True,
+                multiline=True,
+                size_hint_y=1,
+                font_size=dp(13),
+                background_color=(0.15, 0.15, 0.15, 1),
+                foreground_color=(1, 1, 1, 1),
+            )
+            content.add_widget(details_input)
+
+            button_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(42), spacing=dp(8))
+            copy_btn = Button(text='Copy Error Details', background_color=[0.2, 0.55, 0.85, 1])
+            close_btn = Button(text='Close', background_color=[0.45, 0.45, 0.45, 1])
+            button_row.add_widget(copy_btn)
+            button_row.add_widget(close_btn)
+            content.add_widget(button_row)
+
+            popup = Popup(
+                title='Backend Error Details',
+                content=content,
+                size_hint=(0.86, 0.58),
+                auto_dismiss=True,
+            )
+
+            def _copy_details(_instance):
+                Clipboard.copy(details)
+                self.status_label.text = 'Backend error details copied to clipboard'
+
+            copy_btn.bind(on_press=_copy_details)
+            close_btn.bind(on_press=popup.dismiss)
+            popup.open()
+
+        Clock.schedule_once(_open_popup, 0)
 
     @mainthread
     def _on_backend_progress(self, status: str) -> None:
