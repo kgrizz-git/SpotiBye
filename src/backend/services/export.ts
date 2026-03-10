@@ -1,44 +1,38 @@
 import { SpotifyService } from './spotify';
-import type { SpotifyTrack, SpotifyAudioFeatures } from '../types/spotify';
+import * as XLSX from 'xlsx';
 
 interface ExportTrack {
-  id: string;
-  name: string;
-  artists: string;
-  album: string;
-  duration: string;
-  duration_ms: number;
-  popularity: number;
-  explicit: boolean;
-  release_date: string;
-  uri: string;
-  added_at?: string;
-  audio_features?: {
-    acousticness: number;
-    danceability: number;
-    energy: number;
-    instrumentalness: number;
-    liveness: number;
-    loudness: number;
-    speechiness: number;
-    valence: number;
-    tempo: number;
-    key: number;
-    mode: number;
-    time_signature: number;
-  };
+  Artist: string;
+  Album: string;
+  Track: string;
+  Duration: string;
+  'Spotify URL': string;
+  Tempo: number | string;
+  Key: string;
+  Danceability: number | string;
+  Energy: number | string;
+  Valence: number | string;
+  Acousticness: number | string;
+  Instrumentalness: number | string;
+  Liveness: number | string;
+  Speechiness: number | string;
+  Loudness: number | string;
+  'Time Signature': number | string;
 }
 
-interface ExportData {
+export interface ExportData {
   playlist: {
     id: string;
     name: string;
     description: string;
     total_tracks: number;
     owner: string;
+    followers: number;
+    url: string;
     created_at?: string;
   };
   tracks: ExportTrack[];
+  total_duration_ms: number;
   generated_at: string;
 }
 
@@ -102,35 +96,37 @@ export class ExportService {
       .map((item: any) => {
         const track = item.track;
         const audioFeatures = audioFeaturesMap.get(track.id);
+        const keyMap = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const modeMap: Record<number, string> = { 0: 'minor', 1: 'major' };
+        const keyName = typeof audioFeatures?.key === 'number' && audioFeatures.key >= 0 && audioFeatures.key < keyMap.length
+          ? keyMap[audioFeatures.key]
+          : null;
+        const modeName = typeof audioFeatures?.mode === 'number' ? modeMap[audioFeatures.mode] : null;
+        const keyValue = keyName ? `${keyName}${modeName ? ` ${modeName}` : ''}` : 'N/A';
         
         return {
-          id: track.id,
-          name: track.name,
-          artists: track.artists.map((artist: any) => artist.name).join(', '),
-          album: track.album.name,
-          duration: this.formatDuration(track.duration_ms),
-          duration_ms: track.duration_ms,
-          popularity: track.popularity ?? 0,
-          explicit: track.explicit,
-          release_date: track.album.release_date,
-          uri: track.uri,
-          added_at: item.added_at,
-          audio_features: audioFeatures ? {
-            acousticness: audioFeatures.acousticness,
-            danceability: audioFeatures.danceability,
-            energy: audioFeatures.energy,
-            instrumentalness: audioFeatures.instrumentalness,
-            liveness: audioFeatures.liveness,
-            loudness: audioFeatures.loudness,
-            speechiness: audioFeatures.speechiness,
-            valence: audioFeatures.valence,
-            tempo: audioFeatures.tempo,
-            key: audioFeatures.key,
-            mode: audioFeatures.mode,
-            time_signature: audioFeatures.time_signature
-          } : undefined
+          Artist: track.artists.map((artist: any) => artist.name).join(', '),
+          Album: track.album?.name || '',
+          Track: track.name,
+          Duration: this.formatDuration(track.duration_ms),
+          'Spotify URL': track.external_urls?.spotify || '',
+          Tempo: typeof audioFeatures?.tempo === 'number' ? Number(audioFeatures.tempo.toFixed(2)) : 'N/A',
+          Key: keyValue,
+          Danceability: typeof audioFeatures?.danceability === 'number' ? Number(audioFeatures.danceability.toFixed(3)) : 'N/A',
+          Energy: typeof audioFeatures?.energy === 'number' ? Number(audioFeatures.energy.toFixed(3)) : 'N/A',
+          Valence: typeof audioFeatures?.valence === 'number' ? Number(audioFeatures.valence.toFixed(3)) : 'N/A',
+          Acousticness: typeof audioFeatures?.acousticness === 'number' ? Number(audioFeatures.acousticness.toFixed(3)) : 'N/A',
+          Instrumentalness: typeof audioFeatures?.instrumentalness === 'number' ? Number(audioFeatures.instrumentalness.toFixed(3)) : 'N/A',
+          Liveness: typeof audioFeatures?.liveness === 'number' ? Number(audioFeatures.liveness.toFixed(3)) : 'N/A',
+          Speechiness: typeof audioFeatures?.speechiness === 'number' ? Number(audioFeatures.speechiness.toFixed(3)) : 'N/A',
+          Loudness: typeof audioFeatures?.loudness === 'number' ? Number(audioFeatures.loudness.toFixed(1)) : 'N/A',
+          'Time Signature': typeof audioFeatures?.time_signature === 'number' ? audioFeatures.time_signature : 'N/A',
         };
       });
+
+    const totalDurationMs = allTracks
+      .filter((item: any) => item.track && typeof item.track.duration_ms === 'number')
+      .reduce((acc: number, item: any) => acc + (item.track.duration_ms || 0), 0);
     
     return {
       playlist: {
@@ -138,43 +134,20 @@ export class ExportService {
         name: playlist.name,
         description: playlist.description || '',
         total_tracks: playlist.items?.total ?? playlist.tracks?.total ?? exportTracks.length,
-        owner: playlist.owner.display_name
+        owner: playlist.owner?.display_name || 'Unknown',
+        followers: playlist.followers?.total || 0,
+        url: playlist.external_urls?.spotify || ''
       },
       tracks: exportTracks,
+      total_duration_ms: totalDurationMs,
       generated_at: new Date().toISOString()
     };
   }
   
-  async generateExcelFile(exportData: ExportData): Promise<ArrayBuffer> {
-    // Create a simple CSV-like Excel file (in production, you'd use a proper Excel library)
-    // For Cloudflare Workers, we'll create a simple format that can be opened in Excel
+  async generateCsvFile(exportData: ExportData): Promise<ArrayBuffer> {
+    const headers = this.getTrackHeaders();
     
-    const headers = [
-      'Track ID',
-      'Track Name',
-      'Artists',
-      'Album',
-      'Duration',
-      'Popularity',
-      'Explicit',
-      'Release Date',
-      'Spotify URI',
-      'Added At',
-      'Acousticness',
-      'Danceability',
-      'Energy',
-      'Instrumentalness',
-      'Liveness',
-      'Loudness',
-      'Speechiness',
-      'Valence',
-      'Tempo',
-      'Key',
-      'Mode',
-      'Time Signature'
-    ];
-    
-    // Create CSV content (Excel can open CSV files)
+    // Create CSV content
     let csvContent = headers.join(',') + '\n';
     
     // Add playlist info as first row
@@ -183,30 +156,7 @@ export class ExportService {
     
     // Add track data
     for (const track of exportData.tracks) {
-      const row = [
-        this.escapeCsvValue(track.id),
-        this.escapeCsvValue(track.name),
-        this.escapeCsvValue(track.artists),
-        this.escapeCsvValue(track.album),
-        this.escapeCsvValue(track.duration),
-        track.popularity,
-        track.explicit,
-        this.escapeCsvValue(track.release_date),
-        this.escapeCsvValue(track.uri),
-        this.escapeCsvValue(track.added_at || ''),
-        track.audio_features?.acousticness || '',
-        track.audio_features?.danceability || '',
-        track.audio_features?.energy || '',
-        track.audio_features?.instrumentalness || '',
-        track.audio_features?.liveness || '',
-        track.audio_features?.loudness || '',
-        track.audio_features?.speechiness || '',
-        track.audio_features?.valence || '',
-        track.audio_features?.tempo || '',
-        track.audio_features?.key || '',
-        track.audio_features?.mode || '',
-        track.audio_features?.time_signature || ''
-      ];
+      const row = headers.map((header) => this.escapeCsvValue(String((track as any)[header] ?? '')));
       
       csvContent += row.join(',') + '\n';
     }
@@ -215,11 +165,130 @@ export class ExportService {
     const encoder = new TextEncoder();
     return encoder.encode(csvContent).buffer as ArrayBuffer;
   }
+
+  async generateExcelFile(exportData: ExportData): Promise<ArrayBuffer> {
+    return this.generateCombinedExcelFile([exportData]);
+  }
+
+  async generateCombinedExcelFile(exportDataList: ExportData[]): Promise<ArrayBuffer> {
+    const workbook = XLSX.utils.book_new();
+    const summaryRows: Array<Array<string | number>> = [
+      ['Playlist Name', 'Owner', 'Track Count', 'Duration']
+    ];
+
+    for (const exportData of exportDataList) {
+      summaryRows.push([
+        exportData.playlist.name,
+        exportData.playlist.owner,
+        exportData.tracks.length,
+        this.formatDuration(exportData.total_duration_ms),
+      ]);
+    }
+
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+    summarySheet['!cols'] = [{ wch: 29 }, { wch: 24 }, { wch: 16 }, { wch: 19 }];
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Playlists');
+
+    const headers = this.getTrackHeaders();
+
+    for (const exportData of exportDataList) {
+      const sheetName = this.sanitizeSheetName(`${exportData.playlist.name} - ${exportData.playlist.owner}`);
+
+      const rows: Array<Array<string | number>> = [
+        [exportData.playlist.name],
+        [`Created by: ${exportData.playlist.owner}`],
+        [`Followers: ${exportData.playlist.followers}`],
+        [`Tracks exported: ${exportData.tracks.length}`],
+        [`Total duration: ${this.formatDuration(exportData.total_duration_ms)}`],
+        [`Playlist URL: ${exportData.playlist.url || 'N/A'}`],
+        [`Description: ${exportData.playlist.description || 'N/A'}`],
+        [],
+        [],
+        [],
+        headers,
+      ];
+
+      for (const track of exportData.tracks) {
+        rows.push(headers.map((header) => (track as any)[header] ?? ''));
+      }
+
+      const sheet = XLSX.utils.aoa_to_sheet(rows);
+      sheet['!cols'] = [
+        { wch: 30 },
+        { wch: 40 },
+        { wch: 40 },
+        { wch: 15 },
+        { wch: 60 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 14 },
+      ];
+
+      const startRow = 12;
+      const endRow = rows.length;
+      sheet['!autofilter'] = { ref: `A11:P${Math.max(endRow, 11)}` };
+
+      for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
+        const cellRef = `E${rowIndex}`;
+        const cellValue = sheet[cellRef]?.v;
+        if (typeof cellValue === 'string' && cellValue.startsWith('http')) {
+          sheet[cellRef] = {
+            t: 's',
+            v: cellValue,
+            l: { Target: cellValue },
+          };
+        }
+      }
+
+      XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    }
+
+    return XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  }
   
   private formatDuration(ms: number): string {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (hours > 0) {
+      return `${hours}:${remainingMinutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    return `${remainingMinutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  private sanitizeSheetName(name: string): string {
+    const cleaned = name.replace(/[\\/*?:\[\]]/g, ' ').trim();
+    return (cleaned || 'Playlist').slice(0, 31);
+  }
+
+  private getTrackHeaders(): string[] {
+    return [
+      'Artist',
+      'Album',
+      'Track',
+      'Duration',
+      'Spotify URL',
+      'Tempo',
+      'Key',
+      'Danceability',
+      'Energy',
+      'Valence',
+      'Acousticness',
+      'Instrumentalness',
+      'Liveness',
+      'Speechiness',
+      'Loudness',
+      'Time Signature',
+    ];
   }
   
   private escapeCsvValue(value: string): string {
@@ -230,8 +299,7 @@ export class ExportService {
   }
   
   async generateAdvancedExcelFile(exportData: ExportData): Promise<ArrayBuffer> {
-    // This would be a more sophisticated Excel generator
-    // For now, we'll return the CSV format
+    // Keep advanced export aligned with the primary XLSX output.
     return this.generateExcelFile(exportData);
   }
 }

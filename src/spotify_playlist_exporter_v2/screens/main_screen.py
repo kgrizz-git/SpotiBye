@@ -1394,9 +1394,10 @@ class MainScreen(Screen):
 
         filename = (self.filename_input.text or '').strip() if hasattr(self, 'filename_input') else ''
         if not filename:
-            filename = self._generate_default_filename()
-        elif not filename.lower().endswith('.xlsx'):
-            filename += '.xlsx'
+            filename = os.path.splitext(self._generate_default_filename())[0]
+
+        if not filename.lower().endswith('.xlsx'):
+            filename = f"{os.path.splitext(filename)[0]}.xlsx"
 
         output_path = os.path.join(SAVE_DIR, filename)
 
@@ -1460,16 +1461,13 @@ class MainScreen(Screen):
         return safe[:80] if safe else 'playlist'
 
     def _build_backend_output_path(self, playlist: dict, base_output_path: str, multiple: bool) -> str:
-        """Build output file path for backend export, generating unique per-playlist files when needed."""
+        """Build output file path for backend export."""
         if not multiple:
             return base_output_path
 
         base_dir = os.path.dirname(base_output_path)
         base_name = os.path.splitext(os.path.basename(base_output_path))[0]
-        playlist_name = self._sanitize_export_filename_component(playlist.get('name', 'playlist'))
-        playlist_id = self._sanitize_export_filename_component(playlist.get('id', 'unknown'))
-        combined = f"{base_name} - {playlist_name} ({playlist_id}).xlsx"
-        return os.path.join(base_dir, combined)
+        return os.path.join(base_dir, f"{base_name}.xlsx")
 
     def backend_export_worker(self, playlists, output_path) -> None:
         """Worker that generates and downloads export(s) from backend API."""
@@ -1488,56 +1486,47 @@ class MainScreen(Screen):
                 return
 
             total = len(valid_playlists)
-            multiple = total > 1
-            completed = 0
+            playlist_ids = [p.get('id') for p in valid_playlists if p.get('id')]
+            target_path = self._build_backend_output_path(valid_playlists[0], output_path, total > 1)
 
-            for index, playlist in enumerate(valid_playlists, start=1):
-                playlist_id = playlist.get('id')
-                playlist_name = playlist.get('name', 'Playlist')
-                target_path = self._build_backend_output_path(playlist, output_path, multiple)
+            Clock.schedule_once(
+                lambda _, t=total: setattr(
+                    self.status_label, 'text', f'Generating combined backend export for {t} playlist(s)...'
+                ),
+                0,
+            )
+            Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 35), 0)
 
+            export_info = self.backend_adapter.generate_batch_export(playlist_ids, 'xlsx')
+            if not export_info:
                 Clock.schedule_once(
-                    lambda _, i=index, t=total, name=playlist_name: setattr(
-                        self.status_label, 'text', f'[{i}/{t}] Generating export on backend for {name}...'
-                    ),
+                    lambda _: setattr(self.status_label, 'text', 'Backend combined export generation failed'),
                     0,
                 )
-                Clock.schedule_once(lambda _, i=index, t=total: setattr(self.progress_bar, 'value', int(((i - 1) / t) * 100) + 10), 0)
+                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
+                Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+                return
 
-                export_info = self.backend_adapter.generate_export(playlist_id, 'xlsx')
-                if not export_info:
-                    Clock.schedule_once(
-                        lambda _, name=playlist_name: setattr(self.status_label, 'text', f'Backend export generation failed for {name}'),
-                        0,
-                    )
-                    Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-                    Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
-                    return
+            export_id = export_info.get('job_id', '') if isinstance(export_info, dict) else ''
 
-                export_id = export_info.get('job_id', '') if isinstance(export_info, dict) else ''
+            Clock.schedule_once(
+                lambda _: setattr(self.status_label, 'text', 'Downloading combined backend export...'),
+                0,
+            )
+            Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 80), 0)
 
+            success = self.backend_adapter.download_batch_export(export_id, target_path)
+            if not success:
                 Clock.schedule_once(
-                    lambda _, i=index, t=total, name=playlist_name: setattr(
-                        self.status_label, 'text', f'[{i}/{t}] Downloading export for {name}...'
-                    ),
+                    lambda _: setattr(self.status_label, 'text', 'Backend combined export download failed'),
                     0,
                 )
-                Clock.schedule_once(lambda _, i=index, t=total: setattr(self.progress_bar, 'value', int(((i - 1) / t) * 100) + 60), 0)
-
-                success = self.backend_adapter.download_export(playlist_id, export_id, target_path)
-                if not success:
-                    Clock.schedule_once(
-                        lambda _, name=playlist_name: setattr(self.status_label, 'text', f'Backend export download failed for {name}'),
-                        0,
-                    )
-                    Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-                    Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
-                    return
-
-                completed += 1
+                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
+                Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+                return
 
             Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 100), 0)
-            Clock.schedule_once(lambda _, c=completed: setattr(self.status_label, 'text', f'Export complete ({c} playlist(s))'), 0)
+            Clock.schedule_once(lambda _, c=total: setattr(self.status_label, 'text', f'Export complete ({c} playlist(s))'), 0)
             Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
             Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
 

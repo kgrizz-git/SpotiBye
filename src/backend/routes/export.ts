@@ -6,16 +6,22 @@ import type { Env } from '../types/env';
 
 const app = new Hono<{ Bindings: Env }>();
 
+function resolveRequestedFormat(body: any): 'xlsx' | 'csv' {
+  return body && body.format === 'csv' ? 'csv' : 'xlsx';
+}
+
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
 
-// POST /export/playlist/:id - Generate Excel export
+// POST /export/playlist/:id - Generate playlist export
 app.post('/playlist/:id', async (c) => {
   const requestId = crypto.randomUUID();
   try {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
+    const body = await c.req.json().catch(() => ({}));
+    const requestedFormat = resolveRequestedFormat(body);
     
     const exportService = new ExportService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
@@ -57,7 +63,8 @@ app.post('/playlist/:id', async (c) => {
         completed_at: new Date().toISOString(),
         progress: 100,
         file_url: `/export/playlist/${playlistId}/download`,
-        file_size: exportData.length,
+        file_format: requestedFormat,
+        file_size: JSON.stringify(exportData).length,
         track_count: exportData.tracks.length
       };
       
@@ -124,6 +131,136 @@ app.post('/playlist/:id', async (c) => {
   }
 });
 
+// POST /export/playlists - Generate combined export for multiple playlists
+app.post('/playlists', async (c) => {
+  const requestId = crypto.randomUUID();
+  try {
+    const userId = c.get('user').id;
+    const accessToken = c.get('access_token');
+    const body = await c.req.json().catch(() => ({}));
+    const playlistIds: string[] = Array.isArray(body?.playlist_ids)
+      ? body.playlist_ids.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
+      : [];
+    const requestedFormat = resolveRequestedFormat(body);
+
+    if (playlistIds.length === 0) {
+      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, 400);
+    }
+
+    const exportService = new ExportService(accessToken);
+    const cacheService = new CacheService(c.env.CACHE_KV);
+    const jobId = crypto.randomUUID();
+    const batchKey = `export:batch:${jobId}:${userId}`;
+
+    console.info('[export-batch] start', {
+      requestId,
+      userId,
+      playlistCount: playlistIds.length,
+      jobId,
+    });
+
+    const exportDataList = [];
+    for (const playlistId of playlistIds) {
+      const exportData = await exportService.generatePlaylistExport(playlistId);
+      exportDataList.push(exportData);
+    }
+
+    const totalTracks = exportDataList.reduce((sum, item) => sum + item.tracks.length, 0);
+    const status = {
+      job_id: jobId,
+      user_id: userId,
+      status: 'completed',
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      progress: 100,
+      file_url: `/export/playlists/${jobId}/download`,
+      file_format: requestedFormat,
+      file_size: JSON.stringify(exportDataList).length,
+      playlist_count: exportDataList.length,
+      track_count: totalTracks,
+      playlist_ids: playlistIds,
+    };
+
+    await cacheService.set(batchKey, status, 3600);
+    await cacheService.set(`${batchKey}:data`, exportDataList, 3600);
+
+    console.info('[export-batch] completed', {
+      requestId,
+      userId,
+      playlistCount: exportDataList.length,
+      totalTracks,
+      jobId,
+    });
+
+    return c.json({
+      data: status,
+      meta: { timestamp: new Date().toISOString(), request_id: requestId }
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[export-batch] failed', { requestId, error: errorMessage });
+    return c.json(
+      {
+        error: {
+          code: 'EXPORT_BATCH_FAILED',
+          message: `Failed to generate combined export: ${errorMessage}`,
+          request_id: requestId,
+        },
+      },
+      500
+    );
+  }
+});
+
+// GET /export/playlists/:jobId/download - Download combined generated file
+app.get('/playlists/:jobId/download', async (c) => {
+  try {
+    const jobId = c.req.param('jobId');
+    const userId = c.get('user').id;
+    const cacheService = new CacheService(c.env.CACHE_KV);
+
+    const batchKey = `export:batch:${jobId}:${userId}`;
+    const exportStatus = await cacheService.get(batchKey);
+    const exportDataList = await cacheService.get(`${batchKey}:data`);
+
+    if (!exportStatus || !exportDataList || !Array.isArray(exportDataList) || exportDataList.length === 0) {
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, 404);
+    }
+
+    const exportService = new ExportService(c.get('access_token'));
+    const fileFormat = exportStatus.file_format === 'csv' ? 'csv' : 'xlsx';
+
+    if (fileFormat === 'csv') {
+      const chunks: string[] = [];
+      for (const item of exportDataList) {
+        const csvBytes = await exportService.generateCsvFile(item);
+        const csvText = new TextDecoder().decode(csvBytes);
+        chunks.push(csvText);
+      }
+      const combined = chunks.join('\n\n');
+      const filename = `playlists_export_${Date.now()}.csv`;
+      return new Response(combined, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      });
+    }
+
+    const xlsxContent = await exportService.generateCombinedExcelFile(exportDataList);
+    const filename = `playlists_export_${Date.now()}.xlsx`;
+    return new Response(xlsxContent, {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to download combined export:', error);
+    return c.json({ error: { code: 'EXPORT_DOWNLOAD_FAILED', message: 'Failed to download combined export' } }, 500);
+  }
+});
+
 // GET /export/playlist/:id/status - Get export status
 app.get('/playlist/:id/status', async (c) => {
   try {
@@ -154,20 +291,34 @@ app.get('/playlist/:id/download', async (c) => {
     
     const exportKey = `export:${playlistId}:${userId}`;
     const exportData = await cacheService.get(`${exportKey}:data`);
+    const exportStatus = await cacheService.get(exportKey);
     
     if (!exportData) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, 404);
     }
     
-    // Generate Excel file content
-    const excelContent = await new ExportService(c.get('access_token')).generateExcelFile(exportData);
-    
-    // Set headers for file download
+    const exportService = new ExportService(c.get('access_token'));
+    const fileFormat = exportStatus && exportStatus.file_format === 'csv' ? 'csv' : 'xlsx';
+
+    if (fileFormat === 'csv') {
+      const csvContent = await exportService.generateCsvFile(exportData);
+      const filename = `playlist_${playlistId}_export_${Date.now()}.csv`;
+      return new Response(csvContent, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      });
+    }
+
+    const xlsxContent = await exportService.generateExcelFile(exportData);
     const filename = `playlist_${playlistId}_export_${Date.now()}.xlsx`;
-    c.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    c.header('Content-Disposition', `attachment; filename="${filename}"`);
-    
-    return new Response(excelContent);
+    return new Response(xlsxContent, {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
   } catch (error) {
     console.error('Failed to download export:', error);
     return c.json({ error: { code: 'EXPORT_DOWNLOAD_FAILED', message: 'Failed to download export' } }, 500);

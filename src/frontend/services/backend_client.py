@@ -224,6 +224,15 @@ class BackendClient:
         response = self._make_request('POST', f'/export/playlist/{playlist_id}', 
                                     json={'format': format})
         return response
+
+    def generate_batch_export(self, playlist_ids: List[str], format: str = 'xlsx') -> Dict[str, Any]:
+        """Generate a combined export for multiple playlists."""
+        response = self._make_request(
+            'POST',
+            '/export/playlists',
+            json={'playlist_ids': playlist_ids, 'format': format}
+        )
+        return response
     
     def download_export(self, playlist_id: str, export_id: str) -> bytes:
         """Download generated export file."""
@@ -234,6 +243,17 @@ class BackendClient:
         if response.status_code >= 400:
             raise BackendAPIError(f"Export download failed: HTTP {response.status_code}")
         
+        return response.content
+
+    def download_batch_export(self, job_id: str) -> bytes:
+        """Download generated combined export file."""
+        url = f"{self.base_url}/export/playlists/{job_id}/download"
+        headers = {'Authorization': f'Bearer {self.auth_token}'} if self.auth_token else {}
+
+        response = self.session.get(url, headers=headers, timeout=120)
+        if response.status_code >= 400:
+            raise BackendAPIError(f"Batch export download failed: HTTP {response.status_code}")
+
         return response.content
     
     # Utility methods

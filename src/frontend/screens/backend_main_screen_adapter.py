@@ -331,6 +331,48 @@ class BackendMainScreenAdapter:
             if self.error_callback:
                 self.error_callback(f"Download failed: {str(e)}")
             return False
+
+    def generate_batch_export(self, playlist_ids: List[str], format: str = 'xlsx') -> Optional[Dict[str, Any]]:
+        """Generate a combined export for multiple playlists."""
+        try:
+            if self.progress_callback:
+                self.progress_callback("Generating combined export...")
+
+            export_info = self.backend_client.generate_batch_export(playlist_ids, format)
+            return export_info
+        except BackendAPIError as e:
+            error_msg = format_error_message(NetworkError(str(e)))
+            if self.error_callback:
+                self.error_callback(error_msg)
+            return None
+        except Exception as e:
+            logger.error(f"Error generating batch export: {e}")
+            if self.error_callback:
+                self.error_callback(f"Combined export failed: {str(e)}")
+            return None
+
+    def download_batch_export(self, export_id: str, save_path: str) -> bool:
+        """Download combined export file."""
+        try:
+            if self.progress_callback:
+                self.progress_callback("Downloading combined export...")
+
+            export_data = self.backend_client.download_batch_export(export_id)
+            with open(save_path, 'wb') as f:
+                f.write(export_data)
+
+            logger.info(f"Combined export saved to {save_path}")
+            return True
+        except BackendAPIError as e:
+            error_msg = self._format_backend_api_error(e, 'Combined export download failed')
+            if self.error_callback:
+                self.error_callback(error_msg)
+            return False
+        except Exception as e:
+            logger.error(f"Error downloading combined export: {e}")
+            if self.error_callback:
+                self.error_callback(f"Combined download failed: {str(e)}")
+            return False
     
     # Utility methods
     def get_network_status(self) -> Dict[str, Any]:
