@@ -301,19 +301,44 @@ export class ExportService {
     try {
       const response = await fetch(imageUrl);
       if (!response.ok) {
+        console.warn('[export] cover image fetch failed', { imageUrl, status: response.status });
         return;
       }
       const bytes = await response.arrayBuffer();
       const contentType = response.headers.get('content-type') || '';
       const extension = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpeg' : 'png';
-      const imageId = workbook.addImage({ buffer: Buffer.from(bytes), extension });
+      const mimeType = extension === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const base64 = this.arrayBufferToBase64(bytes);
+      const imageId = workbook.addImage({
+        base64: `data:${mimeType};base64,${base64}`,
+        extension,
+      });
       sheet.addImage(imageId, {
         tl: { col: 1.1, row: 0.1 },
         ext: { width: 120, height: 120 },
       });
-    } catch {
-      // Ignore image failures to keep export resilient.
+    } catch (error) {
+      // Ignore image failures to keep export resilient, but log for diagnosis.
+      console.warn('[export] cover image embedding failed', {
+        imageUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
+  }
+
+  private arrayBufferToBase64(bytes: ArrayBuffer): string {
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(bytes).toString('base64');
+    }
+
+    let binary = '';
+    const chunkSize = 0x8000;
+    const byteArray = new Uint8Array(bytes);
+    for (let i = 0; i < byteArray.length; i += chunkSize) {
+      const chunk = byteArray.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
   }
   
   private formatDuration(ms: number): string {

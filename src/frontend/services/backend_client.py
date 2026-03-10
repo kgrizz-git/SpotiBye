@@ -88,7 +88,8 @@ class BackendClient:
         
         try:
             logger.debug(f"Making {method} request to {url}")
-            response = self.session.request(method, url, timeout=30, **kwargs)
+            timeout = kwargs.pop('timeout', 30)
+            response = self.session.request(method, url, timeout=timeout, **kwargs)
             
             # Log response for debugging
             logger.debug(f"Response status: {response.status_code}")
@@ -222,7 +223,7 @@ class BackendClient:
     def generate_export(self, playlist_id: str, format: str = 'xlsx') -> Dict[str, Any]:
         """Generate export for a playlist."""
         response = self._make_request('POST', f'/export/playlist/{playlist_id}', 
-                                    json={'format': format})
+                                    json={'format': format}, timeout=180)
         return response
 
     def generate_batch_export(self, playlist_ids: List[str], format: str = 'xlsx') -> Dict[str, Any]:
@@ -230,7 +231,8 @@ class BackendClient:
         response = self._make_request(
             'POST',
             '/export/playlists',
-            json={'playlist_ids': playlist_ids, 'format': format}
+            json={'playlist_ids': playlist_ids, 'format': format},
+            timeout=300,
         )
         return response
     

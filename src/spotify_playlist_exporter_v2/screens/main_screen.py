@@ -14,7 +14,7 @@ import uuid
 import shutil
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import pandas as pd
 import requests
@@ -109,6 +109,7 @@ class MainScreen(Screen):
         self.backend_adapter = None
         self.playlists: List[dict] = []
         self.playlist_widgets: List[PlaylistCard] = []
+        self.selected_playlist_ids: Set[str] = set()
         self.filtered_playlists: List[dict] = []
         self.current_sort_key = 'default'
         self.current_sort_reverse = False
@@ -631,9 +632,15 @@ class MainScreen(Screen):
             if not self.playlist_widgets:
                 return
                 
-            # Store checkbox states to preserve selection
-            states = {w.playlist_data.get('id', ''): w.checkbox.active 
-                     for w in self.playlist_widgets}
+            # Persist visible checkbox changes before rebuilding cards.
+            for widget in self.playlist_widgets:
+                playlist_id = widget.playlist_data.get('id', '')
+                if not playlist_id:
+                    continue
+                if widget.checkbox.active:
+                    self.selected_playlist_ids.add(playlist_id)
+                else:
+                    self.selected_playlist_ids.discard(playlist_id)
             
             # Get current scroll position
             scroll_y = getattr(self.playlist_layout.parent, 'scroll_y', 1.0)
@@ -651,9 +658,8 @@ class MainScreen(Screen):
                 try:
                     widget = PlaylistCard(playlist)
                     playlist_id = playlist.get('id', '')
-                    if playlist_id in states:
-                        widget.checkbox.active = states[playlist_id]
-                    widget.checkbox.bind(active=lambda *_: self.update_selection_counter())
+                    widget.checkbox.active = playlist_id in self.selected_playlist_ids
+                    widget.checkbox.bind(active=lambda _cb, active, pid=playlist_id: self._on_playlist_checkbox_changed(pid, active))
                     self.playlist_widgets.append(widget)
                     self.playlist_layout.add_widget(widget)
                 except Exception as exc:
@@ -786,7 +792,7 @@ class MainScreen(Screen):
 
     def export_selected(self, instance):
         """Export all selected playlists to selected format files."""
-        selected_playlists = [w for w in self.playlist_widgets if w.checkbox.active]
+        selected_playlists = [w for w in self.playlist_widgets if w.playlist_data.get('id') in self.selected_playlist_ids]
         if not selected_playlists:
             self.status_label.text = 'Please select at least one playlist to export'
             return
@@ -802,7 +808,7 @@ class MainScreen(Screen):
         if format_type not in ['csv', 'json', 'xlsx']:
             raise ValidationError(f"Unsupported export format: {format_type}")
         
-        selected_playlists = [w for w in self.playlist_widgets if w.checkbox.active]
+        selected_playlists = [w for w in self.playlist_widgets if w.playlist_data.get('id') in self.selected_playlist_ids]
         if not selected_playlists:
             raise ValidationError("No playlists selected for export")
 
@@ -1070,7 +1076,25 @@ class MainScreen(Screen):
     def _on_backend_error(self, error_msg: str) -> None:
         """Callback for backend loading errors."""
         logger.error("Backend playlist load failed: %s", error_msg)
-        self.status_label.text = f"Error loading playlists: {error_msg}"
+        message = str(error_msg or '')
+        self.status_label.text = f"Error loading playlists: {message}"
+
+        lowered = message.lower()
+        auth_related = (
+            'session expired' in lowered
+            or 'session expired or invalid' in lowered
+            or 'token expired' in lowered
+            or 'unauthorized' in lowered
+            or 'http 401' in lowered
+        )
+
+        if auth_related:
+            self.status_label.text = 'Session expired. Please login again.'
+            app = App.get_running_app()
+            if app and hasattr(app, 'logout'):
+                Clock.schedule_once(lambda _: app.logout(), 0.2)
+            elif app and hasattr(app, 'switch_to_login'):
+                Clock.schedule_once(lambda _: app.switch_to_login(), 0.2)
 
     @mainthread
     def _on_backend_progress(self, status: str) -> None:
@@ -1136,9 +1160,19 @@ class MainScreen(Screen):
             # Store current scroll position if possible
             scroll_y = getattr(self.playlist_layout.parent, 'scroll_y', 1.0)
             
-            # Store checkbox states to preserve selection
-            states = {w.playlist_data.get('id', ''): w.checkbox.active 
-                     for w in self.playlist_widgets}
+            # Persist visible checkbox changes before rebuilding cards.
+            for widget in self.playlist_widgets:
+                playlist_id = widget.playlist_data.get('id', '')
+                if not playlist_id:
+                    continue
+                if widget.checkbox.active:
+                    self.selected_playlist_ids.add(playlist_id)
+                else:
+                    self.selected_playlist_ids.discard(playlist_id)
+
+            # Drop selections that no longer exist in current dataset.
+            current_ids = {p.get('id', '') for p in self.playlists if p.get('id')}
+            self.selected_playlist_ids = {pid for pid in self.selected_playlist_ids if pid in current_ids}
             
             # Clear existing widgets
             self.playlist_layout.clear_widgets()
@@ -1163,10 +1197,9 @@ class MainScreen(Screen):
                 try:
                     widget = PlaylistCard(playlist)
                     playlist_id = playlist.get('id', '')
-                    # Restore checkbox state if it was previously selected
-                    if playlist_id in states:
-                        widget.checkbox.active = states[playlist_id]
-                    widget.checkbox.bind(active=lambda *_: self.update_selection_counter())
+                    # Restore checkbox state from persistent selection set.
+                    widget.checkbox.active = playlist_id in self.selected_playlist_ids
+                    widget.checkbox.bind(active=lambda _cb, active, pid=playlist_id: self._on_playlist_checkbox_changed(pid, active))
                     self.playlist_widgets.append(widget)
                 except Exception as exc:
                     logger.warning("Error creating playlist widget: %s", exc)
@@ -1327,7 +1360,7 @@ class MainScreen(Screen):
         self.display_playlists_with_cache()
 
     def toggle_select_all(self, instance):
-        """Toggle selection of all playlists."""
+        """Toggle selection for currently visible (filtered) playlists only."""
         if not hasattr(self, 'playlist_widgets') or not self.playlist_widgets:
             return
             
@@ -1338,20 +1371,44 @@ class MainScreen(Screen):
         for widget in self.playlist_widgets:
             widget.checkbox.active = not all_selected
             
-        # Update the button text and counter
+        # Update visible-toggle label and global counter
         self.update_selection_counter()
         
     def update_selection_counter(self):
         """Update the selection counter label."""
         try:
-            if not hasattr(self, 'playlist_widgets') or not self.playlist_widgets:
-                return
-                
-            selected = sum(1 for w in self.playlist_widgets if w.checkbox.active)
-            total = len(self.playlist_widgets)
+            selected = len(self.selected_playlist_ids)
+            total = len(self.playlists)
             self.selection_label.text = f'Selected: {selected} of {total}'
+            self._update_select_all_button_label()
         except Exception as exc:
             logger.warning("Error updating selection counter: %s", exc)
+
+    def _update_select_all_button_label(self) -> None:
+        """Update visible-toggle button text based on currently filtered cards."""
+        if not hasattr(self, 'select_all_btn'):
+            return
+
+        visible_cards = len(self.playlist_widgets)
+        if visible_cards == 0:
+            self.select_all_btn.text = 'Select Visible'
+            return
+
+        visible_selected = sum(1 for w in self.playlist_widgets if w.checkbox.active)
+        if visible_selected == visible_cards:
+            self.select_all_btn.text = 'Unselect Visible'
+        else:
+            self.select_all_btn.text = 'Select Visible'
+
+    def _on_playlist_checkbox_changed(self, playlist_id: str, is_active: bool) -> None:
+        """Keep playlist selection persistent even when filtering hides cards."""
+        if not playlist_id:
+            return
+        if is_active:
+            self.selected_playlist_ids.add(playlist_id)
+        else:
+            self.selected_playlist_ids.discard(playlist_id)
+        self.update_selection_counter()
 
     def select_all(self, *_args) -> None:
         for widget in self.playlist_widgets:
@@ -1359,6 +1416,7 @@ class MainScreen(Screen):
         self.update_selection_counter()
 
     def deselect_all(self, *_args) -> None:
+        self.selected_playlist_ids.clear()
         for widget in self.playlist_widgets:
             widget.checkbox.active = False
         self.update_selection_counter()
@@ -1366,7 +1424,7 @@ class MainScreen(Screen):
     # Export --------------------------------------------------------------
     def start_export(self, *_args) -> None:
         try:
-            selected = [w.playlist_data for w in self.playlist_widgets if w.checkbox.active]
+            selected = [p for p in self.playlists if p.get('id') in self.selected_playlist_ids]
             if not selected:
                 Popup(
                     title='No Selection',
