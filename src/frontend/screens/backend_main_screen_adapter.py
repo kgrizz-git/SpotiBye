@@ -312,7 +312,7 @@ class BackendMainScreenAdapter:
             return {'status': 'error', 'error': str(e)}
     
     # Export management
-    def generate_export(self, playlist_id: str, format: str = 'xlsx') -> Optional[Dict[str, Any]]:
+    def generate_export(self, playlist_id: str, format: str = 'xlsx', report_errors: bool = True) -> Optional[Dict[str, Any]]:
         """
         Generate export for a playlist.
         
@@ -330,6 +330,8 @@ class BackendMainScreenAdapter:
             export_info = self._run_with_transient_retry(
                 "Generating export",
                 lambda: self.backend_client.generate_export(playlist_id, format),
+                max_attempts=6,
+                base_delay=1.5,
             )
             
             # Cache export info
@@ -338,13 +340,13 @@ class BackendMainScreenAdapter:
             return export_info
             
         except BackendAPIError as e:
-            error_msg = self._format_backend_api_error(e, 'Combined export generation failed')
-            if self.error_callback:
+            error_msg = self._format_backend_api_error(e, 'Export generation failed')
+            if report_errors and self.error_callback:
                 self.error_callback(error_msg)
             return None
         except Exception as e:
             logger.error(f"Error generating export: {e}")
-            if self.error_callback:
+            if report_errors and self.error_callback:
                 self.error_callback(f"Export failed: {str(e)}")
             return None
     
@@ -415,6 +417,7 @@ class BackendMainScreenAdapter:
         format: str = 'xlsx',
         chunk_size: int = 1,
         max_steps: int = 200,
+        report_errors: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """Generate combined export via multiple chunked backend invocations."""
         try:
@@ -453,21 +456,21 @@ class BackendMainScreenAdapter:
                 if status.get('status') == 'completed' or not status.get('continuation_required', False):
                     return status
 
-                # Small delay to avoid immediate tight-loop retries from desktop side.
-                time.sleep(0.15)
+                # Small delay to avoid sustained pressure on backend/upstream during large runs.
+                time.sleep(0.5)
 
             logger.error("Chunked batch export reached max steps without completion")
-            if self.error_callback:
+            if report_errors and self.error_callback:
                 self.error_callback("Chunked export timed out before completion")
             return last_status
         except BackendAPIError as e:
-            error_msg = format_error_message(NetworkError(str(e)))
-            if self.error_callback:
+            error_msg = self._format_backend_api_error(e, 'Combined export generation failed')
+            if report_errors and self.error_callback:
                 self.error_callback(error_msg)
             return None
         except Exception as e:
             logger.error(f"Error generating chunked batch export: {e}")
-            if self.error_callback:
+            if report_errors and self.error_callback:
                 self.error_callback(f"Chunked export failed: {str(e)}")
             return None
 
