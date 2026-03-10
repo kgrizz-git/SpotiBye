@@ -116,8 +116,8 @@ describe('Authentication Flow Tests', () => {
 
       const refreshResponse = await app.fetch(refreshRequest, mockEnv);
       
-      // This will likely fail without proper Spotify credentials, but should have proper error handling
-      expect([200, 400, 500]).toContain(refreshResponse.status);
+      // Without a valid auth session this can now return 401 instead of being masked as 500.
+      expect([200, 400, 401, 500]).toContain(refreshResponse.status);
     });
 
     it('should reject refresh without token', async () => {
@@ -130,8 +130,8 @@ describe('Authentication Flow Tests', () => {
       const refreshResponse = await app.fetch(refreshRequest, mockEnv);
       const refreshData = await refreshResponse.json();
 
-      expect(refreshResponse.status).toBe(500);
-      expect(refreshData.error).toHaveProperty('code', 'INTERNAL_ERROR');
+      expect(refreshResponse.status).toBe(401);
+      expect(refreshData.error).toHaveProperty('code', 'UNAUTHORIZED');
     });
   });
 

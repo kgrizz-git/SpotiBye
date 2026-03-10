@@ -167,8 +167,8 @@ describe('Complete Workflow Integration Tests', () => {
 
         const response = await app.fetch(request, mockEnv);
         
-        // Should handle method not allowed or other appropriate error
-        expect([404, 405, 400, 500]).toContain(response.status);
+        // Should handle method not allowed or auth guard responses for protected routes.
+        expect([401, 404, 405, 400, 500]).toContain(response.status);
       }
     });
 
