@@ -7,6 +7,16 @@ import type { SpotifyPlaylist, SpotifyTrack, SpotifyAudioFeatures } from '../typ
 
 const app = new Hono<{ Bindings: Env }>();
 
+function extractUpstreamStatus(error: unknown): number | null {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = message.match(/HTTP\s+(\d{3})/i);
+  if (!match) {
+    return null;
+  }
+  const status = Number(match[1]);
+  return Number.isFinite(status) ? status : null;
+}
+
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
 
@@ -67,6 +77,19 @@ app.get('/playlists', async (c) => {
     return c.json({ data: playlists, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get playlists:', error);
+    const upstreamStatus = extractUpstreamStatus(error);
+    if (upstreamStatus === 401) {
+      return c.json(
+        { error: { code: 'SPOTIFY_TOKEN_EXPIRED', message: 'Spotify access token expired. Please log in again.' } },
+        401
+      );
+    }
+    if (upstreamStatus === 429) {
+      return c.json(
+        { error: { code: 'SPOTIFY_RATE_LIMITED', message: 'Spotify API rate limited request. Please retry shortly.' } },
+        429
+      );
+    }
     return c.json({ error: { code: 'PLAYLISTS_FETCH_FAILED', message: 'Failed to fetch playlists' } }, 500);
   }
 });
