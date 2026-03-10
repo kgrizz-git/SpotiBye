@@ -61,7 +61,7 @@ class BackendMainScreenAdapter:
 
     def _emit_progress(self, message: str) -> None:
         """Send progress to UI and terminal logs."""
-        logger.info("[backend-progress] %s", message)
+        # MainScreen logs progress with trace context; avoid duplicate adapter-side logs.
         if self.progress_callback:
             self.progress_callback(message)
 
@@ -362,7 +362,14 @@ class BackendMainScreenAdapter:
             return {'status': 'error', 'error': str(e)}
     
     # Export management
-    def generate_export(self, playlist_id: str, format: str = 'xlsx', report_errors: bool = True) -> Optional[Dict[str, Any]]:
+    def generate_export(
+        self,
+        playlist_id: str,
+        format: str = 'xlsx',
+        report_errors: bool = True,
+        retry_attempts: int = 6,
+        retry_base_delay: float = 1.5,
+    ) -> Optional[Dict[str, Any]]:
         """
         Generate export for a playlist.
         
@@ -380,8 +387,8 @@ class BackendMainScreenAdapter:
             export_info = self._run_with_transient_retry(
                 "Generating export",
                 lambda: self.backend_client.generate_export(playlist_id, format),
-                max_attempts=6,
-                base_delay=1.5,
+                max_attempts=max(1, retry_attempts),
+                base_delay=max(0.1, retry_base_delay),
             )
             
             # Cache export info

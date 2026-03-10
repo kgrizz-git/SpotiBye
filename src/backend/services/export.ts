@@ -44,8 +44,9 @@ export class ExportService {
     this.accessToken = accessToken;
   }
   
-  async generatePlaylistExport(playlistId: string): Promise<ExportData> {
+  async generatePlaylistExport(playlistId: string, options?: { includeAudioFeatures?: boolean }): Promise<ExportData> {
     const spotifyService = new SpotifyService(this.accessToken);
+    const includeAudioFeatures = options?.includeAudioFeatures === true;
     
     // Get playlist details
     const playlist = await spotifyService.getPlaylist(playlistId);
@@ -70,7 +71,7 @@ export class ExportService {
     
     const audioFeaturesMap = new Map();
     let audioFeaturesUnavailable = false;
-    if (trackIds.length > 0) {
+    if (includeAudioFeatures && trackIds.length > 0) {
       // Process in batches of 100 (Spotify API limit)
       for (let i = 0; i < trackIds.length; i += 100) {
         if (audioFeaturesUnavailable) {

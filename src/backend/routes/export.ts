@@ -29,6 +29,23 @@ function resolveRequestedFormat(body: any): 'xlsx' | 'csv' {
   return body && body.format === 'csv' ? 'csv' : 'xlsx';
 }
 
+function resolveIncludeAudioFeatures(body: any): boolean {
+  return body?.include_audio_features === true;
+}
+
+function resolveErrorStatus(code: string, message: string): number {
+  if (/cpu time limit|exceeded cpu/i.test(message)) {
+    return 503;
+  }
+  if (/HTTP\s+401/i.test(message)) {
+    return 401;
+  }
+  if (/HTTP\s+429/i.test(message)) {
+    return 429;
+  }
+  return code.includes('DOWNLOAD') ? 503 : 500;
+}
+
 function parseUpstreamStatus(errorMessage: string): number | undefined {
   const match = /HTTP\s+(\d{3})/i.exec(errorMessage);
   if (!match) {
@@ -41,6 +58,7 @@ function parseUpstreamStatus(errorMessage: string): number | undefined {
 function buildExportErrorPayload(code: string, message: string, requestId: string, details: Record<string, unknown> = {}) {
   const upstreamStatus = parseUpstreamStatus(message);
   const upstream = upstreamStatus ? 'spotify' : undefined;
+  const cpuLimited = /cpu time limit|exceeded cpu/i.test(message);
   return {
     error: {
       code,
@@ -50,6 +68,7 @@ function buildExportErrorPayload(code: string, message: string, requestId: strin
         ...details,
         upstream,
         upstream_status: upstreamStatus,
+        cpu_limited: cpuLimited,
       },
     },
   };
@@ -68,6 +87,7 @@ app.post('/playlist/:id', async (c) => {
     const accessToken = c.get('access_token');
     const body = await c.req.json().catch(() => ({}));
     const requestedFormat = resolveRequestedFormat(body);
+    const includeAudioFeatures = resolveIncludeAudioFeatures(body);
     
     const exportService = new ExportService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
@@ -100,7 +120,7 @@ app.post('/playlist/:id', async (c) => {
     
     try {
       // Generate the export
-      const exportData = await exportService.generatePlaylistExport(playlistId);
+      const exportData = await exportService.generatePlaylistExport(playlistId, { includeAudioFeatures });
       
       // Store the export data (in production, this would be stored in R2 or similar)
       const completedStatus = {
@@ -157,9 +177,10 @@ app.post('/playlist/:id', async (c) => {
             playlist_id: playlistId,
             user_id: userId,
             trace_id: traceId,
+            include_audio_features: includeAudioFeatures,
           },
         ),
-        500
+        resolveErrorStatus('EXPORT_FAILED', errorMessage)
       );
     }
   } catch (error) {
@@ -171,7 +192,7 @@ app.post('/playlist/:id', async (c) => {
         `Failed to start export: ${errorMessage}`,
         requestId,
       ),
-      500
+      resolveErrorStatus('EXPORT_START_FAILED', errorMessage)
     );
   }
 });
@@ -188,6 +209,7 @@ app.post('/playlists', async (c) => {
       ? body.playlist_ids.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
       : [];
     const requestedFormat = resolveRequestedFormat(body);
+    const includeAudioFeatures = resolveIncludeAudioFeatures(body);
 
     if (playlistIds.length === 0) {
       return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, 400);
@@ -208,7 +230,7 @@ app.post('/playlists', async (c) => {
 
     const exportDataList = [];
     for (const playlistId of playlistIds) {
-      const exportData = await exportService.generatePlaylistExport(playlistId);
+      const exportData = await exportService.generatePlaylistExport(playlistId, { includeAudioFeatures });
       exportDataList.push(exportData);
     }
 
@@ -253,7 +275,7 @@ app.post('/playlists', async (c) => {
         `Failed to generate combined export: ${errorMessage}`,
         requestId,
       ),
-      500
+      resolveErrorStatus('EXPORT_BATCH_FAILED', errorMessage)
     );
   }
 });
@@ -270,6 +292,7 @@ app.post('/playlists/chunk', async (c) => {
       ? body.playlist_ids.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
       : [];
     const requestedFormat = resolveRequestedFormat(body);
+    const includeAudioFeatures = resolveIncludeAudioFeatures(body);
     const providedJobId = typeof body?.job_id === 'string' && body.job_id.trim().length > 0
       ? body.job_id.trim()
       : '';
@@ -330,7 +353,7 @@ app.post('/playlists/chunk', async (c) => {
 
     for (let idx = effectiveCursor; idx < endCursor; idx += 1) {
       const playlistId = playlistIds[idx];
-      const exportData = await exportService.generatePlaylistExport(playlistId);
+      const exportData = await exportService.generatePlaylistExport(playlistId, { includeAudioFeatures });
       exportDataList.push(exportData);
       status.processed_count = exportDataList.length;
       status.track_count = exportDataList.reduce((sum, item) => sum + item.tracks.length, 0);
@@ -372,7 +395,7 @@ app.post('/playlists/chunk', async (c) => {
         `Failed to process combined export chunk: ${errorMessage}`,
         requestId,
       ),
-      500
+      resolveErrorStatus('EXPORT_BATCH_CHUNK_FAILED', errorMessage)
     );
   }
 });
@@ -451,7 +474,7 @@ app.get('/playlists/:jobId/download', async (c) => {
         crypto.randomUUID(),
         { trace_id: traceId },
       ),
-      500
+      resolveErrorStatus('EXPORT_DOWNLOAD_FAILED', errorMessage)
     );
   }
 });
@@ -523,7 +546,7 @@ app.get('/playlist/:id/download', async (c) => {
         `Failed to download export: ${errorMessage}`,
         crypto.randomUUID(),
       ),
-      500
+      resolveErrorStatus('EXPORT_DOWNLOAD_FAILED', errorMessage)
     );
   }
 });

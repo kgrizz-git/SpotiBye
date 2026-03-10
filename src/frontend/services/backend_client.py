@@ -264,8 +264,12 @@ class BackendClient:
     # Export endpoints
     def generate_export(self, playlist_id: str, format: str = 'xlsx') -> Dict[str, Any]:
         """Generate export for a playlist."""
-        response = self._make_request('POST', f'/export/playlist/{playlist_id}', 
-                                    json={'format': format}, timeout=180)
+        response = self._make_request(
+            'POST',
+            f'/export/playlist/{playlist_id}',
+            json={'format': format, 'include_audio_features': False},
+            timeout=180,
+        )
         return response
 
     def generate_batch_export(self, playlist_ids: List[str], format: str = 'xlsx') -> Dict[str, Any]:
@@ -273,7 +277,7 @@ class BackendClient:
         response = self._make_request(
             'POST',
             '/export/playlists',
-            json={'playlist_ids': playlist_ids, 'format': format},
+            json={'playlist_ids': playlist_ids, 'format': format, 'include_audio_features': False},
             timeout=300,
         )
         return response
@@ -292,6 +296,7 @@ class BackendClient:
             'format': format,
             'cursor': max(0, int(cursor)),
             'chunk_size': max(1, int(chunk_size)),
+            'include_audio_features': False,
         }
         if job_id:
             payload['job_id'] = job_id
