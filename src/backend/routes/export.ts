@@ -6,6 +6,25 @@ import type { Env } from '../types/env';
 
 const app = new Hono<{ Bindings: Env }>();
 
+type BatchExportStatus = {
+  job_id: string;
+  user_id: string;
+  status: 'processing' | 'completed' | 'failed';
+  started_at: string;
+  completed_at?: string;
+  progress: number;
+  file_url?: string;
+  file_format: 'xlsx' | 'csv';
+  file_size?: number;
+  playlist_count: number;
+  processed_count: number;
+  track_count: number;
+  playlist_ids: string[];
+  next_cursor: number;
+  continuation_required: boolean;
+  error?: string;
+};
+
 function resolveRequestedFormat(body: any): 'xlsx' | 'csv' {
   return body && body.format === 'csv' ? 'csv' : 'xlsx';
 }
@@ -209,6 +228,144 @@ app.post('/playlists', async (c) => {
       },
       500
     );
+  }
+});
+
+// POST /export/playlists/chunk - Generate combined export incrementally across invocations
+app.post('/playlists/chunk', async (c) => {
+  const requestId = crypto.randomUUID();
+  try {
+    const userId = c.get('user').id;
+    const accessToken = c.get('access_token');
+    const body = await c.req.json().catch(() => ({}));
+    const playlistIds: string[] = Array.isArray(body?.playlist_ids)
+      ? body.playlist_ids.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
+      : [];
+    const requestedFormat = resolveRequestedFormat(body);
+    const providedJobId = typeof body?.job_id === 'string' && body.job_id.trim().length > 0
+      ? body.job_id.trim()
+      : '';
+    const startCursor = Number.isInteger(body?.cursor) && body.cursor >= 0 ? Number(body.cursor) : 0;
+    const requestedChunkSize = Number.isInteger(body?.chunk_size) ? Number(body.chunk_size) : 1;
+    const chunkSize = Math.min(Math.max(requestedChunkSize, 1), 3);
+
+    if (playlistIds.length === 0) {
+      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, 400);
+    }
+
+    const exportService = new ExportService(accessToken);
+    const cacheService = new CacheService(c.env.CACHE_KV);
+    const jobId = providedJobId || crypto.randomUUID();
+    const batchKey = `export:batch:${jobId}:${userId}`;
+    const batchDataKey = `${batchKey}:data`;
+
+    const cachedStatus = await cacheService.get<BatchExportStatus>(batchKey);
+    const cachedData = await cacheService.get<any[]>(batchDataKey);
+
+    const status: BatchExportStatus = cachedStatus && cachedStatus.user_id === userId
+      ? {
+          ...cachedStatus,
+          file_format: requestedFormat,
+          playlist_ids: playlistIds,
+          playlist_count: playlistIds.length,
+        }
+      : {
+          job_id: jobId,
+          user_id: userId,
+          status: 'processing',
+          started_at: new Date().toISOString(),
+          progress: 0,
+          file_format: requestedFormat,
+          playlist_count: playlistIds.length,
+          processed_count: 0,
+          track_count: 0,
+          playlist_ids: playlistIds,
+          next_cursor: startCursor,
+          continuation_required: true,
+        };
+
+    // Keep already-generated playlist exports between chunk calls.
+    const exportDataList: any[] = Array.isArray(cachedData) ? cachedData : [];
+    const effectiveCursor = Math.max(startCursor, status.next_cursor || 0);
+    const endCursor = Math.min(effectiveCursor + chunkSize, playlistIds.length);
+
+    console.info('[export-batch-chunk] process', {
+      requestId,
+      userId,
+      jobId,
+      startCursor: effectiveCursor,
+      endCursor,
+      chunkSize,
+      total: playlistIds.length,
+    });
+
+    for (let idx = effectiveCursor; idx < endCursor; idx += 1) {
+      const playlistId = playlistIds[idx];
+      const exportData = await exportService.generatePlaylistExport(playlistId);
+      exportDataList.push(exportData);
+      status.processed_count = exportDataList.length;
+      status.track_count = exportDataList.reduce((sum, item) => sum + item.tracks.length, 0);
+      status.next_cursor = idx + 1;
+      status.progress = Math.min(99, Math.floor((status.processed_count / playlistIds.length) * 100));
+      status.continuation_required = status.next_cursor < playlistIds.length;
+    }
+
+    if (status.next_cursor >= playlistIds.length) {
+      status.status = 'completed';
+      status.progress = 100;
+      status.completed_at = new Date().toISOString();
+      status.file_url = `/export/playlists/${jobId}/download`;
+      status.file_size = JSON.stringify(exportDataList).length;
+      status.continuation_required = false;
+      console.info('[export-batch-chunk] completed', {
+        requestId,
+        userId,
+        jobId,
+        playlistCount: exportDataList.length,
+        totalTracks: status.track_count,
+      });
+    }
+
+    await cacheService.set(batchKey, status, 3600);
+    await cacheService.set(batchDataKey, exportDataList, 3600);
+
+    return c.json({
+      data: status,
+      meta: { timestamp: new Date().toISOString(), request_id: requestId },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[export-batch-chunk] failed', { requestId, error: errorMessage });
+    return c.json(
+      {
+        error: {
+          code: 'EXPORT_BATCH_CHUNK_FAILED',
+          message: `Failed to process combined export chunk: ${errorMessage}`,
+          request_id: requestId,
+        },
+      },
+      500
+    );
+  }
+});
+
+// GET /export/playlists/:jobId/status - Get combined export status
+app.get('/playlists/:jobId/status', async (c) => {
+  try {
+    const jobId = c.req.param('jobId');
+    const userId = c.get('user').id;
+    const cacheService = new CacheService(c.env.CACHE_KV);
+    const batchKey = `export:batch:${jobId}:${userId}`;
+    const status = await cacheService.get<BatchExportStatus>(batchKey);
+
+    if (!status) {
+      return c.json({ error: { code: 'EXPORT_NOT_FOUND', message: 'Combined export not found' } }, 404);
+    }
+
+    return c.json({ data: status, meta: { timestamp: new Date().toISOString() } });
+  } catch (error) {
+    console.error('Failed to get combined export status:', error);
+    return c.json({ error: { code: 'EXPORT_STATUS_FAILED', message: 'Failed to get combined export status' } }, 500);
   }
 });
 

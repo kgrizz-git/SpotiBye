@@ -1549,18 +1549,26 @@ class MainScreen(Screen):
 
             Clock.schedule_once(
                 lambda _, t=total: setattr(
-                    self.status_label, 'text', f'Generating combined backend export for {t} playlist(s)...'
+                    self.status_label, 'text', f'Generating combined backend export for {t} playlist(s) (chunked)...'
                 ),
                 0,
             )
             Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 35), 0)
 
-            export_info = self.backend_adapter.generate_batch_export(playlist_ids, 'xlsx')
+            # Use chunked processing to avoid per-invocation subrequest caps on Cloudflare free plans.
+            export_info = self.backend_adapter.generate_batch_export_chunked(playlist_ids, 'xlsx', chunk_size=1)
             if not export_info:
-                Clock.schedule_once(
-                    lambda _: setattr(self.status_label, 'text', 'Backend combined export generation failed'),
-                    0,
-                )
+                # Fallback: combined export can exceed Worker subrequest limits for larger selections.
+                # Degrade gracefully to sequential per-playlist exports so the user still gets files.
+                fallback_ok = self._backend_export_fallback_sequential(valid_playlists, output_path)
+                if fallback_ok:
+                    Clock.schedule_once(lambda _, c=total: setattr(self.status_label, 'text', f'Export complete ({c} playlist(s), sequential fallback)'), 0)
+                    Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 100), 0)
+                else:
+                    Clock.schedule_once(
+                        lambda _: setattr(self.status_label, 'text', 'Backend combined export generation failed'),
+                        0,
+                    )
                 Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
                 Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
                 return
@@ -1575,10 +1583,15 @@ class MainScreen(Screen):
 
             success = self.backend_adapter.download_batch_export(export_id, target_path)
             if not success:
-                Clock.schedule_once(
-                    lambda _: setattr(self.status_label, 'text', 'Backend combined export download failed'),
-                    0,
-                )
+                fallback_ok = self._backend_export_fallback_sequential(valid_playlists, output_path)
+                if fallback_ok:
+                    Clock.schedule_once(lambda _, c=total: setattr(self.status_label, 'text', f'Export complete ({c} playlist(s), sequential fallback)'), 0)
+                    Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 100), 0)
+                else:
+                    Clock.schedule_once(
+                        lambda _: setattr(self.status_label, 'text', 'Backend combined export download failed'),
+                        0,
+                    )
                 Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
                 Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
                 return
@@ -1593,6 +1606,60 @@ class MainScreen(Screen):
             Clock.schedule_once(lambda _: setattr(self.status_label, 'text', f'Backend export failed: {exc}'), 0)
             Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
             Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+
+    def _backend_export_fallback_sequential(self, playlists: List[Dict[str, Any]], base_output_path: str) -> bool:
+        """Fallback export strategy: generate one backend export per playlist.
+
+        Returns True if all playlist exports complete successfully.
+        """
+        if not self.backend_adapter:
+            return False
+
+        total = len(playlists)
+        base_dir = os.path.dirname(base_output_path)
+        base_name = os.path.splitext(os.path.basename(base_output_path))[0]
+
+        for index, playlist in enumerate(playlists, start=1):
+            playlist_id = playlist.get('id')
+            if not playlist_id:
+                return False
+
+            playlist_name = self._sanitize_export_filename_component(playlist.get('name', 'playlist'))
+            safe_id = self._sanitize_export_filename_component(playlist_id)
+            target_file = f"{base_name} - {playlist_name} ({safe_id}).xlsx"
+            target_path = os.path.join(base_dir, target_file)
+
+            Clock.schedule_once(
+                lambda _, i=index, t=total, name=playlist_name: setattr(
+                    self.status_label,
+                    'text',
+                    f'Fallback [{i}/{t}] Generating export for {name}...'
+                ),
+                0,
+            )
+            Clock.schedule_once(lambda _, i=index, t=total: setattr(self.progress_bar, 'value', int(((i - 1) / t) * 100) + 10), 0)
+
+            export_info = self.backend_adapter.generate_export(playlist_id, 'xlsx')
+            if not export_info:
+                return False
+
+            export_id = export_info.get('job_id', '') if isinstance(export_info, dict) else ''
+
+            Clock.schedule_once(
+                lambda _, i=index, t=total, name=playlist_name: setattr(
+                    self.status_label,
+                    'text',
+                    f'Fallback [{i}/{t}] Downloading export for {name}...'
+                ),
+                0,
+            )
+            Clock.schedule_once(lambda _, i=index, t=total: setattr(self.progress_bar, 'value', int(((i - 1) / t) * 100) + 60), 0)
+
+            success = self.backend_adapter.download_export(playlist_id, export_id, target_path)
+            if not success:
+                return False
+
+        return True
 
     def _check_cache_status_and_proceed(self, playlists) -> None:
         """Check cache status for selected playlists and show warning if needed."""

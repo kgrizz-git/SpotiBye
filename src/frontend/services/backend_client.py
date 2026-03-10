@@ -235,6 +235,37 @@ class BackendClient:
             timeout=300,
         )
         return response
+
+    def generate_batch_export_chunk(
+        self,
+        playlist_ids: List[str],
+        format: str = 'xlsx',
+        job_id: Optional[str] = None,
+        cursor: int = 0,
+        chunk_size: int = 1,
+    ) -> Dict[str, Any]:
+        """Process one chunk of a combined export job."""
+        payload: Dict[str, Any] = {
+            'playlist_ids': playlist_ids,
+            'format': format,
+            'cursor': max(0, int(cursor)),
+            'chunk_size': max(1, int(chunk_size)),
+        }
+        if job_id:
+            payload['job_id'] = job_id
+
+        response = self._make_request(
+            'POST',
+            '/export/playlists/chunk',
+            json=payload,
+            timeout=180,
+        )
+        return response
+
+    def get_batch_export_status(self, job_id: str) -> Dict[str, Any]:
+        """Get status of a combined export job."""
+        response = self._make_request('GET', f'/export/playlists/{job_id}/status', timeout=60)
+        return response
     
     def download_export(self, playlist_id: str, export_id: str) -> bytes:
         """Download generated export file."""

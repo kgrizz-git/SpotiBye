@@ -351,6 +351,63 @@ class BackendMainScreenAdapter:
                 self.error_callback(f"Combined export failed: {str(e)}")
             return None
 
+    def generate_batch_export_chunked(
+        self,
+        playlist_ids: List[str],
+        format: str = 'xlsx',
+        chunk_size: int = 1,
+        max_steps: int = 200,
+    ) -> Optional[Dict[str, Any]]:
+        """Generate combined export via multiple chunked backend invocations."""
+        try:
+            if self.progress_callback:
+                self.progress_callback("Generating combined export (chunked)...")
+
+            cursor = 0
+            job_id: Optional[str] = None
+            last_status: Optional[Dict[str, Any]] = None
+
+            for step in range(max_steps):
+                status = self.backend_client.generate_batch_export_chunk(
+                    playlist_ids=playlist_ids,
+                    format=format,
+                    job_id=job_id,
+                    cursor=cursor,
+                    chunk_size=chunk_size,
+                )
+                if not isinstance(status, dict):
+                    return None
+
+                last_status = status
+                job_id = str(status.get('job_id') or job_id or '')
+                cursor = int(status.get('next_cursor', cursor))
+                processed = int(status.get('processed_count', 0))
+                total = int(status.get('playlist_count', len(playlist_ids)))
+
+                if self.progress_callback:
+                    self.progress_callback(f"Chunked export progress: {processed}/{total} playlists")
+
+                if status.get('status') == 'completed' or not status.get('continuation_required', False):
+                    return status
+
+                # Small delay to avoid immediate tight-loop retries from desktop side.
+                time.sleep(0.15)
+
+            logger.error("Chunked batch export reached max steps without completion")
+            if self.error_callback:
+                self.error_callback("Chunked export timed out before completion")
+            return last_status
+        except BackendAPIError as e:
+            error_msg = format_error_message(NetworkError(str(e)))
+            if self.error_callback:
+                self.error_callback(error_msg)
+            return None
+        except Exception as e:
+            logger.error(f"Error generating chunked batch export: {e}")
+            if self.error_callback:
+                self.error_callback(f"Chunked export failed: {str(e)}")
+            return None
+
     def download_batch_export(self, export_id: str, save_path: str) -> bool:
         """Download combined export file."""
         try:
