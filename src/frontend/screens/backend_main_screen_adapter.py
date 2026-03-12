@@ -696,7 +696,8 @@ class BackendMainScreenAdapter:
         resume_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Load matching cached resumable job from local cache or create a new one."""
-        cached_job = self._get_matching_active_export_job(playlist_ids, format, resume_context)
+        allow_resume = bool((resume_context or {}).get('allow_resume'))
+        cached_job = self._get_matching_active_export_job(playlist_ids, format, resume_context) if allow_resume else None
         if cached_job:
             self._emit_progress("Resuming previous export job...")
             try:

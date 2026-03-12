@@ -14,6 +14,8 @@ from kivy.core.window import Window
 from kivy.lang.builder import Builder
 from kivy.logger import Logger as logger
 from kivy.metrics import dp
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import ScreenManager
@@ -53,6 +55,7 @@ class BackendSpotifyExporterApp(MDApp):
         self.backend_adapter: Optional[BackendMainScreenAdapter] = None
         self.selected_backend_url: str = resolve_startup_backend_url()
         self.backend_selector_popup: Optional[Popup] = None
+        self.pending_export_popup: Optional[Popup] = None
         
         # Match previous dark styling
         self.theme_cls.theme_style = "Dark"
@@ -174,6 +177,7 @@ class BackendSpotifyExporterApp(MDApp):
             # Initialize main screen with backend adapter
             if hasattr(self.main_screen, 'initialize_with_backend') and self.backend_adapter:
                 self.main_screen.initialize_with_backend(self.backend_adapter)
+            Clock.schedule_once(lambda _dt: self._check_pending_export_after_login(), 0.2)
 
     def switch_to_login(self) -> None:
         """Switch to login screen."""
@@ -263,6 +267,8 @@ class BackendSpotifyExporterApp(MDApp):
             # Return to login screen
             if hasattr(self, 'screen_manager') and self.screen_manager:
                 self.screen_manager.current = 'login'
+                if self.pending_export_popup:
+                    self.pending_export_popup.dismiss()
                 
                 # Refresh login screen connection status
                 if hasattr(self.login_screen, 'refresh_connection_status'):
@@ -317,6 +323,99 @@ class BackendSpotifyExporterApp(MDApp):
         except Exception as e:
             original_logger.error(f"Error getting backend status: {e}")
             return {'status': 'error', 'error': str(e)}
+
+    def _check_pending_export_after_login(self) -> None:
+        """Prompt user after login if a resumable export job is stored locally."""
+        if not self.cache_manager or not self.backend_client or not self.backend_adapter:
+            return
+
+        cached_job = self.cache_manager.get_active_export_job()
+        if not isinstance(cached_job, dict):
+            return
+
+        job_id = str(cached_job.get('job_id') or '')
+        if not job_id:
+            self.cache_manager.clear_active_export_job()
+            return
+
+        try:
+            status = self.backend_client.get_export_job_status(job_id)
+        except Exception as exc:
+            if getattr(exc, 'status_code', None) == 404:
+                self.cache_manager.clear_active_export_job()
+            else:
+                original_logger.warning("Pending export status check failed: %s", exc)
+            return
+
+        if not isinstance(status, dict):
+            return
+
+        is_completed = str(status.get('status') or '') == 'completed' or not bool(status.get('continuation_required', True))
+        playlist_names = cached_job.get('playlist_names') or []
+        playlist_ids = cached_job.get('playlist_ids') or []
+        output_path = str(cached_job.get('output_path') or '')
+        if not isinstance(playlist_ids, list) or not output_path:
+            return
+
+        playlists = []
+        for index, playlist_id in enumerate(playlist_ids):
+            name = playlist_names[index] if isinstance(playlist_names, list) and index < len(playlist_names) else playlist_id
+            playlists.append({'id': playlist_id, 'name': name})
+
+        self._show_pending_export_popup(playlists, output_path, status, is_completed)
+
+    def _show_pending_export_popup(self, playlists: list[dict[str, Any]], output_path: str, status: Dict[str, Any], is_completed: bool) -> None:
+        """Render pending export resume/discard prompt after login."""
+        if self.pending_export_popup:
+            return
+
+        title = 'Completed Export Available' if is_completed else 'Resume Pending Export'
+        processed = int(status.get('processed_count', 0) or 0)
+        total = int(status.get('playlist_count', len(playlists)) or len(playlists))
+        phase = str(status.get('phase') or 'collect')
+        body_text = (
+            f"A previous export was found.\n\n"
+            f"Progress: {processed}/{total} playlists\n"
+            f"Phase: {phase}\n"
+            f"Output: {Path(output_path).name}"
+        )
+
+        layout = BoxLayout(orientation='vertical', spacing=dp(12), padding=dp(16))
+        layout.add_widget(Label(text=body_text, halign='center'))
+
+        button_row = BoxLayout(orientation='horizontal', spacing=dp(12), size_hint_y=None, height=dp(42))
+        resume_button = Button(text='Download' if is_completed else 'Resume')
+        discard_button = Button(text='Discard')
+        button_row.add_widget(resume_button)
+        button_row.add_widget(discard_button)
+        layout.add_widget(button_row)
+
+        popup = Popup(title=title, content=layout, size_hint=(0.75, None), height=dp(240), auto_dismiss=False)
+        self.pending_export_popup = popup
+
+        def _dismiss(*_args: Any) -> None:
+            if self.pending_export_popup:
+                self.pending_export_popup.dismiss()
+            self.pending_export_popup = None
+
+        def _resume(*_args: Any) -> None:
+            _dismiss()
+            if hasattr(self.main_screen, 'begin_backend_export') and self.backend_adapter:
+                self.main_screen.begin_backend_export(
+                    playlists,
+                    output_path,
+                    resume_saved_job=True,
+                )
+
+        def _discard(*_args: Any) -> None:
+            if self.backend_adapter:
+                self.backend_adapter.clear_active_export_job()
+            _dismiss()
+
+        resume_button.bind(on_press=_resume)
+        discard_button.bind(on_press=_discard)
+        popup.bind(on_dismiss=lambda *_args: setattr(self, 'pending_export_popup', None))
+        popup.open()
 
     def refresh_backend_connection(self) -> None:
         """Refresh backend connection status."""

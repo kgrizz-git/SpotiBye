@@ -1562,7 +1562,7 @@ class MainScreen(Screen):
         popup.dismiss()
         self.begin_backend_export(playlists, output_path)
 
-    def begin_backend_export(self, playlists, output_path) -> None:
+    def begin_backend_export(self, playlists, output_path, resume_saved_job: bool = False) -> None:
         """Begin backend export worker for one or more playlists."""
         try:
             if self.trace_mode_enabled:
@@ -1580,7 +1580,7 @@ class MainScreen(Screen):
             filename = os.path.basename(output_path)
             self.status_label.text = f'Exporting {total} playlist(s) via backend to: {filename}'
             self.progress_bar.value = 5
-            threading.Thread(target=self.backend_export_worker, args=(playlists, output_path), daemon=True).start()
+            threading.Thread(target=self.backend_export_worker, args=(playlists, output_path, resume_saved_job), daemon=True).start()
         except Exception as exc:
             logger.error("Error beginning backend export: %s", exc)
             self.export_btn.disabled = False
@@ -1603,7 +1603,7 @@ class MainScreen(Screen):
         base_name = os.path.splitext(os.path.basename(base_output_path))[0]
         return os.path.join(base_dir, f"{base_name}.xlsx")
 
-    def backend_export_worker(self, playlists, output_path) -> None:
+    def backend_export_worker(self, playlists, output_path, resume_saved_job: bool = False) -> None:
         """Worker that generates and downloads export(s) from backend API."""
         try:
             if not self.backend_adapter:
@@ -1623,6 +1623,7 @@ class MainScreen(Screen):
             playlist_ids = [p.get('id') for p in valid_playlists if p.get('id')]
             target_path = self._build_backend_output_path(valid_playlists[0], output_path, total > 1)
             resume_context = {
+                'allow_resume': resume_saved_job,
                 'output_path': target_path,
                 'playlist_names': [p.get('name', '') for p in valid_playlists],
             }
