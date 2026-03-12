@@ -475,8 +475,22 @@ class BackendMainScreenAdapter:
         chunk_size: int = 1,
         max_steps: int = 200,
         report_errors: bool = True,
+        resume_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Generate combined export via multiple chunked backend invocations."""
+        """Generate combined export via resumable jobs, with legacy chunk fallback."""
+        resumable_result = self._generate_batch_export_resumable(
+            playlist_ids=playlist_ids,
+            format=format,
+            chunk_size=chunk_size,
+            max_steps=max_steps,
+            report_errors=False,
+            resume_context=resume_context,
+        )
+        if resumable_result:
+            return resumable_result
+
+        logger.info("Resumable export unavailable or failed; falling back to legacy chunked endpoint")
+
         try:
             if self.progress_callback:
                 self._emit_progress("Generating combined export (chunked)...")
@@ -530,6 +544,115 @@ class BackendMainScreenAdapter:
                 self.error_callback(f"Chunked export failed: {str(e)}")
             return None
 
+    def _generate_batch_export_resumable(
+        self,
+        playlist_ids: List[str],
+        format: str = 'xlsx',
+        chunk_size: int = 1,
+        max_steps: int = 200,
+        report_errors: bool = True,
+        resume_context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Generate combined export through resumable job endpoints."""
+        try:
+            if self.progress_callback:
+                self._emit_progress("Generating combined export (resumable)...")
+
+            job = self._load_or_create_resumable_job(playlist_ids, format, resume_context)
+            if not isinstance(job, dict):
+                return None
+
+            job_id = str(job.get('job_id') or '')
+            cursor = str(job.get('current_cursor') or '')
+            resume_token = str(job.get('current_resume_token') or '')
+            if not job_id or not cursor or not resume_token:
+                logger.warning("Resumable export job response missing required fields")
+                return None
+
+            self._persist_active_export_job(job, playlist_ids, format, resume_context)
+
+            status = job
+            for _ in range(max_steps):
+                status_name = str(status.get('status', ''))
+                if status_name == 'completed' or not bool(status.get('continuation_required', True)):
+                    self._persist_active_export_job(status, playlist_ids, format, resume_context)
+                    return status
+
+                try:
+                    status = self._run_with_transient_retry(
+                        "Processing export job step",
+                        lambda: self.backend_client.step_export_job(
+                            job_id=job_id,
+                            cursor=cursor,
+                            resume_token=resume_token,
+                            max_playlists_per_step=chunk_size,
+                        ),
+                        max_attempts=4,
+                        base_delay=1.0,
+                    )
+                except BackendAPIError as e:
+                    if e.status_code == 409 and isinstance(e.response_data, dict):
+                        details = e.response_data.get('error', {}).get('details', {}) if isinstance(e.response_data.get('error'), dict) else {}
+                        latest_cursor = details.get('latest_cursor')
+                        latest_token = details.get('latest_resume_token')
+                        logger.warning("Resumable export conflict encountered; syncing to latest cursor/token")
+
+                        if latest_cursor and latest_token:
+                            cursor = str(latest_cursor)
+                            resume_token = str(latest_token)
+                        else:
+                            status = self.backend_client.get_export_job_status(job_id)
+                            cursor = str(status.get('current_cursor') or cursor)
+                            resume_token = str(status.get('current_resume_token') or resume_token)
+                            self._persist_active_export_job(status, playlist_ids, format, resume_context)
+
+                        time.sleep(0.2)
+                        continue
+                    raise
+
+                if not isinstance(status, dict):
+                    return None
+
+                processed = int(status.get('processed_count', 0))
+                total = int(status.get('playlist_count', len(playlist_ids)))
+                phase = str(status.get('phase', 'collect'))
+                current_track_offset = int(status.get('current_track_offset', 0) or 0)
+                self._emit_progress(
+                    f"Resumable export progress ({phase}): {processed}/{total} playlists, current track offset {current_track_offset}"
+                )
+
+                cursor = str(status.get('current_cursor') or cursor)
+                resume_token = str(status.get('current_resume_token') or resume_token)
+                self._persist_active_export_job(status, playlist_ids, format, resume_context)
+
+                time.sleep(0.35)
+
+            logger.error("Resumable export reached max steps without completion")
+            if report_errors and self.error_callback:
+                self.error_callback("Resumable export timed out before completion")
+            return status
+        except BackendAPIError as e:
+            if e.status_code == 404:
+                logger.info("Resumable export endpoints not available on backend")
+                return None
+
+            if e.status_code == 409 and isinstance(e.response_data, dict):
+                details = e.response_data.get('error', {}).get('details', {}) if isinstance(e.response_data.get('error'), dict) else {}
+                latest_cursor = details.get('latest_cursor')
+                latest_token = details.get('latest_resume_token')
+                if latest_cursor and latest_token:
+                    logger.warning("Resumable export conflict encountered; retry will resume with backend-provided cursor/token")
+
+            error_msg = self._format_backend_api_error(e, 'Resumable export generation failed')
+            if report_errors and self.error_callback:
+                self.error_callback(error_msg)
+            return None
+        except Exception as e:
+            logger.error(f"Error generating resumable batch export: {e}")
+            if report_errors and self.error_callback:
+                self.error_callback(f"Resumable export failed: {str(e)}")
+            return None
+
     def download_batch_export(self, export_id: str, save_path: str) -> bool:
         """Download combined export file."""
         try:
@@ -538,12 +661,13 @@ class BackendMainScreenAdapter:
 
             export_data = self._run_with_transient_retry(
                 "Downloading combined export",
-                lambda: self.backend_client.download_batch_export(export_id),
+                lambda: self._download_batch_export_any(export_id),
             )
             with open(save_path, 'wb') as f:
                 f.write(export_data)
 
             logger.info(f"Combined export saved to {save_path}")
+            self.clear_active_export_job(export_id)
             return True
         except BackendAPIError as e:
             error_msg = self._format_backend_api_error(e, 'Combined export download failed')
@@ -555,6 +679,111 @@ class BackendMainScreenAdapter:
             if self.error_callback:
                 self.error_callback(f"Combined download failed: {str(e)}")
             return False
+
+    def _download_batch_export_any(self, export_id: str) -> bytes:
+        """Download from resumable job endpoint first, then legacy batch endpoint."""
+        try:
+            return self.backend_client.download_export_job(export_id)
+        except BackendAPIError as e:
+            if e.status_code == 404:
+                return self.backend_client.download_batch_export(export_id)
+            raise
+
+    def _load_or_create_resumable_job(
+        self,
+        playlist_ids: List[str],
+        format: str,
+        resume_context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Load matching cached resumable job from local cache or create a new one."""
+        cached_job = self._get_matching_active_export_job(playlist_ids, format, resume_context)
+        if cached_job:
+            self._emit_progress("Resuming previous export job...")
+            try:
+                return self.backend_client.get_export_job_status(str(cached_job.get('job_id') or ''))
+            except BackendAPIError as e:
+                if e.status_code != 404:
+                    raise
+                self.clear_active_export_job()
+
+        return self._run_with_transient_retry(
+            "Creating export job",
+            lambda: self.backend_client.create_export_job(playlist_ids, format),
+            max_attempts=3,
+            base_delay=1.0,
+        )
+
+    def _persist_active_export_job(
+        self,
+        status: Dict[str, Any],
+        playlist_ids: List[str],
+        format: str,
+        resume_context: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Persist active resumable export job metadata for restart recovery."""
+        if not isinstance(status, dict):
+            return
+
+        payload: Dict[str, Any] = {
+            'job_id': status.get('job_id'),
+            'playlist_ids': list(playlist_ids),
+            'format': format,
+            'current_cursor': status.get('current_cursor'),
+            'current_resume_token': status.get('current_resume_token'),
+            'status': status.get('status'),
+            'phase': status.get('phase'),
+            'continuation_required': status.get('continuation_required', True),
+            'current_track_offset': status.get('current_track_offset', 0),
+            'processed_count': status.get('processed_count', 0),
+            'playlist_count': status.get('playlist_count', len(playlist_ids)),
+            'trace_id': self.backend_client.trace_id,
+            'updated_at': time.time(),
+        }
+        if isinstance(resume_context, dict):
+            payload['output_path'] = resume_context.get('output_path')
+            payload['playlist_names'] = resume_context.get('playlist_names')
+
+        self.cache_manager.cache_active_export_job(payload)
+
+    def _get_matching_active_export_job(
+        self,
+        playlist_ids: List[str],
+        format: str,
+        resume_context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Return cached active export job when it matches the current export request."""
+        cached_job = self.cache_manager.get_active_export_job()
+        if not isinstance(cached_job, dict):
+            return None
+
+        if str(cached_job.get('format') or '') != format:
+            return None
+
+        if list(cached_job.get('playlist_ids') or []) != list(playlist_ids):
+            return None
+
+        if isinstance(resume_context, dict):
+            cached_output_path = cached_job.get('output_path')
+            current_output_path = resume_context.get('output_path')
+            if cached_output_path and current_output_path and str(cached_output_path) != str(current_output_path):
+                return None
+
+        cached_job_id = str(cached_job.get('job_id') or '')
+        cached_cursor = str(cached_job.get('current_cursor') or '')
+        cached_token = str(cached_job.get('current_resume_token') or '')
+        if not cached_job_id or not cached_cursor or not cached_token:
+            return None
+
+        return cached_job
+
+    def clear_active_export_job(self, export_id: Optional[str] = None) -> None:
+        """Clear persisted active resumable export job metadata."""
+        cached_job = self.cache_manager.get_active_export_job()
+        if export_id and isinstance(cached_job, dict):
+            cached_job_id = str(cached_job.get('job_id') or '')
+            if cached_job_id and cached_job_id != export_id:
+                return
+        self.cache_manager.clear_active_export_job()
     
     # Utility methods
     def get_network_status(self) -> Dict[str, Any]:

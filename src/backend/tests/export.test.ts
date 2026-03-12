@@ -5,30 +5,140 @@ import type { Env } from '../types/env';
 
 // Mock the services
 vi.mock('../services/export', () => ({
-  ExportService: vi.fn().mockImplementation(function () {
-    return {
-    generateExcelExport: vi.fn().mockResolvedValue({
-      export_id: 'test-export-id',
-      file_name: 'playlist-test.xlsx',
-      file_size: 1024,
-      created_at: new Date().toISOString(),
-      download_url: '/export/playlist/test-export-id/download'
-    }),
-    generatePlaylistExport: vi.fn().mockResolvedValue({
-      playlist: {
-        id: 'playlist1',
-        name: 'Test Playlist',
-        description: '',
-        total_tracks: 1,
-        owner: 'Test User'
-      },
-      tracks: []
-    }),
-    generateExcelFile: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4, 5]).buffer),
-    getExportFile: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4, 5])),
-    cleanupOldExports: vi.fn().mockResolvedValue(undefined)
-    };
-  })
+  ExportService: class {
+    static encodeCursor(nextPlaylistIndex: number, phase: 'collect' | 'assemble' = 'collect') {
+      return JSON.stringify({ next_playlist_index: nextPlaylistIndex, phase });
+    }
+
+    static createResumeToken() {
+      return `token-${Math.random().toString(16).slice(2)}`;
+    }
+
+    static createJobState(options: any) {
+      return {
+        job_id: options.jobId,
+        user_id: options.userId,
+        status: 'running',
+        phase: 'collect',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        playlist_ids: options.playlistIds,
+        playlist_count: options.playlistIds.length,
+        processed_count: 0,
+        track_count: 0,
+        file_format: options.fileFormat,
+        include_audio_features: options.includeAudioFeatures,
+        current_cursor: this.encodeCursor(0, 'collect'),
+        current_resume_token: this.createResumeToken(),
+        next_playlist_index: 0,
+        continuation_required: true,
+        progress: 0,
+        trace_id: options.traceId,
+      };
+    }
+
+    static validateStepRequest(job: any, cursor: string, resumeToken: string) {
+      if (job.status === 'completed') {
+        return;
+      }
+      if (job.current_cursor !== cursor || job.current_resume_token !== resumeToken) {
+        const conflictError: any = new Error('Stale cursor or resume token');
+        conflictError.name = 'ResumableExportConflictError';
+        conflictError.latestCursor = job.current_cursor;
+        conflictError.latestResumeToken = job.current_resume_token;
+        throw conflictError;
+      }
+    }
+
+    async generateExcelExport() {
+      return {
+        export_id: 'test-export-id',
+        file_name: 'playlist-test.xlsx',
+        file_size: 1024,
+        created_at: new Date().toISOString(),
+        download_url: '/export/playlist/test-export-id/download'
+      };
+    }
+
+    async generatePlaylistExport() {
+      return {
+        playlist: {
+          id: 'playlist1',
+          name: 'Test Playlist',
+          description: '',
+          total_tracks: 1,
+          owner: 'Test User'
+        },
+        tracks: []
+      };
+    }
+
+    async runResumableStep(job: any, exportDataList: any[], maxPlaylistsPerStep = 1) {
+      const startIndex = job.next_playlist_index || 0;
+      const endIndex = Math.min(startIndex + maxPlaylistsPerStep, job.playlist_ids.length);
+
+      for (let index = startIndex; index < endIndex; index += 1) {
+        exportDataList.push(await this.generatePlaylistExport());
+        job.next_playlist_index = index + 1;
+      }
+
+      job.processed_count = exportDataList.length;
+      job.track_count = 0;
+      job.last_completed_cursor = job.current_cursor;
+      job.last_completed_token = job.current_resume_token;
+      job.updated_at = new Date().toISOString();
+
+      if (job.next_playlist_index >= job.playlist_ids.length) {
+        job.status = 'completed';
+        job.phase = 'assemble';
+        job.progress = 100;
+        job.continuation_required = false;
+        job.file_url = `/export/jobs/${job.job_id}/download`;
+        job.current_cursor = (this.constructor as any).encodeCursor(job.next_playlist_index, 'assemble');
+        job.current_resume_token = (this.constructor as any).createResumeToken();
+      } else {
+        job.status = 'running';
+        job.phase = 'collect';
+        job.progress = Math.min(99, Math.floor((job.processed_count / job.playlist_count) * 100));
+        job.continuation_required = true;
+        job.current_cursor = (this.constructor as any).encodeCursor(job.next_playlist_index, 'collect');
+        job.current_resume_token = (this.constructor as any).createResumeToken();
+      }
+
+      return { job, exportDataList };
+    }
+
+    async generateExcelFile() {
+      return new Uint8Array([1, 2, 3, 4, 5]).buffer;
+    }
+
+    async generateCombinedExcelFile() {
+      return new Uint8Array([1, 2, 3, 4, 5]).buffer;
+    }
+
+    async generateCsvFile() {
+      return new TextEncoder().encode('a,b\n1,2').buffer;
+    }
+
+    async getExportFile() {
+      return new Uint8Array([1, 2, 3, 4, 5]);
+    }
+
+    async cleanupOldExports() {
+      return undefined;
+    }
+  },
+  ResumableExportConflictError: class ResumableExportConflictError extends Error {
+    latestCursor: string;
+    latestResumeToken: string;
+
+    constructor(message: string, latestCursor: string, latestResumeToken: string) {
+      super(message);
+      this.name = 'ResumableExportConflictError';
+      this.latestCursor = latestCursor;
+      this.latestResumeToken = latestResumeToken;
+    }
+  }
 }));
 
 vi.mock('../middleware/auth', () => ({
@@ -257,6 +367,222 @@ describe('Export Routes', () => {
       expect(secondData.data).toHaveProperty('continuation_required', false);
       expect(secondData.data).toHaveProperty('processed_count', 2);
       expect(secondData.data).toHaveProperty('file_url');
+    });
+  });
+
+  describe('Resumable export jobs', () => {
+    it('should create a resumable export job', async () => {
+      const request = new Request('http://localhost/export/jobs', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          playlist_ids: ['playlist1', 'playlist2'],
+          format: 'xlsx'
+        })
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.data).toHaveProperty('job_id');
+      expect(data.data).toHaveProperty('status', 'running');
+      expect(data.data).toHaveProperty('current_cursor');
+      expect(data.data).toHaveProperty('current_resume_token');
+      expect(data.data).toHaveProperty('playlist_count', 2);
+    });
+
+    it('should process a resumable export job across multiple steps', async () => {
+      const createRequest = new Request('http://localhost/export/jobs', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          playlist_ids: ['playlist1', 'playlist2'],
+          format: 'xlsx'
+        })
+      });
+
+      const createResponse = await app.request(createRequest, undefined, mockEnv);
+      const createData = await createResponse.json();
+
+      const stepOneRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/step`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cursor: createData.data.current_cursor,
+          resume_token: createData.data.current_resume_token,
+          max_playlists_per_step: 1,
+        })
+      });
+
+      const stepOneResponse = await app.request(stepOneRequest, undefined, mockEnv);
+      const stepOneData = await stepOneResponse.json();
+
+      expect(stepOneResponse.status).toBe(200);
+      expect(stepOneData.data).toHaveProperty('status', 'running');
+      expect(stepOneData.data).toHaveProperty('processed_count', 1);
+      expect(stepOneData.data).toHaveProperty('continuation_required', true);
+
+      const stepTwoRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/step`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cursor: stepOneData.data.current_cursor,
+          resume_token: stepOneData.data.current_resume_token,
+          max_playlists_per_step: 1,
+        })
+      });
+
+      const stepTwoResponse = await app.request(stepTwoRequest, undefined, mockEnv);
+      const stepTwoData = await stepTwoResponse.json();
+
+      expect(stepTwoResponse.status).toBe(200);
+      expect(stepTwoData.data).toHaveProperty('status', 'completed');
+      expect(stepTwoData.data).toHaveProperty('processed_count', 2);
+      expect(stepTwoData.data).toHaveProperty('file_url');
+      expect(stepTwoData.data).toHaveProperty('continuation_required', false);
+    });
+
+    it('should reject stale resume token with conflict details', async () => {
+      const createRequest = new Request('http://localhost/export/jobs', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          playlist_ids: ['playlist1', 'playlist2'],
+          format: 'xlsx'
+        })
+      });
+
+      const createResponse = await app.request(createRequest, undefined, mockEnv);
+      const createData = await createResponse.json();
+
+      const firstStepRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/step`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cursor: createData.data.current_cursor,
+          resume_token: createData.data.current_resume_token,
+          max_playlists_per_step: 1,
+        })
+      });
+
+      await app.request(firstStepRequest, undefined, mockEnv);
+
+      const staleStepRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/step`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cursor: createData.data.current_cursor,
+          resume_token: createData.data.current_resume_token,
+          max_playlists_per_step: 1,
+        })
+      });
+
+      const staleResponse = await app.request(staleStepRequest, undefined, mockEnv);
+      const staleData = await staleResponse.json();
+
+      expect(staleResponse.status).toBe(409);
+      expect(staleData.error).toHaveProperty('code', 'EXPORT_JOB_CONFLICT');
+      expect(staleData.error.details).toHaveProperty('latest_cursor');
+      expect(staleData.error.details).toHaveProperty('latest_resume_token');
+    });
+
+    it('should return resumable export job status', async () => {
+      const createRequest = new Request('http://localhost/export/jobs', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          playlist_ids: ['playlist1'],
+          format: 'xlsx'
+        })
+      });
+
+      const createResponse = await app.request(createRequest, undefined, mockEnv);
+      const createData = await createResponse.json();
+
+      const statusRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/status`, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const statusResponse = await app.request(statusRequest, undefined, mockEnv);
+      const statusData = await statusResponse.json();
+
+      expect(statusResponse.status).toBe(200);
+      expect(statusData.data).toHaveProperty('job_id', createData.data.job_id);
+    });
+
+    it('should download completed resumable export job data', async () => {
+      const createRequest = new Request('http://localhost/export/jobs', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          playlist_ids: ['playlist1'],
+          format: 'xlsx'
+        })
+      });
+
+      const createResponse = await app.request(createRequest, undefined, mockEnv);
+      const createData = await createResponse.json();
+
+      const stepRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/step`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cursor: createData.data.current_cursor,
+          resume_token: createData.data.current_resume_token,
+          max_playlists_per_step: 1,
+        })
+      });
+
+      await app.request(stepRequest, undefined, mockEnv);
+
+      const downloadRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/download`, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const downloadResponse = await app.request(downloadRequest, undefined, mockEnv);
+      const body = await downloadResponse.arrayBuffer();
+
+      expect(downloadResponse.status).toBe(200);
+      expect(body.byteLength).toBeGreaterThan(0);
     });
   });
 

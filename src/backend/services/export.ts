@@ -37,11 +37,247 @@ export interface ExportData {
   generated_at: string;
 }
 
+export type ResumableExportJobStatus = 'running' | 'assembling' | 'completed' | 'failed';
+
+export type ResumableExportJobPhase = 'collect' | 'assemble';
+
+export interface ResumablePlaylistProgress {
+  next_offset: number;
+  total_tracks: number;
+  collected_tracks: number;
+  done: boolean;
+}
+
+export interface ResumableExportJobState {
+  job_id: string;
+  user_id: string;
+  status: ResumableExportJobStatus;
+  phase: ResumableExportJobPhase;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+  playlist_ids: string[];
+  playlist_count: number;
+  processed_count: number;
+  track_count: number;
+  file_format: 'xlsx' | 'csv';
+  include_audio_features: boolean;
+  current_cursor: string;
+  current_resume_token: string;
+  next_playlist_index: number;
+  current_track_offset: number;
+  track_page_size: number;
+  playlist_progress: Record<string, ResumablePlaylistProgress>;
+  continuation_required: boolean;
+  progress: number;
+  file_url?: string;
+  file_size?: number;
+  result?: {
+    download_id: string;
+    filename?: string;
+    expires_at?: string;
+  };
+  last_error?: string;
+  trace_id?: string;
+  last_completed_cursor?: string;
+  last_completed_token?: string;
+}
+
+export interface ResumableExportStepResult {
+  job: ResumableExportJobState;
+  exportDataList: ExportData[];
+}
+
+export class ResumableExportConflictError extends Error {
+  latestCursor: string;
+  latestResumeToken: string;
+
+  constructor(message: string, latestCursor: string, latestResumeToken: string) {
+    super(message);
+    this.name = 'ResumableExportConflictError';
+    this.latestCursor = latestCursor;
+    this.latestResumeToken = latestResumeToken;
+  }
+}
+
 export class ExportService {
   private accessToken: string;
   
   constructor(accessToken: string) {
     this.accessToken = accessToken;
+  }
+
+  static encodeCursor(nextPlaylistIndex: number, phase: ResumableExportJobPhase = 'collect', nextTrackOffset = 0): string {
+    return JSON.stringify({ next_playlist_index: nextPlaylistIndex, next_track_offset: nextTrackOffset, phase });
+  }
+
+  static decodeCursor(cursor: string | undefined, fallbackIndex = 0, fallbackTrackOffset = 0): { nextPlaylistIndex: number; nextTrackOffset: number; phase: ResumableExportJobPhase } {
+    if (!cursor) {
+      return { nextPlaylistIndex: fallbackIndex, nextTrackOffset: fallbackTrackOffset, phase: 'collect' };
+    }
+
+    try {
+      const parsed = JSON.parse(cursor);
+      const nextPlaylistIndex = Number.isInteger(parsed?.next_playlist_index) && parsed.next_playlist_index >= 0
+        ? parsed.next_playlist_index
+        : fallbackIndex;
+      const nextTrackOffset = Number.isInteger(parsed?.next_track_offset) && parsed.next_track_offset >= 0
+        ? parsed.next_track_offset
+        : fallbackTrackOffset;
+      const phase = parsed?.phase === 'assemble' ? 'assemble' : 'collect';
+      return { nextPlaylistIndex, nextTrackOffset, phase };
+    } catch {
+      return { nextPlaylistIndex: fallbackIndex, nextTrackOffset: fallbackTrackOffset, phase: 'collect' };
+    }
+  }
+
+  static createResumeToken(): string {
+    return crypto.randomUUID();
+  }
+
+  static createJobState(options: {
+    jobId: string;
+    userId: string;
+    playlistIds: string[];
+    fileFormat: 'xlsx' | 'csv';
+    includeAudioFeatures: boolean;
+    traceId?: string;
+  }): ResumableExportJobState {
+    const cursor = ExportService.encodeCursor(0, 'collect', 0);
+    return {
+      job_id: options.jobId,
+      user_id: options.userId,
+      status: 'running',
+      phase: 'collect',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      playlist_ids: options.playlistIds,
+      playlist_count: options.playlistIds.length,
+      processed_count: 0,
+      track_count: 0,
+      file_format: options.fileFormat,
+      include_audio_features: options.includeAudioFeatures,
+      current_cursor: cursor,
+      current_resume_token: ExportService.createResumeToken(),
+      next_playlist_index: 0,
+      current_track_offset: 0,
+      track_page_size: 100,
+      playlist_progress: {},
+      continuation_required: options.playlistIds.length > 0,
+      progress: 0,
+      trace_id: options.traceId,
+    };
+  }
+
+  static validateStepRequest(job: ResumableExportJobState, cursor: string, resumeToken: string): void {
+    if (job.status === 'completed') {
+      return;
+    }
+
+    if (cursor !== job.current_cursor || resumeToken !== job.current_resume_token) {
+      throw new ResumableExportConflictError(
+        'Stale cursor or resume token',
+        job.current_cursor,
+        job.current_resume_token,
+      );
+    }
+  }
+
+  async runResumableStep(
+    job: ResumableExportJobState,
+    exportDataList: ExportData[],
+    maxPlaylistsPerStep = 1,
+  ): Promise<ResumableExportStepResult> {
+    if (job.status === 'completed') {
+      return { job, exportDataList };
+    }
+
+    const decodedCursor = ExportService.decodeCursor(
+      job.current_cursor,
+      job.next_playlist_index,
+      job.current_track_offset,
+    );
+    let nextPlaylistIndex = decodedCursor.nextPlaylistIndex;
+    let nextTrackOffset = decodedCursor.nextTrackOffset;
+    let remainingSlices = Math.max(maxPlaylistsPerStep, 1);
+
+    while (remainingSlices > 0 && nextPlaylistIndex < job.playlist_ids.length) {
+      const playlistId = job.playlist_ids[nextPlaylistIndex];
+      const existingExportData = exportDataList.find((item) => item.playlist.id === playlistId);
+      const playlistProgress = job.playlist_progress[playlistId] || {
+        next_offset: nextTrackOffset,
+        total_tracks: existingExportData?.playlist.total_tracks || 0,
+        collected_tracks: existingExportData?.tracks.length || 0,
+        done: false,
+      };
+      const slice = await this.generatePlaylistExportSlice(playlistId, {
+        includeAudioFeatures: job.include_audio_features,
+        offset: playlistProgress.next_offset,
+        limit: job.track_page_size,
+        existingExportData,
+      });
+
+      const mergedExportData = this.mergeExportSlice(existingExportData, slice.exportData);
+      const existingIndex = exportDataList.findIndex((item) => item.playlist.id === playlistId);
+      if (existingIndex >= 0) {
+        exportDataList[existingIndex] = mergedExportData;
+      } else {
+        exportDataList.push(mergedExportData);
+      }
+
+      const totalTracks = slice.totalTracks || mergedExportData.playlist.total_tracks || mergedExportData.tracks.length;
+      const collectedTracks = mergedExportData.tracks.length;
+      const playlistDone = collectedTracks >= totalTracks || slice.fetchedCount === 0;
+
+      job.playlist_progress[playlistId] = {
+        next_offset: playlistDone ? collectedTracks : playlistProgress.next_offset + slice.fetchedCount,
+        total_tracks: totalTracks,
+        collected_tracks: collectedTracks,
+        done: playlistDone,
+      };
+
+      if (playlistDone) {
+        nextPlaylistIndex += 1;
+        nextTrackOffset = 0;
+      } else {
+        nextTrackOffset = job.playlist_progress[playlistId].next_offset;
+      }
+
+      remainingSlices -= 1;
+    }
+
+    job.next_playlist_index = nextPlaylistIndex;
+    job.current_track_offset = nextTrackOffset;
+    job.processed_count = Object.values(job.playlist_progress).filter((progress) => progress.done).length;
+    job.track_count = exportDataList.reduce((sum, item) => sum + item.tracks.length, 0);
+    job.updated_at = new Date().toISOString();
+    job.last_completed_cursor = job.current_cursor;
+    job.last_completed_token = job.current_resume_token;
+
+    if (job.next_playlist_index >= job.playlist_ids.length) {
+      job.phase = 'assemble';
+      job.status = 'completed';
+      job.progress = 100;
+      job.continuation_required = false;
+      job.completed_at = new Date().toISOString();
+      job.file_url = `/export/jobs/${job.job_id}/download`;
+      job.file_size = JSON.stringify(exportDataList).length;
+      job.result = {
+        download_id: job.job_id,
+      };
+      job.current_cursor = ExportService.encodeCursor(job.next_playlist_index, 'assemble', 0);
+      job.current_resume_token = ExportService.createResumeToken();
+      return { job, exportDataList };
+    }
+
+    job.phase = 'collect';
+    job.status = 'running';
+    job.continuation_required = true;
+    job.progress = this.calculateJobProgress(job);
+    job.current_cursor = ExportService.encodeCursor(job.next_playlist_index, 'collect', job.current_track_offset);
+    job.current_resume_token = ExportService.createResumeToken();
+
+    return { job, exportDataList };
   }
   
   async generatePlaylistExport(playlistId: string, options?: { includeAudioFeatures?: boolean }): Promise<ExportData> {
@@ -64,100 +300,193 @@ export class ExportService {
       offset += limit;
     }
     
-    // Get audio features for all tracks
+    const exportTracks = await this.buildExportTracks(allTracks, includeAudioFeatures, spotifyService);
+    const totalDurationMs = this.calculateTotalDurationMs(allTracks);
+    
+    return {
+      playlist: this.buildPlaylistMetadata(playlist, exportTracks.length),
+      tracks: exportTracks,
+      total_duration_ms: totalDurationMs,
+      generated_at: new Date().toISOString()
+    };
+  }
+
+  async generatePlaylistExportSlice(
+    playlistId: string,
+    options: {
+      includeAudioFeatures?: boolean;
+      offset?: number;
+      limit?: number;
+      existingExportData?: ExportData;
+    },
+  ): Promise<{ exportData: ExportData; fetchedCount: number; totalTracks: number }> {
+    const spotifyService = new SpotifyService(this.accessToken);
+    const includeAudioFeatures = options.includeAudioFeatures === true;
+    const offset = Math.max(0, options.offset || 0);
+    const limit = Math.max(1, options.limit || 100);
+    const existingExportData = options.existingExportData;
+    const playlist = existingExportData?.playlist.id === playlistId
+      ? undefined
+      : await spotifyService.getPlaylist(playlistId);
+    const tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
+    const exportTracks = await this.buildExportTracks(tracksData.items, includeAudioFeatures, spotifyService);
+    const totalDurationMs = this.calculateTotalDurationMs(tracksData.items);
+    const playlistMetadata = existingExportData?.playlist || this.buildPlaylistMetadata(playlist, tracksData.total);
+
+    return {
+      exportData: {
+        playlist: {
+          ...playlistMetadata,
+          total_tracks: tracksData.total || playlistMetadata.total_tracks,
+        },
+        tracks: exportTracks,
+        total_duration_ms: totalDurationMs,
+        generated_at: new Date().toISOString(),
+      },
+      fetchedCount: tracksData.items.length,
+      totalTracks: tracksData.total,
+    };
+  }
+
+  private mergeExportSlice(existingExportData: ExportData | undefined, sliceExportData: ExportData): ExportData {
+    if (!existingExportData) {
+      return sliceExportData;
+    }
+
+    return {
+      playlist: {
+        ...existingExportData.playlist,
+        ...sliceExportData.playlist,
+      },
+      tracks: [...existingExportData.tracks, ...sliceExportData.tracks],
+      total_duration_ms: existingExportData.total_duration_ms + sliceExportData.total_duration_ms,
+      generated_at: sliceExportData.generated_at,
+    };
+  }
+
+  private calculateJobProgress(job: ResumableExportJobState): number {
+    const playlistIds = job.playlist_ids;
+    if (playlistIds.length === 0) {
+      return 100;
+    }
+
+    let aggregateProgress = 0;
+    for (const playlistId of playlistIds) {
+      const progress = job.playlist_progress[playlistId];
+      if (!progress) {
+        continue;
+      }
+      if (progress.done) {
+        aggregateProgress += 1;
+        continue;
+      }
+      if (progress.total_tracks > 0) {
+        aggregateProgress += Math.min(progress.collected_tracks / progress.total_tracks, 0.99);
+      }
+    }
+
+    return Math.min(99, Math.floor((aggregateProgress / playlistIds.length) * 100));
+  }
+
+  private buildPlaylistMetadata(playlist: any, fallbackTrackCount: number): ExportData['playlist'] {
+    return {
+      id: playlist?.id || '',
+      name: playlist?.name || 'Unknown Playlist',
+      description: playlist?.description || '',
+      total_tracks: playlist?.items?.total ?? playlist?.tracks?.total ?? fallbackTrackCount,
+      owner: playlist?.owner?.display_name || 'Unknown',
+      followers: playlist?.followers?.total || 0,
+      url: playlist?.external_urls?.spotify || '',
+      cover_image_url: Array.isArray(playlist?.images) && playlist.images.length > 0 ? playlist.images[0]?.url : undefined,
+    };
+  }
+
+  private calculateTotalDurationMs(items: any[]): number {
+    return items
+      .filter((item: any) => item.track && typeof item.track.duration_ms === 'number')
+      .reduce((acc: number, item: any) => acc + (item.track.duration_ms || 0), 0);
+  }
+
+  private async buildExportTracks(allTracks: any[], includeAudioFeatures: boolean, spotifyService: SpotifyService): Promise<ExportTrack[]> {
     const trackIds = allTracks
       .filter((item: any) => item.track && item.track.id)
       .map((item: any) => item.track.id);
-    
-    const audioFeaturesMap = new Map();
+
+    const audioFeaturesMap = await this.loadAudioFeaturesMap(trackIds, includeAudioFeatures, spotifyService);
+
+    return allTracks
+      .filter((item: any) => item.track)
+      .map((item: any) => this.mapTrackForExport(item.track, audioFeaturesMap.get(item.track.id)));
+  }
+
+  private async loadAudioFeaturesMap(trackIds: string[], includeAudioFeatures: boolean, spotifyService: SpotifyService): Promise<Map<string, any>> {
+    const audioFeaturesMap = new Map<string, any>();
     let audioFeaturesUnavailable = false;
-    if (includeAudioFeatures && trackIds.length > 0) {
-      // Process in batches of 100 (Spotify API limit)
-      for (let i = 0; i < trackIds.length; i += 100) {
-        if (audioFeaturesUnavailable) {
-          break;
-        }
-        const batch = trackIds.slice(i, i + 100);
-        try {
-          const audioFeatures = await spotifyService.getMultipleAudioFeatures(batch);
-          audioFeatures.forEach(feature => {
-            if (feature) {
-              audioFeaturesMap.set(feature.id, feature);
-            }
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (/HTTP\s+(401|403)/i.test(message)) {
-            audioFeaturesUnavailable = true;
-            console.warn('Audio-features API unavailable for this token; skipping remaining batches', {
-              batchStart: i,
-              batchSize: batch.length,
-              error: message,
-            });
-            continue;
+
+    if (!includeAudioFeatures || trackIds.length === 0) {
+      return audioFeaturesMap;
+    }
+
+    for (let i = 0; i < trackIds.length; i += 100) {
+      if (audioFeaturesUnavailable) {
+        break;
+      }
+      const batch = trackIds.slice(i, i + 100);
+      try {
+        const audioFeatures = await spotifyService.getMultipleAudioFeatures(batch);
+        audioFeatures.forEach((feature) => {
+          if (feature) {
+            audioFeaturesMap.set(feature.id, feature);
           }
-          // Export should still succeed if audio-features API fails for a batch.
-          console.warn('Audio-features batch failed; continuing without those features', {
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/HTTP\s+(401|403)/i.test(message)) {
+          audioFeaturesUnavailable = true;
+          console.warn('Audio-features API unavailable for this token; skipping remaining batches', {
             batchStart: i,
             batchSize: batch.length,
             error: message,
           });
+          continue;
         }
+        console.warn('Audio-features batch failed; continuing without those features', {
+          batchStart: i,
+          batchSize: batch.length,
+          error: message,
+        });
       }
     }
-    
-    // Transform data for export
-    const exportTracks: ExportTrack[] = allTracks
-      .filter((item: any) => item.track)
-      .map((item: any) => {
-        const track = item.track;
-        const audioFeatures = audioFeaturesMap.get(track.id);
-        const keyMap = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-        const modeMap: Record<number, string> = { 0: 'minor', 1: 'major' };
-        const keyName = typeof audioFeatures?.key === 'number' && audioFeatures.key >= 0 && audioFeatures.key < keyMap.length
-          ? keyMap[audioFeatures.key]
-          : null;
-        const modeName = typeof audioFeatures?.mode === 'number' ? modeMap[audioFeatures.mode] : null;
-        const keyValue = keyName ? `${keyName}${modeName ? ` ${modeName}` : ''}` : 'N/A';
-        
-        return {
-          Artist: track.artists.map((artist: any) => artist.name).join(', '),
-          Album: track.album?.name || '',
-          Track: track.name,
-          Duration: this.formatDuration(track.duration_ms),
-          'Spotify URL': track.external_urls?.spotify || '',
-          Tempo: typeof audioFeatures?.tempo === 'number' ? Number(audioFeatures.tempo.toFixed(2)) : 'N/A',
-          Key: keyValue,
-          Danceability: typeof audioFeatures?.danceability === 'number' ? Number(audioFeatures.danceability.toFixed(3)) : 'N/A',
-          Energy: typeof audioFeatures?.energy === 'number' ? Number(audioFeatures.energy.toFixed(3)) : 'N/A',
-          Valence: typeof audioFeatures?.valence === 'number' ? Number(audioFeatures.valence.toFixed(3)) : 'N/A',
-          Acousticness: typeof audioFeatures?.acousticness === 'number' ? Number(audioFeatures.acousticness.toFixed(3)) : 'N/A',
-          Instrumentalness: typeof audioFeatures?.instrumentalness === 'number' ? Number(audioFeatures.instrumentalness.toFixed(3)) : 'N/A',
-          Liveness: typeof audioFeatures?.liveness === 'number' ? Number(audioFeatures.liveness.toFixed(3)) : 'N/A',
-          Speechiness: typeof audioFeatures?.speechiness === 'number' ? Number(audioFeatures.speechiness.toFixed(3)) : 'N/A',
-          Loudness: typeof audioFeatures?.loudness === 'number' ? Number(audioFeatures.loudness.toFixed(1)) : 'N/A',
-          'Time Signature': typeof audioFeatures?.time_signature === 'number' ? audioFeatures.time_signature : 'N/A',
-        };
-      });
 
-    const totalDurationMs = allTracks
-      .filter((item: any) => item.track && typeof item.track.duration_ms === 'number')
-      .reduce((acc: number, item: any) => acc + (item.track.duration_ms || 0), 0);
-    
+    return audioFeaturesMap;
+  }
+
+  private mapTrackForExport(track: any, audioFeatures: any): ExportTrack {
+    const keyMap = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const modeMap: Record<number, string> = { 0: 'minor', 1: 'major' };
+    const keyName = typeof audioFeatures?.key === 'number' && audioFeatures.key >= 0 && audioFeatures.key < keyMap.length
+      ? keyMap[audioFeatures.key]
+      : null;
+    const modeName = typeof audioFeatures?.mode === 'number' ? modeMap[audioFeatures.mode] : null;
+    const keyValue = keyName ? `${keyName}${modeName ? ` ${modeName}` : ''}` : 'N/A';
+
     return {
-      playlist: {
-        id: playlist.id,
-        name: playlist.name,
-        description: playlist.description || '',
-        total_tracks: playlist.items?.total ?? playlist.tracks?.total ?? exportTracks.length,
-        owner: playlist.owner?.display_name || 'Unknown',
-        followers: playlist.followers?.total || 0,
-        url: playlist.external_urls?.spotify || '',
-        cover_image_url: Array.isArray(playlist.images) && playlist.images.length > 0 ? playlist.images[0]?.url : undefined,
-      },
-      tracks: exportTracks,
-      total_duration_ms: totalDurationMs,
-      generated_at: new Date().toISOString()
+      Artist: track.artists.map((artist: any) => artist.name).join(', '),
+      Album: track.album?.name || '',
+      Track: track.name,
+      Duration: this.formatDuration(track.duration_ms),
+      'Spotify URL': track.external_urls?.spotify || '',
+      Tempo: typeof audioFeatures?.tempo === 'number' ? Number(audioFeatures.tempo.toFixed(2)) : 'N/A',
+      Key: keyValue,
+      Danceability: typeof audioFeatures?.danceability === 'number' ? Number(audioFeatures.danceability.toFixed(3)) : 'N/A',
+      Energy: typeof audioFeatures?.energy === 'number' ? Number(audioFeatures.energy.toFixed(3)) : 'N/A',
+      Valence: typeof audioFeatures?.valence === 'number' ? Number(audioFeatures.valence.toFixed(3)) : 'N/A',
+      Acousticness: typeof audioFeatures?.acousticness === 'number' ? Number(audioFeatures.acousticness.toFixed(3)) : 'N/A',
+      Instrumentalness: typeof audioFeatures?.instrumentalness === 'number' ? Number(audioFeatures.instrumentalness.toFixed(3)) : 'N/A',
+      Liveness: typeof audioFeatures?.liveness === 'number' ? Number(audioFeatures.liveness.toFixed(3)) : 'N/A',
+      Speechiness: typeof audioFeatures?.speechiness === 'number' ? Number(audioFeatures.speechiness.toFixed(3)) : 'N/A',
+      Loudness: typeof audioFeatures?.loudness === 'number' ? Number(audioFeatures.loudness.toFixed(1)) : 'N/A',
+      'Time Signature': typeof audioFeatures?.time_signature === 'number' ? audioFeatures.time_signature : 'N/A',
     };
   }
   

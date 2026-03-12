@@ -309,6 +309,45 @@ class BackendClient:
         )
         return response
 
+    def create_export_job(self, playlist_ids: List[str], format: str = 'xlsx') -> Dict[str, Any]:
+        """Create a resumable export job."""
+        response = self._make_request(
+            'POST',
+            '/export/jobs',
+            json={
+                'playlist_ids': playlist_ids,
+                'format': format,
+                'include_audio_features': False,
+            },
+            timeout=120,
+        )
+        return response
+
+    def step_export_job(
+        self,
+        job_id: str,
+        cursor: str,
+        resume_token: str,
+        max_playlists_per_step: int = 1,
+    ) -> Dict[str, Any]:
+        """Process one resumable export job step."""
+        response = self._make_request(
+            'POST',
+            f'/export/jobs/{job_id}/step',
+            json={
+                'cursor': cursor,
+                'resume_token': resume_token,
+                'max_playlists_per_step': max(1, int(max_playlists_per_step)),
+            },
+            timeout=180,
+        )
+        return response
+
+    def get_export_job_status(self, job_id: str) -> Dict[str, Any]:
+        """Get status for a resumable export job."""
+        response = self._make_request('GET', f'/export/jobs/{job_id}/status', timeout=60)
+        return response
+
     def get_batch_export_status(self, job_id: str) -> Dict[str, Any]:
         """Get status of a combined export job."""
         response = self._make_request('GET', f'/export/playlists/{job_id}/status', timeout=60)
@@ -357,6 +396,31 @@ class BackendClient:
 
             error_payload = response_data.get('error', {}) if isinstance(response_data, dict) else {}
             message = f"Batch export download failed: HTTP {response.status_code}"
+            if isinstance(error_payload, dict):
+                message = error_payload.get('message', error_payload.get('code', message))
+
+            raise BackendAPIError(message, response.status_code, response_data)
+
+        return response.content
+
+    def download_export_job(self, job_id: str) -> bytes:
+        """Download generated resumable export file."""
+        url = f"{self.base_url}/export/jobs/{job_id}/download"
+        headers = {'Authorization': f'Bearer {self.auth_token}'} if self.auth_token else {}
+        if self.trace_id:
+            headers['X-SpotiBye-Trace-Id'] = self.trace_id
+
+        response = self.session.get(url, headers=headers, timeout=120)
+        if response.status_code >= 400:
+            response_data: Dict[str, Any] = {}
+            try:
+                if response.headers.get('content-type', '').startswith('application/json'):
+                    response_data = response.json()
+            except Exception:
+                response_data = {}
+
+            error_payload = response_data.get('error', {}) if isinstance(response_data, dict) else {}
+            message = f"Export job download failed: HTTP {response.status_code}"
             if isinstance(error_payload, dict):
                 message = error_payload.get('message', error_payload.get('code', message))
 

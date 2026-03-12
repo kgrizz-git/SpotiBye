@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth';
-import { ExportService } from '../services/export';
+import { ExportService, ResumableExportConflictError } from '../services/export';
 import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
 
@@ -24,6 +24,25 @@ type BatchExportStatus = {
   continuation_required: boolean;
   error?: string;
 };
+
+type ResumableExportJobStatus = ReturnType<typeof ExportService.createJobState>;
+
+function resolveStepSize(body: any): number {
+  const requested = Number.isInteger(body?.max_playlists_per_step)
+    ? Number(body.max_playlists_per_step)
+    : Number.isInteger(body?.chunk_size)
+      ? Number(body.chunk_size)
+      : 1;
+  return Math.min(Math.max(requested, 1), 3);
+}
+
+function buildExportJobKey(jobId: string, userId: string): string {
+  return `export:job:${jobId}:${userId}`;
+}
+
+function buildExportJobDataKey(jobId: string, userId: string): string {
+  return `${buildExportJobKey(jobId, userId)}:data`;
+}
 
 function resolveRequestedFormat(body: any): 'xlsx' | 'csv' {
   return body && body.format === 'csv' ? 'csv' : 'xlsx';
@@ -76,6 +95,200 @@ function buildExportErrorPayload(code: string, message: string, requestId: strin
 
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
+
+// POST /export/jobs - Create resumable export job
+app.post('/jobs', async (c) => {
+  const requestId = crypto.randomUUID();
+  const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
+  try {
+    const userId = c.get('user').id;
+    const body = await c.req.json().catch(() => ({}));
+    const playlistIds: string[] = Array.isArray(body?.playlist_ids)
+      ? body.playlist_ids.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
+      : [];
+    const requestedFormat = resolveRequestedFormat(body);
+    const includeAudioFeatures = resolveIncludeAudioFeatures(body);
+
+    if (playlistIds.length === 0) {
+      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, 400);
+    }
+
+    const cacheService = new CacheService(c.env.CACHE_KV);
+    const jobId = crypto.randomUUID();
+    const state = ExportService.createJobState({
+      jobId,
+      userId,
+      playlistIds,
+      fileFormat: requestedFormat,
+      includeAudioFeatures,
+      traceId,
+    });
+
+    await cacheService.set(buildExportJobKey(jobId, userId), state, 3600);
+    await cacheService.set(buildExportJobDataKey(jobId, userId), [], 3600);
+
+    return c.json({
+      data: state,
+      meta: { timestamp: new Date().toISOString(), request_id: requestId },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return c.json(
+      buildExportErrorPayload('EXPORT_JOB_CREATE_FAILED', `Failed to create export job: ${errorMessage}`, requestId, {
+        trace_id: traceId,
+      }),
+      resolveErrorStatus('EXPORT_JOB_CREATE_FAILED', errorMessage),
+    );
+  }
+});
+
+// POST /export/jobs/:jobId/step - Process one resumable export step
+app.post('/jobs/:jobId/step', async (c) => {
+  const requestId = crypto.randomUUID();
+  const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
+  try {
+    const userId = c.get('user').id;
+    const accessToken = c.get('access_token');
+    const jobId = c.req.param('jobId');
+    const body = await c.req.json().catch(() => ({}));
+    const cursor = typeof body?.cursor === 'string' ? body.cursor : '';
+    const resumeToken = typeof body?.resume_token === 'string' ? body.resume_token : '';
+    const maxPlaylistsPerStep = resolveStepSize(body);
+    const cacheService = new CacheService(c.env.CACHE_KV);
+    const jobKey = buildExportJobKey(jobId, userId);
+    const dataKey = buildExportJobDataKey(jobId, userId);
+    const job = await cacheService.get<ResumableExportJobStatus>(jobKey);
+    const exportDataList = await cacheService.get<any[]>(dataKey);
+
+    if (!job) {
+      return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, 404);
+    }
+
+    try {
+      ExportService.validateStepRequest(job, cursor, resumeToken);
+    } catch (error) {
+      const isConflictError = error instanceof ResumableExportConflictError
+        || ((error as any)?.name === 'ResumableExportConflictError'
+          && typeof (error as any)?.latestCursor === 'string'
+          && typeof (error as any)?.latestResumeToken === 'string');
+      if (isConflictError) {
+        const latestCursor = (error as any).latestCursor;
+        const latestResumeToken = (error as any).latestResumeToken;
+        return c.json({
+          error: {
+            code: 'EXPORT_JOB_CONFLICT',
+            message: error instanceof Error ? error.message : 'Stale cursor or resume token',
+            request_id: requestId,
+            details: {
+              latest_cursor: latestCursor,
+              latest_resume_token: latestResumeToken,
+              trace_id: traceId,
+            },
+          },
+        }, 409);
+      }
+      throw error;
+    }
+
+    const exportService = new ExportService(accessToken);
+    const result = await exportService.runResumableStep(job, Array.isArray(exportDataList) ? exportDataList : [], maxPlaylistsPerStep);
+    await cacheService.set(jobKey, result.job, 3600);
+    await cacheService.set(dataKey, result.exportDataList, 3600);
+
+    return c.json({
+      data: result.job,
+      meta: { timestamp: new Date().toISOString(), request_id: requestId },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return c.json(
+      buildExportErrorPayload('EXPORT_JOB_STEP_FAILED', `Failed to process export job step: ${errorMessage}`, requestId, {
+        trace_id: traceId,
+      }),
+      resolveErrorStatus('EXPORT_JOB_STEP_FAILED', errorMessage),
+    );
+  }
+});
+
+// GET /export/jobs/:jobId/status - Get resumable export job status
+app.get('/jobs/:jobId/status', async (c) => {
+  try {
+    const jobId = c.req.param('jobId');
+    const userId = c.get('user').id;
+    const cacheService = new CacheService(c.env.CACHE_KV);
+    const job = await cacheService.get<ResumableExportJobStatus>(buildExportJobKey(jobId, userId));
+
+    if (!job) {
+      return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, 404);
+    }
+
+    return c.json({ data: job, meta: { timestamp: new Date().toISOString() } });
+  } catch (error) {
+    console.error('Failed to get export job status:', error);
+    return c.json({ error: { code: 'EXPORT_JOB_STATUS_FAILED', message: 'Failed to get export job status' } }, 500);
+  }
+});
+
+// GET /export/jobs/:jobId/download - Download resumable export file
+app.get('/jobs/:jobId/download', async (c) => {
+  const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
+  try {
+    const jobId = c.req.param('jobId');
+    const userId = c.get('user').id;
+    const cacheService = new CacheService(c.env.CACHE_KV);
+    const jobKey = buildExportJobKey(jobId, userId);
+    const exportStatus = await cacheService.get<ResumableExportJobStatus>(jobKey);
+    const exportDataList = await cacheService.get<any[]>(buildExportJobDataKey(jobId, userId));
+
+    if (!exportStatus || !Array.isArray(exportDataList) || exportDataList.length === 0) {
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, 404);
+    }
+
+    if (exportStatus.status !== 'completed') {
+      return c.json({ error: { code: 'EXPORT_NOT_READY', message: 'Export job is not completed yet' } }, 409);
+    }
+
+    const exportService = new ExportService(c.get('access_token'));
+    const fileFormat = exportStatus.file_format === 'csv' ? 'csv' : 'xlsx';
+
+    if (fileFormat === 'csv') {
+      const chunks: string[] = [];
+      for (const item of exportDataList) {
+        const csvBytes = await exportService.generateCsvFile(item);
+        const csvText = new TextDecoder().decode(csvBytes);
+        chunks.push(csvText);
+      }
+      const combined = chunks.join('\n\n');
+      const filename = `playlists_export_${Date.now()}.csv`;
+      return new Response(combined, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      });
+    }
+
+    const xlsxContent = await exportService.generateCombinedExcelFile(exportDataList);
+    const filename = `playlists_export_${Date.now()}.xlsx`;
+    return new Response(xlsxContent, {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return c.json(
+      buildExportErrorPayload(
+        'EXPORT_JOB_DOWNLOAD_FAILED',
+        `Failed to download export job: ${errorMessage}`,
+        crypto.randomUUID(),
+        { trace_id: traceId },
+      ),
+      resolveErrorStatus('EXPORT_JOB_DOWNLOAD_FAILED', errorMessage),
+    );
+  }
+});
 
 // POST /export/playlist/:id - Generate playlist export
 app.post('/playlist/:id', async (c) => {

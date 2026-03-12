@@ -230,6 +230,32 @@ class BackendCacheManager:
             'ttl': ttl
         }
         self._save_cache_file(f'export_{playlist_id}.json', cache_data)
+
+    def get_active_export_job(self) -> Optional[Dict[str, Any]]:
+        """Get cached resumable export job metadata for restart recovery."""
+        return self._load_cache_file('active_export_job.json')
+
+    def cache_active_export_job(self, export_job: Dict[str, Any], ttl: int = 86400) -> None:
+        """Persist active resumable export job metadata."""
+        cache_data = {
+            'data': export_job,
+            'timestamp': time.time(),
+            'ttl': ttl,
+        }
+        self._save_cache_file('active_export_job.json', cache_data)
+
+    def clear_active_export_job(self) -> None:
+        """Remove cached active resumable export job metadata."""
+        cache_path = self.cache_dir / 'active_export_job.json'
+        file_lock = self._get_file_lock(cache_path)
+
+        with file_lock:
+            try:
+                if cache_path.exists():
+                    cache_path.unlink()
+                    logger.debug("Cleared active export job cache")
+            except Exception as e:
+                logger.error(f"Failed to clear active export job cache: {e}")
     
     # Cache utility methods
     def _get_file_lock(self, cache_path: Path):

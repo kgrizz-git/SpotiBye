@@ -1622,6 +1622,10 @@ class MainScreen(Screen):
             total = len(valid_playlists)
             playlist_ids = [p.get('id') for p in valid_playlists if p.get('id')]
             target_path = self._build_backend_output_path(valid_playlists[0], output_path, total > 1)
+            resume_context = {
+                'output_path': target_path,
+                'playlist_names': [p.get('name', '') for p in valid_playlists],
+            }
             self._set_backend_error_context('chunked-combined', f'prepare ({total} playlists)')
 
             Clock.schedule_once(
@@ -1639,10 +1643,12 @@ class MainScreen(Screen):
                 'xlsx',
                 chunk_size=1,
                 report_errors=False,
+                resume_context=resume_context,
             )
             if not export_info:
                 # Fallback: combined export can exceed Worker subrequest limits for larger selections.
                 # Degrade gracefully to sequential per-playlist exports so the user still gets files.
+                self.backend_adapter.clear_active_export_job()
                 self._set_backend_error_context('sequential-fallback', 'start')
                 fallback_result = self._backend_export_fallback_sequential(valid_playlists, output_path)
                 if fallback_result.get('success_count', 0) > 0 and fallback_result.get('failed_count', 0) == 0:
@@ -1671,6 +1677,7 @@ class MainScreen(Screen):
             # Large combined workbook generation in one Worker invocation often exceeds CPU limits.
             total_tracks = int(export_info.get('track_count', 0)) if isinstance(export_info, dict) else 0
             if total_tracks >= 3500:
+                self.backend_adapter.clear_active_export_job(export_id or None)
                 self._set_backend_error_context('sequential-fallback', f'preemptive large-download-avoidance tracks={total_tracks}')
                 fallback_result = self._backend_export_fallback_sequential(valid_playlists, output_path)
                 s = fallback_result.get('success_count', 0)
@@ -1693,6 +1700,7 @@ class MainScreen(Screen):
 
             success = self.backend_adapter.download_batch_export(export_id, target_path)
             if not success:
+                self.backend_adapter.clear_active_export_job(export_id or None)
                 self._set_backend_error_context('sequential-fallback', 'start-after-download-failure')
                 # Cool down briefly before fallback to avoid immediate re-hit of a degraded backend.
                 time.sleep(6.0)
@@ -1975,6 +1983,8 @@ class MainScreen(Screen):
         global current_export_job
         if current_export_job:
             current_export_job['cancelled'] = True
+            if self.backend_adapter:
+                self.backend_adapter.clear_active_export_job()
             self.cancel_btn.disabled = True
             self.cancel_btn.text = 'Cancelling...'
             self.status_label.text = 'Cancelling export...'
