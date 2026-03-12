@@ -93,6 +93,23 @@ function buildExportErrorPayload(code: string, message: string, requestId: strin
   };
 }
 
+// Shared helper: build the final download bytes for a completed export (xlsx or csv).
+async function generateFileBytes(
+  exportService: ExportService,
+  exportDataList: any[],
+  fileFormat: 'xlsx' | 'csv',
+): Promise<ArrayBuffer> {
+  if (fileFormat === 'csv') {
+    const chunks: string[] = [];
+    for (const item of exportDataList) {
+      const csvBytes = await exportService.generateCsvFile(item);
+      chunks.push(new TextDecoder().decode(csvBytes));
+    }
+    return new TextEncoder().encode(chunks.join('\n\n')).buffer as ArrayBuffer;
+  }
+  return exportService.generateCombinedExcelFile(exportDataList);
+}
+
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
 
@@ -195,6 +212,21 @@ app.post('/jobs/:jobId/step', async (c) => {
     await cacheService.set(jobKey, result.job, 3600);
     await cacheService.set(dataKey, result.exportDataList, 3600);
 
+    // Pre-build file bytes on completion so the download endpoint only needs a KV read.
+    if (result.job.status === 'completed') {
+      const completedFormat = (result.job.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
+      try {
+        const fileBytes = await generateFileBytes(exportService, result.exportDataList, completedFormat);
+        await cacheService.setBuffer(`${jobKey}:file`, fileBytes, 3600);
+        console.info('[export-job] file cached', { jobId, fileFormat: completedFormat });
+      } catch (genErr) {
+        console.warn('[export-job] file pre-build failed; download will regenerate on demand', {
+          jobId,
+          error: genErr instanceof Error ? genErr.message : String(genErr),
+        });
+      }
+    }
+
     return c.json({
       data: result.job,
       meta: { timestamp: new Date().toISOString(), request_id: requestId },
@@ -238,43 +270,35 @@ app.get('/jobs/:jobId/download', async (c) => {
     const cacheService = new CacheService(c.env.CACHE_KV);
     const jobKey = buildExportJobKey(jobId, userId);
     const exportStatus = await cacheService.get<ResumableExportJobStatus>(jobKey);
-    const exportDataList = await cacheService.get<any[]>(buildExportJobDataKey(jobId, userId));
-
-    if (!exportStatus || !Array.isArray(exportDataList) || exportDataList.length === 0) {
+    if (!exportStatus) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, 404);
     }
-
     if (exportStatus.status !== 'completed') {
       return c.json({ error: { code: 'EXPORT_NOT_READY', message: 'Export job is not completed yet' } }, 409);
     }
+    const fileFormat = (exportStatus.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
+    const [dlContentType, dlExt] = fileFormat === 'csv'
+      ? ['text/csv; charset=utf-8', 'csv']
+      : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
+    const dlFilename = `playlists_export_${Date.now()}.${dlExt}`;
 
-    const exportService = new ExportService(c.get('access_token'));
-    const fileFormat = exportStatus.file_format === 'csv' ? 'csv' : 'xlsx';
-
-    if (fileFormat === 'csv') {
-      const chunks: string[] = [];
-      for (const item of exportDataList) {
-        const csvBytes = await exportService.generateCsvFile(item);
-        const csvText = new TextDecoder().decode(csvBytes);
-        chunks.push(csvText);
-      }
-      const combined = chunks.join('\n\n');
-      const filename = `playlists_export_${Date.now()}.csv`;
-      return new Response(combined, {
-        headers: {
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${filename}"`,
-        },
+    // Serve pre-built bytes when available — zero CPU, just a KV read.
+    const prebuiltBytes = await cacheService.getBuffer(`${jobKey}:file`);
+    if (prebuiltBytes) {
+      return new Response(prebuiltBytes, {
+        headers: { 'Content-Type': dlContentType, 'Content-Disposition': `attachment; filename="${dlFilename}"` },
       });
     }
 
-    const xlsxContent = await exportService.generateCombinedExcelFile(exportDataList);
-    const filename = `playlists_export_${Date.now()}.xlsx`;
-    return new Response(xlsxContent, {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
+    // Fallback: regenerate from cached track data (backward-compat for jobs without a pre-built file).
+    const exportDataList = await cacheService.get<any[]>(buildExportJobDataKey(jobId, userId));
+    if (!Array.isArray(exportDataList) || exportDataList.length === 0) {
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, 404);
+    }
+    const exportService = new ExportService(c.get('access_token'));
+    const fallbackBytes = await generateFileBytes(exportService, exportDataList, fileFormat);
+    return new Response(fallbackBytes, {
+      headers: { 'Content-Type': dlContentType, 'Content-Disposition': `attachment; filename="${dlFilename}"` },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -349,6 +373,18 @@ app.post('/playlist/:id', async (c) => {
       
       await cacheService.set(exportKey, completedStatus, 3600);
       await cacheService.set(`${exportKey}:data`, exportData, 3600);
+
+      // Pre-build file bytes so the download endpoint only needs a KV read (avoids ExcelJS CPU spike).
+      const singleFormat = requestedFormat as 'xlsx' | 'csv';
+      try {
+        const fileBytes = await generateFileBytes(exportService, [exportData], singleFormat);
+        await cacheService.setBuffer(`${exportKey}:file`, fileBytes, 3600);
+      } catch (genErr) {
+        console.warn('[export] file pre-build failed; download will regenerate', {
+          playlistId,
+          error: genErr instanceof Error ? genErr.message : String(genErr),
+        });
+      }
 
       console.info('[export] completed', {
         requestId,
@@ -465,6 +501,17 @@ app.post('/playlists', async (c) => {
 
     await cacheService.set(batchKey, status, 3600);
     await cacheService.set(`${batchKey}:data`, exportDataList, 3600);
+
+    const batchFormat = requestedFormat as 'xlsx' | 'csv';
+    try {
+      const fileBytes = await generateFileBytes(exportService, exportDataList, batchFormat);
+      await cacheService.setBuffer(`${batchKey}:file`, fileBytes, 3600);
+    } catch (genErr) {
+      console.warn('[export-batch] file pre-build failed; download will regenerate', {
+        jobId,
+        error: genErr instanceof Error ? genErr.message : String(genErr),
+      });
+    }
 
     console.info('[export-batch] completed', {
       requestId,
@@ -590,6 +637,18 @@ app.post('/playlists/chunk', async (c) => {
         playlistCount: exportDataList.length,
         totalTracks: status.track_count,
       });
+      // Pre-build file bytes so the download handler only needs a KV read.
+      const chunkFormat = requestedFormat as 'xlsx' | 'csv';
+      try {
+        const fileBytes = await generateFileBytes(exportService, exportDataList, chunkFormat);
+        await cacheService.setBuffer(`${batchKey}:file`, fileBytes, 3600);
+        console.info('[export-batch-chunk] file cached', { jobId, fileFormat: chunkFormat });
+      } catch (genErr) {
+        console.warn('[export-batch-chunk] file pre-build failed; download will regenerate', {
+          jobId,
+          error: genErr instanceof Error ? genErr.message : String(genErr),
+        });
+      }
     }
 
     await cacheService.set(batchKey, status, 3600);
@@ -643,39 +702,32 @@ app.get('/playlists/:jobId/download', async (c) => {
 
     const batchKey = `export:batch:${jobId}:${userId}`;
     const exportStatus = await cacheService.get(batchKey);
-    const exportDataList = await cacheService.get(`${batchKey}:data`);
-
-    if (!exportStatus || !exportDataList || !Array.isArray(exportDataList) || exportDataList.length === 0) {
+    if (!exportStatus) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, 404);
     }
+    const batchFileFormat = (exportStatus.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
+    const [bContentType, bExt] = batchFileFormat === 'csv'
+      ? ['text/csv; charset=utf-8', 'csv']
+      : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
+    const bFilename = `playlists_export_${Date.now()}.${bExt}`;
 
-    const exportService = new ExportService(c.get('access_token'));
-    const fileFormat = exportStatus.file_format === 'csv' ? 'csv' : 'xlsx';
-
-    if (fileFormat === 'csv') {
-      const chunks: string[] = [];
-      for (const item of exportDataList) {
-        const csvBytes = await exportService.generateCsvFile(item);
-        const csvText = new TextDecoder().decode(csvBytes);
-        chunks.push(csvText);
-      }
-      const combined = chunks.join('\n\n');
-      const filename = `playlists_export_${Date.now()}.csv`;
-      return new Response(combined, {
-        headers: {
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${filename}"`,
-        },
+    // Serve pre-built bytes when available.
+    const prebuiltBytes = await cacheService.getBuffer(`${batchKey}:file`);
+    if (prebuiltBytes) {
+      return new Response(prebuiltBytes, {
+        headers: { 'Content-Type': bContentType, 'Content-Disposition': `attachment; filename="${bFilename}"` },
       });
     }
 
-    const xlsxContent = await exportService.generateCombinedExcelFile(exportDataList);
-    const filename = `playlists_export_${Date.now()}.xlsx`;
-    return new Response(xlsxContent, {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
+    // Fallback: regenerate from cached track data.
+    const exportDataList = await cacheService.get(`${batchKey}:data`);
+    if (!exportDataList || !Array.isArray(exportDataList) || exportDataList.length === 0) {
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, 404);
+    }
+    const exportService = new ExportService(c.get('access_token'));
+    const fallbackBytes = await generateFileBytes(exportService, exportDataList, batchFileFormat);
+    return new Response(fallbackBytes, {
+      headers: { 'Content-Type': bContentType, 'Content-Disposition': `attachment; filename="${bFilename}"` },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -721,34 +773,37 @@ app.get('/playlist/:id/download', async (c) => {
     const cacheService = new CacheService(c.env.CACHE_KV);
     
     const exportKey = `export:${playlistId}:${userId}`;
-    const exportData = await cacheService.get(`${exportKey}:data`);
-    const exportStatus = await cacheService.get(exportKey);
-    
-    if (!exportData) {
+    const exportStatus = await cacheService.get<any>(exportKey);
+    let exportData = await cacheService.get<any>(`${exportKey}:data`);
+    // Backward compatibility: older payloads stored export data directly under exportKey.
+    if (!exportData && exportStatus && exportStatus.playlist && Array.isArray(exportStatus.tracks)) {
+      exportData = exportStatus;
+    }
+    if (!exportStatus && !exportData) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, 404);
     }
-    
-    const exportService = new ExportService(c.get('access_token'));
-    const fileFormat = exportStatus && exportStatus.file_format === 'csv' ? 'csv' : 'xlsx';
+    const singleFileFormat = (exportStatus?.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
+    const [spContentType, spExt] = singleFileFormat === 'csv'
+      ? ['text/csv; charset=utf-8', 'csv']
+      : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
+    const spFilename = `playlist_${playlistId}_export_${Date.now()}.${spExt}`;
 
-    if (fileFormat === 'csv') {
-      const csvContent = await exportService.generateCsvFile(exportData);
-      const filename = `playlist_${playlistId}_export_${Date.now()}.csv`;
-      return new Response(csvContent, {
-        headers: {
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${filename}"`,
-        },
+    // Serve pre-built bytes (written during POST) — zero CPU re-generation.
+    const prebuiltBytes = await cacheService.getBuffer(`${exportKey}:file`);
+    if (prebuiltBytes) {
+      return new Response(prebuiltBytes, {
+        headers: { 'Content-Type': spContentType, 'Content-Disposition': `attachment; filename="${spFilename}"` },
       });
     }
 
-    const xlsxContent = await exportService.generateExcelFile(exportData);
-    const filename = `playlist_${playlistId}_export_${Date.now()}.xlsx`;
-    return new Response(xlsxContent, {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
+    // Fallback: regenerate from cached track data.
+    if (!exportData) {
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, 404);
+    }
+    const exportService = new ExportService(c.get('access_token'));
+    const fallbackBytes = await generateFileBytes(exportService, [exportData], singleFileFormat);
+    return new Response(fallbackBytes, {
+      headers: { 'Content-Type': spContentType, 'Content-Disposition': `attachment; filename="${spFilename}"` },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -775,7 +830,8 @@ app.delete('/playlist/:id', async (c) => {
     
     await Promise.all([
       cacheService.delete(exportKey),
-      cacheService.delete(`${exportKey}:data`)
+      cacheService.delete(`${exportKey}:data`),
+      cacheService.delete(`${exportKey}:file`)
     ]);
     
     return c.json({ data: { message: 'Export deleted successfully' } });

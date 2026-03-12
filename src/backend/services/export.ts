@@ -609,13 +609,14 @@ export class ExportService {
       }
 
       if (rowNumber > 12) {
-        sheet.autoFilter = {
-          from: { row: 11, column: 1 },
-          to: { row: rowNumber - 1, column: headers.length },
-        };
-
-        sheet.addTable({
-          name: `tbl_${sheetName.replace(/[^A-Za-z0-9_]/g, '').slice(0, 20)}_${Math.floor(Math.random() * 1000)}`,
+        // Compute last column letter (headers.length <= 26 covers all our column sets).
+        const lastColLetter = String.fromCharCode(64 + headers.length);
+        const fullRef = `A11:${lastColLetter}${rowNumber - 1}`;
+        const tableName = `tbl_${sheetName.replace(/[^A-Za-z0-9_]/g, '').slice(0, 20)}_${Math.floor(Math.random() * 1000)}`;
+        // Pass rows:[] so ExcelJS's store() writes no cells (they are already populated above).
+        // Then patch tableRef / autoFilterRef so the XML declares the full data range.
+        const tbl = sheet.addTable({
+          name: tableName,
           ref: 'A11',
           headerRow: true,
           style: {
@@ -623,8 +624,10 @@ export class ExportService {
             showRowStripes: true,
           },
           columns: headers.map((header) => ({ name: header })),
-          rows: exportData.tracks.map((track) => headers.map((header) => (track as any)[header] ?? '')),
+          rows: [],
         });
+        (tbl as any).table.tableRef = fullRef;
+        (tbl as any).table.autoFilterRef = fullRef;
       }
 
       for (let r = 1; r <= rowNumber; r += 1) {
@@ -675,14 +678,12 @@ export class ExportService {
       return Buffer.from(bytes).toString('base64');
     }
 
-    let binary = '';
-    const chunkSize = 0x8000;
     const byteArray = new Uint8Array(bytes);
-    for (let i = 0; i < byteArray.length; i += chunkSize) {
-      const chunk = byteArray.subarray(i, i + chunkSize);
-      binary += String.fromCharCode(...chunk);
+    const chars = new Array<string>(byteArray.length);
+    for (let i = 0; i < byteArray.length; i++) {
+      chars[i] = String.fromCharCode(byteArray[i]);
     }
-    return btoa(binary);
+    return btoa(chars.join(''));
   }
   
   private formatDuration(ms: number): string {

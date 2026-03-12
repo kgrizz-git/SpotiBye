@@ -67,4 +67,24 @@ export class CacheService {
     const promises = entries.map(entry => this.set(entry.key, entry.value, entry.ttlSeconds));
     return Promise.all(promises);
   }
+
+  async getBuffer(key: string): Promise<ArrayBuffer | null> {
+    try {
+      return await this.kv.get(key, { type: 'arrayBuffer' });
+    } catch (error) {
+      console.error('Cache getBuffer error:', error);
+      return null;
+    }
+  }
+
+  async setBuffer(key: string, value: ArrayBuffer, ttlSeconds?: number): Promise<boolean> {
+    try {
+      const options = ttlSeconds ? { expirationTtl: ttlSeconds } : undefined;
+      await this.kv.put(key, value, options);
+      return true;
+    } catch (error) {
+      console.error('Cache setBuffer error:', error);
+      return false;
+    }
+  }
 }
