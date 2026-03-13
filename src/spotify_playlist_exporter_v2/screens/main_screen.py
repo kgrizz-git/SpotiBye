@@ -123,6 +123,7 @@ class MainScreen(Screen):
         self._backend_error_step = ''
         self.trace_mode_enabled = os.getenv('SPOTIBYE_TRACE_MODE', '0').lower() in {'1', 'true', 'yes', 'on'}
         self._current_trace_id: str = ''
+        self._backend_resume_popup: Optional[Popup] = None
         self.build_ui()
 
     def _set_backend_error_context(self, phase: str, step: str = '') -> None:
@@ -1123,9 +1124,24 @@ class MainScreen(Screen):
             f"Step: {step}\n"
             f"Error: {message}"
         )
+        resumable_export = self._get_recoverable_backend_export_context()
 
         def _open_popup(_dt):
+            if self._backend_resume_popup:
+                self._backend_resume_popup.dismiss()
+
             content = BoxLayout(orientation='vertical', spacing=dp(8), padding=dp(10))
+
+            if resumable_export:
+                resume_summary = Label(
+                    text=resumable_export['summary'],
+                    size_hint_y=None,
+                    height=dp(72),
+                    halign='center',
+                    valign='middle',
+                    text_size=(dp(420), None),
+                )
+                content.add_widget(resume_summary)
 
             details_input = TextInput(
                 text=details,
@@ -1137,6 +1153,14 @@ class MainScreen(Screen):
                 foreground_color=(1, 1, 1, 1),
             )
             content.add_widget(details_input)
+
+            if resumable_export:
+                action_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(42), spacing=dp(8))
+                resume_btn = Button(text='Resume Export', background_color=[0.2, 0.6, 0.35, 1])
+                discard_btn = Button(text='Discard Resume', background_color=[0.55, 0.35, 0.2, 1])
+                action_row.add_widget(resume_btn)
+                action_row.add_widget(discard_btn)
+                content.add_widget(action_row)
 
             button_row = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(42), spacing=dp(8))
             copy_btn = Button(text='Copy Error Details', background_color=[0.2, 0.55, 0.85, 1])
@@ -1151,16 +1175,80 @@ class MainScreen(Screen):
                 size_hint=(0.86, 0.58),
                 auto_dismiss=True,
             )
+            self._backend_resume_popup = popup
 
             def _copy_details(_instance):
                 Clipboard.copy(details)
                 self.status_label.text = 'Backend error details copied to clipboard'
 
+            def _clear_resume_job(_instance):
+                if self.backend_adapter:
+                    self.backend_adapter.clear_active_export_job()
+                self.status_label.text = 'Discarded resumable export state'
+                popup.dismiss()
+
+            def _resume_export(_instance):
+                popup.dismiss()
+                self.begin_backend_export(
+                    resumable_export['playlists'],
+                    resumable_export['output_path'],
+                    resume_saved_job=True,
+                )
+
             copy_btn.bind(on_press=_copy_details)
             close_btn.bind(on_press=popup.dismiss)
+            if resumable_export:
+                resume_btn.bind(on_press=_resume_export)
+                discard_btn.bind(on_press=_clear_resume_job)
+            popup.bind(on_dismiss=lambda *_args: setattr(self, '_backend_resume_popup', None))
             popup.open()
 
         Clock.schedule_once(_open_popup, 0)
+
+    def _get_recoverable_backend_export_context(self) -> Optional[Dict[str, Any]]:
+        """Return cached resumable export details when the current failure can be resumed."""
+        if not self.backend_adapter:
+            return None
+
+        if self._backend_error_phase not in {'chunked-combined', 'sequential-fallback', 'failed'}:
+            return None
+
+        cached_job = self.backend_adapter.get_active_export_job()
+        if not isinstance(cached_job, dict):
+            return None
+
+        playlist_ids = cached_job.get('playlist_ids') or []
+        playlist_names = cached_job.get('playlist_names') or []
+        output_path = str(cached_job.get('output_path') or '')
+        job_id = str(cached_job.get('job_id') or '')
+        current_cursor = str(cached_job.get('current_cursor') or '')
+        current_resume_token = str(cached_job.get('current_resume_token') or '')
+        if not isinstance(playlist_ids, list) or not playlist_ids or not output_path or not job_id:
+            return None
+
+        if not current_cursor or not current_resume_token:
+            return None
+
+        playlists = []
+        for index, playlist_id in enumerate(playlist_ids):
+            playlist_name = playlist_names[index] if isinstance(playlist_names, list) and index < len(playlist_names) else playlist_id
+            playlists.append({'id': playlist_id, 'name': playlist_name})
+
+        processed = int(cached_job.get('processed_count', 0) or 0)
+        total = int(cached_job.get('playlist_count', len(playlists)) or len(playlists))
+        phase = str(cached_job.get('phase') or 'collect')
+        summary = (
+            f"A resumable export is still available.\n"
+            f"Progress: {processed}/{total} playlists\n"
+            f"Phase: {phase}\n"
+            f"Output: {os.path.basename(output_path)}"
+        )
+
+        return {
+            'playlists': playlists,
+            'output_path': output_path,
+            'summary': summary,
+        }
 
     @mainthread
     def _on_backend_progress(self, status: str) -> None:
@@ -1649,10 +1737,10 @@ class MainScreen(Screen):
             if not export_info:
                 # Fallback: combined export can exceed Worker subrequest limits for larger selections.
                 # Degrade gracefully to sequential per-playlist exports so the user still gets files.
-                self.backend_adapter.clear_active_export_job()
                 self._set_backend_error_context('sequential-fallback', 'start')
                 fallback_result = self._backend_export_fallback_sequential(valid_playlists, output_path)
                 if fallback_result.get('success_count', 0) > 0 and fallback_result.get('failed_count', 0) == 0:
+                    self.backend_adapter.clear_active_export_job()
                     Clock.schedule_once(lambda _, c=total: setattr(self.status_label, 'text', f'Export complete ({c} playlist(s), sequential fallback)'), 0)
                     Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 100), 0)
                 elif fallback_result.get('success_count', 0) > 0:
@@ -1699,14 +1787,14 @@ class MainScreen(Screen):
             )
             Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 80), 0)
 
-            success = self.backend_adapter.download_batch_export(export_id, target_path)
+            success = self.backend_adapter.download_batch_export(export_id, target_path, report_errors=False)
             if not success:
-                self.backend_adapter.clear_active_export_job(export_id or None)
                 self._set_backend_error_context('sequential-fallback', 'start-after-download-failure')
                 # Cool down briefly before fallback to avoid immediate re-hit of a degraded backend.
                 time.sleep(6.0)
                 fallback_result = self._backend_export_fallback_sequential(valid_playlists, output_path)
                 if fallback_result.get('success_count', 0) > 0 and fallback_result.get('failed_count', 0) == 0:
+                    self.backend_adapter.clear_active_export_job(export_id or None)
                     Clock.schedule_once(lambda _, c=total: setattr(self.status_label, 'text', f'Export complete ({c} playlist(s), sequential fallback)'), 0)
                     Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 100), 0)
                 elif fallback_result.get('success_count', 0) > 0:
@@ -1722,6 +1810,7 @@ class MainScreen(Screen):
                         lambda _: setattr(self.status_label, 'text', 'Backend combined export download failed'),
                         0,
                     )
+                    self._show_backend_error_popup('Combined export download failed after retries and sequential fallback')
                 Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
                 Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
                 return
@@ -1735,6 +1824,8 @@ class MainScreen(Screen):
         except Exception as exc:
             logger.error("Backend export failed: %s", exc)
             Clock.schedule_once(lambda _: setattr(self.status_label, 'text', f'Backend export failed: {exc}'), 0)
+            self._set_backend_error_context('failed', 'backend-export-worker')
+            self._show_backend_error_popup(f'Backend export failed: {exc}')
             Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
             Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
 

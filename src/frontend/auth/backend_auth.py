@@ -16,6 +16,12 @@ from ..config.backend_config import OAUTH_CALLBACK_PORT
 logger = logging.getLogger(__name__)
 
 
+class ReusableHTTPServer(HTTPServer):
+    """HTTP server configured for quick restart on the same callback port."""
+
+    allow_reuse_address = True
+
+
 class CallbackHandler(BaseHTTPRequestHandler):
     """HTTP server handler for OAuth callback."""
     
@@ -45,7 +51,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
                 <head><title>Authentication Successful</title></head>
                 <body>
                     <h1>Authentication Successful!</h1>
-                    <p>You can now close this window and return to the application.</p>
+                    <p>You can return to the app now. The active session continues automatically.</p>
                     <script>
                         setTimeout(function() {
                             window.close();
@@ -204,6 +210,9 @@ class BackendAuthenticator:
     def _start_callback_server(self) -> bool:
         """Start local HTTP server to handle OAuth callback."""
         try:
+            # Ensure a stale server from a previous login attempt is fully released.
+            self._stop_callback_server()
+
             # Container to store authorization code
             self.auth_result_container: Dict[str, str] = {}
             
@@ -211,7 +220,7 @@ class BackendAuthenticator:
             def handler(*args, **kwargs):
                 return CallbackHandler(self.auth_result_container, *args, **kwargs)
             
-            self.http_server = HTTPServer((self.callback_host, self.callback_port), handler)
+            self.http_server = ReusableHTTPServer((self.callback_host, self.callback_port), handler)
             
             # Start server in separate thread
             self.server_thread = threading.Thread(target=self.http_server.serve_forever)
@@ -267,7 +276,7 @@ class BackendAuthenticator:
                 if 'error' in self.auth_result_container:
                     return {'error': self.auth_result_container['error']}
             
-            time.sleep(1)
+            time.sleep(0.2)
         
         logger.warning("OAuth callback timeout")
         return None

@@ -677,7 +677,7 @@ class BackendMainScreenAdapter:
                 self.error_callback(f"Resumable export failed: {str(e)}")
             return None
 
-    def download_batch_export(self, export_id: str, save_path: str) -> bool:
+    def download_batch_export(self, export_id: str, save_path: str, report_errors: bool = True) -> bool:
         """Download combined export file."""
         try:
             if self.progress_callback:
@@ -695,14 +695,18 @@ class BackendMainScreenAdapter:
             return True
         except BackendAPIError as e:
             error_msg = self._format_backend_api_error(e, 'Combined export download failed')
-            if self.error_callback:
+            if report_errors and self.error_callback:
                 self.error_callback(error_msg)
             return False
         except Exception as e:
             logger.error(f"Error downloading combined export: {e}")
-            if self.error_callback:
+            if report_errors and self.error_callback:
                 self.error_callback(f"Combined download failed: {str(e)}")
             return False
+
+    def get_active_export_job(self) -> Optional[Dict[str, Any]]:
+        """Return cached resumable export job metadata, if any."""
+        return self.cache_manager.get_active_export_job()
 
     def _download_batch_export_any(self, export_id: str) -> bytes:
         """Download from resumable job endpoint first, then legacy batch endpoint."""
