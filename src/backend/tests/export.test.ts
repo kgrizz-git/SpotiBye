@@ -10,6 +10,16 @@ vi.mock('../services/export', () => ({
       return JSON.stringify({ next_playlist_index: nextPlaylistIndex, phase });
     }
 
+    static createAssemblyState() {
+      return {
+        summary_headers: ['Playlist Name', 'Owner', 'Track Count', 'Duration'],
+        summary_rows: [],
+        worksheets: [],
+        csv_chunks: [],
+        next_assemble_index: 0,
+      };
+    }
+
     static createResumeToken() {
       return `token-${Math.random().toString(16).slice(2)}`;
     }
@@ -31,6 +41,7 @@ vi.mock('../services/export', () => ({
         current_cursor: this.encodeCursor(0, 'collect'),
         current_resume_token: this.createResumeToken(),
         next_playlist_index: 0,
+        assemble_index: 0,
         continuation_required: true,
         progress: 0,
         trace_id: options.traceId,
@@ -73,7 +84,7 @@ vi.mock('../services/export', () => ({
       };
     }
 
-    async runResumableStep(job: any, exportDataList: any[], maxPlaylistsPerStep = 1) {
+    async runResumableStep(job: any, exportDataList: any[], assemblyState: any, maxPlaylistsPerStep = 1) {
       const startIndex = job.next_playlist_index || 0;
       const endIndex = Math.min(startIndex + maxPlaylistsPerStep, job.playlist_ids.length);
 
@@ -105,7 +116,7 @@ vi.mock('../services/export', () => ({
         job.current_resume_token = (this.constructor as any).createResumeToken();
       }
 
-      return { job, exportDataList };
+      return { job, exportDataList, assemblyState };
     }
 
     async generateExcelFile() {
@@ -114,6 +125,14 @@ vi.mock('../services/export', () => ({
 
     async generateCombinedExcelFile() {
       return new Uint8Array([1, 2, 3, 4, 5]).buffer;
+    }
+
+    async generateCombinedExcelFileFromAssembly() {
+      return new Uint8Array([1, 2, 3, 4, 5]).buffer;
+    }
+
+    async generateCombinedCsvFromAssembly() {
+      return new TextEncoder().encode('a,b\n1,2').buffer;
     }
 
     async generateCsvFile() {

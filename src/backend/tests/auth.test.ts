@@ -171,7 +171,9 @@ describe('Auth Routes', () => {
       const data = await response.json() as any;
 
       expect(response.status).toBe(200);
-      expect(data.data).toHaveProperty('access_token', 'new-access-token');
+      expect(data.data).toHaveProperty('token', 'test-jwt-token');
+      expect(data.data).toHaveProperty('access_token', 'test-jwt-token');
+      expect(data.data).toHaveProperty('spotify_access_expires_in', 3600);
     });
 
     it('returns 404 when session is missing', async () => {

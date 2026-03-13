@@ -6,6 +6,9 @@ export interface AuthTokens {
   scope: string;
 }
 
+export const SPOTIFY_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+export const APP_JWT_TTL_SECONDS = SPOTIFY_SESSION_TTL_SECONDS;
+
 export interface JWTPayload {
   sub: string;
   email?: string;

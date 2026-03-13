@@ -205,7 +205,7 @@ class BackendClient:
     def refresh_token(self) -> Dict[str, Any]:
         """Refresh JWT token."""
         response = self._make_request('POST', '/auth/spotify/refresh')
-        token = response.get('access_token')
+        token = response.get('token') or response.get('access_token')
         if not token:
             raise BackendAPIError("No refreshed token received from backend")
         

@@ -1,5 +1,6 @@
 import { SpotifyService } from './spotify';
 import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 
 interface ExportTrack {
   Artist: string;
@@ -48,6 +49,28 @@ export interface ResumablePlaylistProgress {
   done: boolean;
 }
 
+type ExportCellValue = string | number;
+
+export interface WorksheetAssemblyData {
+  sheet_name: string;
+  playlist_name: string;
+  playlist_owner: string;
+  playlist_followers: number;
+  playlist_description: string;
+  playlist_url: string;
+  total_duration: string;
+  headers: string[];
+  rows: ExportCellValue[][];
+}
+
+export interface ResumableExportAssemblyState {
+  summary_headers: string[];
+  summary_rows: ExportCellValue[][];
+  worksheets: WorksheetAssemblyData[];
+  csv_chunks: string[];
+  next_assemble_index: number;
+}
+
 export interface ResumableExportJobState {
   job_id: string;
   user_id: string;
@@ -66,6 +89,7 @@ export interface ResumableExportJobState {
   current_resume_token: string;
   next_playlist_index: number;
   current_track_offset: number;
+  assemble_index: number;
   track_page_size: number;
   playlist_progress: Record<string, ResumablePlaylistProgress>;
   continuation_required: boolean;
@@ -86,6 +110,7 @@ export interface ResumableExportJobState {
 export interface ResumableExportStepResult {
   job: ResumableExportJobState;
   exportDataList: ExportData[];
+  assemblyState: ResumableExportAssemblyState;
 }
 
 export class ResumableExportConflictError extends Error {
@@ -107,13 +132,28 @@ export class ExportService {
     this.accessToken = accessToken;
   }
 
-  static encodeCursor(nextPlaylistIndex: number, phase: ResumableExportJobPhase = 'collect', nextTrackOffset = 0): string {
-    return JSON.stringify({ next_playlist_index: nextPlaylistIndex, next_track_offset: nextTrackOffset, phase });
+  static encodeCursor(nextPlaylistIndex: number, phase: ResumableExportJobPhase = 'collect', nextTrackOffset = 0, nextAssembleIndex = 0): string {
+    return JSON.stringify({
+      next_playlist_index: nextPlaylistIndex,
+      next_track_offset: nextTrackOffset,
+      next_assemble_index: nextAssembleIndex,
+      phase,
+    });
   }
 
-  static decodeCursor(cursor: string | undefined, fallbackIndex = 0, fallbackTrackOffset = 0): { nextPlaylistIndex: number; nextTrackOffset: number; phase: ResumableExportJobPhase } {
+  static decodeCursor(
+    cursor: string | undefined,
+    fallbackIndex = 0,
+    fallbackTrackOffset = 0,
+    fallbackAssembleIndex = 0,
+  ): { nextPlaylistIndex: number; nextTrackOffset: number; nextAssembleIndex: number; phase: ResumableExportJobPhase } {
     if (!cursor) {
-      return { nextPlaylistIndex: fallbackIndex, nextTrackOffset: fallbackTrackOffset, phase: 'collect' };
+      return {
+        nextPlaylistIndex: fallbackIndex,
+        nextTrackOffset: fallbackTrackOffset,
+        nextAssembleIndex: fallbackAssembleIndex,
+        phase: 'collect',
+      };
     }
 
     try {
@@ -124,11 +164,29 @@ export class ExportService {
       const nextTrackOffset = Number.isInteger(parsed?.next_track_offset) && parsed.next_track_offset >= 0
         ? parsed.next_track_offset
         : fallbackTrackOffset;
+      const nextAssembleIndex = Number.isInteger(parsed?.next_assemble_index) && parsed.next_assemble_index >= 0
+        ? parsed.next_assemble_index
+        : fallbackAssembleIndex;
       const phase = parsed?.phase === 'assemble' ? 'assemble' : 'collect';
-      return { nextPlaylistIndex, nextTrackOffset, phase };
+      return { nextPlaylistIndex, nextTrackOffset, nextAssembleIndex, phase };
     } catch {
-      return { nextPlaylistIndex: fallbackIndex, nextTrackOffset: fallbackTrackOffset, phase: 'collect' };
+      return {
+        nextPlaylistIndex: fallbackIndex,
+        nextTrackOffset: fallbackTrackOffset,
+        nextAssembleIndex: fallbackAssembleIndex,
+        phase: 'collect',
+      };
     }
+  }
+
+  static createAssemblyState(): ResumableExportAssemblyState {
+    return {
+      summary_headers: ['Playlist Name', 'Owner', 'Track Count', 'Duration'],
+      summary_rows: [],
+      worksheets: [],
+      csv_chunks: [],
+      next_assemble_index: 0,
+    };
   }
 
   static createResumeToken(): string {
@@ -161,6 +219,7 @@ export class ExportService {
       current_resume_token: ExportService.createResumeToken(),
       next_playlist_index: 0,
       current_track_offset: 0,
+      assemble_index: 0,
       track_page_size: 100,
       playlist_progress: {},
       continuation_required: options.playlistIds.length > 0,
@@ -186,17 +245,24 @@ export class ExportService {
   async runResumableStep(
     job: ResumableExportJobState,
     exportDataList: ExportData[],
+    assemblyState: ResumableExportAssemblyState,
     maxPlaylistsPerStep = 1,
   ): Promise<ResumableExportStepResult> {
     if (job.status === 'completed') {
-      return { job, exportDataList };
+      return { job, exportDataList, assemblyState };
     }
 
     const decodedCursor = ExportService.decodeCursor(
       job.current_cursor,
       job.next_playlist_index,
       job.current_track_offset,
+      job.assemble_index,
     );
+
+    if (job.phase === 'assemble' || decodedCursor.phase === 'assemble' || job.status === 'assembling') {
+      return this.runAssemblePhaseStep(job, exportDataList, assemblyState, maxPlaylistsPerStep, decodedCursor.nextAssembleIndex);
+    }
+
     let nextPlaylistIndex = decodedCursor.nextPlaylistIndex;
     let nextTrackOffset = decodedCursor.nextTrackOffset;
     let remainingSlices = Math.max(maxPlaylistsPerStep, 1);
@@ -256,28 +322,78 @@ export class ExportService {
 
     if (job.next_playlist_index >= job.playlist_ids.length) {
       job.phase = 'assemble';
-      job.status = 'completed';
-      job.progress = 100;
-      job.continuation_required = false;
-      job.completed_at = new Date().toISOString();
-      job.file_url = `/export/jobs/${job.job_id}/download`;
-      job.file_size = JSON.stringify(exportDataList).length;
-      job.result = {
-        download_id: job.job_id,
-      };
-      job.current_cursor = ExportService.encodeCursor(job.next_playlist_index, 'assemble', 0);
+      job.status = 'assembling';
+      job.assemble_index = assemblyState.next_assemble_index || 0;
+      job.progress = this.calculateAssembleProgress(job, exportDataList.length);
+      job.continuation_required = exportDataList.length > 0;
+      job.current_cursor = ExportService.encodeCursor(job.next_playlist_index, 'assemble', 0, job.assemble_index);
       job.current_resume_token = ExportService.createResumeToken();
-      return { job, exportDataList };
+      return { job, exportDataList, assemblyState };
     }
 
     job.phase = 'collect';
     job.status = 'running';
     job.continuation_required = true;
     job.progress = this.calculateJobProgress(job);
-    job.current_cursor = ExportService.encodeCursor(job.next_playlist_index, 'collect', job.current_track_offset);
+    job.current_cursor = ExportService.encodeCursor(job.next_playlist_index, 'collect', job.current_track_offset, job.assemble_index);
     job.current_resume_token = ExportService.createResumeToken();
 
-    return { job, exportDataList };
+    return { job, exportDataList, assemblyState };
+  }
+
+  private async runAssemblePhaseStep(
+    job: ResumableExportJobState,
+    exportDataList: ExportData[],
+    assemblyState: ResumableExportAssemblyState,
+    maxPlaylistsPerStep: number,
+    startAssembleIndex: number,
+  ): Promise<ResumableExportStepResult> {
+    const totalPlaylists = exportDataList.length;
+    let assembleIndex = Math.max(0, startAssembleIndex || assemblyState.next_assemble_index || job.assemble_index || 0);
+    let remaining = Math.max(maxPlaylistsPerStep, 1);
+
+    while (remaining > 0 && assembleIndex < totalPlaylists) {
+      const exportData = exportDataList[assembleIndex];
+      if (job.file_format === 'csv') {
+        assemblyState.csv_chunks.push(await this.buildCsvChunk(exportData));
+      } else {
+        assemblyState.worksheets.push(this.buildWorksheetAssembly(exportData));
+      }
+      assemblyState.summary_rows.push([
+        exportData.playlist.name,
+        exportData.playlist.owner,
+        exportData.tracks.length,
+        this.formatDuration(exportData.total_duration_ms),
+      ]);
+      assembleIndex += 1;
+      remaining -= 1;
+    }
+
+    assemblyState.next_assemble_index = assembleIndex;
+    job.phase = 'assemble';
+    job.status = assembleIndex >= totalPlaylists ? 'completed' : 'assembling';
+    job.assemble_index = assembleIndex;
+    job.updated_at = new Date().toISOString();
+    job.last_completed_cursor = job.current_cursor;
+    job.last_completed_token = job.current_resume_token;
+
+    if (assembleIndex >= totalPlaylists) {
+      job.progress = 100;
+      job.continuation_required = false;
+      job.completed_at = new Date().toISOString();
+      job.file_url = `/export/jobs/${job.job_id}/download`;
+      job.file_size = JSON.stringify(assemblyState).length;
+      job.result = {
+        download_id: job.job_id,
+      };
+    } else {
+      job.progress = this.calculateAssembleProgress(job, totalPlaylists);
+      job.continuation_required = true;
+    }
+
+    job.current_cursor = ExportService.encodeCursor(job.next_playlist_index, 'assemble', 0, assembleIndex);
+    job.current_resume_token = ExportService.createResumeToken();
+    return { job, exportDataList, assemblyState };
   }
   
   async generatePlaylistExport(playlistId: string, options?: { includeAudioFeatures?: boolean }): Promise<ExportData> {
@@ -386,6 +502,116 @@ export class ExportService {
     }
 
     return Math.min(99, Math.floor((aggregateProgress / playlistIds.length) * 100));
+  }
+
+  private calculateAssembleProgress(job: ResumableExportJobState, totalPlaylists: number): number {
+    if (totalPlaylists <= 0) {
+      return 100;
+    }
+    const assembleProgress = Math.min(job.assemble_index / totalPlaylists, 0.99);
+    return Math.min(99, 95 + Math.floor(assembleProgress * 4));
+  }
+
+  private async buildCsvChunk(exportData: ExportData): Promise<string> {
+    const csvBytes = await this.generateCsvFile(exportData);
+    return new TextDecoder().decode(csvBytes);
+  }
+
+  private buildWorksheetAssembly(exportData: ExportData): WorksheetAssemblyData {
+    const headers = this.getTrackHeaders();
+    return {
+      sheet_name: this.sanitizeSheetName(`${exportData.playlist.name} - ${exportData.playlist.owner}`),
+      playlist_name: exportData.playlist.name,
+      playlist_owner: exportData.playlist.owner,
+      playlist_followers: exportData.playlist.followers,
+      playlist_description: exportData.playlist.description || 'N/A',
+      playlist_url: exportData.playlist.url || '',
+      total_duration: this.formatDuration(exportData.total_duration_ms),
+      headers,
+      rows: exportData.tracks.map((track) => headers.map((header) => (track as any)[header] ?? '')),
+    };
+  }
+
+  async generateCombinedExcelFileFromAssembly(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {
+    const workbook = XLSX.utils.book_new();
+
+    const summarySheet = XLSX.utils.aoa_to_sheet([
+      assemblyState.summary_headers,
+      ...assemblyState.summary_rows,
+    ]);
+    summarySheet['!cols'] = [
+      { wch: 29 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 19 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Playlists');
+
+    for (const worksheet of assemblyState.worksheets) {
+      const sheetRows: ExportCellValue[][] = [
+        [worksheet.playlist_name],
+        [`Created by: ${worksheet.playlist_owner}`],
+        [`Followers: ${worksheet.playlist_followers}`],
+        [`Tracks exported: ${worksheet.rows.length}`],
+        [`Total duration: ${worksheet.total_duration}`],
+        [worksheet.playlist_url ? `Playlist URL: ${worksheet.playlist_url}` : 'Playlist URL: N/A'],
+        [`Description: ${worksheet.playlist_description || 'N/A'}`],
+        [],
+        [],
+        [],
+        worksheet.headers,
+        ...worksheet.rows,
+      ];
+
+      const sheet = XLSX.utils.aoa_to_sheet(sheetRows);
+      sheet['!cols'] = [
+        { wch: 30 },
+        { wch: 40 },
+        { wch: 40 },
+        { wch: 15 },
+        { wch: 60 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 14 },
+      ];
+
+      if (worksheet.playlist_url) {
+        const urlCell = sheet['A6'];
+        if (urlCell) {
+          (urlCell as any).l = { Target: worksheet.playlist_url };
+        }
+      }
+
+      if (worksheet.rows.length > 0) {
+        for (let index = 0; index < worksheet.rows.length; index += 1) {
+          const spotifyUrl = worksheet.rows[index][4];
+          if (typeof spotifyUrl === 'string' && spotifyUrl.startsWith('http')) {
+            const address = XLSX.utils.encode_cell({ r: 11 + index, c: 4 });
+            const cell = sheet[address];
+            if (cell) {
+              (cell as any).l = { Target: spotifyUrl };
+            }
+          }
+        }
+        (sheet as any)['!autofilter'] = { ref: `A11:P${11 + worksheet.rows.length}` };
+      }
+
+      XLSX.utils.book_append_sheet(workbook, sheet, worksheet.sheet_name);
+    }
+
+    return XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  }
+
+  async generateCombinedCsvFromAssembly(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {
+    return new TextEncoder().encode(assemblyState.csv_chunks.join('\n\n')).buffer as ArrayBuffer;
   }
 
   private buildPlaylistMetadata(playlist: any, fallbackTrackCount: number): ExportData['playlist'] {

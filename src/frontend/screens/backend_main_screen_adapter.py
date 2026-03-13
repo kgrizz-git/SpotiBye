@@ -591,6 +591,24 @@ class BackendMainScreenAdapter:
                         base_delay=1.0,
                     )
                 except BackendAPIError as e:
+                    # The backend persists resumable job state before some finalization work.
+                    # A timeout/503 here can still mean the job actually completed server-side,
+                    # so poll status once before abandoning the resumable path.
+                    if e.status_code in {500, 502, 503, 504, None}:
+                        try:
+                            latest_status = self.backend_client.get_export_job_status(job_id)
+                            if isinstance(latest_status, dict):
+                                status = latest_status
+                                cursor = str(status.get('current_cursor') or cursor)
+                                resume_token = str(status.get('current_resume_token') or resume_token)
+                                self._persist_active_export_job(status, playlist_ids, format, resume_context)
+
+                                if str(status.get('status', '')) == 'completed' or not bool(status.get('continuation_required', True)):
+                                    self._emit_progress("Resumable export completed after backend status recovery")
+                                    return status
+                        except BackendAPIError:
+                            pass
+
                     if e.status_code == 409 and isinstance(e.response_data, dict):
                         details = e.response_data.get('error', {}).get('details', {}) if isinstance(e.response_data.get('error'), dict) else {}
                         latest_cursor = details.get('latest_cursor')
@@ -617,9 +635,15 @@ class BackendMainScreenAdapter:
                 total = int(status.get('playlist_count', len(playlist_ids)))
                 phase = str(status.get('phase', 'collect'))
                 current_track_offset = int(status.get('current_track_offset', 0) or 0)
-                self._emit_progress(
-                    f"Resumable export progress ({phase}): {processed}/{total} playlists, current track offset {current_track_offset}"
-                )
+                if phase == 'assemble':
+                    assembled = int(status.get('assemble_index', 0) or 0)
+                    self._emit_progress(
+                        f"Resumable export progress ({phase}): assembled {assembled}/{total} playlists"
+                    )
+                else:
+                    self._emit_progress(
+                        f"Resumable export progress ({phase}): {processed}/{total} playlists, current track offset {current_track_offset}"
+                    )
 
                 cursor = str(status.get('current_cursor') or cursor)
                 resume_token = str(status.get('current_resume_token') or resume_token)

@@ -1,6 +1,10 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '../middleware/auth';
-import { ExportService, ResumableExportConflictError } from '../services/export';
+import {
+  ExportService,
+  ResumableExportConflictError,
+  type ResumableExportAssemblyState,
+} from '../services/export';
 import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
 
@@ -42,6 +46,10 @@ function buildExportJobKey(jobId: string, userId: string): string {
 
 function buildExportJobDataKey(jobId: string, userId: string): string {
   return `${buildExportJobKey(jobId, userId)}:data`;
+}
+
+function buildExportJobAssemblyKey(jobId: string, userId: string): string {
+  return `${buildExportJobKey(jobId, userId)}:assembly`;
 }
 
 function resolveRequestedFormat(body: any): 'xlsx' | 'csv' {
@@ -110,6 +118,17 @@ async function generateFileBytes(
   return exportService.generateCombinedExcelFile(exportDataList);
 }
 
+async function generateFileBytesFromAssembly(
+  exportService: ExportService,
+  assemblyState: ResumableExportAssemblyState,
+  fileFormat: 'xlsx' | 'csv',
+): Promise<ArrayBuffer> {
+  if (fileFormat === 'csv') {
+    return exportService.generateCombinedCsvFromAssembly(assemblyState);
+  }
+  return exportService.generateCombinedExcelFileFromAssembly(assemblyState);
+}
+
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
 
@@ -143,6 +162,7 @@ app.post('/jobs', async (c) => {
 
     await cacheService.set(buildExportJobKey(jobId, userId), state, 3600);
     await cacheService.set(buildExportJobDataKey(jobId, userId), [], 3600);
+    await cacheService.set(buildExportJobAssemblyKey(jobId, userId), ExportService.createAssemblyState(), 3600);
 
     return c.json({
       data: state,
@@ -174,8 +194,10 @@ app.post('/jobs/:jobId/step', async (c) => {
     const cacheService = new CacheService(c.env.CACHE_KV);
     const jobKey = buildExportJobKey(jobId, userId);
     const dataKey = buildExportJobDataKey(jobId, userId);
+    const assemblyKey = buildExportJobAssemblyKey(jobId, userId);
     const job = await cacheService.get<ResumableExportJobStatus>(jobKey);
     const exportDataList = await cacheService.get<any[]>(dataKey);
+    const assemblyState = await cacheService.get<ResumableExportAssemblyState>(assemblyKey);
 
     if (!job) {
       return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, 404);
@@ -208,15 +230,22 @@ app.post('/jobs/:jobId/step', async (c) => {
     }
 
     const exportService = new ExportService(accessToken);
-    const result = await exportService.runResumableStep(job, Array.isArray(exportDataList) ? exportDataList : [], maxPlaylistsPerStep);
+    const result = await exportService.runResumableStep(
+      job,
+      Array.isArray(exportDataList) ? exportDataList : [],
+      assemblyState || ExportService.createAssemblyState(),
+      maxPlaylistsPerStep,
+    );
     await cacheService.set(jobKey, result.job, 3600);
     await cacheService.set(dataKey, result.exportDataList, 3600);
+    await cacheService.set(assemblyKey, result.assemblyState, 3600);
 
-    // Pre-build file bytes on completion so the download endpoint only needs a KV read.
-    if (result.job.status === 'completed') {
-      const completedFormat = (result.job.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
+    // After assemble finishes, CSV can be materialized cheaply. XLSX stays lazy and is generated
+    // from the assembled manifest on first download.
+    if (result.job.status === 'completed' && result.job.file_format === 'csv') {
+      const completedFormat = 'csv' as const;
       try {
-        const fileBytes = await generateFileBytes(exportService, result.exportDataList, completedFormat);
+        const fileBytes = await generateFileBytesFromAssembly(exportService, result.assemblyState, completedFormat);
         await cacheService.setBuffer(`${jobKey}:file`, fileBytes, 3600);
         console.info('[export-job] file cached', { jobId, fileFormat: completedFormat });
       } catch (genErr) {
@@ -269,6 +298,7 @@ app.get('/jobs/:jobId/download', async (c) => {
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
     const jobKey = buildExportJobKey(jobId, userId);
+    const assemblyKey = buildExportJobAssemblyKey(jobId, userId);
     const exportStatus = await cacheService.get<ResumableExportJobStatus>(jobKey);
     if (!exportStatus) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, 404);
@@ -291,12 +321,22 @@ app.get('/jobs/:jobId/download', async (c) => {
     }
 
     // Fallback: regenerate from cached track data (backward-compat for jobs without a pre-built file).
+    const assemblyState = await cacheService.get<ResumableExportAssemblyState>(assemblyKey);
+    if (assemblyState && Array.isArray(assemblyState.summary_rows) && exportStatus.phase === 'assemble') {
+      const fallbackBytes = await generateFileBytesFromAssembly(new ExportService(c.get('access_token')), assemblyState, fileFormat);
+      await cacheService.setBuffer(`${jobKey}:file`, fallbackBytes, 3600);
+      return new Response(fallbackBytes, {
+        headers: { 'Content-Type': dlContentType, 'Content-Disposition': `attachment; filename="${dlFilename}"` },
+      });
+    }
+
     const exportDataList = await cacheService.get<any[]>(buildExportJobDataKey(jobId, userId));
     if (!Array.isArray(exportDataList) || exportDataList.length === 0) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, 404);
     }
     const exportService = new ExportService(c.get('access_token'));
     const fallbackBytes = await generateFileBytes(exportService, exportDataList, fileFormat);
+    await cacheService.setBuffer(`${jobKey}:file`, fallbackBytes, 3600);
     return new Response(fallbackBytes, {
       headers: { 'Content-Type': dlContentType, 'Content-Disposition': `attachment; filename="${dlFilename}"` },
     });
@@ -502,15 +542,16 @@ app.post('/playlists', async (c) => {
     await cacheService.set(batchKey, status, 3600);
     await cacheService.set(`${batchKey}:data`, exportDataList, 3600);
 
-    const batchFormat = requestedFormat as 'xlsx' | 'csv';
-    try {
-      const fileBytes = await generateFileBytes(exportService, exportDataList, batchFormat);
-      await cacheService.setBuffer(`${batchKey}:file`, fileBytes, 3600);
-    } catch (genErr) {
-      console.warn('[export-batch] file pre-build failed; download will regenerate', {
-        jobId,
-        error: genErr instanceof Error ? genErr.message : String(genErr),
-      });
+    if (requestedFormat === 'csv') {
+      try {
+        const fileBytes = await generateFileBytes(exportService, exportDataList, 'csv');
+        await cacheService.setBuffer(`${batchKey}:file`, fileBytes, 3600);
+      } catch (genErr) {
+        console.warn('[export-batch] file pre-build failed; download will regenerate', {
+          jobId,
+          error: genErr instanceof Error ? genErr.message : String(genErr),
+        });
+      }
     }
 
     console.info('[export-batch] completed', {
@@ -637,17 +678,17 @@ app.post('/playlists/chunk', async (c) => {
         playlistCount: exportDataList.length,
         totalTracks: status.track_count,
       });
-      // Pre-build file bytes so the download handler only needs a KV read.
-      const chunkFormat = requestedFormat as 'xlsx' | 'csv';
-      try {
-        const fileBytes = await generateFileBytes(exportService, exportDataList, chunkFormat);
-        await cacheService.setBuffer(`${batchKey}:file`, fileBytes, 3600);
-        console.info('[export-batch-chunk] file cached', { jobId, fileFormat: chunkFormat });
-      } catch (genErr) {
-        console.warn('[export-batch-chunk] file pre-build failed; download will regenerate', {
-          jobId,
-          error: genErr instanceof Error ? genErr.message : String(genErr),
-        });
+      if (requestedFormat === 'csv') {
+        try {
+          const fileBytes = await generateFileBytes(exportService, exportDataList, 'csv');
+          await cacheService.setBuffer(`${batchKey}:file`, fileBytes, 3600);
+          console.info('[export-batch-chunk] file cached', { jobId, fileFormat: 'csv' });
+        } catch (genErr) {
+          console.warn('[export-batch-chunk] file pre-build failed; download will regenerate', {
+            jobId,
+            error: genErr instanceof Error ? genErr.message : String(genErr),
+          });
+        }
       }
     }
 
@@ -726,6 +767,7 @@ app.get('/playlists/:jobId/download', async (c) => {
     }
     const exportService = new ExportService(c.get('access_token'));
     const fallbackBytes = await generateFileBytes(exportService, exportDataList, batchFileFormat);
+    await cacheService.setBuffer(`${batchKey}:file`, fallbackBytes, 3600);
     return new Response(fallbackBytes, {
       headers: { 'Content-Type': bContentType, 'Content-Disposition': `attachment; filename="${bFilename}"` },
     });
@@ -802,6 +844,7 @@ app.get('/playlist/:id/download', async (c) => {
     }
     const exportService = new ExportService(c.get('access_token'));
     const fallbackBytes = await generateFileBytes(exportService, [exportData], singleFileFormat);
+    await cacheService.setBuffer(`${exportKey}:file`, fallbackBytes, 3600);
     return new Response(fallbackBytes, {
       headers: { 'Content-Type': spContentType, 'Content-Disposition': `attachment; filename="${spFilename}"` },
     });

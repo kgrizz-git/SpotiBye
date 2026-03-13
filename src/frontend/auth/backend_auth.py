@@ -314,7 +314,26 @@ class BackendAuthenticator:
             True if refresh successful, False otherwise
         """
         try:
-            self.backend_client.refresh_token()
+            refresh_response = self.backend_client.refresh_token()
+            app_token = refresh_response.get('token') or refresh_response.get('access_token')
+            if app_token:
+                app = None
+                try:
+                    from kivy.app import App
+                    app = App.get_running_app()
+                except Exception:
+                    app = None
+
+                cache_manager = getattr(app, 'cache_manager', None) if app else None
+                username = getattr(app, 'username', None) if app else None
+                if cache_manager:
+                    cache_manager.save_auth_token(
+                        {
+                            'token': app_token,
+                            'username': username or 'User',
+                            'saved_at': int(time.time()),
+                        }
+                    )
             logger.info("Token refreshed successfully")
             return True
             

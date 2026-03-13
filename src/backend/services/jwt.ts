@@ -1,3 +1,4 @@
+import { APP_JWT_TTL_SECONDS } from '../types/auth';
 import type { JWTPayload } from '../types/auth';
 
 export class JWTService {
@@ -13,7 +14,7 @@ export class JWTService {
     const fullPayload = {
       ...payload,
       iat: now,
-      exp: now + (24 * 60 * 60) // 24 hours
+      exp: now + APP_JWT_TTL_SECONDS
     };
     
     const encodedHeader = this.base64UrlEncode(JSON.stringify(header));

@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/auth';
 import { SpotifyAuthService } from '../services/spotify-auth';
 import { JWTService } from '../services/jwt';
 import type { Env } from '../types/env';
+import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
 import type { AuthTokens } from '../types/auth';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -72,7 +73,7 @@ app.get('/spotify/callback', async (c) => {
       refresh_token: tokens.refresh_token,
       expires_at: Date.now() + (tokens.expires_in * 1000),
       spotify_data: userProfile
-    }), { expirationTtl: tokens.expires_in });
+    }), { expirationTtl: SPOTIFY_SESSION_TTL_SECONDS });
     
     // Generate JWT
     const jwtService = new JWTService(c.env.JWT_SECRET);
@@ -87,7 +88,8 @@ app.get('/spotify/callback', async (c) => {
       data: {
         token: jwtToken,
         user: userProfile,
-        expires_in: tokens.expires_in
+        expires_in: SPOTIFY_SESSION_TTL_SECONDS,
+        spotify_access_expires_in: tokens.expires_in,
       }
     });
   } catch (error) {
@@ -116,17 +118,29 @@ app.post('/spotify/refresh', authMiddleware, async (c) => {
     const updatedSession = {
       ...session,
       access_token: newTokens.access_token,
+      refresh_token: (newTokens as any).refresh_token || session.refresh_token,
       expires_at: Date.now() + (newTokens.expires_in * 1000)
     };
-    
-    await c.env.SESSIONS_KV.put(sessionId, JSON.stringify(updatedSession), { 
-      expirationTtl: newTokens.expires_in 
+
+    await c.env.SESSIONS_KV.put(sessionId, JSON.stringify(updatedSession), {
+      expirationTtl: SPOTIFY_SESSION_TTL_SECONDS
+    });
+
+    const user = c.get('user');
+    const jwtService = new JWTService(c.env.JWT_SECRET);
+    const jwtToken = await jwtService.generateToken({
+      sub: user.id,
+      email: user.email,
+      name: user.name,
+      session_id: sessionId,
     });
     
     return c.json({
       data: {
-        access_token: newTokens.access_token,
-        expires_in: newTokens.expires_in
+        token: jwtToken,
+        access_token: jwtToken,
+        expires_in: SPOTIFY_SESSION_TTL_SECONDS,
+        spotify_access_expires_in: newTokens.expires_in,
       }
     });
   } catch (error) {

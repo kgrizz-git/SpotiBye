@@ -1,7 +1,9 @@
 import { Context, Next } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { JWTService } from '../services/jwt';
+import { SpotifyAuthService } from '../services/spotify-auth';
 import type { Env } from '../types/env';
+import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
 import type { JWTPayload } from '../types/auth';
 import type { Variables } from '../types/variables';
 
@@ -24,11 +26,31 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
       throw new HTTPException(401, { message: 'Session expired or invalid' });
     }
     
-    const session = JSON.parse(sessionData);
-    
-    // Check if token is still valid
+    let session = JSON.parse(sessionData);
+
+    // Refresh the Spotify access token transparently when it expires.
     if (Date.now() > session.expires_at) {
-      throw new HTTPException(401, { message: 'Token expired' });
+      if (!session.refresh_token) {
+        throw new HTTPException(401, { message: 'Token expired' });
+      }
+
+      try {
+        const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
+        const refreshed = await spotifyAuth.refreshAccessToken(session.refresh_token);
+        session = {
+          ...session,
+          access_token: refreshed.access_token,
+          refresh_token: (refreshed as any).refresh_token || session.refresh_token,
+          expires_at: Date.now() + (refreshed.expires_in * 1000),
+        };
+
+        await c.env.SESSIONS_KV.put(payload.session_id, JSON.stringify(session), {
+          expirationTtl: SPOTIFY_SESSION_TTL_SECONDS,
+        });
+      } catch (refreshError) {
+        console.error('Failed to refresh Spotify access token:', refreshError);
+        throw new HTTPException(401, { message: 'Token expired' });
+      }
     }
     
     // Add user and session info to context
