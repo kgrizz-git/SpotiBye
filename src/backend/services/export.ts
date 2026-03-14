@@ -1,5 +1,6 @@
 import { SpotifyService } from './spotify';
 import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 
 interface ExportTrack {
   Artist: string;
@@ -49,6 +50,8 @@ export interface ResumablePlaylistProgress {
 }
 
 type ExportCellValue = string | number;
+
+export type XlsxRenderMode = 'auto' | 'rich' | 'lite';
 
 export interface WorksheetAssemblyData {
   sheet_name: string;
@@ -105,6 +108,12 @@ export interface ResumableExportJobState {
   trace_id?: string;
   last_completed_cursor?: string;
   last_completed_token?: string;
+  render_mode_hint?: 'rich' | 'lite';
+  render_warning?: string;
+  render_stats?: {
+    worksheet_count: number;
+    track_rows: number;
+  };
 }
 
 export interface ResumableExportStepResult {
@@ -579,7 +588,32 @@ export class ExportService {
     };
   }
 
-  async generateCombinedExcelFileFromAssembly(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {
+  async generateCombinedExcelFileFromAssembly(
+    assemblyState: ResumableExportAssemblyState,
+    renderMode: XlsxRenderMode = 'auto',
+  ): Promise<ArrayBuffer> {
+    const totalWorksheets = Array.isArray(assemblyState.worksheets) ? assemblyState.worksheets.length : 0;
+    const totalTrackRows = (assemblyState.worksheets || []).reduce(
+      (sum, worksheet) => sum + (Array.isArray(worksheet.rows) ? worksheet.rows.length : 0),
+      0,
+    );
+
+    // Rich ExcelJS rendering (tables + cover images) is CPU heavy on large jobs under
+    // Workers CPU limits. Use it when safely sized; otherwise degrade to a lightweight
+    // renderer that prioritizes successful combined download.
+    const useRichRenderer = renderMode === 'rich'
+      ? true
+      : renderMode === 'lite'
+        ? false
+        : totalWorksheets <= 18 && totalTrackRows <= 2400;
+    if (!useRichRenderer) {
+      console.warn('[export] using lightweight XLSX assembly renderer due to job size', {
+        worksheetCount: totalWorksheets,
+        trackRows: totalTrackRows,
+      });
+      return this.generateCombinedExcelFileFromAssemblyLite(assemblyState);
+    }
+
     // Reconstruct lightweight ExportData objects and reuse the full ExcelJS renderer
     // so assembled resumable exports keep table styles and embedded cover images.
     const exportDataList: ExportData[] = assemblyState.worksheets.map((worksheet) => {
@@ -610,6 +644,84 @@ export class ExportService {
     });
 
     return this.generateCombinedExcelFile(exportDataList);
+  }
+
+  private generateCombinedExcelFileFromAssemblyLite(assemblyState: ResumableExportAssemblyState): ArrayBuffer {
+    const workbook = XLSX.utils.book_new();
+
+    const summarySheet = XLSX.utils.aoa_to_sheet([
+      assemblyState.summary_headers,
+      ...assemblyState.summary_rows,
+    ]);
+    summarySheet['!cols'] = [
+      { wch: 29 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 19 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Playlists');
+
+    for (const worksheet of assemblyState.worksheets) {
+      const sheetRows: ExportCellValue[][] = [
+        [worksheet.playlist_name],
+        [`Created by: ${worksheet.playlist_owner}`],
+        [`Followers: ${worksheet.playlist_followers}`],
+        [`Tracks exported: ${worksheet.rows.length}`],
+        [`Total duration: ${worksheet.total_duration}`],
+        [worksheet.playlist_url ? `Playlist URL: ${worksheet.playlist_url}` : 'Playlist URL: N/A'],
+        [`Description: ${worksheet.playlist_description || 'N/A'}`],
+        [],
+        [],
+        [],
+        worksheet.headers,
+        ...worksheet.rows,
+      ];
+
+      const sheet = XLSX.utils.aoa_to_sheet(sheetRows);
+      sheet['!cols'] = [
+        { wch: 30 },
+        { wch: 40 },
+        { wch: 40 },
+        { wch: 15 },
+        { wch: 60 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 16 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 14 },
+      ];
+
+      if (worksheet.playlist_url) {
+        const urlCell = sheet['A6'];
+        if (urlCell) {
+          (urlCell as any).l = { Target: worksheet.playlist_url };
+        }
+      }
+
+      if (worksheet.rows.length > 0) {
+        for (let index = 0; index < worksheet.rows.length; index += 1) {
+          const spotifyUrl = worksheet.rows[index][4];
+          if (typeof spotifyUrl === 'string' && spotifyUrl.startsWith('http')) {
+            const address = XLSX.utils.encode_cell({ r: 11 + index, c: 4 });
+            const cell = sheet[address];
+            if (cell) {
+              (cell as any).l = { Target: spotifyUrl };
+            }
+          }
+        }
+        (sheet as any)['!autofilter'] = { ref: `A11:P${11 + worksheet.rows.length}` };
+      }
+
+      XLSX.utils.book_append_sheet(workbook, sheet, worksheet.sheet_name);
+    }
+
+    return XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
   }
 
   async generateCombinedCsvFromAssembly(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {

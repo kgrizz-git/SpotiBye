@@ -1762,6 +1762,17 @@ class MainScreen(Screen):
                 return
 
             export_id = export_info.get('job_id', '') if isinstance(export_info, dict) else ''
+            total_tracks = int(export_info.get('track_count', 0)) if isinstance(export_info, dict) else 0
+            if total_tracks >= 2400:
+                Clock.schedule_once(
+                    lambda _, t=total_tracks: setattr(
+                        self.status_label,
+                        'text',
+                        f'Large export ({t} tracks): reliability mode active; combined file prioritized over heavy styling.',
+                    ),
+                    0,
+                )
+
             self._set_backend_error_context('chunked-combined', f'download job={export_id or "unknown"}')
 
             Clock.schedule_once(

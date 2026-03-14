@@ -4,6 +4,7 @@ import {
   ExportService,
   ResumableExportConflictError,
   type ResumableExportAssemblyState,
+  type XlsxRenderMode,
 } from '../services/export';
 import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
@@ -50,6 +51,21 @@ function buildExportJobDataKey(jobId: string, userId: string): string {
 
 function buildExportJobAssemblyKey(jobId: string, userId: string): string {
   return `${buildExportJobKey(jobId, userId)}:assembly`;
+}
+
+function buildExportFileKey(baseKey: string, mode: 'default' | 'rich' | 'lite' | 'csv' = 'default'): string {
+  if (mode === 'default') {
+    return `${baseKey}:file`;
+  }
+  return `${baseKey}:file:${mode}`;
+}
+
+function parseXlsxRenderMode(value: string | undefined): XlsxRenderMode {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'rich' || normalized === 'lite') {
+    return normalized;
+  }
+  return 'auto';
 }
 
 function resolveRequestedFormat(body: any): 'xlsx' | 'csv' {
@@ -122,11 +138,12 @@ async function generateFileBytesFromAssembly(
   exportService: ExportService,
   assemblyState: ResumableExportAssemblyState,
   fileFormat: 'xlsx' | 'csv',
+  renderMode: XlsxRenderMode = 'auto',
 ): Promise<ArrayBuffer> {
   if (fileFormat === 'csv') {
     return exportService.generateCombinedCsvFromAssembly(assemblyState);
   }
-  return exportService.generateCombinedExcelFileFromAssembly(assemblyState);
+  return exportService.generateCombinedExcelFileFromAssembly(assemblyState, renderMode);
 }
 
 // Apply auth middleware to all routes
@@ -191,7 +208,6 @@ app.post('/jobs/:jobId/step', async (c) => {
     const cursor = typeof body?.cursor === 'string' ? body.cursor : '';
     const resumeToken = typeof body?.resume_token === 'string' ? body.resume_token : '';
     const maxPlaylistsPerStep = resolveStepSize(body);
-    const cacheService = new CacheService(c.env.CACHE_KV);
     const jobKey = buildExportJobKey(jobId, userId);
     const dataKey = buildExportJobDataKey(jobId, userId);
     const assemblyKey = buildExportJobAssemblyKey(jobId, userId);
@@ -240,19 +256,61 @@ app.post('/jobs/:jobId/step', async (c) => {
     await cacheService.set(dataKey, result.exportDataList, 3600);
     await cacheService.set(assemblyKey, result.assemblyState, 3600);
 
-    // After assemble finishes, CSV can be materialized cheaply. XLSX stays lazy and is generated
-    // from the assembled manifest on first download.
-    if (result.job.status === 'completed' && result.job.file_format === 'csv') {
-      const completedFormat = 'csv' as const;
-      try {
-        const fileBytes = await generateFileBytesFromAssembly(exportService, result.assemblyState, completedFormat);
-        await cacheService.setBuffer(`${jobKey}:file`, fileBytes, 3600);
-        console.info('[export-job] file cached', { jobId, fileFormat: completedFormat });
-      } catch (genErr) {
-        console.warn('[export-job] file pre-build failed; download will regenerate on demand', {
-          jobId,
-          error: genErr instanceof Error ? genErr.message : String(genErr),
-        });
+    if (result.job.status === 'completed') {
+      const worksheetCount = Array.isArray(result.assemblyState?.worksheets) ? result.assemblyState.worksheets.length : 0;
+      const trackRows = Array.isArray(result.assemblyState?.worksheets)
+        ? result.assemblyState.worksheets.reduce((sum, ws) => sum + (Array.isArray(ws.rows) ? ws.rows.length : 0), 0)
+        : 0;
+      const richEligible = worksheetCount <= 18 && trackRows <= 2400;
+
+      result.job.render_stats = {
+        worksheet_count: worksheetCount,
+        track_rows: trackRows,
+      };
+      result.job.render_mode_hint = richEligible ? 'rich' : 'lite';
+      if (!richEligible) {
+        result.job.render_warning = 'Large combined export uses reliability mode by default (reduced styling)';
+      }
+
+      await cacheService.set(jobKey, result.job, 3600);
+
+      if (result.job.file_format === 'csv') {
+        const completedFormat = 'csv' as const;
+        try {
+          const fileBytes = await generateFileBytesFromAssembly(exportService, result.assemblyState, completedFormat);
+          await cacheService.setBuffer(buildExportFileKey(jobKey, 'csv'), fileBytes, 3600);
+          await cacheService.setBuffer(buildExportFileKey(jobKey), fileBytes, 3600);
+          console.info('[export-job] file cached', { jobId, fileFormat: completedFormat });
+        } catch (genErr) {
+          console.warn('[export-job] file pre-build failed; download will regenerate on demand', {
+            jobId,
+            error: genErr instanceof Error ? genErr.message : String(genErr),
+          });
+        }
+      } else {
+        // Always prebuild lite variant for reliability. Optionally prebuild rich when small enough.
+        try {
+          const liteBytes = await generateFileBytesFromAssembly(exportService, result.assemblyState, 'xlsx', 'lite');
+          await cacheService.setBuffer(buildExportFileKey(jobKey, 'lite'), liteBytes, 3600);
+          await cacheService.setBuffer(buildExportFileKey(jobKey), liteBytes, 3600);
+        } catch (liteErr) {
+          console.warn('[export-job] lite xlsx pre-build failed; download will generate on demand', {
+            jobId,
+            error: liteErr instanceof Error ? liteErr.message : String(liteErr),
+          });
+        }
+
+        if (richEligible) {
+          try {
+            const richBytes = await generateFileBytesFromAssembly(exportService, result.assemblyState, 'xlsx', 'rich');
+            await cacheService.setBuffer(buildExportFileKey(jobKey, 'rich'), richBytes, 3600);
+          } catch (richErr) {
+            console.warn('[export-job] rich xlsx pre-build failed; lite remains available', {
+              jobId,
+              error: richErr instanceof Error ? richErr.message : String(richErr),
+            });
+          }
+        }
       }
     }
 
@@ -283,7 +341,23 @@ app.get('/jobs/:jobId/status', async (c) => {
       return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, 404);
     }
 
-    return c.json({ data: job, meta: { timestamp: new Date().toISOString() } });
+    const cacheService = new CacheService(c.env.CACHE_KV);
+    const jobKey = buildExportJobKey(jobId, userId);
+    const hasDefaultFile = await cacheService.exists(buildExportFileKey(jobKey));
+    const hasLiteFile = await cacheService.exists(buildExportFileKey(jobKey, 'lite'));
+    const hasRichFile = await cacheService.exists(buildExportFileKey(jobKey, 'rich'));
+
+    return c.json({
+      data: {
+        ...job,
+        available_render_modes: {
+          default: hasDefaultFile,
+          lite: hasLiteFile,
+          rich: hasRichFile,
+        },
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
   } catch (error) {
     console.error('Failed to get export job status:', error);
     return c.json({ error: { code: 'EXPORT_JOB_STATUS_FAILED', message: 'Failed to get export job status' } }, 500);
@@ -306,25 +380,82 @@ app.get('/jobs/:jobId/download', async (c) => {
     if (exportStatus.status !== 'completed') {
       return c.json({ error: { code: 'EXPORT_NOT_READY', message: 'Export job is not completed yet' } }, 409);
     }
+    const requestedMode = parseXlsxRenderMode(c.req.query('mode'));
     const fileFormat = (exportStatus.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
     const [dlContentType, dlExt] = fileFormat === 'csv'
       ? ['text/csv; charset=utf-8', 'csv']
       : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
     const dlFilename = `playlists_export_${Date.now()}.${dlExt}`;
 
-    // Serve pre-built bytes when available — zero CPU, just a KV read.
-    const prebuiltBytes = await cacheService.getBuffer(`${jobKey}:file`);
-    if (prebuiltBytes) {
-      return new Response(prebuiltBytes, {
-        headers: { 'Content-Type': dlContentType, 'Content-Disposition': `attachment; filename="${dlFilename}"` },
-      });
+    const renderMode = fileFormat === 'xlsx'
+      ? (requestedMode === 'auto' ? (exportStatus.render_mode_hint || 'auto') : requestedMode)
+      : 'csv';
+
+    const prebuiltKeyOrder = fileFormat === 'csv'
+      ? [buildExportFileKey(jobKey, 'csv'), buildExportFileKey(jobKey)]
+      : renderMode === 'rich'
+        ? [buildExportFileKey(jobKey, 'rich'), buildExportFileKey(jobKey), buildExportFileKey(jobKey, 'lite')]
+        : renderMode === 'lite'
+          ? [buildExportFileKey(jobKey, 'lite'), buildExportFileKey(jobKey)]
+          : [buildExportFileKey(jobKey), buildExportFileKey(jobKey, 'lite'), buildExportFileKey(jobKey, 'rich')];
+
+    for (const key of prebuiltKeyOrder) {
+      const prebuiltBytes = await cacheService.getBuffer(key);
+      if (prebuiltBytes) {
+        const resolvedMode = key.endsWith(':file:rich')
+          ? 'rich'
+          : key.endsWith(':file:lite')
+            ? 'lite'
+            : fileFormat === 'csv'
+              ? 'csv'
+              : (exportStatus.render_mode_hint || 'auto');
+        return new Response(prebuiltBytes, {
+          headers: {
+            'Content-Type': dlContentType,
+            'Content-Disposition': `attachment; filename="${dlFilename}"`,
+            'X-SpotiBye-Render-Mode': String(resolvedMode),
+          },
+        });
+      }
     }
 
     // Fallback: regenerate from cached track data (backward-compat for jobs without a pre-built file).
     const assemblyState = await cacheService.get<ResumableExportAssemblyState>(assemblyKey);
     if (assemblyState && Array.isArray(assemblyState.summary_rows) && exportStatus.phase === 'assemble') {
-      const fallbackBytes = await generateFileBytesFromAssembly(new ExportService(c.get('access_token')), assemblyState, fileFormat);
-      await cacheService.setBuffer(`${jobKey}:file`, fallbackBytes, 3600);
+      const exportService = new ExportService(c.get('access_token'));
+      if (fileFormat === 'xlsx') {
+        try {
+          const preferredMode = renderMode === 'csv' ? 'auto' : (renderMode as XlsxRenderMode);
+          const rendered = await generateFileBytesFromAssembly(exportService, assemblyState, fileFormat, preferredMode);
+          const variant = preferredMode === 'rich' ? 'rich' : preferredMode === 'lite' ? 'lite' : 'default';
+          await cacheService.setBuffer(buildExportFileKey(jobKey, variant as 'default' | 'rich' | 'lite'), rendered, 3600);
+          await cacheService.setBuffer(buildExportFileKey(jobKey), rendered, 3600);
+          return new Response(rendered, {
+            headers: {
+              'Content-Type': dlContentType,
+              'Content-Disposition': `attachment; filename="${dlFilename}"`,
+              'X-SpotiBye-Render-Mode': variant === 'default' ? String(exportStatus.render_mode_hint || 'auto') : variant,
+            },
+          });
+        } catch {
+          // If rich/auto rendering fails (e.g., CPU), degrade to lightweight render for reliability.
+          const liteBytes = await generateFileBytesFromAssembly(exportService, assemblyState, fileFormat, 'lite');
+          await cacheService.setBuffer(buildExportFileKey(jobKey, 'lite'), liteBytes, 3600);
+          await cacheService.setBuffer(buildExportFileKey(jobKey), liteBytes, 3600);
+          return new Response(liteBytes, {
+            headers: {
+              'Content-Type': dlContentType,
+              'Content-Disposition': `attachment; filename="${dlFilename}"`,
+              'X-SpotiBye-Render-Mode': 'lite',
+              'X-SpotiBye-Render-Warning': 'Degraded-to-lite-due-to-render-failure',
+            },
+          });
+        }
+      }
+
+      const fallbackBytes = await generateFileBytesFromAssembly(exportService, assemblyState, fileFormat);
+      await cacheService.setBuffer(buildExportFileKey(jobKey, 'csv'), fallbackBytes, 3600);
+      await cacheService.setBuffer(buildExportFileKey(jobKey), fallbackBytes, 3600);
       return new Response(fallbackBytes, {
         headers: { 'Content-Type': dlContentType, 'Content-Disposition': `attachment; filename="${dlFilename}"` },
       });

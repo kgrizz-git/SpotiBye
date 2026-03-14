@@ -683,11 +683,23 @@ class BackendMainScreenAdapter:
             if self.progress_callback:
                 self._emit_progress("Downloading combined export...")
 
+            preferred_mode = 'auto'
+            try:
+                status = self.backend_client.get_export_job_status(export_id)
+                hint = str(status.get('render_mode_hint', 'auto')) if isinstance(status, dict) else 'auto'
+                if hint in {'rich', 'lite'}:
+                    preferred_mode = hint
+                    if hint == 'lite':
+                        self._emit_progress("Large export reliability mode detected; downloading lite-rendered combined file...")
+            except BackendAPIError:
+                # Status endpoint may be temporarily unavailable; continue with default auto mode.
+                pass
+
             for recovery_pass in range(2):
                 try:
                     export_data = self._run_with_transient_retry(
                         "Downloading combined export",
-                        lambda: self._download_batch_export_any(export_id),
+                        lambda mode=preferred_mode: self._download_batch_export_any(export_id, mode=mode),
                         max_attempts=6,
                         base_delay=2.0,
                     )
@@ -716,6 +728,9 @@ class BackendMainScreenAdapter:
 
                             status_name = str(status.get('status', ''))
                             continuation_required = bool(status.get('continuation_required', True))
+                            render_hint = str(status.get('render_mode_hint', preferred_mode))
+                            if render_hint in {'rich', 'lite'}:
+                                preferred_mode = render_hint
                             if status_name != 'completed' and continuation_required and playlist_ids:
                                 self._emit_progress("Resuming combined export job before download retry...")
                                 resumed_status = self._generate_batch_export_resumable(
@@ -728,8 +743,16 @@ class BackendMainScreenAdapter:
                                 )
                                 if isinstance(resumed_status, dict):
                                     self._persist_active_export_job(resumed_status, playlist_ids, export_format)
+                                    resumed_hint = str(resumed_status.get('render_mode_hint', preferred_mode))
+                                    if resumed_hint in {'rich', 'lite'}:
+                                        preferred_mode = resumed_hint
                     except BackendAPIError as status_err:
                         logger.warning("Combined download recovery status check failed: %s", status_err)
+
+                    # Last-chance deterministic downgrade for large exports: explicit lite mode.
+                    if recovery_pass == 0 and preferred_mode != 'lite':
+                        preferred_mode = 'lite'
+                        self._emit_progress("Retrying combined download in lightweight render mode...")
 
                     time.sleep(3.0)
 
@@ -749,10 +772,10 @@ class BackendMainScreenAdapter:
         """Return cached resumable export job metadata, if any."""
         return self.cache_manager.get_active_export_job()
 
-    def _download_batch_export_any(self, export_id: str) -> bytes:
+    def _download_batch_export_any(self, export_id: str, mode: str = 'auto') -> bytes:
         """Download from resumable job endpoint first, then legacy batch endpoint."""
         try:
-            return self.backend_client.download_export_job(export_id)
+            return self.backend_client.download_export_job(export_id, mode=mode)
         except BackendAPIError as e:
             if e.status_code == 404:
                 return self.backend_client.download_batch_export(export_id)

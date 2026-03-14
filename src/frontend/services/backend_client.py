@@ -403,9 +403,10 @@ class BackendClient:
 
         return response.content
 
-    def download_export_job(self, job_id: str) -> bytes:
+    def download_export_job(self, job_id: str, mode: str = 'auto') -> bytes:
         """Download generated resumable export file."""
-        url = f"{self.base_url}/export/jobs/{job_id}/download"
+        normalized_mode = mode if mode in {'auto', 'rich', 'lite'} else 'auto'
+        url = f"{self.base_url}/export/jobs/{job_id}/download?mode={normalized_mode}"
         headers = {'Authorization': f'Bearer {self.auth_token}'} if self.auth_token else {}
         if self.trace_id:
             headers['X-SpotiBye-Trace-Id'] = self.trace_id
