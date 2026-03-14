@@ -285,11 +285,6 @@ export class ExportService {
 
       const mergedExportData = this.mergeExportSlice(existingExportData, slice.exportData);
       const existingIndex = exportDataList.findIndex((item) => item.playlist.id === playlistId);
-      if (existingIndex >= 0) {
-        exportDataList[existingIndex] = mergedExportData;
-      } else {
-        exportDataList.push(mergedExportData);
-      }
 
       const totalTracks = slice.totalTracks || mergedExportData.playlist.total_tracks || mergedExportData.tracks.length;
       const collectedTracks = mergedExportData.tracks.length;
@@ -303,9 +298,37 @@ export class ExportService {
       };
 
       if (playlistDone) {
+        // Pre-assemble immediately to prevent raw track data accumulating in KV across steps.
+        // Worksheet/CSV is built now and tracks are discarded, keeping exportDataList lean.
+        if (job.file_format === 'csv') {
+          assemblyState.csv_chunks.push(await this.buildCsvChunk(mergedExportData));
+        } else {
+          assemblyState.worksheets.push(this.buildWorksheetAssembly(mergedExportData));
+        }
+        assemblyState.summary_rows.push([
+          mergedExportData.playlist.name,
+          mergedExportData.playlist.owner,
+          mergedExportData.tracks.length,
+          this.formatDuration(mergedExportData.total_duration_ms),
+        ]);
+        assemblyState.next_assemble_index = (assemblyState.next_assemble_index || 0) + 1;
+
+        // Store a tracks-free sentinel so the assemble phase can identify pre-assembled entries.
+        const strippedData = { ...mergedExportData, tracks: [] as typeof mergedExportData.tracks };
+        if (existingIndex >= 0) {
+          exportDataList[existingIndex] = strippedData;
+        } else {
+          exportDataList.push(strippedData);
+        }
+
         nextPlaylistIndex += 1;
         nextTrackOffset = 0;
       } else {
+        if (existingIndex >= 0) {
+          exportDataList[existingIndex] = mergedExportData;
+        } else {
+          exportDataList.push(mergedExportData);
+        }
         nextTrackOffset = job.playlist_progress[playlistId].next_offset;
       }
 
@@ -315,17 +338,33 @@ export class ExportService {
     job.next_playlist_index = nextPlaylistIndex;
     job.current_track_offset = nextTrackOffset;
     job.processed_count = Object.values(job.playlist_progress).filter((progress) => progress.done).length;
-    job.track_count = exportDataList.reduce((sum, item) => sum + item.tracks.length, 0);
+    // Use playlist_progress totals since tracks are cleared from exportDataList upon completion.
+    job.track_count = Object.values(job.playlist_progress).reduce((sum, p) => sum + p.collected_tracks, 0);
     job.updated_at = new Date().toISOString();
     job.last_completed_cursor = job.current_cursor;
     job.last_completed_token = job.current_resume_token;
 
     if (job.next_playlist_index >= job.playlist_ids.length) {
+      const preAssembledCount = assemblyState.next_assemble_index || 0;
+      const totalPlaylists = job.playlist_ids.length;
       job.phase = 'assemble';
-      job.status = 'assembling';
-      job.assemble_index = assemblyState.next_assemble_index || 0;
-      job.progress = this.calculateAssembleProgress(job, exportDataList.length);
-      job.continuation_required = exportDataList.length > 0;
+      job.assemble_index = preAssembledCount;
+
+      if (preAssembledCount >= totalPlaylists) {
+        // All playlists were pre-assembled inline during collect — complete immediately.
+        job.status = 'completed';
+        job.progress = 100;
+        job.continuation_required = false;
+        job.completed_at = new Date().toISOString();
+        job.file_url = `/export/jobs/${job.job_id}/download`;
+        job.file_size = JSON.stringify(assemblyState).length;
+        job.result = { download_id: job.job_id };
+      } else {
+        job.status = 'assembling';
+        job.progress = this.calculateAssembleProgress(job, totalPlaylists);
+        job.continuation_required = true;
+      }
+
       job.current_cursor = ExportService.encodeCursor(job.next_playlist_index, 'assemble', 0, job.assemble_index);
       job.current_resume_token = ExportService.createResumeToken();
       return { job, exportDataList, assemblyState };
@@ -354,6 +393,13 @@ export class ExportService {
 
     while (remaining > 0 && assembleIndex < totalPlaylists) {
       const exportData = exportDataList[assembleIndex];
+
+      // Playlists with no tracks were pre-assembled inline during the collect phase — skip them.
+      if (exportData.tracks.length === 0) {
+        assembleIndex += 1;
+        continue;
+      }
+
       if (job.file_format === 'csv') {
         assemblyState.csv_chunks.push(await this.buildCsvChunk(exportData));
       } else {
