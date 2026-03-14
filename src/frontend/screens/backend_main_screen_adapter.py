@@ -473,7 +473,7 @@ class BackendMainScreenAdapter:
         playlist_ids: List[str],
         format: str = 'xlsx',
         chunk_size: int = 1,
-        max_steps: int = 200,
+        max_steps: int = 600,
         report_errors: bool = True,
         resume_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
@@ -549,7 +549,7 @@ class BackendMainScreenAdapter:
         playlist_ids: List[str],
         format: str = 'xlsx',
         chunk_size: int = 1,
-        max_steps: int = 200,
+        max_steps: int = 600,
         report_errors: bool = True,
         resume_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
@@ -683,16 +683,57 @@ class BackendMainScreenAdapter:
             if self.progress_callback:
                 self._emit_progress("Downloading combined export...")
 
-            export_data = self._run_with_transient_retry(
-                "Downloading combined export",
-                lambda: self._download_batch_export_any(export_id),
-            )
-            with open(save_path, 'wb') as f:
-                f.write(export_data)
+            for recovery_pass in range(2):
+                try:
+                    export_data = self._run_with_transient_retry(
+                        "Downloading combined export",
+                        lambda: self._download_batch_export_any(export_id),
+                        max_attempts=6,
+                        base_delay=2.0,
+                    )
+                    with open(save_path, 'wb') as f:
+                        f.write(export_data)
 
-            logger.info(f"Combined export saved to {save_path}")
-            self.clear_active_export_job(export_id)
-            return True
+                    logger.info(f"Combined export saved to {save_path}")
+                    self.clear_active_export_job(export_id)
+                    return True
+                except BackendAPIError as e:
+                    can_recover = e.status_code in {409, 500, 502, 503, 504, None}
+                    if not can_recover or recovery_pass >= 1:
+                        raise
+
+                    self._emit_progress("Combined download not ready yet; checking job status and retrying...")
+                    try:
+                        status = self.backend_client.get_export_job_status(export_id)
+                        if isinstance(status, dict):
+                            playlist_ids = [
+                                str(pid)
+                                for pid in list(status.get('playlist_ids') or [])
+                                if isinstance(pid, str) and pid
+                            ]
+                            export_format = str(status.get('file_format') or 'xlsx')
+                            self._persist_active_export_job(status, playlist_ids, export_format)
+
+                            status_name = str(status.get('status', ''))
+                            continuation_required = bool(status.get('continuation_required', True))
+                            if status_name != 'completed' and continuation_required and playlist_ids:
+                                self._emit_progress("Resuming combined export job before download retry...")
+                                resumed_status = self._generate_batch_export_resumable(
+                                    playlist_ids=playlist_ids,
+                                    format=export_format,
+                                    chunk_size=1,
+                                    max_steps=240,
+                                    report_errors=False,
+                                    resume_context={'allow_resume': True},
+                                )
+                                if isinstance(resumed_status, dict):
+                                    self._persist_active_export_job(resumed_status, playlist_ids, export_format)
+                    except BackendAPIError as status_err:
+                        logger.warning("Combined download recovery status check failed: %s", status_err)
+
+                    time.sleep(3.0)
+
+            return False
         except BackendAPIError as e:
             error_msg = self._format_backend_api_error(e, 'Combined export download failed')
             if report_errors and self.error_callback:

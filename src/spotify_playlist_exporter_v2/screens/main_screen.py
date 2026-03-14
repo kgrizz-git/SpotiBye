@@ -1762,23 +1762,6 @@ class MainScreen(Screen):
                 return
 
             export_id = export_info.get('job_id', '') if isinstance(export_info, dict) else ''
-
-            # Large combined workbook generation in one Worker invocation often exceeds CPU limits.
-            total_tracks = int(export_info.get('track_count', 0)) if isinstance(export_info, dict) else 0
-            if total_tracks >= 3500:
-                self.backend_adapter.clear_active_export_job(export_id or None)
-                self._set_backend_error_context('sequential-fallback', f'preemptive large-download-avoidance tracks={total_tracks}')
-                fallback_result = self._backend_export_fallback_sequential(valid_playlists, output_path)
-                s = fallback_result.get('success_count', 0)
-                f = fallback_result.get('failed_count', 0)
-                if s > 0:
-                    Clock.schedule_once(lambda _, ss=s, ff=f: setattr(self.status_label, 'text', f'Export complete via sequential fallback ({ss} saved, {ff} failed)'), 0)
-                    Clock.schedule_once(lambda _: setattr(self.progress_bar, 'value', 100), 0)
-                else:
-                    Clock.schedule_once(lambda _: setattr(self.status_label, 'text', 'Backend combined export too large and sequential fallback failed'), 0)
-                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-                Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
-                return
             self._set_backend_error_context('chunked-combined', f'download job={export_id or "unknown"}')
 
             Clock.schedule_once(
@@ -1789,8 +1772,34 @@ class MainScreen(Screen):
 
             success = self.backend_adapter.download_batch_export(export_id, target_path, report_errors=False)
             if not success:
-                self._set_backend_error_context('sequential-fallback', 'start-after-download-failure')
-                # Cool down briefly before fallback to avoid immediate re-hit of a degraded backend.
+                # Recovery pass: try to resume/reconcile combined job state and retry combined download once.
+                self._set_backend_error_context('chunked-combined', 'recover-and-redownload')
+                Clock.schedule_once(
+                    lambda _: setattr(self.status_label, 'text', 'Combined download failed; retrying combined export recovery...'),
+                    0,
+                )
+                recovered_info = self.backend_adapter.generate_batch_export_chunked(
+                    playlist_ids,
+                    'xlsx',
+                    chunk_size=1,
+                    max_steps=240,
+                    report_errors=False,
+                    resume_context={
+                        'allow_resume': True,
+                        'output_path': target_path,
+                        'playlist_names': [p.get('name', '') for p in valid_playlists],
+                    },
+                )
+                recovered_export_id = (
+                    recovered_info.get('job_id', '') if isinstance(recovered_info, dict) else ''
+                ) or export_id
+
+                if recovered_export_id:
+                    success = self.backend_adapter.download_batch_export(recovered_export_id, target_path, report_errors=False)
+
+            if not success:
+                self._set_backend_error_context('sequential-fallback', 'start-after-combined-failure')
+                # Combined path failed after retries/recovery; now degrade to sequential.
                 time.sleep(6.0)
                 fallback_result = self._backend_export_fallback_sequential(valid_playlists, output_path)
                 if fallback_result.get('success_count', 0) > 0 and fallback_result.get('failed_count', 0) == 0:

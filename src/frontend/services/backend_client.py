@@ -385,7 +385,7 @@ class BackendClient:
         if self.trace_id:
             headers['X-SpotiBye-Trace-Id'] = self.trace_id
 
-        response = self.session.get(url, headers=headers, timeout=120)
+        response = self.session.get(url, headers=headers, timeout=300)
         if response.status_code >= 400:
             response_data: Dict[str, Any] = {}
             try:
@@ -410,7 +410,7 @@ class BackendClient:
         if self.trace_id:
             headers['X-SpotiBye-Trace-Id'] = self.trace_id
 
-        response = self.session.get(url, headers=headers, timeout=120)
+        response = self.session.get(url, headers=headers, timeout=300)
         if response.status_code >= 400:
             response_data: Dict[str, Any] = {}
             try:
