@@ -1,6 +1,5 @@
 import { SpotifyService } from './spotify';
 import ExcelJS from 'exceljs';
-import * as XLSX from 'xlsx';
 
 interface ExportTrack {
   Artist: string;
@@ -56,6 +55,7 @@ export interface WorksheetAssemblyData {
   playlist_name: string;
   playlist_owner: string;
   playlist_followers: number;
+  playlist_cover_image_url?: string;
   playlist_description: string;
   playlist_url: string;
   total_duration: string;
@@ -570,6 +570,7 @@ export class ExportService {
       playlist_name: exportData.playlist.name,
       playlist_owner: exportData.playlist.owner,
       playlist_followers: exportData.playlist.followers,
+      playlist_cover_image_url: exportData.playlist.cover_image_url,
       playlist_description: exportData.playlist.description || 'N/A',
       playlist_url: exportData.playlist.url || '',
       total_duration: this.formatDuration(exportData.total_duration_ms),
@@ -579,81 +580,36 @@ export class ExportService {
   }
 
   async generateCombinedExcelFileFromAssembly(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {
-    const workbook = XLSX.utils.book_new();
-
-    const summarySheet = XLSX.utils.aoa_to_sheet([
-      assemblyState.summary_headers,
-      ...assemblyState.summary_rows,
-    ]);
-    summarySheet['!cols'] = [
-      { wch: 29 },
-      { wch: 24 },
-      { wch: 16 },
-      { wch: 19 },
-    ];
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Playlists');
-
-    for (const worksheet of assemblyState.worksheets) {
-      const sheetRows: ExportCellValue[][] = [
-        [worksheet.playlist_name],
-        [`Created by: ${worksheet.playlist_owner}`],
-        [`Followers: ${worksheet.playlist_followers}`],
-        [`Tracks exported: ${worksheet.rows.length}`],
-        [`Total duration: ${worksheet.total_duration}`],
-        [worksheet.playlist_url ? `Playlist URL: ${worksheet.playlist_url}` : 'Playlist URL: N/A'],
-        [`Description: ${worksheet.playlist_description || 'N/A'}`],
-        [],
-        [],
-        [],
-        worksheet.headers,
-        ...worksheet.rows,
-      ];
-
-      const sheet = XLSX.utils.aoa_to_sheet(sheetRows);
-      sheet['!cols'] = [
-        { wch: 30 },
-        { wch: 40 },
-        { wch: 40 },
-        { wch: 15 },
-        { wch: 60 },
-        { wch: 12 },
-        { wch: 14 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 16 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 14 },
-      ];
-
-      if (worksheet.playlist_url) {
-        const urlCell = sheet['A6'];
-        if (urlCell) {
-          (urlCell as any).l = { Target: worksheet.playlist_url };
+    // Reconstruct lightweight ExportData objects and reuse the full ExcelJS renderer
+    // so assembled resumable exports keep table styles and embedded cover images.
+    const exportDataList: ExportData[] = assemblyState.worksheets.map((worksheet) => {
+      const tracks = worksheet.rows.map((row) => {
+        const track: Partial<ExportTrack> = {};
+        for (let i = 0; i < worksheet.headers.length; i += 1) {
+          const key = worksheet.headers[i] as keyof ExportTrack;
+          (track as any)[key] = row[i] ?? '';
         }
-      }
+        return track as ExportTrack;
+      });
 
-      if (worksheet.rows.length > 0) {
-        for (let index = 0; index < worksheet.rows.length; index += 1) {
-          const spotifyUrl = worksheet.rows[index][4];
-          if (typeof spotifyUrl === 'string' && spotifyUrl.startsWith('http')) {
-            const address = XLSX.utils.encode_cell({ r: 11 + index, c: 4 });
-            const cell = sheet[address];
-            if (cell) {
-              (cell as any).l = { Target: spotifyUrl };
-            }
-          }
-        }
-        (sheet as any)['!autofilter'] = { ref: `A11:P${11 + worksheet.rows.length}` };
-      }
+      return {
+        playlist: {
+          id: '',
+          name: worksheet.playlist_name,
+          description: worksheet.playlist_description || '',
+          total_tracks: tracks.length,
+          owner: worksheet.playlist_owner,
+          followers: worksheet.playlist_followers,
+          url: worksheet.playlist_url || '',
+          cover_image_url: worksheet.playlist_cover_image_url,
+        },
+        tracks,
+        total_duration_ms: 0,
+        generated_at: new Date().toISOString(),
+      };
+    });
 
-      XLSX.utils.book_append_sheet(workbook, sheet, worksheet.sheet_name);
-    }
-
-    return XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+    return this.generateCombinedExcelFile(exportDataList);
   }
 
   async generateCombinedCsvFromAssembly(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {
