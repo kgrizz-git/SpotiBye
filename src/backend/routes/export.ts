@@ -211,6 +211,7 @@ app.post('/jobs/:jobId/step', async (c) => {
     const jobKey = buildExportJobKey(jobId, userId);
     const dataKey = buildExportJobDataKey(jobId, userId);
     const assemblyKey = buildExportJobAssemblyKey(jobId, userId);
+    const cacheService = new CacheService(c.env.CACHE_KV);
     const job = await cacheService.get<ResumableExportJobStatus>(jobKey);
     const exportDataList = await cacheService.get<any[]>(dataKey);
     const assemblyState = await cacheService.get<ResumableExportAssemblyState>(assemblyKey);
@@ -341,7 +342,6 @@ app.get('/jobs/:jobId/status', async (c) => {
       return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, 404);
     }
 
-    const cacheService = new CacheService(c.env.CACHE_KV);
     const jobKey = buildExportJobKey(jobId, userId);
     const hasDefaultFile = await cacheService.exists(buildExportFileKey(jobKey));
     const hasLiteFile = await cacheService.exists(buildExportFileKey(jobKey, 'lite'));
