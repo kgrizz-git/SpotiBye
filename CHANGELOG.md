@@ -17,6 +17,9 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ### Fixed
 - Removed hardcoded executable version values from the PyInstaller spec to reduce release drift.
+- Fixed GitHub release publishing permissions by granting workflow `contents: write` access.
+- Fixed release creation race conditions by moving GitHub release publishing to a single post-build job.
+- Added explicit Node.js 24 action runtime opt-in for GitHub Actions compatibility.
 
 ### Known Issues
 - macOS bundle identifier and company metadata still use placeholder values and should be finalized before public distribution.
