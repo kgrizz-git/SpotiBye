@@ -18,7 +18,6 @@ on:
 
 jobs:
   build:
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || (github.event.inputs.platform == 'windows' && matrix.os == 'windows-latest') || (github.event.inputs.platform == 'macos' && matrix.os == 'macos-latest') || (github.event.inputs.platform == 'linux' && matrix.os == 'ubuntu-latest') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -26,15 +25,33 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
+    # Set SKIP_BUILD=true when a specific platform is requested and this runner
+    # doesn't match. runner.os lowercased matches the platform input values
+    # (Windows→windows, macOS→macos, Linux→linux).
+    - name: Set platform skip flag
+      shell: bash
+      run: |
+        PLATFORM="${{ github.event.inputs.platform }}"
+        OS_LOWER=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && \
+           [[ -n "$PLATFORM" ]] && \
+           [[ "$PLATFORM" != "all" ]] && \
+           [[ "$OS_LOWER" != "$PLATFORM" ]]; then
+          echo "SKIP_BUILD=true" >> "$GITHUB_ENV"
+        fi
+
     - name: Checkout code
+      if: env.SKIP_BUILD != 'true'
       uses: actions/checkout@v3
 
     - name: Set up Python
+      if: env.SKIP_BUILD != 'true'
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
     - name: Resolve app version
+      if: env.SKIP_BUILD != 'true'
       shell: bash
       run: |
         if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
@@ -45,7 +62,7 @@ jobs:
         echo "APP_VERSION=${APP_VERSION}" >> "${GITHUB_ENV}"
 
     - name: Install system dependencies (Linux)
-      if: runner.os == 'Linux'
+      if: env.SKIP_BUILD != 'true' && runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -56,20 +73,21 @@ jobs:
           zlib1g-dev upx
 
     - name: Install Python dependencies
+      if: env.SKIP_BUILD != 'true'
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
 
     - name: Build executable (Windows)
-      if: runner.os == 'Windows'
+      if: env.SKIP_BUILD != 'true' && runner.os == 'Windows'
+      shell: pwsh
       run: |
         pyinstaller spotibye.spec --noconfirm --clean
         Compress-Archive -Path dist\SpotiBye\* -DestinationPath SpotiBye-Windows-v${{ env.APP_VERSION }}.zip -Force
-      shell: pwsh
 
     - name: Build executable (macOS)
-      if: runner.os == 'macOS'
+      if: env.SKIP_BUILD != 'true' && runner.os == 'macOS'
       run: |
         pyinstaller spotibye.spec --noconfirm --clean
         cd dist
@@ -77,7 +95,7 @@ jobs:
         cd ..
 
     - name: Build executable (Linux)
-      if: runner.os == 'Linux'
+      if: env.SKIP_BUILD != 'true' && runner.os == 'Linux'
       run: |
         pyinstaller spotibye.spec --noconfirm --clean
         cd dist
@@ -85,6 +103,7 @@ jobs:
         cd ..
 
     - name: Upload artifact
+      if: env.SKIP_BUILD != 'true'
       uses: actions/upload-artifact@v3
       with:
         name: SpotiBye-${{ runner.os }}-v${{ env.APP_VERSION }}
@@ -94,7 +113,7 @@ jobs:
           ${{ runner.os == 'Linux' && format('dist/SpotiBye-Linux-v{0}.tar.gz', env.APP_VERSION) || '' }}
 
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
+      if: env.SKIP_BUILD != 'true' && startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: |
