@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -8,6 +9,44 @@ from pathlib import Path
 # PyInstaller may execute spec files without defining __file__.
 PROJECT_ROOT = Path(__file__).parent.resolve() if '__file__' in globals() else Path.cwd().resolve()
 SRC_DIR = PROJECT_ROOT / 'src'
+
+
+def read_project_version(pyproject_path: Path) -> str:
+    """Read project.version from pyproject.toml without extra dependencies."""
+    content = pyproject_path.read_text(encoding='utf-8')
+    in_project_section = False
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#'):
+            continue
+
+        if line.startswith('['):
+            in_project_section = line == '[project]'
+            continue
+
+        if in_project_section:
+            match = re.match(r'^version\s*=\s*["\']([^"\']+)["\']$', line)
+            if match:
+                return match.group(1)
+
+    raise ValueError('Could not find [project].version in pyproject.toml')
+
+
+def to_windows_version_tuple(version: str) -> tuple[int, int, int, int]:
+    """Convert semantic version to a 4-part Windows version tuple."""
+    parsed = []
+    for part in version.split('.')[:4]:
+        parsed.append(int(part) if part.isdigit() else 0)
+
+    while len(parsed) < 4:
+        parsed.append(0)
+
+    return tuple(parsed[:4])
+
+
+APP_VERSION = read_project_version(PROJECT_ROOT / 'pyproject.toml')
+APP_VERSION_TUPLE = to_windows_version_tuple(APP_VERSION)
 
 # Platform-specific settings
 if sys.platform == 'win32':
@@ -20,8 +59,8 @@ if sys.platform == 'win32':
     # Version info for Windows executable
     version_info = vs.VSVersionInfo(
         ffi=vs.FixedFileInfo(
-            filevers=(1, 0, 0, 0),
-            prodvers=(1, 0, 0, 0),
+            filevers=APP_VERSION_TUPLE,
+            prodvers=APP_VERSION_TUPLE,
             mask=0x3f,
             flags=0x0,
             OS=0x40004,
@@ -37,12 +76,12 @@ if sys.platform == 'win32':
                         [
                             vs.StringStruct('CompanyName', 'Your Company'),
                             vs.StringStruct('FileDescription', 'SpotiBye - Spotify Playlist Exporter'),
-                            vs.StringStruct('FileVersion', '1.0.0'),
+                            vs.StringStruct('FileVersion', APP_VERSION),
                             vs.StringStruct('InternalName', 'SpotiBye'),
                             vs.StringStruct('LegalCopyright', '© 2025 Your Company. All rights reserved.'),
                             vs.StringStruct('OriginalFilename', 'SpotiBye.exe'),
                             vs.StringStruct('ProductName', 'SpotiBye'),
-                            vs.StringStruct('ProductVersion', '1.0.0')
+                            vs.StringStruct('ProductVersion', APP_VERSION)
                         ]
                     )
                 ]
@@ -140,8 +179,8 @@ if sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'SpotiBye',
             'CFBundleDisplayName': 'SpotiBye',
-            'CFBundleVersion': '1.0.0',
-            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleVersion': APP_VERSION,
+            'CFBundleShortVersionString': APP_VERSION,
             'NSHighResolutionCapable': 'True',
             'NSRequiresAquaSystemAppearance': 'False',
             'NSAppTransportSecurity': {

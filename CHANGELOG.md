@@ -1,0 +1,22 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format follows Keep a Changelog and this project uses Semantic Versioning.
+
+## [0.1.0] - 2026-03-15
+
+### Added
+- Initial semantic version baseline for the desktop app at 0.1.0.
+- Cross-platform desktop build pipeline via GitHub Actions for Windows, macOS, and Linux executables.
+- Versioned build artifact naming in CI release outputs.
+
+### Changed
+- Desktop executable metadata now uses the project version from pyproject.toml for Windows and macOS packaging.
+- Release process now includes explicit changelog maintenance and semantic version tracking.
+
+### Fixed
+- Removed hardcoded executable version values from the PyInstaller spec to reduce release drift.
+
+### Known Issues
+- macOS bundle identifier and company metadata still use placeholder values and should be finalized before public distribution.

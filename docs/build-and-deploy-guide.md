@@ -88,9 +88,9 @@ Notes:
   - manual run (`workflow_dispatch`)
 - Builds on `windows-latest`, `macos-latest`, `ubuntu-latest`
 - Produces artifacts:
-  - Windows: `SpotiBye-Windows.zip`
-  - macOS: `dist/SpotiBye-macOS.dmg`
-  - Linux: `dist/SpotiBye-Linux.tar.gz`
+  - Windows: `SpotiBye-Windows-vX.Y.Z.zip`
+  - macOS: `dist/SpotiBye-macOS-vX.Y.Z.dmg`
+  - Linux: `dist/SpotiBye-Linux-vX.Y.Z.tar.gz`
 
 ### Backend deployment workflows
 - `.github/workflows/deploy-backend.yml`
@@ -136,9 +136,20 @@ wrangler secret put JWT_SECRET
 wrangler secret put RECOCOBEATS_API_KEY
 ```
 
-## 5) Recommended Release Flow
+## 5) Versioning and Changelog
+
+- Canonical desktop app version source: `pyproject.toml` (`[project].version`)
+- Runtime package version: `src/spotify_playlist_exporter_v2/__init__.py`
+- Release notes history: `CHANGELOG.md`
+
+Rule:
+- For any user-visible change, update `CHANGELOG.md` in the same pull request.
+
+## 6) Recommended Release Flow
 
 1. Verify backend tests pass (`src/backend`).
-2. Build desktop app locally.
-3. Tag release (`vX.Y.Z`) and push tag.
-4. Let GitHub Actions build desktop artifacts and deploy production backend.
+2. Bump desktop version in `pyproject.toml` and `src/spotify_playlist_exporter_v2/__init__.py`.
+3. Update `CHANGELOG.md` for all user-visible changes.
+4. Build desktop app locally.
+5. Tag release (`vX.Y.Z`) and push tag.
+6. Let GitHub Actions build desktop artifacts and deploy production backend.

@@ -18,18 +18,12 @@ on:
 
 jobs:
   build:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || (github.event.inputs.platform == 'windows' && matrix.os == 'windows-latest') || (github.event.inputs.platform == 'macos' && matrix.os == 'macos-latest') || (github.event.inputs.platform == 'linux' && matrix.os == 'ubuntu-latest') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        exclude:
-          - os: windows-latest
-            if: ${{ github.event.inputs.platform != 'all' && github.event.inputs.platform != 'windows' && github.event.inputs.platform != '' }}
-          - os: ubuntu-latest
-            if: ${{ github.event.inputs.platform != 'all' && github.event.inputs.platform != 'linux' && github.event.inputs.platform != '' }}
-          - os: macos-latest
-            if: ${{ github.event.inputs.platform != 'all' && github.event.inputs.platform != 'macos' && github.event.inputs.platform != '' }}
 
     steps:
     - name: Checkout code
@@ -39,6 +33,16 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+
+    - name: Resolve app version
+      shell: bash
+      run: |
+        if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          APP_VERSION="${GITHUB_REF#refs/tags/v}"
+        else
+          APP_VERSION="$(python -c "import pathlib,re; text=pathlib.Path('pyproject.toml').read_text(encoding='utf-8'); m=re.search(r'^version\\s*=\\s*\"([^\"]+)\"', text, re.M); print(m.group(1) if m else '0.0.0')")"
+        fi
+        echo "APP_VERSION=${APP_VERSION}" >> "${GITHUB_ENV}"
 
     - name: Install system dependencies (Linux)
       if: runner.os == 'Linux'
@@ -61,7 +65,7 @@ jobs:
       if: runner.os == 'Windows'
       run: |
         pyinstaller spotibye.spec --noconfirm --clean
-        Compress-Archive -Path dist\SpotiBye\* -DestinationPath SpotiBye-Windows.zip -Force
+        Compress-Archive -Path dist\SpotiBye\* -DestinationPath SpotiBye-Windows-v${{ env.APP_VERSION }}.zip -Force
       shell: pwsh
 
     - name: Build executable (macOS)
@@ -69,7 +73,7 @@ jobs:
       run: |
         pyinstaller spotibye.spec --noconfirm --clean
         cd dist
-        hdiutil create -volname "SpotiBye" -srcfolder SpotiBye.app -ov -format UDZO SpotiBye-macOS.dmg
+        hdiutil create -volname "SpotiBye" -srcfolder SpotiBye.app -ov -format UDZO SpotiBye-macOS-v${APP_VERSION}.dmg
         cd ..
 
     - name: Build executable (Linux)
@@ -77,26 +81,26 @@ jobs:
       run: |
         pyinstaller spotibye.spec --noconfirm --clean
         cd dist
-        tar -czvf SpotiBye-Linux.tar.gz SpotiBye/
+        tar -czvf SpotiBye-Linux-v${APP_VERSION}.tar.gz SpotiBye/
         cd ..
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: SpotiBye-${{ runner.os }}
+        name: SpotiBye-${{ runner.os }}-v${{ env.APP_VERSION }}
         path: |
-          ${{ runner.os == 'Windows' && 'SpotiBye-Windows.zip' || '' }}
-          ${{ runner.os == 'macOS' && 'dist/SpotiBye-macOS.dmg' || '' }}
-          ${{ runner.os == 'Linux' && 'dist/SpotiBye-Linux.tar.gz' || '' }}
+          ${{ runner.os == 'Windows' && format('SpotiBye-Windows-v{0}.zip', env.APP_VERSION) || '' }}
+          ${{ runner.os == 'macOS' && format('dist/SpotiBye-macOS-v{0}.dmg', env.APP_VERSION) || '' }}
+          ${{ runner.os == 'Linux' && format('dist/SpotiBye-Linux-v{0}.tar.gz', env.APP_VERSION) || '' }}
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          ${{ runner.os == 'Windows' && 'SpotiBye-Windows.zip' || '' }}
-          ${{ runner.os == 'macOS' && 'dist/SpotiBye-macOS.dmg' || '' }}
-          ${{ runner.os == 'Linux' && 'dist/SpotiBye-Linux.tar.gz' || '' }}
+          ${{ runner.os == 'Windows' && format('SpotiBye-Windows-v{0}.zip', env.APP_VERSION) || '' }}
+          ${{ runner.os == 'macOS' && format('dist/SpotiBye-macOS-v{0}.dmg', env.APP_VERSION) || '' }}
+          ${{ runner.os == 'Linux' && format('dist/SpotiBye-Linux-v{0}.tar.gz', env.APP_VERSION) || '' }}
         draft: false
         prerelease: false
       env:
