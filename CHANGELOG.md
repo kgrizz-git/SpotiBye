@@ -23,6 +23,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Reduced Windows CI packaging time by switching artifact compression to `tar -a` instead of `Compress-Archive`.
 - Improved CI dependency install reliability and speed with pip cache and `--prefer-binary` package resolution.
 - Fixed Windows CI Kivy/OpenGL initialization failures by deferring `Window` imports until runtime and forcing ANGLE-backed Kivy settings during PyInstaller builds.
+- Fixed Windows CI packaging to support both PyInstaller output modes (`dist/SpotiBye/` onedir and `dist/SpotiBye.exe` onefile).
 
 ### Known Issues
 - macOS bundle identifier and company metadata still use placeholder values and should be finalized before public distribution.

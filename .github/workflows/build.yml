@@ -98,7 +98,16 @@ jobs:
         $env:KIVY_WINDOW = 'sdl2'
         $env:KIVY_NO_ARGS = '1'
         pyinstaller spotibye.spec --noconfirm --clean
-        tar -a -c -f SpotiBye-Windows-v${{ env.APP_VERSION }}.zip -C dist SpotiBye
+        $zipPath = "SpotiBye-Windows-v${{ env.APP_VERSION }}.zip"
+        if (Test-Path "dist\SpotiBye") {
+          tar -a -c -f $zipPath -C dist SpotiBye
+        } elseif (Test-Path "dist\SpotiBye.exe") {
+          tar -a -c -f $zipPath -C dist SpotiBye.exe
+        } else {
+          Write-Error "Expected dist\\SpotiBye directory or dist\\SpotiBye.exe, but neither was found."
+          Get-ChildItem -Recurse dist
+          exit 1
+        }
 
     - name: Build executable (macOS)
       if: env.SKIP_BUILD != 'true' && runner.os == 'macOS'
