@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional
 from kivymd.app import MDApp
 from kivy.clock import Clock
 from kivy.config import Config
-from kivy.core.window import Window
 from kivy.lang.builder import Builder
 from kivy.logger import Logger as logger
 from kivy.metrics import dp

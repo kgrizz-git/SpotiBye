@@ -8,10 +8,16 @@ import time
 from typing import Tuple
 
 from kivy.clock import Clock
-from kivy.core.window import Window
 from kivy.metrics import dp
 
 from ..logging_config import logger
+
+
+def _window():
+    """Lazily import Kivy Window to avoid import-time GL initialization."""
+    from kivy.core.window import Window as KivyWindow
+
+    return KivyWindow
 
 
 def diagnose_macos_issues() -> None:
@@ -276,7 +282,8 @@ def set_window_on_top() -> None:
 
                 def bring_to_front(dt):
                     try:
-                        hwnd = ctypes.windll.user32.FindWindowW(None, Window.title)
+                        window = _window()
+                        hwnd = ctypes.windll.user32.FindWindowW(None, window.title)
                         if hwnd:
                             ctypes.windll.user32.ShowWindow(hwnd, 9)
                             ctypes.windll.user32.SetForegroundWindow(hwnd)
@@ -312,7 +319,8 @@ def set_window_on_top() -> None:
             try:
                 def bring_to_front_linux(dt):
                     try:
-                        subprocess.run(['wmctrl', '-a', Window.title], check=False, timeout=2)
+                        window = _window()
+                        subprocess.run(['wmctrl', '-a', window.title], check=False, timeout=2)
                     except (FileNotFoundError, subprocess.TimeoutExpired):
                         logger.info("wmctrl not available or timed out")
                     except Exception as exc:
@@ -329,20 +337,21 @@ def set_window_on_top() -> None:
 def set_window_basics(title: str) -> None:
     """Common logic for setting window size, title, and positioning."""
     try:
+        window = _window()
         width, height = calculate_optimal_window_size()
-        Window.size = (width, height)
-        Window.title = title
+        window.size = (width, height)
+        window.title = title
 
         mobile = is_mobile_platform()
         if mobile:
-            Window.resizable = False
-            Window.fullscreen = 'auto'
+            window.resizable = False
+            window.fullscreen = 'auto'
             logger.info("Mobile window configured: %sx%s (fullscreen)", width, height)
         else:
-            Window.resizable = True
-            Window.fullscreen = False
-            Window.minimum_width = 480
-            Window.minimum_height = 600
+            window.resizable = True
+            window.fullscreen = False
+            window.minimum_width = 480
+            window.minimum_height = 600
             logger.info("Desktop window configured: %sx%s", width, height)
 
             Clock.schedule_once(lambda dt: _position_and_focus_window(), 0.5)
@@ -359,12 +368,13 @@ def _position_and_focus_window() -> None:
             return
 
         try:
+            window = _window()
             screen_width, screen_height = get_screen_resolution()
-            width, height = Window.size
+            width, height = window.size
             pos_x = max(0, (screen_width - width) // 2)
             pos_y = max(0, (screen_height - height) // 2)
-            Window.left = pos_x
-            Window.top = pos_y
+            window.left = pos_x
+            window.top = pos_y
             logger.info("Desktop window positioned at: %s, %s (centered)", pos_x, pos_y)
         except Exception as exc:
             logger.info("Could not position window: %s", exc)

@@ -20,6 +20,9 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed GitHub release publishing permissions by granting workflow `contents: write` access.
 - Fixed release creation race conditions by moving GitHub release publishing to a single post-build job.
 - Added explicit Node.js 24 action runtime opt-in for GitHub Actions compatibility.
+- Reduced Windows CI packaging time by switching artifact compression to `tar -a` instead of `Compress-Archive`.
+- Improved CI dependency install reliability and speed with pip cache and `--prefer-binary` package resolution.
+- Fixed Windows CI Kivy/OpenGL initialization failures by deferring `Window` imports until runtime and forcing ANGLE-backed Kivy settings during PyInstaller builds.
 
 ### Known Issues
 - macOS bundle identifier and company metadata still use placeholder values and should be finalized before public distribution.

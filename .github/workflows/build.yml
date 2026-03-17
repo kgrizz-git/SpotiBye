@@ -25,6 +25,8 @@ env:
 jobs:
   build:
     timeout-minutes: 120
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -56,6 +58,8 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
+        cache: 'pip'
+        cache-dependency-path: requirements.txt
 
     - name: Resolve app version
       if: env.SKIP_BUILD != 'true'
@@ -83,15 +87,18 @@ jobs:
       if: env.SKIP_BUILD != 'true'
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install --prefer-binary -r requirements.txt
         pip install pyinstaller
 
     - name: Build executable (Windows)
       if: env.SKIP_BUILD != 'true' && runner.os == 'Windows'
       shell: pwsh
       run: |
+        $env:KIVY_GL_BACKEND = 'angle_sdl2'
+        $env:KIVY_WINDOW = 'sdl2'
+        $env:KIVY_NO_ARGS = '1'
         pyinstaller spotibye.spec --noconfirm --clean
-        Compress-Archive -Path dist\SpotiBye\* -DestinationPath SpotiBye-Windows-v${{ env.APP_VERSION }}.zip -Force
+        tar -a -c -f SpotiBye-Windows-v${{ env.APP_VERSION }}.zip -C dist SpotiBye
 
     - name: Build executable (macOS)
       if: env.SKIP_BUILD != 'true' && runner.os == 'macOS'
@@ -124,6 +131,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
     - name: Download build artifacts
       uses: actions/download-artifact@v4
