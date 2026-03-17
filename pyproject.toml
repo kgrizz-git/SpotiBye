@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spotibye"
-version = "0.1.0"
+version = "0.1.1"
 description = "Refactored Spotify Playlist Exporter (Kivy desktop)"
 authors = [{ name = "Kevin Grizzard" }]
 readme = "README.md"

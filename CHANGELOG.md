@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and this project uses Semantic Versioning.
 
+## [0.1.1] - 2026-03-17
+
+### Fixed
+- Hardened GitHub Actions desktop release workflow for permissions, release creation, and artifact packaging across platforms.
+- Fixed backend resumable export route regressions that caused CI test failures after recent changes.
+- Fixed packaged desktop startup failures by including missing runtime dependency `kivymd` in build manifests.
+- Fixed packaged macOS playlist cover rendering by bundling CA certificates and using a pinned cert bundle for HTTPS image downloads.
+- Fixed backend-mode cache explorer mismatch so cached playlist visibility matches cache status reporting.
+
 ## [0.1.0] - 2026-03-15
 
 ### Added
