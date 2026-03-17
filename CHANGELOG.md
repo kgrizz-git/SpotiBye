@@ -25,6 +25,8 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed Windows CI Kivy/OpenGL initialization failures by deferring `Window` imports until runtime and forcing ANGLE-backed Kivy settings during PyInstaller builds.
 - Fixed Windows CI packaging to support both PyInstaller output modes (`dist/SpotiBye/` onedir and `dist/SpotiBye.exe` onefile).
 - Fixed packaged desktop startup crash (`ModuleNotFoundError: kivymd`) by including `kivymd` in project and CI build dependencies.
+- Fixed packaged macOS playlist cover rendering by bundling CA certificates (`certifi`) and using the certificate bundle for HTTPS image downloads.
+- Fixed cache explorer mismatch in backend mode so backend-cached playlists are visible instead of incorrectly showing "No cached playlists found" while file counts are present.
 
 ### Known Issues
 - macOS bundle identifier and company metadata still use placeholder values and should be finalized before public distribution.

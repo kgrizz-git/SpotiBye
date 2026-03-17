@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import certifi
 import requests
 from kivy.cache import Cache
 from kivy.core.image import Image as CoreImage
@@ -78,7 +79,14 @@ class CachedAsyncImage(AsyncImage):
     def _download_and_cache_image(self):
         """Download image from network and cache it locally."""
         try:
-            response = requests.get(self.original_url, timeout=10)
+            response = requests.get(
+                self.original_url,
+                timeout=10,
+                verify=certifi.where(),
+                headers={
+                    'User-Agent': 'SpotiBye/0.1.0 (+https://github.com/kevingrizzard/SpotiBye)'
+                },
+            )
             response.raise_for_status()
             
             # Cache the image data
@@ -92,7 +100,12 @@ class CachedAsyncImage(AsyncImage):
                 Clock.schedule_once(lambda dt: self._fallback_to_network())
                 
         except Exception as exc:
-            logger.warning("Error downloading image %s: %s", self.original_url, exc)
+            logger.warning(
+                "Error downloading image %s: %s (cert bundle: %s)",
+                self.original_url,
+                exc,
+                certifi.where(),
+            )
             Clock.schedule_once(lambda dt: self._fallback_to_network())
     
     def _load_from_local(self, local_path: str):

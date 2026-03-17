@@ -22,6 +22,7 @@ from spotify_playlist_exporter_v2.logging_config import logger
 try:
     from ..services.backend_client import BackendClient
     from ..config.backend_config import BackendConfig
+    from ..caching.backend_cache import get_cache_manager
     BACKEND_AVAILABLE = True
 except ImportError:
     BACKEND_AVAILABLE = False
@@ -40,6 +41,7 @@ class BackendCacheExplorerPopup(Popup):
         # Backend client for cache status
         self.backend_client = None
         self.backend_cache_status = None
+        self.cache_manager = get_cache_manager() if BACKEND_AVAILABLE else None
         
         # UI components
         self.main_layout = None
@@ -50,6 +52,7 @@ class BackendCacheExplorerPopup(Popup):
         
         self.build_ui()
         self.initialize_backend_client()
+        self.populate_from_backend_local_cache()
         self.load_backend_cache_status()
 
     def build_ui(self) -> None:
@@ -139,7 +142,8 @@ class BackendCacheExplorerPopup(Popup):
 
     def load_backend_cache_status(self) -> None:
         """Load backend cache status asynchronously."""
-        if not self.backend_client:
+        if not self.backend_client or not hasattr(self.backend_client, 'get_cache_status'):
+            self.update_backend_status_from_local_cache()
             return
             
         def load_status():
@@ -153,7 +157,58 @@ class BackendCacheExplorerPopup(Popup):
                 
             except Exception as exc:
                 logger.error("Failed to load backend cache status: %s", exc)
-                Clock.schedule_once(lambda dt: self.update_backend_error(str(exc)))
+                Clock.schedule_once(lambda dt: self.update_backend_status_from_local_cache())
+
+    def update_backend_status_from_local_cache(self, *_args) -> None:
+        """Fallback status using local backend cache manager stats."""
+        if not self.cache_manager:
+            self.backend_status_label.text = 'Backend: No cache manager'
+            return
+
+        stats = self.cache_manager.get_cache_stats()
+        total_files = int(stats.get('total_files', 0) or 0)
+        playlists = int(stats.get('playlists_count', 0) or 0)
+        tracks = int(stats.get('tracks_count', 0) or 0)
+        size_mb = float(stats.get('total_size_mb', 0) or 0)
+        self.backend_status_label.text = (
+            f'Backend Local Cache: {size_mb:.1f}MB, {total_files} files, '
+            f'{playlists} playlists, {tracks} track entries'
+        )
+
+    def populate_from_backend_local_cache(self) -> None:
+        """Populate embedded explorer using backend cache data when legacy cache is empty."""
+        if not self.cache_manager or not self.cache_explorer:
+            return
+
+        cached_playlists = self.cache_manager.get_cached_playlists() or []
+        if not cached_playlists:
+            return
+
+        existing_playlists = self.cache_explorer.cache_data.get('playlists', []) if self.cache_explorer.cache_data else []
+        if existing_playlists:
+            return
+
+        now_ts = datetime.now().timestamp()
+        mapped = []
+        for playlist in cached_playlists:
+            mapped.append({
+                'cache_key': f"backend_{playlist.get('id', 'unknown')}",
+                'playlist_id': playlist.get('id', ''),
+                'user_id': playlist.get('owner', {}).get('id', ''),
+                'name': playlist.get('name', 'Unknown Playlist'),
+                'tracks_count': playlist.get('tracks', {}).get('total', 0),
+                'cached_at': now_ts,
+                'size_mb': 0.0,
+            })
+
+        self.cache_explorer.cache_data = {
+            'summary': self.cache_manager.get_cache_stats(),
+            'playlists': mapped,
+            'tracks': [],
+            'images': [],
+            'analysis': [],
+        }
+        self.cache_explorer.populate_playlists_column()
         
         # Run in background thread
         threading.Thread(target=load_status, daemon=True).start()

@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files
 
 # Project root directory
 # PyInstaller may execute spec files without defining __file__.
@@ -113,11 +114,12 @@ a = Analysis(
     datas=[
         (str(SRC_DIR / 'spotify_playlist_exporter_v2'), 'spotify_playlist_exporter_v2'),
         (str(SRC_DIR / 'frontend'), 'frontend'),
-    ],
+    ] + collect_data_files('certifi'),
     hiddenimports=[
         'kivy',
         'kivymd',
         'kivymd.icon_definitions',
+        'certifi',
         'requests',
         'spotipy',
         'openpyxl',

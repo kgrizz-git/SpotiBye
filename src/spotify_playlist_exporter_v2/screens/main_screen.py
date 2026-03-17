@@ -61,7 +61,7 @@ from ..ui.cache_explorer import CacheExplorerPopup
 
 # Import backend cache explorer adapter if available
 try:
-    from ..frontend.screens.cache_explorer_adapter import create_cache_explorer
+    from frontend.screens.cache_explorer_adapter import create_cache_explorer
     BACKEND_CACHE_EXPLORER_AVAILABLE = True
 except ImportError:
     BACKEND_CACHE_EXPLORER_AVAILABLE = False
