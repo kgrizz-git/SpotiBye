@@ -90,6 +90,35 @@ jobs:
         pip install --prefer-binary -r requirements.txt
         pip install pyinstaller
 
+    - name: Validate icon assets
+      if: env.SKIP_BUILD != 'true'
+      shell: bash
+      run: |
+        ICON_BASE="resources/SpotiBye black edited 1-modified"
+        case "${{ runner.os }}" in
+          Windows)
+            ICON_PATH="${ICON_BASE}.ico"
+            ;;
+          macOS)
+            ICON_PATH="${ICON_BASE}.icns"
+            ;;
+          Linux)
+            ICON_PATH="${ICON_BASE}.png"
+            ;;
+          *)
+            echo "Unsupported runner OS: ${{ runner.os }}"
+            exit 1
+            ;;
+        esac
+
+        if [[ ! -f "$ICON_PATH" ]]; then
+          echo "Missing required icon for ${{ runner.os }} build: $ICON_PATH"
+          ls -la resources || true
+          exit 1
+        fi
+
+        echo "Using icon for ${{ runner.os }} build: $ICON_PATH"
+
     - name: Build executable (Windows)
       if: env.SKIP_BUILD != 'true' && runner.os == 'Windows'
       shell: pwsh
@@ -121,9 +150,15 @@ jobs:
       if: env.SKIP_BUILD != 'true' && runner.os == 'Linux'
       run: |
         pyinstaller spotibye.spec --noconfirm --clean
-        cd dist
-        tar -czvf SpotiBye-Linux-v${APP_VERSION}.tar.gz SpotiBye/
-        cd ..
+        PACKAGE_ROOT="dist/SpotiBye-Linux-v${APP_VERSION}"
+        rm -rf "$PACKAGE_ROOT"
+        mkdir -p "$PACKAGE_ROOT/resources"
+        cp -R dist/SpotiBye "$PACKAGE_ROOT/SpotiBye"
+        cp "resources/SpotiBye black edited 1-modified.png" "$PACKAGE_ROOT/resources/"
+        cp "packaging/linux/SpotiBye.desktop" "$PACKAGE_ROOT/SpotiBye.desktop.template"
+        cp "packaging/linux/install-desktop-entry.sh" "$PACKAGE_ROOT/install-desktop-entry.sh"
+        chmod +x "$PACKAGE_ROOT/install-desktop-entry.sh"
+        tar -czvf "dist/SpotiBye-Linux-v${APP_VERSION}.tar.gz" -C dist "SpotiBye-Linux-v${APP_VERSION}"
 
     - name: Upload artifact
       if: env.SKIP_BUILD != 'true'

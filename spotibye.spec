@@ -55,7 +55,7 @@ if sys.platform == 'win32':
     import PyInstaller.utils.win32.versioninfo as vs
     
     exe_name = 'SpotiBye.exe'
-    icon = str(SRC_DIR / 'frontend' / 'assets' / 'icon.ico')
+    icon = str(PROJECT_ROOT / 'resources' / 'SpotiBye black edited 1-modified.ico')
     
     # Version info for Windows executable
     version_info = vs.VSVersionInfo(
@@ -91,9 +91,12 @@ if sys.platform == 'win32':
         ]
     )
 else:
-    # macOS specific settings
+    # macOS/Linux settings
     exe_name = 'SpotiBye'
-    icon = str(SRC_DIR / 'frontend' / 'assets' / 'icon.icns')
+    if sys.platform == 'darwin':
+        icon = str(PROJECT_ROOT / 'resources' / 'SpotiBye black edited 1-modified.icns')
+    else:
+        icon = str(PROJECT_ROOT / 'resources' / 'SpotiBye black edited 1-modified.png')
     version_info = None
 
 # Default to unsigned local builds. For release signing/notarization,

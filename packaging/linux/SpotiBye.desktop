@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SpotiBye
+Comment=Spotify Playlist Exporter
+Exec=__SPOTIBYE_EXEC__
+Icon=__SPOTIBYE_ICON__
+Terminal=false
+Categories=AudioVideo;Utility;
+StartupWMClass=SpotiBye

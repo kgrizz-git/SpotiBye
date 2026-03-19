@@ -92,6 +92,18 @@ Notes:
   - macOS: `dist/SpotiBye-macOS-vX.Y.Z.dmg`
   - Linux: `dist/SpotiBye-Linux-vX.Y.Z.tar.gz`
 
+Linux artifact contents:
+- `SpotiBye/` (PyInstaller app folder)
+- `resources/SpotiBye black edited 1-modified.png` (launcher icon)
+- `SpotiBye.desktop.template` (desktop entry template)
+- `install-desktop-entry.sh` (installs a launcher entry in `~/.local/share/applications`)
+
+After extracting the Linux archive, install a launcher entry:
+```bash
+cd SpotiBye-Linux-vX.Y.Z
+./install-desktop-entry.sh
+```
+
 ### Backend deployment workflows
 - `.github/workflows/deploy-backend.yml`
   - Runs tests for changes under `src/backend/**`
