@@ -59,12 +59,18 @@ from ..ui.layouts import ResponsiveGridLayout
 from ..ui.playlist_card import PlaylistCard
 from ..ui.cache_explorer import CacheExplorerPopup
 
-# Import backend cache explorer adapter if available
+# Import backend cache explorer adapter if available.
+# Prefer the runtime path used by the packaged launcher (`src.frontend...`),
+# then fall back to `frontend...` for editable/local package layouts.
 try:
-    from frontend.screens.cache_explorer_adapter import create_cache_explorer
+    from src.frontend.screens.cache_explorer_adapter import create_cache_explorer
     BACKEND_CACHE_EXPLORER_AVAILABLE = True
 except ImportError:
-    BACKEND_CACHE_EXPLORER_AVAILABLE = False
+    try:
+        from frontend.screens.cache_explorer_adapter import create_cache_explorer
+        BACKEND_CACHE_EXPLORER_AVAILABLE = True
+    except ImportError:
+        BACKEND_CACHE_EXPLORER_AVAILABLE = False
 from ..utils.platform_utils import is_mobile_platform
 
 

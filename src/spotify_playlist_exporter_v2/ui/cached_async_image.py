@@ -121,6 +121,8 @@ class CachedAsyncImage(AsyncImage):
         except Exception as exc:
             logger.warning("Error loading local image %s: %s", local_path, exc)
             self._fallback_to_network()
+        finally:
+            self._is_loading = False
     
     def _fallback_to_network(self):
         """Fallback to regular AsyncImage network loading."""

@@ -277,6 +277,13 @@ class PersistentCache:
                 return None
 
             cache_info = self.metadata['images'][url_hash]
+            # Legacy builds wrote WebP files that packaged Kivy providers may not decode.
+            # Drop the entry here to force a clean re-download in JPEG/PNG.
+            legacy_path = str(cache_info.get('file_path', ''))
+            if legacy_path.endswith('.webp'):
+                self._remove_image_cache(url_hash)
+                return None
+
             if not self._is_cache_valid(cache_info['cached_at']):
                 logger.debug("Image cache expired for %s", image_url)
                 self._remove_image_cache(url_hash)

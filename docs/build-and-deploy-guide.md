@@ -150,6 +150,26 @@ Rule:
 1. Verify backend tests pass (`src/backend`).
 2. Bump desktop version in `pyproject.toml` and `src/spotify_playlist_exporter_v2/__init__.py`.
 3. Update `CHANGELOG.md` for all user-visible changes.
-4. Build desktop app locally.
-5. Tag release (`vX.Y.Z`) and push tag.
+4. **Build the desktop app locally and smoke-test before tagging** (see checklist below).
+5. Tag release (`vX.Y.Z`) and push tag only after the smoke-test passes.
 6. Let GitHub Actions build desktop artifacts and deploy production backend.
+
+### Local smoke-test checklist (run before every tag)
+
+```bash
+source .venv/bin/activate
+pyinstaller spotibye.spec --noconfirm --clean
+```
+
+Then launch the built executable (`dist/SpotiBye.app` on macOS, `dist/SpotiBye/SpotiBye` on Linux/Windows) and verify:
+
+- [ ] App launches without a crash dialog or console traceback.
+- [ ] Backend selector popup appears and `Test Connection` succeeds against your chosen backend.
+- [ ] Playlist grid loads and all cover images render (no red X placeholders).
+- [ ] Scroll through a few playlist cards — covers should appear within a few seconds.
+- [ ] Open **Cache Explorer** — the playlist list should not be empty (should match the count shown in the status bar).
+- [ ] Select a playlist in Cache Explorer and confirm tracks appear in the tracks column.
+- [ ] Export at least one playlist to CSV or XLSX and confirm the file is written to Downloads.
+- [ ] Quit and relaunch — backend selection is restored automatically (no selector popup on second launch unless explicitly cleared).
+
+Only push the version tag once all checklist items pass on your local macOS build.
