@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and this project uses Semantic Versioning.
 
+## [0.1.2] - 2026-03-18
+
+### Fixed
+- Fixed backend cache explorer fallback wiring so backend cache status refresh and playlist population use valid background tasks.
+- Fixed cache explorer consistency in backend mode by ensuring local backend cache playlists are surfaced when legacy playlist metadata is empty.
+- Fixed playlist cover cache compatibility by avoiding WebP-only cached image output in packaged desktop builds.
+
 ## [0.1.1] - 2026-03-17
 
 ### Fixed

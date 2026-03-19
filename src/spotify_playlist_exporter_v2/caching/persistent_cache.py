@@ -159,13 +159,13 @@ class PersistentCache:
             if optimized_data:
                 image_data = optimized_data
             
-            # Prefer WebP format for better compression
-            file_ext = '.webp'
+            # Keep broadly supported formats for packaged desktop builds.
+            file_ext = '.jpg'
             lowered = image_url.lower()
-            if '.png' in lowered and not PIL_AVAILABLE:
-                file_ext = '.png'  # Keep PNG if PIL not available for conversion
-            elif '.jpg' in lowered or '.jpeg' in lowered:
-                file_ext = '.webp'  # Convert to WebP for better compression
+            if '.png' in lowered:
+                file_ext = '.png'
+            elif '.jpeg' in lowered or '.jpg' in lowered:
+                file_ext = '.jpg'
 
             cache_file = self.image_cache_dir / f"{url_hash}{file_ext}"
             with open(cache_file, 'wb') as file:
@@ -187,7 +187,7 @@ class PersistentCache:
             return None
     
     def _optimize_image(self, image_data: bytes, image_url: str) -> Optional[bytes]:
-        """Optimize image data by compressing and converting to WebP."""
+        """Optimize image data while preserving a widely supported output format."""
         if not PIL_AVAILABLE:
             return None
         
@@ -196,14 +196,17 @@ class PersistentCache:
             import io
             image = Image.open(io.BytesIO(image_data))
             
-            # Convert to RGB if necessary (for WebP compatibility)
+            # Convert to RGB when writing JPEG. Preserve alpha for PNG where possible.
             if image.mode in ('RGBA', 'LA', 'P'):
-                # Create a white background for transparency
-                background = Image.new('RGB', image.size, (255, 255, 255))
-                if image.mode == 'P':
-                    image = image.convert('RGBA')
-                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
-                image = background
+                if '.png' in image_url.lower():
+                    if image.mode == 'P':
+                        image = image.convert('RGBA')
+                else:
+                    background = Image.new('RGB', image.size, (255, 255, 255))
+                    if image.mode == 'P':
+                        image = image.convert('RGBA')
+                    background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                    image = background
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
             
@@ -212,9 +215,13 @@ class PersistentCache:
             if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
                 image.thumbnail(max_size, Image.Resampling.LANCZOS)
             
-            # Convert to WebP with good quality/size ratio
+            # Encode using JPEG/PNG for compatibility with Kivy providers in packaged apps.
             output = io.BytesIO()
-            image.save(output, 'WebP', quality=85, method=6)  # method=6 for better compression
+            lowered = image_url.lower()
+            if '.png' in lowered:
+                image.save(output, 'PNG', optimize=True)
+            else:
+                image.save(output, 'JPEG', quality=85, optimize=True)
             optimized_data = output.getvalue()
             
             # Only use optimized version if it's smaller

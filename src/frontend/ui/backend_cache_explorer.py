@@ -159,6 +159,9 @@ class BackendCacheExplorerPopup(Popup):
                 logger.error("Failed to load backend cache status: %s", exc)
                 Clock.schedule_once(lambda dt: self.update_backend_status_from_local_cache())
 
+        # Run in background thread
+        threading.Thread(target=load_status, daemon=True).start()
+
     def update_backend_status_from_local_cache(self, *_args) -> None:
         """Fallback status using local backend cache manager stats."""
         if not self.cache_manager:
@@ -209,9 +212,6 @@ class BackendCacheExplorerPopup(Popup):
             'analysis': [],
         }
         self.cache_explorer.populate_playlists_column()
-        
-        # Run in background thread
-        threading.Thread(target=load_status, daemon=True).start()
 
     def update_backend_status_display(self, dt) -> None:
         """Update backend status display."""
