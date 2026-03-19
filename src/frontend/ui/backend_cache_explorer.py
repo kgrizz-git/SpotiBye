@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import logging
 from datetime import datetime
@@ -178,17 +179,31 @@ class BackendCacheExplorerPopup(Popup):
             f'{playlists} playlists, {tracks} track entries'
         )
 
+    def _read_playlists_raw(self) -> List[Dict[str, Any]]:
+        """Read playlists.json directly, bypassing TTL, for cache-explorer display."""
+        try:
+            playlists_path = self.cache_manager.cache_dir / 'playlists.json'
+            if not playlists_path.exists():
+                return []
+            with open(playlists_path, 'r') as fh:
+                data = json.load(fh)
+            if isinstance(data, dict) and 'data' in data:
+                return data['data'] or []
+            if isinstance(data, list):
+                return data
+        except Exception as exc:
+            logger.warning("Failed to read playlists raw: %s", exc)
+        return []
+
     def populate_from_backend_local_cache(self) -> None:
         """Populate embedded explorer using backend cache data when legacy cache is empty."""
         if not self.cache_manager or not self.cache_explorer:
             return
 
-        cached_playlists = self.cache_manager.get_cached_playlists() or []
+        # Try live (within-TTL) cache first, then fall back to a raw file read so the
+        # explorer still shows data even when the TTL has expired.
+        cached_playlists = self.cache_manager.get_cached_playlists() or self._read_playlists_raw()
         if not cached_playlists:
-            return
-
-        existing_playlists = self.cache_explorer.cache_data.get('playlists', []) if self.cache_explorer.cache_data else []
-        if existing_playlists:
             return
 
         now_ts = datetime.now().timestamp()
@@ -212,6 +227,20 @@ class BackendCacheExplorerPopup(Popup):
             'analysis': [],
         }
         self.cache_explorer.populate_playlists_column()
+
+        # The CacheExplorerPopup background thread (started in its __init__) will call
+        # _on_cache_data_loaded once the legacy PersistentCache load finishes.  That
+        # would overwrite the backend data above with an empty list.  Patch the
+        # instance method so backend playlists are preserved when legacy data is empty.
+        backend_playlists = mapped
+        original_method = CacheExplorerPopup._on_cache_data_loaded
+
+        def _merged_on_cache_data_loaded(cache_data):
+            if not cache_data.get('playlists'):
+                cache_data['playlists'] = backend_playlists
+            original_method(self.cache_explorer, cache_data)
+
+        self.cache_explorer._on_cache_data_loaded = _merged_on_cache_data_loaded
 
     def update_backend_status_display(self, dt) -> None:
         """Update backend status display."""

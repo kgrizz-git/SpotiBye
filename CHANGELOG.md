@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and this project uses Semantic Versioning.
 
+## [0.1.3] - 2026-03-18
+
+### Fixed
+- Fixed playlist cover images still showing red X after 0.1.2: on startup the app now purges leftover `.webp` image cache files (cached by older builds) so fresh JPEG downloads are triggered instead of Kivy attempting to decode an unsupported format.
+- Fixed Cache Explorer still showing "No cached playlists found" after 0.1.2: resolved a race condition where the legacy `PersistentCache` background load thread was overwriting backend playlist data; also added a TTL-bypass read so playlists are displayed even after the 1-hour cache window expires.
+
 ## [0.1.2] - 2026-03-18
 
 ### Fixed

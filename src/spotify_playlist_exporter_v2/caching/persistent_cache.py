@@ -44,11 +44,45 @@ class PersistentCache:
 
         self.metadata_file = self.cache_dir / "cache_metadata.json"
         self.metadata = self._load_metadata()
+        self._migrate_webp_cache()
 
         self.max_cache_age_days = 7
         self.max_cache_size_mb = 100
 
         logger.info("Initialized persistent cache at: %s", self.cache_dir)
+
+    # ------------------------------------------------------------------
+    # Migration helpers
+    # ------------------------------------------------------------------
+    def _migrate_webp_cache(self) -> None:
+        """Remove .webp image cache entries left by old builds.
+
+        Kivy's image providers in packaged macOS/Windows builds cannot decode
+        WebP, so any cached .webp files from earlier versions of the app must
+        be purged so that fresh JPEG/PNG downloads are triggered.
+        """
+        changed = False
+        for url_hash in list(self.metadata.get('images', {}).keys()):
+            entry = self.metadata['images'][url_hash]
+            file_path = entry.get('file_path', '')
+            if file_path.endswith('.webp'):
+                try:
+                    Path(file_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+                del self.metadata['images'][url_hash]
+                changed = True
+
+        # Also sweep for orphaned .webp files not tracked in metadata.
+        for webp_file in self.image_cache_dir.glob('*.webp'):
+            try:
+                webp_file.unlink()
+            except Exception:
+                pass
+
+        if changed:
+            self._save_metadata()
+            logger.info("Purged legacy WebP image cache entries")
 
     # ------------------------------------------------------------------
     # Metadata
