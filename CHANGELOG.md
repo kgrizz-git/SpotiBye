@@ -6,6 +6,8 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-03-19
+
 ### Changed
 - Desktop packaging now uses icon assets from `resources/` across all build targets (`.ico` for Windows, `.icns` for macOS, and `.png` for Linux) so artifacts consistently include the intended app icons.
 - Build CI now validates the required per-platform icon file before running PyInstaller, failing fast with a clear error if an icon asset is missing.
