@@ -3,12 +3,10 @@ import { CacheService } from './cache';
 import type { Env } from '../types/env';
 
 export class AnalysisService {
-  private reccoBeatsApiKey: string;
   private accessToken: string;
   private reccoBeatsUrl = 'https://api.recocbeats.com/v1';
   
-  constructor(reccoBeatsApiKey: string, accessToken: string) {
-    this.reccoBeatsApiKey = reccoBeatsApiKey;
+  constructor(accessToken: string) {
     this.accessToken = accessToken;
   }
   
@@ -70,8 +68,7 @@ export class AnalysisService {
     const response = await fetch(`${this.reccoBeatsUrl}/analyze`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.reccoBeatsApiKey}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(data)
     });

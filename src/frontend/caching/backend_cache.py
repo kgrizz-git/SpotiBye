@@ -30,12 +30,30 @@ class BackendCacheManager:
         """
         self.backend_client = backend_client
         self.cache_dir = CACHE_DIR
-        self.token_cache_path = Path(TOKEN_CACHE_PATH)
+        
+        # Create environment-specific cache paths
+        backend_url = self._get_backend_url_safe()
+        env_hash = self._hash_backend_url(backend_url)
+        self.token_cache_path = self.cache_dir / f"backend_token_{env_hash}.json"
+        
         self._file_locks = {}  # Dictionary to store file locks
         self._lock = threading.Lock()  # Global lock for managing file locks
         
         # Ensure cache directory exists
         self.cache_dir.mkdir(exist_ok=True)
+    
+    def _get_backend_url_safe(self) -> str:
+        """Get backend URL safely, fallback to default if not available."""
+        if self.backend_client:
+            return self.backend_client.base_url
+        return "default"
+    
+    def _hash_backend_url(self, backend_url: str) -> str:
+        """Create a safe hash of backend URL for cache filenames."""
+        import hashlib
+        # Create a short, safe hash for filename
+        hash_obj = hashlib.sha256(backend_url.encode())
+        return hash_obj.hexdigest()[:12]
         
     # Token management
     def save_auth_token(self, token_data: Dict[str, Any]) -> None:
@@ -246,7 +264,10 @@ class BackendCacheManager:
 
     def clear_active_export_job(self) -> None:
         """Remove cached active resumable export job metadata."""
-        cache_path = self.cache_dir / 'active_export_job.json'
+        # Add environment hash to filename for environment-specific caching
+        env_hash = self._hash_backend_url(self._get_backend_url_safe())
+        env_filename = f"{env_hash}_active_export_job.json"
+        cache_path = self.cache_dir / env_filename
         file_lock = self._get_file_lock(cache_path)
 
         with file_lock:
@@ -307,7 +328,10 @@ class BackendCacheManager:
         Returns:
             Cached data or None if not found/invalid
         """
-        cache_path = self.cache_dir / filename
+        # Add environment hash to filename for environment-specific caching
+        env_hash = self._hash_backend_url(self._get_backend_url_safe())
+        env_filename = f"{env_hash}_{filename}"
+        cache_path = self.cache_dir / env_filename
         
         file_lock = self._get_file_lock(cache_path)
         
@@ -338,7 +362,10 @@ class BackendCacheManager:
             filename: Cache filename
             data: Data to cache
         """
-        cache_path = self.cache_dir / filename
+        # Add environment hash to filename for environment-specific caching
+        env_hash = self._hash_backend_url(self._get_backend_url_safe())
+        env_filename = f"{env_hash}_{filename}"
+        cache_path = self.cache_dir / env_filename
         self._atomic_write_cache_file(cache_path, data)
     
     def _is_cache_valid(self, filename: str) -> bool:
@@ -352,7 +379,10 @@ class BackendCacheManager:
             True if cache is valid, False otherwise
         """
         try:
-            cache_path = self.cache_dir / filename
+            # Add environment hash to filename for environment-specific caching
+            env_hash = self._hash_backend_url(self._get_backend_url_safe())
+            env_filename = f"{env_hash}_{filename}"
+            cache_path = self.cache_dir / env_filename
             if not cache_path.exists():
                 return False
             

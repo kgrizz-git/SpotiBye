@@ -16,7 +16,7 @@ app.post('/playlist/:id', async (c) => {
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
     
-    const analysisService = new AnalysisService(c.env.RECOCOBEATS_API_KEY, accessToken);
+    const analysisService = new AnalysisService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
     
     // Check if analysis is already in progress or completed

@@ -31,6 +31,7 @@ app.get('/health', (c) => {
   });
 });
 
+
 // API routes
 app.route('/auth', authRoutes);
 app.route('/spotify', spotifyRoutes);

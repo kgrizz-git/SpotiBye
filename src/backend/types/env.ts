@@ -9,9 +9,6 @@ export interface Env {
   // JWT secret
   JWT_SECRET: string;
   
-  // ReccoBeats API key
-  RECOCOBEATS_API_KEY: string;
-  
   // KV namespaces
   CACHE_KV: KVNamespace;
   SESSIONS_KV: KVNamespace;
