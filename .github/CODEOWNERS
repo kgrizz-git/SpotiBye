@@ -1,0 +1,17 @@
+# Global fallback - require review for all changes
+* @kgrizz
+
+# Security-sensitive files
+/.github/workflows/           @kgrizz
+/.github/workflows/security.yml @kgrizz
+/secrets/                     @kgrizz
+**/*.env*                     @kgrizz
+**/wrangler.toml              @kgrizz
+/src/backend/middleware/      @kgrizz
+/src/frontend/auth/           @kgrizz
+/src/spotify_playlist_exporter_v2/auth/ @kgrizz
+
+# Security configuration files
+/.pre-commit-config.yaml      @kgrizz
+/bandit.yaml                  @kgrizz
+/semgrep.yml                  @kgrizz

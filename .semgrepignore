@@ -1,0 +1,14 @@
+# Semgrep ignore file
+# This file tells Semgrep to ignore specific files and patterns
+
+# Ignore gitleaks configuration files
+.gitleaks.toml
+
+# Ignore backup and documentation files that contain example secrets
+**/backup*/
+**/*.backup
+**/docs/**/example*
+
+# Ignore test files
+**/test_*.py
+**/tests/**

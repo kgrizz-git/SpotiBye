@@ -23,6 +23,9 @@ dependencies = [
 development = [
     "black",
     "ruff",
+    "bandit[toml]>=1.7.8",
+    "pip-audit>=2.7.0",
+    "pip-review>=1.3.0",
 ]
 
 [project.scripts]
@@ -30,3 +33,9 @@ spotify-playlist-exporter = "spotify_playlist_exporter_v2.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "venv", "__pycache__", "build", "dist"]
+skips = ["B101", "B601"]  # Skip assert warnings and wildcard imports
+severity = "medium"
+confidence = "medium"

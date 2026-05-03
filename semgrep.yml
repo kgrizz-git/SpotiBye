@@ -1,0 +1,70 @@
+# Semgrep configuration for SpotiBye project
+# See: https://semgrep.dev/docs/semgrep-code/rule-board/
+
+rules:
+  # Include Semgrep's standard rule packs
+  - r/security-audit
+  - r/owasp-top-ten
+  - r/cwe-top-25
+  - r/ci
+  - r/secrets
+  - r/javascript
+  - r/typescript
+  - r/python
+
+
+  # Custom rules for project-specific patterns
+  - id: spotify-api-key-hardcoded
+    patterns:
+      - pattern-regex: (sp_[a-zA-Z0-9]{32,}|SPOTIFY_[A-Z_]*KEY.*=.*["'][^"']{20,}["'])
+    message: "Potential hardcoded Spotify API key detected"
+    severity: ERROR
+    languages: [python, javascript, typescript, generic]
+    metadata:
+      category: security
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+
+  - id: jwt-secret-hardcoded
+    patterns:
+      - pattern-regex: (JWT[_-]?SECRET|jwt[_-]?secret).*=.*["'][^"']{10,}["']
+    message: "Potential hardcoded JWT secret detected"
+    severity: ERROR
+    languages: [python, javascript, typescript, generic]
+    metadata:
+      category: security
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+
+  - id: cloudflare-api-token-hardcoded
+    patterns:
+      - pattern-regex: (CLOUDFLARE[_-]?API[_-]?TOKEN|cloudflare[_-]?api[_-]?token).*=.*["'][^"']{20,}["']
+    message: "Potential hardcoded Cloudflare API token detected"
+    severity: ERROR
+    languages: [python, javascript, typescript, generic]
+    metadata:
+      category: security
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+
+# Configuration options
+config:
+  # Files to exclude
+  exclude:
+    - tests/**
+    - .venv/**
+    - venv/**
+    - __pycache__/**
+    - build/**
+    - dist/**
+    - node_modules/**
+    - "*.min.js"
+    - "*.min.css"
+    - .gitleaks.toml
+    - "**/.gitleaks.toml"
+
+  # Maximum file size to scan (in bytes)
+  max-target-bytes: 1000000
+
+  # Number of jobs to run in parallel
+  jobs: 4
+
+  # Show progress
+  verbose: true

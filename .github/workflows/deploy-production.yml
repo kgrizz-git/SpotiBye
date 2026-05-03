@@ -2,8 +2,38 @@ name: Deploy Production
 
 on:
   workflow_dispatch:
+    inputs:
+      skip_security_checks:
+        description: 'Skip security checks (emergency only)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
+  security-checks:
+    name: Security Verification
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_security_checks }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --only-verified
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -34,9 +64,13 @@ jobs:
       run: echo "Linting skipped temporarily - ESLint configuration issues" # npm run lint
 
   deploy-prod:
-    needs: test
+    needs: [test, security-checks]
+    if: always() && needs.test.result == 'success' && (needs.security-checks.result == 'success' || needs.security-checks.result == 'skipped')
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+      actions: write
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -62,7 +96,7 @@ jobs:
       run: |
         VERSION=$(date +%Y%m%d-%H%M%S)
         echo "Deploying version $VERSION"
-        
+
         echo "Deployment Info:" > deployment-info.txt
         echo "Version: $VERSION" >> deployment-info.txt
         echo "Commit: ${{ github.sha }}" >> deployment-info.txt
