@@ -101,7 +101,7 @@ def ensure_directories() -> None:
     """Create necessary directories if they don't exist."""
     CACHE_DIR.mkdir(exist_ok=True)
     Path(TOKEN_CACHE_PATH).parent.mkdir(exist_ok=True)
-    Path(EXPORT_DIR).mkdir(exist_ok=True)
+    Path(EXPORT_DIR).expanduser().mkdir(exist_ok=True)
     Path(TEMP_DIR).mkdir(exist_ok=True)
 
 
@@ -180,7 +180,7 @@ def validate_config() -> list[str]:
         issues.append(f"Cannot create cache directory: {e}")
     
     try:
-        Path(EXPORT_DIR).mkdir(exist_ok=True)
+        Path(EXPORT_DIR).expanduser().mkdir(exist_ok=True)
     except Exception as e:
         issues.append(f"Cannot create export directory: {e}")
     

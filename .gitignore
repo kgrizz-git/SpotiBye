@@ -21,3 +21,9 @@ yarn-error.log*
 
 # API security documentation (keep local, not in repo)
 docs/api_key_security.md
+
+# Environment variables (keep local, not in repo)
+.env
+.env.local
+.env.production
+.env.development
