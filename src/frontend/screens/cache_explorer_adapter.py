@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from kivy.clock import Clock
 
 from spotify_playlist_exporter_v2.logging_config import logger
 
 try:
     from ..ui.backend_cache_explorer import BackendCacheExplorerPopup
     from ..config.backend_config import BackendConfig
+
     BACKEND_AVAILABLE = True
 except ImportError:
     BACKEND_AVAILABLE = False
@@ -22,11 +21,11 @@ from spotify_playlist_exporter_v2.ui.cache_explorer import CacheExplorerPopup
 
 class CacheExplorerAdapter:
     """Adapter that provides appropriate cache explorer based on backend availability."""
-    
+
     def __init__(self):
         self.backend_available = BACKEND_AVAILABLE
         self.backend_config = None
-        
+
         if self.backend_available:
             try:
                 self.backend_config = BackendConfig()
@@ -44,7 +43,7 @@ class CacheExplorerAdapter:
                 logger.error("Failed to create backend cache explorer: %s", exc)
                 # Fallback to standard cache explorer
                 logger.info("Falling back to standard cache explorer")
-        
+
         # Return standard cache explorer
         return CacheExplorerPopup()
 
@@ -55,14 +54,14 @@ class CacheExplorerAdapter:
     def get_cache_status_info(self) -> dict[str, Any]:
         """Get cache status information for display."""
         info = {
-            'local_cache': True,
-            'backend_cache': self.is_backend_enabled(),
-            'backend_url': None
+            "local_cache": True,
+            "backend_cache": self.is_backend_enabled(),
+            "backend_url": None,
         }
-        
+
         if self.backend_config:
-            info['backend_url'] = self.backend_config.backend_url
-            
+            info["backend_url"] = self.backend_config.backend_url
+
         return info
 
 

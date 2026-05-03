@@ -33,7 +33,7 @@ wrangler tail --env production
 
 #### 401 Unauthorized Errors
 **Symptoms**: API calls return 401 status codes
-**Causes**: 
+**Causes**:
 - Expired JWT token
 - Invalid token format
 - Missing Authorization header
@@ -120,13 +120,13 @@ if (duration > 2000) {
 async function processLargePlaylist(tracks: Track[]) {
   const CHUNK_SIZE = 100;
   const results = [];
-  
+
   for (let i = 0; i < tracks.length; i += CHUNK_SIZE) {
     const chunk = tracks.slice(i, i + CHUNK_SIZE);
     const chunkResult = await processChunk(chunk);
     results.push(chunkResult);
   }
-  
+
   return results;
 }
 
@@ -260,7 +260,7 @@ O
 
 Ooma
 
-O 
+O
 ### Spotify API читать
 
 #### Rate Limitassociations
@@ -292,7 +292,7 @@ class RateLimiter {
 
   async checkLimit(): Promise<boolean> {
     const now = Date.now();
-    
+
     if (now > this.resetTime) {
       this.requests = 0;
       this.resetTime = now + 60000; // 1 minute window
@@ -357,20 +357,20 @@ async function generateExportStream(playlist: Playlist) {
       try {
         // Write header
         controller.write('Track Name,Artist,Album,Duration\n');
-        
+
         // Stream tracks
         for (const track of playlist.tracks) {
           const row = `${track.name},${track.artist},${track.album},${track.duration}\n`;
           controller.write(row);
         }
-        
+
         controller.close();
       } catch (error) {
         controller.error(error);
       }
     }
   });
-  
+
   return stream;
 }
 ```
@@ -387,7 +387,7 @@ async function generateExportStream(playlist: Playlist) {
 // Check export validity
 async function validateExport(env: Env, exportId: string): Promise<boolean> {
   const exportData = await env.EXPORT_KV.get(exportId);
-  
+
   if (!exportData) {
     return false;
   }
@@ -431,7 +431,7 @@ function withPerformanceMonitoring(fn: Function) {
     const start = performance.now();
     const result = await fn(...args);
     const duration = performance.now() - start;
-    
+
     console.log(`Function ${fn.name} took ${duration.toFixed(2)}ms`);
     return result;
   };

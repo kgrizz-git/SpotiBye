@@ -28,7 +28,7 @@ app.get('/playlists', async (c) => {
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
     console.info('[playlists] start', { userId });
-    
+
     // Check cache first
     const cacheKey = `playlists:v2:${userId}`;
     const cached = await cacheService.get(cacheKey);
@@ -69,11 +69,11 @@ app.get('/playlists', async (c) => {
     }
 
     console.info('[playlists] aggregated', { userId, totalCount: playlists.length });
-    
+
     // Cache for 5 minutes
     await cacheService.set(cacheKey, playlists, 300);
     console.info('[playlists] cache set', { userId, cacheKey, ttlSeconds: 300, totalCount: playlists.length });
-    
+
     return c.json({ data: playlists, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get playlists:', error);
@@ -101,19 +101,19 @@ app.get('/playlists/:id', async (c) => {
     const accessToken = c.get('access_token');
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
-    
+
     // Check cache first
     const cacheKey = `playlist:${playlistId}`;
     const cached = await cacheService.get(cacheKey);
     if (cached) {
       return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
     }
-    
+
     const playlist = await spotifyService.getPlaylist(playlistId);
-    
+
     // Cache for 10 minutes
     await cacheService.set(cacheKey, playlist, 600);
-    
+
     return c.json({ data: playlist, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get playlist:', error);
@@ -127,22 +127,22 @@ const getPlaylistItemsHandler = async (c: any) => {
     const accessToken = c.get('access_token');
     const limit = parseInt(c.req.query('limit') || '50');
     const offset = parseInt(c.req.query('offset') || '0');
-    
+
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
-    
+
     // Check cache first
     const cacheKey = `playlist:${playlistId}:tracks:${limit}:${offset}`;
     const cached = await cacheService.get(cacheKey);
     if (cached) {
       return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
     }
-    
+
     const tracks = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
-    
+
     // Cache for 5 minutes
     await cacheService.set(cacheKey, tracks, 300);
-    
+
     return c.json({ data: tracks, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get playlist tracks:', error);
@@ -163,19 +163,19 @@ app.get('/tracks/:id', async (c) => {
     const accessToken = c.get('access_token');
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
-    
+
     // Check cache first
     const cacheKey = `track:${trackId}`;
     const cached = await cacheService.get(cacheKey);
     if (cached) {
       return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
     }
-    
+
     const track = await spotifyService.getTrack(trackId);
-    
+
     // Cache for 1 hour
     await cacheService.set(cacheKey, track, 3600);
-    
+
     return c.json({ data: track, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get track:', error);
@@ -190,19 +190,19 @@ app.get('/tracks/:id/audio-features', async (c) => {
     const accessToken = c.get('access_token');
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
-    
+
     // Check cache first
     const cacheKey = `track:${trackId}:audio-features`;
     const cached = await cacheService.get(cacheKey);
     if (cached) {
       return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
     }
-    
+
     const audioFeatures = await spotifyService.getAudioFeatures(trackId);
-    
+
     // Cache for 1 hour
     await cacheService.set(cacheKey, audioFeatures, 3600);
-    
+
     return c.json({ data: audioFeatures, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get audio features:', error);

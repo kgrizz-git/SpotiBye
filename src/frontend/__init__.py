@@ -8,13 +8,13 @@ from .config.backend_config import CURRENT_BACKEND_URL, UIConstants, FeatureFlag
 
 __all__ = [
     "BackendClient",
-    "get_backend_client", 
+    "get_backend_client",
     "BackendAuthenticator",
     "get_authenticator",
     "BackendLoginScreen",
     "create_backend_login_screen",
     "NetworkError",
-    "ConnectionError", 
+    "ConnectionError",
     "TimeoutError",
     "CURRENT_BACKEND_URL",
     "UIConstants",

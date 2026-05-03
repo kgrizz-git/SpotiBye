@@ -11,7 +11,9 @@ from kivy.metrics import dp
 
 # Spotify API configuration
 CLIENT_ID: Final[str] = os.environ.get("SPOTIPY_CLIENT_ID", "YOUR_CLIENT_ID_HERE")
-CLIENT_SECRET: Final[str] = os.environ.get("SPOTIPY_CLIENT_SECRET", "YOUR_CLIENT_SECRET_HERE")
+CLIENT_SECRET: Final[str] = os.environ.get(
+    "SPOTIPY_CLIENT_SECRET", "YOUR_CLIENT_SECRET_HERE"
+)
 SCOPE: Final[str] = "playlist-read-private playlist-read-collaborative"
 
 # OAuth ports to try in order (fallback logic)

@@ -62,7 +62,7 @@ vi.mock('../services/spotify', () => ({
 vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation((c, next) => {
     // Mock authenticated user
-    c.set('user', { 
+    c.set('user', {
       id: 'test-user-id',
       email: 'test@example.com',
       name: 'Test User'
@@ -79,7 +79,7 @@ describe('Spotify Routes', () => {
   beforeEach(() => {
     app = new Hono<{ Bindings: Env }>();
     app.route('/spotify', spotifyRoutes);
-    
+
     mockEnv = {
       ENVIRONMENT: 'test',
       SPOTIFY_CLIENT_ID: 'test-client-id',
@@ -109,7 +109,7 @@ describe('Spotify Routes', () => {
     it('should return user playlists', async () => {
       const request = new Request('http://localhost/spotify/playlists', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -187,7 +187,7 @@ describe('Spotify Routes', () => {
     it('should return playlist details', async () => {
       const request = new Request('http://localhost/spotify/playlists/playlist1', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -204,7 +204,7 @@ describe('Spotify Routes', () => {
     it('should return playlist details for requested id', async () => {
       const request = new Request('http://localhost/spotify/playlists/nonexistent', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -222,7 +222,7 @@ describe('Spotify Routes', () => {
     it('should return playlist tracks', async () => {
       const request = new Request('http://localhost/spotify/playlists/playlist1/tracks', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -243,7 +243,7 @@ describe('Spotify Routes', () => {
     it('should return track details', async () => {
       const request = new Request('http://localhost/spotify/tracks/track1', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -262,7 +262,7 @@ describe('Spotify Routes', () => {
     it('should return track audio features', async () => {
       const request = new Request('http://localhost/spotify/tracks/track1/audio-features', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }

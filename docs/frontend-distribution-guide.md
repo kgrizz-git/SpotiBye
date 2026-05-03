@@ -222,7 +222,7 @@ To automate the build process for all platforms, we've set up GitHub Actions wor
   - Extend the GitHub workflow to create installers
   - Add build steps for `makensis` or Inno Setup
   - Automatically sign installers using GitHub Secrets
-  
+
   Example workflow addition:
   ```yaml
   - name: Create Windows Installer
@@ -261,7 +261,7 @@ To automate the build process for all platforms, we've set up GitHub Actions wor
 - **Homebrew (macOS/Linux)**:
   - Auto-update formula in a tap repository
   - Users install with: `brew install youruser/tap/spotibye`
-  
+
 - **Chocolatey (Windows)**:
   - Automate package updates
   - Submit to Chocolatey community repository
@@ -310,11 +310,11 @@ Customize the build matrix in `.github/workflows/build.yml` to:
      # Install appimagetool
      wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
      chmod +x appimagetool-x86_64.AppImage
-     
+
      # Create AppDir structure
      mkdir -p AppDir/usr/bin AppDir/usr/share/applications
      cp -r dist/SpotiBye/* AppDir/usr/bin/
-     
+
      # Create .desktop file
      cat > AppDir/spotibye.desktop <<EOL
      [Desktop Entry]
@@ -325,7 +325,7 @@ Customize the build matrix in `.github/workflows/build.yml` to:
      Type=Application
      Categories=Audio;Music;
      EOL
-     
+
      # Create AppImage
      ./appimagetool-x86_64.AppImage AppDir/ SpotiBye-x86_64.AppImage
      ```
@@ -354,11 +354,11 @@ Direct iOS builds are not supported due to platform restrictions. Consider these
    ```bash
    # Install kivy-ios
    pip3 install kivy-ios
-   
+
    # Build for iOS
    toolchain build python3 kivy
    toolchain build spotify_playlist_exporter_v2
-   
+
    # Open in Xcode
    open spotify_playlist_exporter_v2-ios/YourApp.xcodeproj
    ```

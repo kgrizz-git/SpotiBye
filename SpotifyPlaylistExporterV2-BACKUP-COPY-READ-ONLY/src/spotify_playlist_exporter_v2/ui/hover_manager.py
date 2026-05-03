@@ -37,7 +37,7 @@ class PlaylistHoverManager:
 
     def check_hover(self, dt) -> None:
         try:
-            if not hasattr(Window, 'mouse_pos') or not self.cards:
+            if not hasattr(Window, "mouse_pos") or not self.cards:
                 return
 
             mouse_pos = Window.mouse_pos
@@ -50,7 +50,10 @@ class PlaylistHoverManager:
             visible_cards = []
             for card in self.cards[:]:
                 try:
-                    if hasattr(card, 'is_visible_in_window') and card.is_visible_in_window():
+                    if (
+                        hasattr(card, "is_visible_in_window")
+                        and card.is_visible_in_window()
+                    ):
                         visible_cards.append(card)
                 except Exception:
                     self.cards.remove(card)
@@ -60,8 +63,8 @@ class PlaylistHoverManager:
                     bounds = card.get_window_bounds()
                     if bounds:
                         if (
-                            bounds['x'] <= mouse_x <= bounds['right']
-                            and bounds['y'] <= mouse_y <= bounds['top']
+                            bounds["x"] <= mouse_x <= bounds["right"]
+                            and bounds["y"] <= mouse_y <= bounds["top"]
                         ):
                             hovered_card = card
                             break

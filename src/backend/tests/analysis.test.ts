@@ -40,7 +40,7 @@ vi.mock('../services/reccobeats', () => ({
 vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation((c, next) => {
     // Mock authenticated user
-    c.set('user', { 
+    c.set('user', {
       id: 'test-user-id',
       email: 'test@example.com',
       name: 'Test User'
@@ -57,7 +57,7 @@ describe('Analysis Routes', () => {
   beforeEach(() => {
     app = new Hono<{ Bindings: Env }>();
     app.route('/analysis', analysisRoutes);
-    
+
     mockEnv = {
       ENVIRONMENT: 'test',
       SPOTIFY_CLIENT_ID: 'test-client-id',
@@ -87,7 +87,7 @@ describe('Analysis Routes', () => {
     it('should start playlist analysis', async () => {
       const request = new Request('http://localhost/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -110,7 +110,7 @@ describe('Analysis Routes', () => {
     it('should return 400 for invalid playlist ID', async () => {
       const request = new Request('http://localhost/analysis/playlist/', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -131,7 +131,7 @@ describe('Analysis Routes', () => {
 
       const request = new Request('http://localhost/analysis/playlist/playlist1/status', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -151,7 +151,7 @@ describe('Analysis Routes', () => {
 
       const request = new Request('http://localhost/analysis/playlist/nonexistent/status', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -169,7 +169,7 @@ describe('Analysis Routes', () => {
     it('should return analysis results', async () => {
       const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -192,7 +192,7 @@ describe('Analysis Routes', () => {
 
       const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }

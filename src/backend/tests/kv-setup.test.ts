@@ -29,7 +29,7 @@ describe('KV Namespace Setup Tests', () => {
       // Test that KV namespaces are properly bound
       expect(mockEnv.CACHE_KV).toBeDefined();
       expect(mockEnv.SESSIONS_KV).toBeDefined();
-      
+
       // Test basic KV operations
       const testKey = 'test-key';
       const testValue = { data: 'test' };
@@ -70,7 +70,7 @@ describe('KV Namespace Setup Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       // Health check should still work even if KV has issues
       expect(response.status).toBe(200);
     });
@@ -79,7 +79,7 @@ describe('KV Namespace Setup Tests', () => {
   describe('KV Namespace Integration', () => {
     it('should work with cache service in tests', async () => {
       const { CacheService } = await import('../services/cache');
-      
+
       const mockKV = {
         get: vi.fn().mockResolvedValue(null),
         put: vi.fn().mockResolvedValue(undefined),
@@ -88,7 +88,7 @@ describe('KV Namespace Setup Tests', () => {
       } as any;
 
       const cacheService = new CacheService(mockKV);
-      
+
       // Test cache operations
       const testKey = 'test-key';
       const testValue = { data: 'test' };
@@ -102,13 +102,13 @@ describe('KV Namespace Setup Tests', () => {
 
     it('should work with JWT service in tests', async () => {
       const { JWTService } = await import('../services/jwt');
-      
+
       const jwtService = new JWTService('test-secret');
-      
+
       // Test JWT operations
       const payload = { sub: 'test-user', email: 'test@example.com', name: 'Test User' };
       const token = await jwtService.generateToken(payload);
-      
+
       expect(typeof token).toBe('string');
       expect(token.split('.')).toHaveLength(3); // JWT has 3 parts
     });
@@ -139,11 +139,11 @@ describe('KV Namespace Setup Tests', () => {
 
       // Verify test environment
       expect(testEnv.ENVIRONMENT).toBe('test');
-      
+
       // Test that test operations don't affect production
       const testKey = 'test-isolation-key';
       await testEnv.CACHE_KV.put(testKey, 'test-value');
-      
+
       // In real implementation, this would use separate KV namespaces
       // For tests, we just verify the mock is called correctly
       expect(testEnv.CACHE_KV.put).toHaveBeenCalledWith(testKey, 'test-value');

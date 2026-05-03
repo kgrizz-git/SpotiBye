@@ -74,7 +74,9 @@ class BackendSelectorPopup(Popup):
         )
         layout.add_widget(self.status_label)
 
-        buttons = BoxLayout(orientation="horizontal", spacing=dp(8), size_hint_y=None, height=dp(42))
+        buttons = BoxLayout(
+            orientation="horizontal", spacing=dp(8), size_hint_y=None, height=dp(42)
+        )
 
         self.test_button = Button(text="Test Connection")
         self.test_button.bind(on_press=self._on_test_pressed)  # type: ignore[attr-defined]
@@ -117,7 +119,9 @@ class BackendSelectorPopup(Popup):
         self.url_input.readonly = True
         self.url_input.text = BACKEND_PRESETS[selected]
         self._last_tested_url = None
-        self._update_status("Preset selected. Click Test Connection.", (0.7, 0.7, 0.7, 1))
+        self._update_status(
+            "Preset selected. Click Test Connection.", (0.7, 0.7, 0.7, 1)
+        )
 
     def _on_url_changed(self, _instance, _text: str) -> None:
         self._last_tested_url = None
@@ -136,7 +140,9 @@ class BackendSelectorPopup(Popup):
     def _on_test_pressed(self, _instance) -> None:
         url = self._get_selected_url()
         if not is_valid_backend_url(url):
-            self._update_status("Invalid URL. Use http:// or https://", (1, 0.3, 0.3, 1))
+            self._update_status(
+                "Invalid URL. Use http:// or https://", (1, 0.3, 0.3, 1)
+            )
             return
 
         self._set_busy(True)
@@ -161,11 +167,15 @@ class BackendSelectorPopup(Popup):
     def _on_continue_pressed(self, _instance) -> None:
         url = self._get_selected_url()
         if not is_valid_backend_url(url):
-            self._update_status("Invalid URL. Use http:// or https://", (1, 0.3, 0.3, 1))
+            self._update_status(
+                "Invalid URL. Use http:// or https://", (1, 0.3, 0.3, 1)
+            )
             return
 
         if self._last_tested_url != url:
-            self._update_status("Please test this URL before continuing.", (1, 0.6, 0.2, 1))
+            self._update_status(
+                "Please test this URL before continuing.", (1, 0.6, 0.2, 1)
+            )
             return
 
         self.dismiss()

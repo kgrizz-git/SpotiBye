@@ -84,8 +84,8 @@ except BackendAPIError as e:
 ### Retry Logic
 ```python
 # Automatic retry with exponential backoff
-client = BackendClient(backend_url, token, 
-                       max_retries=3, 
+client = BackendClient(backend_url, token,
+                       max_retries=3,
                        retry_delay=1.0)
 ```
 
@@ -96,7 +96,7 @@ client = BackendClient(backend_url, token,
 # Development
 BACKEND_URL = "http://localhost:8787"
 
-# Production  
+# Production
 BACKEND_URL = "https://api.spotibye.com"
 ```
 

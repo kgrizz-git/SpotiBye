@@ -11,7 +11,7 @@ The current export system generates CSV-formatted Excel files with the following
 
 **Headers:**
 - Track ID
-- Track Name  
+- Track Name
 - Artists
 - Album
 - Duration
@@ -348,7 +348,7 @@ if (error.status === 403) {
 
 **Feasibility:** High - The Spotify API fully supports the required operations
 
-**Recommended Approach:** 
+**Recommended Approach:**
 1. First enhance export to include Spotify URIs - DONE
 2. Then implement import functionality using URIs as primary identifier
 3. Add search-based matching as fallback for legacy exports

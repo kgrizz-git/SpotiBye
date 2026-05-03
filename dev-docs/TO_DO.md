@@ -15,3 +15,5 @@
 - Check for pyright issues and fix them
 
 - Check for security vulnerabilities and fix them
+
+- start new repo, after cleaning

@@ -105,15 +105,15 @@ class Logger {
 ```typescript
 function withLogging(request: Request, env: Env): Logger {
   const logger = new Logger(env.ENVIRONMENT);
-  
+
   const start = Date.now();
   const url = new URL(request.url);
-  
+
   return {
     logger,
     logRequest: (statusCode: number, error?: string) => {
       const responseTime = Date.now() - start;
-      
+
       logger.info('API Request', {
         endpoint: url.pathname,
         method: request.method,
@@ -133,7 +133,7 @@ function withLogging(request: Request, env: Env): Logger {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { logger, logRequest } = withLogging(request, env);
-    
+
     try {
       // Handle request
       const response = await handleRequest(request, env);
@@ -263,7 +263,7 @@ interface ErrorReport {
 
 function reportError(env: Env, error: Error, context: any = {}) {
   const errorType = classifyError(error, context.statusCode || 500);
-  
+
   const report: ErrorReport = {
     timestamp: new Date().toISOString(),
     errorType,
@@ -278,7 +278,7 @@ function reportError(env: Env, error: Error, context: any = {}) {
 
   // Log error
   console.error(JSON.stringify(report));
-  
+
   // Send to external monitoring (optional)
   if (env.ERROR_WEBHOOK) {
     fetch(env.ERROR_WEBHOOK, {
@@ -315,7 +315,7 @@ async function healthCheck(env: Env): Promise<HealthStatus> {
     memory_usage: getMemoryUsage()
   };
 
-  const isHealthy = Object.values(checks).every(check => 
+  const isHealthy = Object.values(checks).every(check =>
     typeof check === 'boolean' ? check : check < 0.9 // memory usage threshold
   );
 
@@ -363,7 +363,7 @@ class PerformanceTracker {
   end(name: string): number {
     const start = this.timers.get(name);
     if (!start) return 0;
-    
+
     const duration = Date.now() - start;
     this.timers.delete(name);
     return duration;
@@ -448,7 +448,7 @@ class AlertManager {
 
   checkAlerts(env: Env) {
     const thresholds = ALERT_THRESHOLDS[env.ENVIRONMENT];
-    
+
     // Check error rate
     const totalRequests = this.counters.get('total_requests') || 0;
     const errors = this.counters.get('errors') || 0;
@@ -465,14 +465,14 @@ class AlertManager {
   private sendAlert(env: Env, type: string, message: string) {
     const now = Date.now();
     const lastAlertTime = this.lastAlert.get(type) || 0;
-    
+
     // Prevent alert spam (minimum 5 minutes between alerts)
     if (now - lastAlertTime < 300000) return;
 
     this.lastAlert.set(type, now);
-    
+
     console.error(`ALERT: ${type} - ${message}`);
-    
+
     // Send to webhook or monitoring service
     if (env.ALERT_WEBHOOK) {
       fetch(env.ALERT_WEBHOOK, {
@@ -499,34 +499,34 @@ class AlertManager {
 ### Query Examples
 ```sql
 -- Find most frequent errors
-SELECT 
+SELECT
   errorType,
   COUNT(*) as error_count,
   AVG(responseTime) as avg_response_time
-FROM logs 
+FROM logs
 WHERE timestamp > NOW() - INTERVAL '1 hour'
   AND statusCode >= 400
 GROUP BY errorType
 ORDER BY error_count DESC;
 
 -- Find slow endpoints
-SELECT 
+SELECT
   endpoint,
   AVG(responseTime) as avg_response_time,
   MAX(responseTime) as max_response_time,
   COUNT(*) as request_count
-FROM logs 
+FROM logs
 WHERE timestamp > NOW() - INTERVAL '1 hour'
 GROUP BY endpoint
 HAVING AVG(responseTime) > 1000
 ORDER BY avg_response_time DESC;
 
 -- User activity analysis
-SELECT 
+SELECT
   userId,
   COUNT(*) as request_count,
   COUNT(DISTINCT endpoint) as unique_endpoints
-FROM logs 
+FROM logs
 WHERE timestamp > NOW() - INTERVAL '24 hours'
   AND userId IS NOT NULL
 GROUP BY userId
@@ -593,7 +593,7 @@ MEMORY_THRESHOLD=0.9
 ### Update wrangler.toml
 ```toml
 [env.production]
-vars = { 
+vars = {
   ENVIRONMENT = "production",
   ALERT_WEBHOOK = "https://hooks.slack.com/services/...",
   ERROR_WEBHOOK = "https://monitoring.example.com/webhook",

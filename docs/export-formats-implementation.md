@@ -106,13 +106,13 @@ The CSV export will include all existing fields:
    def _prepare_playlist_json_data(self, playlist_data: Dict) -> Dict:
        """Convert playlist data to JSON-serializable format with Excel/CSV consistency."""
        from datetime import datetime
-       
+
        # Convert 'N/A' strings to None for JSON compatibility
        def convert_na_to_none(value):
            if value == 'N/A':
                return None
            return value
-       
+
        # Process tracks to match Excel/CSV field structure
        processed_tracks = []
        for track in playlist_data.get('tracks', []):
@@ -120,7 +120,7 @@ The CSV export will include all existing fields:
            for key, value in track.items():
                processed_track[key] = convert_na_to_none(value)
            processed_tracks.append(processed_track)
-       
+
        return {
            "playlist_info": {
                "name": playlist_data.get('name', 'Unknown'),
@@ -192,7 +192,7 @@ The CSV export will include all existing fields:
 
 ### XLSX Export
 
-#### Status: **MOSTLY COMPLETED** 
+#### Status: **MOSTLY COMPLETED**
 - **Complexity**: Medium (completed)
 - **Implementation Time**: 6-8 hours (completed)
 - **Dependencies**: pandas, openpyxl (already available)
@@ -207,12 +207,12 @@ The CSV export will include all existing fields:
 #### Implemented Features:
 1. **✅ Enhanced formatting**
    - Column width auto-adjustment
-   - Header styling 
+   - Header styling
    - Table styling
 
 2. **✅ Multi-sheet support**
    - Separate playlists into different sheets
-   - Summary sheet 
+   - Summary sheet
    - Metadata display on each playlist sheet
 
 3. **✅ Advanced features**
@@ -226,7 +226,7 @@ The CSV export will include all existing fields:
 - [ ] Validate file size with large datasets
 - [ ] Test compatibility across different Excel versions
 - [ ] Confirm comprehensive error handling
-- [ ] Confirm progress indicators for large exports 
+- [ ] Confirm progress indicators for large exports
 
 ## Comparative Analysis
 
@@ -247,7 +247,7 @@ The CSV export will include all existing fields:
 ### New Methods to Add:
 ```python
 def _export_to_csv(self, df: pd.DataFrame, file_path: str) -> None
-def _export_to_json(self, data: Dict, file_path: str) -> None  
+def _export_to_json(self, data: Dict, file_path: str) -> None
 def _prepare_playlist_json_data(self, playlist_data: List[Dict]) -> Dict
 def _get_file_extension(self, format_type: str) -> str
 ```
@@ -344,13 +344,13 @@ def _export_playlists_worker(self, format_type: str):
     try:
         # Validate inputs
         self._validate_export_parameters(format_type)
-        
+
         # Check disk space
         self._check_disk_space_requirements()
-        
+
         # Process data
         playlist_data = self._prepare_playlist_track_rows()
-        
+
         # Export based on format
         if format_type == 'csv':
             self._export_to_csv(playlist_data, file_path)
@@ -358,7 +358,7 @@ def _export_playlists_worker(self, format_type: str):
             self._export_to_json(playlist_data, file_path)
         elif format_type == 'xlsx':
             self._export_to_excel(playlist_data, file_path)
-            
+
     except InsufficientDiskSpaceError as e:
         self._show_error_dialog("Insufficient disk space", str(e))
     except PermissionError as e:
@@ -377,7 +377,7 @@ def _export_playlists_worker(self, format_type: str):
 def _validate_export_parameters(self, format_type: str):
     if format_type not in ['csv', 'json', 'xlsx']:
         raise ValueError(f"Unsupported export format: {format_type}")
-    
+
     if not self.selected_playlists:
         raise ValueError("No playlists selected for export")
 
@@ -428,7 +428,7 @@ def _log_error(self, error_message: str, context: Dict = None):
 
 #### Design Requirements:
 - **Compact dropdown** (Spinner widget) for format selection
-- **XLSX as default** format to maintain backward compatibility  
+- **XLSX as default** format to maintain backward compatibility
 - **Minimal space usage** in the export section
 - **Integration** with existing filename input and export button
 
@@ -472,7 +472,7 @@ def _get_file_extension(self, format_type: str) -> str:
     """Get file extension for export format."""
     extensions = {
         'xlsx': '.xlsx',
-        'csv': '.csv', 
+        'csv': '.csv',
         'json': '.json'
     }
     return extensions.get(format_type, '.xlsx')
@@ -484,8 +484,8 @@ def start_export(self, instance):
     """Modified to use selected format."""
     selected_format = self.format_spinner.text.lower()
     threading.Thread(
-        target=self._export_playlists_worker, 
-        args=(selected_format,), 
+        target=self._export_playlists_worker,
+        args=(selected_format,),
         daemon=True
     ).start()
 

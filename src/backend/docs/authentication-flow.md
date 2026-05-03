@@ -92,9 +92,9 @@ function verifyState(receivedState) {
 async function login() {
   const redirectUri = `${window.location.origin}/callback`;
   const state = generateSecureState();
-  
+
   storeState(state);
-  
+
   try {
     const authData = await initiateAuth(redirectUri);
     // Redirect user to Spotify
@@ -163,10 +163,10 @@ async function exchangeCodeForTokens(code) {
 
     const data = await response.json();
     const { access_token, refresh_token, expires_in, user } = data.data;
-    
+
     // Store authentication data
     storeAuthData(access_token, refresh_token, expires_in, user);
-    
+
     // Redirect to authenticated area
     window.location.href = '/dashboard';
   } catch (error) {
@@ -201,17 +201,17 @@ async function exchangeCodeForTokens(code) {
 
 function storeAuthData(accessToken, refreshToken, expiresIn, user) {
   const expiresAt = Date.now() + (expiresIn * 1000);
-  
+
   const authData = {
     accessToken,
     refreshToken,
     expiresAt,
     user
   };
-  
+
   // Store in localStorage (development only)
   localStorage.setItem('spotibye_auth', JSON.stringify(authData));
-  
+
   // Set up token refresh timer
   setupTokenRefresh(expiresIn);
 }
@@ -219,15 +219,15 @@ function storeAuthData(accessToken, refreshToken, expiresIn, user) {
 function getAuthData() {
   const stored = localStorage.getItem('spotibye_auth');
   if (!stored) return null;
-  
+
   const authData = JSON.parse(stored);
-  
+
   // Check if token is expired
   if (Date.now() > authData.expiresAt) {
     clearAuthData();
     return null;
   }
-  
+
   return authData;
 }
 
@@ -265,12 +265,12 @@ async function refreshToken() {
 
     const data = await response.json();
     const { access_token, expires_in } = data.data;
-    
+
     // Update stored auth data
     authData.accessToken = access_token;
     authData.expiresAt = Date.now() + (expires_in * 1000);
     localStorage.setItem('spotibye_auth', JSON.stringify(authData));
-    
+
     return access_token;
   } catch (error) {
     console.error('Token refresh error:', error);
@@ -284,7 +284,7 @@ async function refreshToken() {
 function setupTokenRefresh(expiresIn) {
   // Refresh 5 minutes before expiration
   const refreshTime = (expiresIn - 300) * 1000;
-  
+
   window.refreshTimer = setTimeout(() => {
     refreshToken().catch(console.error);
   }, refreshTime);
@@ -303,7 +303,7 @@ class SpotiByeAPI {
 
   async request(endpoint, options = {}) {
     const authData = getAuthData();
-    
+
     if (!authData) {
       throw new Error('Not authenticated');
     }
@@ -584,7 +584,7 @@ describe('Authentication Flow', () => {
   test('should handle callback correctly', async () => {
     const mockCode = 'test-auth-code';
     const mockState = 'test-state';
-    
+
     const userData = await exchangeCodeForTokens(mockCode, mockState);
     expect(userData.access_token).toBeDefined();
     expect(userData.user).toBeDefined();

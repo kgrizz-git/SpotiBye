@@ -56,7 +56,7 @@ describe('Workers Execution Limits and Cold Starts', () => {
 
       // Should either complete successfully or timeout gracefully
       expect([200, 408, 500]).toContain(response.status);
-      
+
       if (response.status === 200) {
         expect(duration).toBeLessThan(10000); // 10 seconds max
       }
@@ -86,7 +86,7 @@ describe('Workers Execution Limits and Cold Starts', () => {
 
       // Should handle large data without memory issues
       expect([200, 400, 404, 413]).toContain(response.status);
-      
+
       // Memory usage should not grow excessively
       const memoryGrowth = finalMemory.heapUsed - initialMemory.heapUsed;
       expect(memoryGrowth).toBeLessThan(50 * 1024 * 1024); // 50MB max growth
@@ -190,10 +190,10 @@ describe('Workers Execution Limits and Cold Starts', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should handle large payloads or reject appropriately
         expect([200, 400, 404, 413]).toContain(response.status);
-        
+
         if (response.status === 413) {
           // Should reject payloads that are too large
           break;
@@ -232,10 +232,10 @@ describe('Workers Execution Limits and Cold Starts', () => {
       });
 
       const response = await app.fetch(largeResponseRequest, mockEnv);
-      
+
       // Should handle large responses or limit appropriately
       expect([200, 400, 500]).toContain(response.status);
-      
+
       if (response.status === 200) {
         const responseText = await response.text();
         // Response should be reasonable size
@@ -281,15 +281,15 @@ describe('Workers Execution Limits and Cold Starts', () => {
       );
 
       // Should handle extreme load gracefully
-      const successful = responses.filter(r => 
+      const successful = responses.filter(r =>
         r.status === 'fulfilled' && r.value.status === 200
       ).length;
-      
+
       const rejected = responses.filter(r => r.status === 'rejected').length;
-      
+
       // Should have some successes even under extreme load
       expect(successful).toBeGreaterThan(0);
-      
+
       // Should handle rejections gracefully
       expect(rejected).toBeLessThan(extremeConcurrency * 0.5); // Less than 50% rejected
     });
@@ -304,10 +304,10 @@ describe('Workers Execution Limits and Cold Starts', () => {
       });
 
       const response = await app.fetch(timeoutRequest, mockEnv);
-      
+
       // Should handle timeouts gracefully
       expect([200, 408, 500]).toContain(response.status);
-      
+
       if (response.status === 408) {
         const data = await response.json() as any;
         expect(data.error).toHaveProperty('code', 'TIMEOUT');
@@ -329,7 +329,7 @@ describe('Workers Execution Limits and Cold Starts', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         expect(scenario.expected).toContain(response.status);
       }
     });
@@ -338,7 +338,7 @@ describe('Workers Execution Limits and Cold Starts', () => {
   describe('Resource Cleanup', () => {
     it('should clean up resources properly after requests', async () => {
       const initialMemory = process.memoryUsage();
-      
+
       // Make several requests
       for (let i = 0; i < 10; i++) {
         const request = new Request(`http://localhost/health?cleanup=${i}`, {
@@ -346,9 +346,9 @@ describe('Workers Execution Limits and Cold Starts', () => {
         });
         await app.fetch(request, mockEnv);
       }
-      
+
       const finalMemory = process.memoryUsage();
-      
+
       // Memory should not grow significantly after cleanup
       const memoryGrowth = finalMemory.heapUsed - initialMemory.heapUsed;
       expect(memoryGrowth).toBeLessThan(10 * 1024 * 1024); // 10MB max growth

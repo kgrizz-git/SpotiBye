@@ -18,7 +18,7 @@ from .network_utils import (
 __all__ = [
     "NetworkError",
     "ConnectionError",
-    "TimeoutError", 
+    "TimeoutError",
     "RateLimitError",
     "ServerError",
     "retry_on_network_error",

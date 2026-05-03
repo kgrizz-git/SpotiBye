@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 # Global state for tracking active analysis tasks
-active_analysis_tasks: Dict[str, "AnalysisTask"] = {}
+active_analysis_tasks: dict[str, AnalysisTask] = {}
 
 
 class AnalysisTask:
@@ -14,8 +12,8 @@ class AnalysisTask:
     def __init__(self, playlist_id: str):
         self.playlist_id = playlist_id
         self.cancelled = False
-        self.spotify_data: Optional[Dict[str, any]] = None
-        self.reccobeats_data: Optional[Dict[str, any]] = None
+        self.spotify_data: dict[str, any] | None = None
+        self.reccobeats_data: dict[str, any] | None = None
         self.created_at = None
         self.updated_at = None
 
@@ -30,6 +28,7 @@ class AnalysisTask:
     def update_progress(self, message: str) -> None:
         """Update progress message."""
         from ..logging_config import logger
+
         logger.info(f"Analysis task {self.playlist_id}: {message}")
 
     def __enter__(self):

@@ -15,21 +15,21 @@ app.post('/playlist/:id', async (c) => {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
-    
+
     const analysisService = new AnalysisService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
-    
+
     // Check if analysis is already in progress or completed
     const statusKey = `analysis:${playlistId}:${userId}:status`;
     const existingStatus = await cacheService.get(statusKey);
-    
+
     if (existingStatus && existingStatus.status !== 'failed') {
-      return c.json({ 
+      return c.json({
         data: existingStatus,
         meta: { timestamp: new Date().toISOString() }
       });
     }
-    
+
     // Start analysis
     const jobId = crypto.randomUUID();
     const status = {
@@ -40,9 +40,9 @@ app.post('/playlist/:id', async (c) => {
       started_at: new Date().toISOString(),
       progress: 0
     };
-    
+
     await cacheService.set(statusKey, status, 3600); // 1 hour TTL
-    
+
     // Start async analysis (in Workers, this would typically use a Durable Object or Queue)
     // For now, we'll start it synchronously but mark it as async
     analysisService.analyzePlaylist(playlistId, userId, jobId).catch(error => {
@@ -55,8 +55,8 @@ app.post('/playlist/:id', async (c) => {
         completed_at: new Date().toISOString()
       }, 3600);
     });
-    
-    return c.json({ 
+
+    return c.json({
       data: { ...status, status: 'processing' },
       meta: { timestamp: new Date().toISOString() }
     });
@@ -72,14 +72,14 @@ app.get('/playlist/:id/status', async (c) => {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
-    
+
     const statusKey = `analysis:${playlistId}:${userId}:status`;
     const status = await cacheService.get(statusKey);
-    
+
     if (!status) {
       return c.json({ error: { code: 'ANALYSIS_NOT_FOUND', message: 'Analysis not found' } }, 404);
     }
-    
+
     return c.json({ data: status, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get analysis status:', error);
@@ -93,14 +93,14 @@ app.get('/playlist/:id/results', async (c) => {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
-    
+
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
     const results = await cacheService.get(resultsKey);
-    
+
     if (!results) {
       return c.json({ error: { code: 'ANALYSIS_RESULTS_NOT_FOUND', message: 'Analysis results not found' } }, 404);
     }
-    
+
     return c.json({ data: results, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get analysis results:', error);
@@ -114,15 +114,15 @@ app.delete('/playlist/:id', async (c) => {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
-    
+
     const statusKey = `analysis:${playlistId}:${userId}:status`;
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
-    
+
     await Promise.all([
       cacheService.delete(statusKey),
       cacheService.delete(resultsKey)
     ]);
-    
+
     return c.json({ data: { message: 'Analysis deleted successfully' } });
   } catch (error) {
     console.error('Failed to delete analysis:', error);

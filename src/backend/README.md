@@ -17,7 +17,7 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
    ```
 
 2. **Set up environment variables**
-   
+
    Create a `.dev.vars` file in the project root:
    ```bash
    SPOTIFY_CLIENT_ID=your_spotify_client_id
@@ -30,7 +30,7 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
    ```bash
    npm run dev
    ```
-   
+
    The worker will start on `http://localhost:8787`
 
 ## Available Scripts

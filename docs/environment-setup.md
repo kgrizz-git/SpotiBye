@@ -53,7 +53,7 @@ Configure different backend environments:
 # Development backend
 SPOTIBYE_BACKEND_URL=https://your-dev-backend.workers.dev
 
-# Production backend  
+# Production backend
 SPOTIBYE_PRODUCTION_BACKEND_URL=https://your-prod-backend.workers.dev
 
 # Local development
@@ -98,7 +98,7 @@ SPOTIBYE_OAUTH_TIMEOUT=300
 For different environments, you can create:
 
 - `.env.development` - Development settings
-- `.env.production` - Production settings  
+- `.env.production` - Production settings
 - `.env.local` - Local overrides (gitignored)
 
 The application will automatically load `.env` first, then environment-specific files.

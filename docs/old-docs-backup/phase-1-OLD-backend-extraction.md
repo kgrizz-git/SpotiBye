@@ -150,7 +150,7 @@ Note: started to implement but will instead implement Cloudflare Worker backend,
   - **Check**: Run `python -m pytest tests/ -v --tb=short`
   - **Expected**: All tests pass (unit, integration, performance tests)
   - **Status**: 27 passed, 8 failed, 5 errors
-  - **Issues**: 
+  - **Issues**:
     - Missing psutil dependency for performance tests
     - Test environment conflicts with actual .env file
     - Some integration tests expecting different error messages

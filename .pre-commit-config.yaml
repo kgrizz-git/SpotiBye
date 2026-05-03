@@ -1,3 +1,17 @@
+exclude: |
+  (?x)^(
+    \.venv/|
+    venv/|
+    node_modules/|
+    build/|
+    dist/|
+    backups/|
+    backend-backup/|
+    SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY/|
+    docs/old-docs-backup/|
+    srcamas/
+  )
+
 repos:
   # Secret scanning - prevent secrets from being committed
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -29,7 +43,7 @@ repos:
         name: Semgrep SAST
         description: Run Semgrep static analysis
         args: ['--config=auto', '--error', '--skip-unknown-extensions']
-        exclude: '^tests/|^\.venv/|^venv/|^node_modules/'
+        exclude: '^tests/|^docs/|^src/backend/docs/|^\.venv/|^venv/|^node_modules/|^build/|^dist/|^backups/|^backend-backup/|^SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY/|^docs/old-docs-backup/|^srcamas/'
         stages: [pre-commit]
 
   # Python security (Bandit) - only on Python files
@@ -75,7 +89,7 @@ repos:
       - id: python-tests
         name: Python Tests
         description: Run Python test suite before push
-        entry: python -m pytest tests/ -v --tb=short
+        entry: python -m pytest src/frontend/tests -v --tb=short
         language: system
         pass_filenames: false
         always_run: true

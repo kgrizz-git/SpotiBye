@@ -46,12 +46,12 @@ export class ReccoBeatsService {
 
   async getMultipleTrackFeatures(trackIds: string[]): Promise<Map<string, ReccobeatsFeatures>> {
     const features = new Map<string, ReccobeatsFeatures>();
-    
+
     for (const trackId of trackIds) {
       const trackFeatures = await this.getTrackFeatures(trackId);
       features.set(trackId, trackFeatures);
     }
-    
+
     return features;
   }
 }

@@ -3,7 +3,7 @@
 > **IMPORTANT**: The `SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY` folder contains the original code and **MAY NOT BE EDITED** under any circumstances. It is for reference only to understand the original monolithic implementation before we split it into front-end and back-end components.
 >
 > **Project Context**: This is Phase 2 of the SpotiBye cloud migration project. See [`project-summary-overview.md`](project-summary-overview.md) for the complete project overview, timeline, and architecture details.
-> 
+>
 > **Prerequisite**: Phase 1 Cloudflare Worker backend must be completed and deployed.
 
 ## Who Runs This Code
@@ -205,11 +205,11 @@ class BackendClient:
         self.base_url = base_url
         self.session = requests.Session()
         self.auth_token = None
-    
+
     def authenticate(self, spotify_code: str) -> str:
         # Get JWT token from backend
         pass
-    
+
     def get_playlists(self) -> List[Playlist]:
         # Call backend API with authentication
         pass
@@ -223,10 +223,10 @@ class BackendAuthenticator:
         # Get auth URL from backend and open browser
         auth_url = f"{self.backend_url}/auth/spotify/login"
         webbrowser.open(auth_url)
-        
+
     def handle_callback(self, code: str) -> str:
         # Exchange code for JWT token
-        response = requests.post(f"{self.backend_url}/auth/spotify/callback", 
+        response = requests.post(f"{self.backend_url}/auth/spotify/callback",
                                 data={"code": code})
         return response.json()["token"]
 ```
@@ -248,7 +248,7 @@ except BackendAPIError as e:
 
 ### **Keep Unchanged:**
 - `ui/playlist_card.py` - UI components
-- `ui/cache_explorer.py` - Cache interface  
+- `ui/cache_explorer.py` - Cache interface
 - `screens/main_screen.py` - Main UI layout (minor changes only)
 - `utils/platform_utils.py` - Platform-specific utilities
 - All Kivy-specific UI code and styling

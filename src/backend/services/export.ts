@@ -136,7 +136,7 @@ export class ResumableExportConflictError extends Error {
 
 export class ExportService {
   private accessToken: string;
-  
+
   constructor(accessToken: string) {
     this.accessToken = accessToken;
   }
@@ -450,30 +450,30 @@ export class ExportService {
     job.current_resume_token = ExportService.createResumeToken();
     return { job, exportDataList, assemblyState };
   }
-  
+
   async generatePlaylistExport(playlistId: string, options?: { includeAudioFeatures?: boolean }): Promise<ExportData> {
     const spotifyService = new SpotifyService(this.accessToken);
     const includeAudioFeatures = options?.includeAudioFeatures === true;
-    
+
     // Get playlist details
     const playlist = await spotifyService.getPlaylist(playlistId);
-    
+
     // Get all tracks (handle pagination)
     const allTracks = [];
     let offset = 0;
     const limit = 100;
-    
+
     while (true) {
       const tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
       allTracks.push(...tracksData.items);
-      
+
       if (tracksData.items.length < limit) break;
       offset += limit;
     }
-    
+
     const exportTracks = await this.buildExportTracks(allTracks, includeAudioFeatures, spotifyService);
     const totalDurationMs = this.calculateTotalDurationMs(allTracks);
-    
+
     return {
       playlist: this.buildPlaylistMetadata(playlist, exportTracks.length),
       tracks: exportTracks,
@@ -829,24 +829,24 @@ export class ExportService {
       'Time Signature': typeof audioFeatures?.time_signature === 'number' ? audioFeatures.time_signature : 'N/A',
     };
   }
-  
+
   async generateCsvFile(exportData: ExportData): Promise<ArrayBuffer> {
     const headers = this.getTrackHeaders();
-    
+
     // Create CSV content
     let csvContent = headers.join(',') + '\n';
-    
+
     // Add playlist info as first row
     csvContent += `"Playlist: ${exportData.playlist.name}",,,,"Total Tracks: ${exportData.playlist.total_tracks}",,,,"Owner: ${exportData.playlist.owner}",,,,,,,\n`;
     csvContent += '\n'; // Empty row
-    
+
     // Add track data
     for (const track of exportData.tracks) {
       const row = headers.map((header) => this.escapeCsvValue(String((track as any)[header] ?? '')));
-      
+
       csvContent += row.join(',') + '\n';
     }
-    
+
     // Convert to ArrayBuffer
     const encoder = new TextEncoder();
     return encoder.encode(csvContent).buffer as ArrayBuffer;
@@ -1025,7 +1025,7 @@ export class ExportService {
     }
     return btoa(chars.join(''));
   }
-  
+
   private formatDuration(ms: number): string {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
@@ -1062,14 +1062,14 @@ export class ExportService {
       'Time Signature',
     ];
   }
-  
+
   private escapeCsvValue(value: string): string {
     if (value.includes(',') || value.includes('"') || value.includes('\n')) {
       return `"${value.replace(/"/g, '""')}"`;
     }
     return value;
   }
-  
+
   async generateAdvancedExcelFile(exportData: ExportData): Promise<ArrayBuffer> {
     // Keep advanced export aligned with the primary XLSX output.
     return this.generateExcelFile(exportData);

@@ -30,8 +30,8 @@ describe('Complete Workflow Integration Tests', () => {
       const loginRequest = new Request('http://localhost/auth/spotify/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          redirect_uri: 'http://localhost:3000/callback' 
+        body: JSON.stringify({
+          redirect_uri: 'http://localhost:3000/callback'
         })
       });
 
@@ -41,7 +41,7 @@ describe('Complete Workflow Integration Tests', () => {
       expect(loginResponse.status).toBe(200);
       expect(loginData.data).toHaveProperty('auth_url');
       expect(loginData.data).toHaveProperty('state');
-      
+
       // Verify the auth URL structure
       const authUrl = loginData.data.auth_url;
       expect(authUrl).toContain('accounts.spotify.com/authorize');
@@ -79,7 +79,7 @@ describe('Complete Workflow Integration Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should require authentication
         expect([401, 500]).toContain(response.status);
       }
@@ -99,7 +99,7 @@ describe('Complete Workflow Integration Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should not require authentication
         expect(response.status).not.toBe(401);
       }
@@ -125,7 +125,7 @@ describe('Complete Workflow Integration Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should handle gracefully without crashing
         expect([400, 401, 404, 500]).toContain(response.status);
       }
@@ -135,7 +135,7 @@ describe('Complete Workflow Integration Tests', () => {
   describe('CORS Workflow', () => {
     it('should handle cross-origin requests properly', async () => {
       const origins = ['http://localhost:3000', 'https://spotibye.com'];
-      
+
       for (const origin of origins) {
         const request = new Request('http://localhost/health', {
           method: 'GET',
@@ -143,7 +143,7 @@ describe('Complete Workflow Integration Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should include appropriate CORS headers
         expect(response.headers.get('access-control-allow-origin')).toBeTruthy();
       }
@@ -166,7 +166,7 @@ describe('Complete Workflow Integration Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should handle method not allowed or auth guard responses for protected routes.
         expect([401, 404, 405, 400, 500]).toContain(response.status);
       }
@@ -180,7 +180,7 @@ describe('Complete Workflow Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       // Should handle content type validation
       expect([400, 415, 500]).toContain(response.status);
     });
@@ -201,14 +201,14 @@ describe('Complete Workflow Integration Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         if (response.status === 200) {
           const data = await response.json();
-          
+
           // Should have consistent JSON structure
           expect(typeof data).toBe('object');
           expect(data).not.toBeNull();
-          
+
           // Check for expected response patterns
           if (endpoint.path === '/health') {
             expect(data).toHaveProperty('status');
@@ -233,7 +233,7 @@ describe('Complete Workflow Integration Tests', () => {
       expect(data).toHaveProperty('status', 'healthy');
       expect(data).toHaveProperty('service', 'spotibye-backend');
       expect(data).toHaveProperty('timestamp');
-      
+
       // Timestamp should be a valid ISO string
       const timestamp = new Date(data.timestamp);
       expect(timestamp.getTime()).not.toBeNaN();

@@ -14,20 +14,20 @@ class AuthHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # pragma: no cover - integration path
         try:
-            if self.path.startswith('/callback'):
+            if self.path.startswith("/callback"):
                 parsed = urlparse(self.path)
-                code = parse_qs(parsed.query).get('code')
-                error = parse_qs(parsed.query).get('error')
+                code = parse_qs(parsed.query).get("code")
+                error = parse_qs(parsed.query).get("error")
 
                 if error:
-                    state.auth_token = {'error': error[0]}
+                    state.auth_token = {"error": error[0]}
                 elif code:
-                    state.auth_token = {'code': code[0]}
+                    state.auth_token = {"code": code[0]}
                 else:
-                    state.auth_token = {'error': 'No code received'}
+                    state.auth_token = {"error": "No code received"}
 
                 self.send_response(200)
-                self.send_header('Content-type', 'text/html')
+                self.send_header("Content-type", "text/html")
                 self.end_headers()
                 self.wfile.write(b"""
                 <html><body style="font-family: Arial; text-align: center; padding: 50px;">
@@ -37,9 +37,11 @@ class AuthHandler(BaseHTTPRequestHandler):
                 """)
         except Exception as exc:
             logger.error("Error in auth handler: %s", exc)
-            state.auth_token = {'error': str(exc)}
+            state.auth_token = {"error": str(exc)}
 
-    def log_message(self, format: str, *args) -> None:  # pragma: no cover - reduce noise
+    def log_message(
+        self, format: str, *args
+    ) -> None:  # pragma: no cover - reduce noise
         return
 
 

@@ -12,23 +12,23 @@ const app = new Hono<{ Bindings: Env }>();
 app.post('/spotify/login', async (c) => {
   try {
     const { redirect_uri } = await c.req.json();
-    
+
     if (!redirect_uri) {
       return c.json({ error: { code: 'MISSING_REDIRECT_URI', message: 'redirect_uri is required' } }, 400);
     }
-    
+
     const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     const state = spotifyAuth.generateState();
     const authUrl = spotifyAuth.getAuthUrl(redirect_uri, state);
 
     // Persist redirect_uri for callback token exchange.
     await c.env.CACHE_KV.put(`oauth_state:${state}`, redirect_uri, { expirationTtl: 600 });
-    
-    return c.json({ 
-      data: { 
+
+    return c.json({
+      data: {
         auth_url: authUrl,
         state
-      } 
+      }
     });
   } catch (error) {
     return c.json({ error: { code: 'OAUTH_INIT_FAILED', message: 'Failed to initiate OAuth flow' } }, 500);
@@ -41,15 +41,15 @@ app.get('/spotify/callback', async (c) => {
     const code = c.req.query('code');
     const state = c.req.query('state');
     const error = c.req.query('error');
-    
+
     if (error) {
       return c.json({ error: { code: 'OAUTH_ERROR', message: error } }, 400);
     }
-    
+
     if (!code || !state) {
       return c.json({ error: { code: 'INVALID_CALLBACK', message: 'Missing code or state parameter' } }, 400);
     }
-    
+
     const redirectUri = await c.env.CACHE_KV.get(`oauth_state:${state}`);
     if (!redirectUri) {
       return c.json({ error: { code: 'INVALID_CALLBACK', message: 'Missing or expired OAuth state' } }, 400);
@@ -61,10 +61,10 @@ app.get('/spotify/callback', async (c) => {
 
     // One-time state usage.
     await c.env.CACHE_KV.delete(`oauth_state:${state}`);
-    
+
     // Get user profile
     const userProfile = await spotifyAuth.getUserProfile(tokens.access_token);
-    
+
     // Store session in KV
     const sessionId = crypto.randomUUID();
     await c.env.SESSIONS_KV.put(sessionId, JSON.stringify({
@@ -74,7 +74,7 @@ app.get('/spotify/callback', async (c) => {
       expires_at: Date.now() + (tokens.expires_in * 1000),
       spotify_data: userProfile
     }), { expirationTtl: SPOTIFY_SESSION_TTL_SECONDS });
-    
+
     // Generate JWT
     const jwtService = new JWTService(c.env.JWT_SECRET);
     const jwtToken = await jwtService.generateToken({
@@ -83,7 +83,7 @@ app.get('/spotify/callback', async (c) => {
       name: userProfile.display_name,
       session_id: sessionId
     });
-    
+
     return c.json({
       data: {
         token: jwtToken,
@@ -103,17 +103,17 @@ app.post('/spotify/refresh', authMiddleware, async (c) => {
   try {
     const sessionId = c.get('session_id');
     const sessionData = await c.env.SESSIONS_KV.get(sessionId);
-    
+
     if (!sessionData) {
       return c.json({ error: { code: 'SESSION_NOT_FOUND', message: 'Session not found' } }, 404);
     }
-    
+
     const session = JSON.parse(sessionData);
-    
+
     // Refresh the access token
     const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     const newTokens = await spotifyAuth.refreshAccessToken(session.refresh_token);
-    
+
     // Update session
     const updatedSession = {
       ...session,
@@ -134,7 +134,7 @@ app.post('/spotify/refresh', authMiddleware, async (c) => {
       name: user.name,
       session_id: sessionId,
     });
-    
+
     return c.json({
       data: {
         token: jwtToken,
@@ -154,7 +154,7 @@ app.post('/logout', authMiddleware, async (c) => {
   try {
     const sessionId = c.get('session_id');
     await c.env.SESSIONS_KV.delete(sessionId);
-    
+
     return c.json({ data: { message: 'Logged out successfully' } });
   } catch (error) {
     return c.json({ error: { code: 'LOGOUT_FAILED', message: 'Failed to logout' } }, 500);

@@ -69,7 +69,7 @@ setInterval(refreshToken, 25 * 60 * 1000); // Refresh every 25 minutes
 ```javascript
 async function apiCall(endpoint, options = {}) {
     const token = localStorage.getItem('access_token');
-    
+
     const response = await fetch(`http://localhost:8000${endpoint}`, {
         ...options,
         headers: {
@@ -78,14 +78,14 @@ async function apiCall(endpoint, options = {}) {
             ...options.headers
         }
     });
-    
+
     if (response.status === 401) {
         // Token expired, try refresh
         await refreshToken();
         // Retry with new token
         return apiCall(endpoint, options);
     }
-    
+
     return response.json();
 }
 ```
@@ -98,7 +98,7 @@ async function apiCall(endpoint, options = {}) {
 ```javascript
 async function refreshToken() {
     const refreshToken = localStorage.getItem('refresh_token');
-    
+
     const response = await fetch('http://localhost:8000/auth/refresh', {
         method: 'POST',
         headers: {
@@ -106,7 +106,7 @@ async function refreshToken() {
         },
         body: JSON.stringify({ refresh_token: refreshToken })
     });
-    
+
     if (response.ok) {
         const { access_token } = await response.json();
         localStorage.setItem('access_token', access_token);
@@ -127,18 +127,18 @@ async function refreshToken() {
 ```javascript
 async function logout() {
     const token = localStorage.getItem('access_token');
-    
+
     await fetch('http://localhost:8000/auth/logout', {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`
         }
     });
-    
+
     // Clear local storage
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
-    
+
     // Redirect to login
     window.location.href = '/login';
 }
@@ -163,7 +163,7 @@ async function logout() {
 ### Scope Management
 The following Spotify scopes are requested:
 - `playlist-read-private` - Read user's private playlists
-- `playlist-read-collaborative` - Read collaborative playlists  
+- `playlist-read-collaborative` - Read collaborative playlists
 - `user-library-read` - Read user's saved tracks
 - `user-read-email` - Read user's email
 - `user-read-private` - Read user's private details
@@ -196,10 +196,10 @@ import { useState, useEffect } from 'react';
 function useAuth() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    
+
     useEffect(() => {
         const token = localStorage.getItem('access_token');
-        
+
         if (token) {
             verifyToken(token).then(userData => {
                 setUser(userData);
@@ -212,17 +212,17 @@ function useAuth() {
             setLoading(false);
         }
     }, []);
-    
+
     const login = () => {
         window.location.href = 'http://localhost:8000/auth/login';
     };
-    
+
     const logout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         setUser(null);
     };
-    
+
     return { user, loading, login, logout };
 }
 ```
@@ -250,10 +250,10 @@ api.interceptors.response.use(
     response => response,
     async error => {
         const originalRequest = error.config;
-        
+
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
-            
+
             try {
                 await refreshToken();
                 const newToken = localStorage.getItem('access_token');
@@ -264,7 +264,7 @@ api.interceptors.response.use(
                 return Promise.reject(refreshError);
             }
         }
-        
+
         return Promise.reject(error);
     }
 );
@@ -278,7 +278,7 @@ api.interceptors.response.use(
 def test_jwt_token_creation():
     data = {"sub": "test_user", "username": "testuser"}
     token = create_access_token(data)
-    
+
     payload = verify_token(token)
     assert payload["sub"] == "test_user"
     assert payload["username"] == "testuser"
@@ -296,14 +296,14 @@ def test_oauth_flow():
     # Test login redirect
     response = client.get("/auth/login")
     assert response.status_code == 302
-    
+
     # Test callback with code (mock)
     with patch('spotipy.SpotifyOAuth') as mock_oauth:
         mock_oauth.return_value.get_access_token.return_value = {
             'access_token': 'test_token',
             'refresh_token': 'test_refresh'
         }
-        
+
         response = client.get("/auth/callback?code=test_code")
         assert response.status_code == 200
 ```
