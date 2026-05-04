@@ -1,10 +1,11 @@
 name: CI
 
 on:
+  # Only run on PRs to main/develop and pushes to these branches
   push:
-    branches: ["**"]
+    branches: [main, develop, WIP]
   pull_request:
-    branches: ["**"]
+    branches: [main, develop, WIP]
 
 jobs:
   backend:

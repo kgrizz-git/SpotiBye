@@ -1,19 +1,10 @@
 name: Security Scan
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - '**.py'
-      - '**.js'
-      - '**.ts'
-      - '**.json'
-      - 'requirements.txt'
-      - 'package*.json'
-      - 'src/**'
-      - '.github/workflows/security.yml'
+  # Only run security scans on PRs to main/develop, not every push
+  # This reduces redundant runs while maintaining security on important branches
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, WIP]
     paths:
       - '**.py'
       - '**.js'
@@ -23,8 +14,9 @@ on:
       - 'package*.json'
       - 'src/**'
       - '.github/workflows/security.yml'
-  # Removed scheduled runs to reduce Actions usage
-  # Schedule can be re-enabled if needed: cron: '0 0 1 * *' (monthly)
+  # Weekly security scan on main branch
+  schedule:
+    - cron: '0 0 * * 1'  # Every Monday at midnight UTC
   workflow_dispatch:
 
 permissions:
@@ -78,10 +70,16 @@ jobs:
             p/typescript
             p/python
 
-  # Python SAST - Bandit
+  # Python SAST - Bandit (only on Python file changes to reduce redundancy)
   bandit:
     name: Python SAST (Bandit)
     runs-on: ubuntu-latest
+    # Only run if Python files were changed
+    if: |
+      github.event_name == 'schedule' || 
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.changed_files, '.py') ||
+      contains(github.event.pull_request.changed_files, 'requirements.txt')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -136,10 +134,17 @@ jobs:
           name: pip-audit-report
           path: pip-audit-report.json
 
-  # Dependency Scanning - Node.js
+  # Dependency Scanning - Node.js (only on Node.js file changes)
   npm-audit:
     name: Node.js Dependency Audit
     runs-on: ubuntu-latest
+    # Only run if Node.js dependencies changed
+    if: |
+      github.event_name == 'schedule' || 
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.changed_files, 'package') ||
+      contains(github.event.pull_request.changed_files, '.js') ||
+      contains(github.event.pull_request.changed_files, '.ts')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
