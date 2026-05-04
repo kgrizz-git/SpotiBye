@@ -8,7 +8,7 @@ from pathlib import Path
 import spotipy
 from kivymd.app import MDApp
 from kivy.config import Config
-from kivy.logger import Logger as logger
+from kivy.core.text import LabelBase
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import ScreenManager
 from spotipy.oauth2 import SpotifyOAuth
@@ -105,7 +105,7 @@ class SpotifyExporterApp(MDApp):
             CLIENT_ID == "YOUR_CLIENT_ID_HERE"
             or CLIENT_SECRET == "YOUR_CLIENT_SECRET_HERE"
         ):
-            popup = Label(
+            Label(
                 text="Please set your Spotify CLIENT_ID and CLIENT_SECRET\n"
                 "in the environment before running the app.",
             )

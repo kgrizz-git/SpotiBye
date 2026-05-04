@@ -12,7 +12,6 @@ import threading
 import time
 import uuid
 import shutil
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
@@ -118,10 +117,6 @@ class ValidationError(ExportError):
     """Raised when export parameters fail validation."""
 
     pass
-
-
-# Set up logging for export operations
-logger = logging.getLogger(__name__)
 
 
 class MainScreen(Screen):
@@ -1434,7 +1429,6 @@ class MainScreen(Screen):
                     break
 
             self.playlists = playlists
-            worksheet = None  # Initialize worksheet to prevent scope error
             Clock.schedule_once(lambda _: self.display_playlists_with_cache(), 0)
 
         except SpotifyException as exc:
@@ -2172,13 +2166,13 @@ class MainScreen(Screen):
         except Exception as exc:
             logger.error("Backend export failed: %s", exc)
             Clock.schedule_once(
-                lambda _: setattr(
-                    self.status_label, "text", f"Backend export failed: {exc}"
+                lambda _, err=str(exc): setattr(
+                    self.status_label, "text", f"Backend export failed: {err}"
                 ),
                 0,
             )
             self._set_backend_error_context("failed", "backend-export-worker")
-            self._show_backend_error_popup(f"Backend export failed: {exc}")
+            self._show_backend_error_popup(f"Backend export failed: {str(exc)}")
             Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
             Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
 
@@ -2657,13 +2651,9 @@ class MainScreen(Screen):
             ) as writer:
                 total = len(playlists)
                 sheets_created = 0
-                worksheet = None  # Initialize worksheet to prevent scope error
 
                 workbook = writer.book
                 summary_sheet = workbook["Playlists"]
-
-                # Skip formatting the Playlists sheet since we've already formatted it
-                formatted_sheets = {"Playlists"}
 
                 for index, playlist in enumerate(playlists):
                     if current_export_job["cancelled"]:
@@ -3501,7 +3491,6 @@ class MainScreen(Screen):
                 max_col=worksheet.max_column,
             )
         )[0]
-        header_letters = {cell.column_letter for cell in header_cells if cell.value}
 
         header_fill = PatternFill(
             start_color="4F81BD", end_color="4F81BD", fill_type="solid"

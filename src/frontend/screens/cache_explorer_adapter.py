@@ -9,7 +9,7 @@ from spotify_playlist_exporter_v2.logging_config import logger
 
 try:
     from ..ui.backend_cache_explorer import BackendCacheExplorerPopup
-    from ..config.backend_config import BackendConfig
+    from ..config.backend_config import resolve_startup_backend_url
 
     BACKEND_AVAILABLE = True
 except ImportError:
@@ -28,7 +28,7 @@ class CacheExplorerAdapter:
 
         if self.backend_available:
             try:
-                self.backend_config = BackendConfig()
+                self.backend_config = {"backend_url": resolve_startup_backend_url()}
                 logger.info("Backend cache explorer adapter initialized")
             except Exception as exc:
                 logger.warning("Backend config unavailable: %s", exc)
@@ -60,7 +60,7 @@ class CacheExplorerAdapter:
         }
 
         if self.backend_config:
-            info["backend_url"] = self.backend_config.backend_url
+            info["backend_url"] = self.backend_config["backend_url"]
 
         return info
 

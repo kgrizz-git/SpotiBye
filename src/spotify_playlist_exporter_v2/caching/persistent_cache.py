@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import pickle
 import shutil
+import threading
 import time
 from pathlib import Path
 
 try:
-    from PIL import Image, ImageOps
+    from PIL import Image
 
     PIL_AVAILABLE = True
 except ImportError:
@@ -24,6 +26,8 @@ from ..logging_config import logger
 
 class PersistentCache:
     """Manages persistent caching of playlist data, images, and analysis results."""
+
+    _metadata_lock = threading.RLock()
 
     def __init__(self, cache_dir: Optional[Path] = None) -> None:
         cache_dir = cache_dir or DEFAULT_CACHE_DIR
@@ -88,14 +92,7 @@ class PersistentCache:
     # ------------------------------------------------------------------
     # Metadata
     # ------------------------------------------------------------------
-    def _load_metadata(self) -> Dict[str, Any]:
-        try:
-            if self.metadata_file.exists():
-                with open(self.metadata_file, "r", encoding="utf-8") as file:
-                    return json.load(file)
-        except Exception as exc:
-            logger.warning("Error loading cache metadata: %s", exc)
-
+    def _default_metadata(self) -> Dict[str, Any]:
         return {
             "playlists": {},
             "images": {},
@@ -104,12 +101,59 @@ class PersistentCache:
             "created_at": time.time(),
         }
 
+    def _load_metadata(self) -> Dict[str, Any]:
+        backup_file = self.metadata_file.with_suffix(".bak")
+
+        with self._metadata_lock:
+            try:
+                if self.metadata_file.exists():
+                    with open(self.metadata_file, "r", encoding="utf-8") as file:
+                        return json.load(file)
+            except json.JSONDecodeError as exc:
+                logger.warning("Error loading cache metadata: %s", exc)
+                corrupt_file = self.metadata_file.with_name(
+                    f"{self.metadata_file.stem}.corrupt-{int(time.time())}.json"
+                )
+                try:
+                    self.metadata_file.replace(corrupt_file)
+                    logger.warning("Moved corrupted cache metadata to %s", corrupt_file)
+                except Exception as move_exc:
+                    logger.warning(
+                        "Failed to move corrupted cache metadata: %s", move_exc
+                    )
+
+                if backup_file.exists():
+                    try:
+                        with open(backup_file, "r", encoding="utf-8") as file:
+                            return json.load(file)
+                    except Exception as backup_exc:
+                        logger.warning(
+                            "Error loading backup cache metadata: %s", backup_exc
+                        )
+            except Exception as exc:
+                logger.warning("Error loading cache metadata: %s", exc)
+
+        return self._default_metadata()
+
     def _save_metadata(self) -> None:
-        try:
-            with open(self.metadata_file, "w", encoding="utf-8") as file:
-                json.dump(self.metadata, file, indent=2)
-        except Exception as exc:
-            logger.warning("Error saving cache metadata: %s", exc)
+        backup_file = self.metadata_file.with_suffix(".bak")
+        temp_file = self.metadata_file.with_suffix(".tmp")
+
+        with self._metadata_lock:
+            try:
+                with open(temp_file, "w", encoding="utf-8") as file:
+                    json.dump(self.metadata, file, indent=2)
+                    file.flush()
+                    os.fsync(file.fileno())
+
+                temp_file.replace(self.metadata_file)
+                shutil.copy2(self.metadata_file, backup_file)
+            except Exception as exc:
+                logger.warning("Error saving cache metadata: %s", exc)
+                try:
+                    temp_file.unlink(missing_ok=True)
+                except Exception:
+                    pass
 
     # ------------------------------------------------------------------
     # Helpers
@@ -815,20 +859,29 @@ class PersistentCache:
                 "images": [],
                 "analysis": [],
             }
+            expired_playlists = 0
 
             # Get detailed playlist info with actual names
-            for cache_key, cache_info in self.metadata["playlists"].items():
+            for cache_key, cache_info in list(self.metadata["playlists"].items()):
+                playlist_id = cache_info.get("playlist_id", "")
+                if not self._is_cache_valid(cache_info.get("cached_at", 0)):
+                    expired_playlists += 1
+                    self._remove_playlist_cache(cache_key)
+                    continue
+
                 try:
                     playlist_data = self.get_cached_playlist_data(
-                        cache_info.get("playlist_id", ""), cache_info.get("user_id")
+                        playlist_id, cache_info.get("user_id")
                     )
+                    if not playlist_data:
+                        continue
                     name = playlist_data.get(
-                        "name", f'Playlist {cache_info.get("playlist_id", "Unknown")}'
+                        "name", f"Playlist {playlist_id or 'Unknown'}"
                     )
                     tracks_count = playlist_data.get("tracks", {}).get("total", 0)
                 except Exception:
                     # Fallback to basic info if cache read fails
-                    name = f'Playlist {cache_info.get("playlist_id", "Unknown")}'
+                    name = f"Playlist {playlist_id or 'Unknown'}"
                     tracks_count = 0
 
                 detailed_info["playlists"].append(
@@ -843,6 +896,13 @@ class PersistentCache:
                             self._get_file_size_mb(cache_info.get("file_path", "")), 2
                         ),
                     }
+                )
+
+            if expired_playlists:
+                logger.info(
+                    "Removed %s expired playlist cache entr%s while loading cache explorer",
+                    expired_playlists,
+                    "y" if expired_playlists == 1 else "ies",
                 )
 
             # Get detailed track info with actual track names (sample first 30 for performance)
@@ -916,7 +976,7 @@ class PersistentCache:
                 )
 
             # Get analysis info from metadata
-            for cache_key, cache_info in self.metadata["analysis"].items():
+            for cache_key, cache_info in list(self.metadata["analysis"].items()):
                 detailed_info["analysis"].append(
                     {
                         "cache_key": cache_key,

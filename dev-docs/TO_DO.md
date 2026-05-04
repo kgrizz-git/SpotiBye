@@ -17,3 +17,7 @@
 - Check for security vulnerabilities and fix them
 
 - start new repo, after cleaning
+
+- update / check build etc
+
+- decide on default size, see if can better place it

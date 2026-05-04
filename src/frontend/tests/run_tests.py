@@ -78,7 +78,6 @@ def run_all_tests() -> Dict[str, Any]:
         perf_results = perf_tests.run_all_tests()
 
         # Get overall summary
-        all_results = framework.get_test_results()
         summary = framework.get_summary()
 
         print("\nTest Results Summary:")

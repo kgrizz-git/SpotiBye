@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -14,8 +13,6 @@ from ..services.reccobeats_backend import ReccoBeatsBackendService
 from ..caching.backend_cache import get_cache_manager
 from ..utils.network_utils import NetworkStatusMonitor, format_error_message
 from ...spotify_playlist_exporter_v2.logging_config import logger
-
-logger = logging.getLogger(__name__)
 
 
 class BackendMainScreenAdapter:

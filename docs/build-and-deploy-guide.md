@@ -37,8 +37,9 @@ Options in the popup:
 
 Flow:
 1. Select target backend.
-2. Click `Test Connection`.
+2. Review the automatic connection status, or click `Test Connection` to verify manually.
 3. Click `Continue`.
+4. If the backend is unavailable, the app blocks the actual Spotify connect/login step and shows an error there.
 
 The selected backend URL is saved to `~/.spotibye_cache/backend_selection.json` and restored on next launch.
 

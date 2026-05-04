@@ -20,7 +20,7 @@ from spotify_playlist_exporter_v2.logging_config import logger
 
 try:
     from ..services.backend_client import BackendClient
-    from ..config.backend_config import BackendConfig
+    from ..config.backend_config import resolve_startup_backend_url
     from ..caching.backend_cache import get_cache_manager
 
     BACKEND_AVAILABLE = True
@@ -65,7 +65,7 @@ class BackendCacheExplorerPopup(Popup):
         self.build_status_bar()
 
         # Main cache explorer (embed original)
-        self.cache_explorer = CacheExplorerPopup()
+        self.cache_explorer = CacheExplorerPopup(close_handler=self.dismiss)
         self.cache_explorer.size_hint = (1, 0.85)
         self.main_layout.add_widget(self.cache_explorer)
 
@@ -123,8 +123,7 @@ class BackendCacheExplorerPopup(Popup):
             return
 
         try:
-            config = BackendConfig()
-            self.backend_client = BackendClient(config.backend_url)
+            self.backend_client = BackendClient(resolve_startup_backend_url())
             self.backend_status_label.text = "Backend: Connected"
             self.backend_switch.active = True
         except Exception as exc:

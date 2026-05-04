@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from ..services.backend_client import BackendClient
 from ..services.reccobeats_backend import ReccoBeatsBackendService
@@ -233,7 +233,7 @@ class TestPerformance:
                 return False
 
             playlist_id = large_playlist["id"]
-            tracks = self.backend_client.get_playlist_tracks(playlist_id)
+            self.backend_client.get_playlist_tracks(playlist_id)
 
             # Check memory after loading
             final_memory = process.memory_info().rss / 1024 / 1024  # MB

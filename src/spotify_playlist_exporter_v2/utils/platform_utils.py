@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import platform
 import subprocess
+import importlib
 from typing import Tuple
 
 from kivy.clock import Clock
@@ -27,15 +28,15 @@ def diagnose_macos_issues() -> None:
         logger.info("=== macOS Compatibility Check ===")
 
         try:
-            from AppKit import NSScreen  # type: ignore
-
+            if importlib.util.find_spec("AppKit") is None:
+                raise ImportError
             logger.info("✓ AppKit available")
         except ImportError:
             logger.info("⚠ AppKit not available (install pyobjc-framework-Cocoa)")
 
         try:
-            from Quartz import CGMainDisplayID  # type: ignore
-
+            if importlib.util.find_spec("Quartz") is None:
+                raise ImportError
             logger.info("✓ Quartz available")
         except ImportError:
             logger.info("⚠ Quartz not available (install pyobjc-framework-Quartz)")
@@ -197,15 +198,13 @@ def is_mobile_platform() -> bool:
             pass
 
         try:
-            import android  # type: ignore
-
+            importlib.import_module("android")
             return True
         except ImportError:
             pass
 
         try:
-            import ios  # type: ignore
-
+            importlib.import_module("ios")
             return True
         except ImportError:
             pass
@@ -377,9 +376,11 @@ def set_window_basics(title: str) -> None:
             window.fullscreen = False
             window.minimum_width = 480
             window.minimum_height = 600
-            logger.info("Desktop window configured: %sx%s", width, height)
+            logger.info(
+                "Desktop window configured: %sx%s (maximize requested)", width, height
+            )
 
-            Clock.schedule_once(lambda dt: _position_and_focus_window(), 0.5)
+            Clock.schedule_once(lambda dt: _maximize_and_focus_window(), 0.5)
 
     except Exception as exc:
         logger.error("Error setting up window: %s", exc)
@@ -410,6 +411,30 @@ def _position_and_focus_window() -> None:
         logger.warning("Error in window positioning/focusing: %s", exc)
 
 
+def _maximize_and_focus_window() -> None:
+    """Maximize desktop window when supported, otherwise center the default size."""
+    try:
+        if is_mobile_platform():
+            return
+
+        window = _window()
+        if hasattr(window, "maximize"):
+            try:
+                window.maximize()
+                logger.info("Desktop window maximized")
+            except Exception as exc:
+                logger.info("Could not maximize window: %s", exc)
+                _position_and_focus_window()
+                return
+            set_window_on_top()
+            return
+
+        _position_and_focus_window()
+
+    except Exception as exc:
+        logger.warning("Error maximizing/focusing window: %s", exc)
+
+
 def _fallback_window_setup() -> None:
     from kivy.core.window import Window as KivyWindow
 
@@ -419,6 +444,7 @@ def _fallback_window_setup() -> None:
     else:
         KivyWindow.size = (1056, 756)
         KivyWindow.resizable = True
+        KivyWindow.fullscreen = False
         KivyWindow.minimum_width = 480
         KivyWindow.minimum_height = 600
     KivyWindow.title = "Spotify Playlist Exporter - Powered by ReccoBeats"

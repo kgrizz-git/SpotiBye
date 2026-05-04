@@ -7,6 +7,8 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 from functools import wraps
 
+import requests
+
 from ..services.backend_client import BackendAPIError
 
 logger = logging.getLogger(__name__)
@@ -233,7 +235,6 @@ class ProgressTracker:
             message: Optional status message
         """
         self.current_step += step
-        progress = min(100, int((self.current_step / self.total_steps) * 100))
 
         for callback in self.callbacks:
             try:
@@ -343,7 +344,3 @@ def create_progress_callback(
             logger.error(f"Progress callback error: {e}")
 
     return callback
-
-
-# Import requests here to avoid circular imports
-import requests

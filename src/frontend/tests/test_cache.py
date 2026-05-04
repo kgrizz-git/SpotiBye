@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from ..caching.backend_cache import BackendCacheManager
 from ..services.backend_client import BackendClient

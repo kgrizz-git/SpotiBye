@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 import threading
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from unittest.mock import patch
 
 from ..services.backend_client import BackendClient
@@ -153,7 +153,7 @@ class TestUIResponsiveness:
 
             # Perform network operation
             start_time = time.time()
-            playlists = self.backend_client.get_playlists()
+            self.backend_client.get_playlists()
             operation_time = time.time() - start_time
 
             # Wait for UI thread to complete

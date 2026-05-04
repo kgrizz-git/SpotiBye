@@ -307,7 +307,7 @@ class BackendCacheManager:
                 if temp_file.exists():
                     try:
                         temp_file.unlink()
-                    except:
+                    except OSError:
                         pass
                 raise
 
@@ -411,9 +411,11 @@ class BackendCacheManager:
         except Exception:
             return False
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def _get_basic_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         try:
+            env_hash = self._hash_backend_url(self._get_backend_url_safe())
+            env_prefix = f"{env_hash}_"
             stats = {
                 "total_cached_items": 0,
                 "cache_size_bytes": 0,
@@ -421,7 +423,7 @@ class BackendCacheManager:
             }
 
             # Check playlists cache
-            playlists_cache = self.cache_dir / "playlists.json"
+            playlists_cache = self.cache_dir / f"{env_prefix}playlists.json"
             if playlists_cache.exists():
                 try:
                     with open(playlists_cache, "r") as f:
@@ -482,13 +484,21 @@ class BackendCacheManager:
             Cache statistics dictionary
         """
         try:
-            cache_files = list(self.cache_dir.glob("*.json"))
+            env_hash = self._hash_backend_url(self._get_backend_url_safe())
+            env_prefix = f"{env_hash}_"
+
+            cache_files = [
+                cache_file
+                for cache_file in self.cache_dir.glob("*.json")
+                if cache_file.name.startswith(env_prefix)
+                or cache_file == self.token_cache_path
+            ]
             total_size = sum(f.stat().st_size for f in cache_files)
 
             # Count by type
             # Count actual playlists in the playlists cache
             playlists_count = 0
-            playlists_cache = self.cache_dir / "playlists.json"
+            playlists_cache = self.cache_dir / f"{env_prefix}playlists.json"
             if playlists_cache.exists():
                 try:
                     with open(playlists_cache, "r") as f:
@@ -498,9 +508,11 @@ class BackendCacheManager:
                 except (json.JSONDecodeError, IOError):
                     pass
 
-            tracks_count = len(list(self.cache_dir.glob("tracks_*.json")))
-            analysis_count = len(list(self.cache_dir.glob("analysis_*.json")))
-            export_count = len(list(self.cache_dir.glob("export_*.json")))
+            tracks_count = len(list(self.cache_dir.glob(f"{env_prefix}tracks_*.json")))
+            analysis_count = len(
+                list(self.cache_dir.glob(f"{env_prefix}analysis_*.json"))
+            )
+            export_count = len(list(self.cache_dir.glob(f"{env_prefix}export_*.json")))
 
             return {
                 "total_files": len(cache_files),
@@ -546,7 +558,7 @@ def cache_spotify_track(track_payload: Dict[str, Any]) -> Optional[Dict[str, Any
     """Legacy compatibility function for Spotify track caching."""
     # In backend mode, we rely on backend caching
     if FeatureFlags.ENABLE_CACHING:
-        cache_manager = get_cache_manager()
+        get_cache_manager()
         # Cache tracks as part of playlist caching
         return track_payload
     return None

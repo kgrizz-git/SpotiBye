@@ -25,6 +25,7 @@ class CacheExplorerPopup(Popup):
     """Popup window for exploring cache contents with column-based navigation."""
 
     def __init__(self, **kwargs):
+        self.close_handler = kwargs.pop("close_handler", None)
         super().__init__(**kwargs)
         self.title = "Cache Explorer"
         self.size_hint = (0.9, 0.9)
@@ -146,10 +147,17 @@ class CacheExplorerPopup(Popup):
             background_color=[0.8, 0.3, 0.3, 1],
             font_size=dp(14),
         )
-        close_btn.bind(on_press=self.dismiss)
+        close_btn.bind(on_press=self._handle_close)
         footer.add_widget(close_btn)
 
         return footer
+
+    def _handle_close(self, *_args) -> None:
+        """Dismiss this popup, or a parent popup when embedded as content."""
+        if self.close_handler is not None:
+            self.close_handler()
+            return
+        self.dismiss()
 
     def _create_playlists_column(self) -> BoxLayout:
         """Create the playlists column."""

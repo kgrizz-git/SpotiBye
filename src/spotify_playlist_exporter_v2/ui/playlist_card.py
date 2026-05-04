@@ -641,26 +641,6 @@ class PlaylistCard(BoxLayout):
             logger.warning("Error getting window bounds: %s", exc)
             return None
 
-        playlist_type = ["Public" if playlist_info["is_public"] else "Private"]
-        if playlist_info["is_collaborative"]:
-            playlist_type.append("Collaborative")
-        info_layout.add_widget(
-            self.create_info_label(
-                f"Type: {', '.join(playlist_type)}", font_size=dp(16), height=dp(22)
-            )
-        )
-
-        info_layout.add_widget(Widget(size_hint_y=None, height=dp(4)))
-
-        stats_text = f"Tracks: {playlist_info['track_count']:,}"
-        followers = playlist_info["followers_count"]
-        if followers:
-            stats_text += f" • Followers: {followers:,}"
-        self.stats_widget = self.create_info_label(
-            stats_text, font_size=dp(16), height=dp(12)
-        )
-        info_layout.add_widget(self.stats_widget)
-
     def _add_show_tracks_button(
         self, info_layout: BoxLayout, playlist_info: Dict[str, Any]
     ) -> None:
@@ -1899,7 +1879,6 @@ class PlaylistCard(BoxLayout):
     def start_analysis_with_cached_data(
         self, playlist_info: Dict[str, Any], cached_data: Optional[Dict[str, Any]]
     ) -> None:
-        playlist_id = playlist_info["playlist_id"]
         track_count = playlist_info.get("track_count", 0)
 
         # For large playlists, show progress and load in background
@@ -2117,7 +2096,6 @@ class PlaylistCard(BoxLayout):
             processed = 0
 
             while results:
-                batch_size = len(results["items"])
                 for item in results["items"]:
                     track = item.get("track")
                     if track:
@@ -2324,9 +2302,9 @@ class PlaylistCard(BoxLayout):
                 exc,
             )
             Clock.schedule_once(
-                lambda dt: self.update_loading_message(
+                lambda dt, err=str(exc): self.update_loading_message(
                     playlist_info["loading_label"],
-                    f"Analysis error: {str(exc)[:30]}...",
+                    f"Analysis error: {err[:30]}...",
                 ),
                 0,
             )

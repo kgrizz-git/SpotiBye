@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import sys
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
+
+SRC_ROOT = Path(__file__).resolve().parents[2]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 # Test the backend cache explorer components
 try:
@@ -12,12 +18,19 @@ try:
         CacheExplorerAdapter,
         create_cache_explorer,
     )
-    from ..config.backend_config import BackendConfig
-    from ..services.backend_client import BackendClient
 
     BACKEND_AVAILABLE = True
 except ImportError:
-    BACKEND_AVAILABLE = False
+    try:
+        from src.frontend.ui.backend_cache_explorer import BackendCacheExplorerPopup
+        from src.frontend.screens.cache_explorer_adapter import (
+            CacheExplorerAdapter,
+            create_cache_explorer,
+        )
+
+        BACKEND_AVAILABLE = True
+    except ImportError:
+        BACKEND_AVAILABLE = False
 
 
 class TestBackendCacheExplorer(unittest.TestCase):
@@ -28,12 +41,8 @@ class TestBackendCacheExplorer(unittest.TestCase):
         if not BACKEND_AVAILABLE:
             self.skipTest("Backend components not available")
 
-        # Mock backend config
-        self.mock_config = Mock(spec=BackendConfig)
-        self.mock_config.backend_url = "http://test-backend.com"
-
         # Mock backend client
-        self.mock_client = Mock(spec=BackendClient)
+        self.mock_client = Mock()
         self.mock_client.get_cache_status.return_value = {
             "hit_rate": 85.5,
             "cache_size_mb": 125.3,
@@ -47,13 +56,13 @@ class TestBackendCacheExplorer(unittest.TestCase):
             "cached_analysis": 18,
         }
 
-    @patch("src.frontend.ui.backend_cache_explorer.BackendConfig")
+    @patch("src.frontend.ui.backend_cache_explorer.resolve_startup_backend_url")
     @patch("src.frontend.ui.backend_cache_explorer.BackendClient")
     def test_backend_cache_explorer_initialization(
-        self, mock_client_class, mock_config_class
+        self, mock_client_class, mock_backend_url
     ):
         """Test backend cache explorer initialization."""
-        mock_config_class.return_value = self.mock_config
+        mock_backend_url.return_value = "http://test-backend.com"
         mock_client_class.return_value = self.mock_client
 
         explorer = BackendCacheExplorerPopup()
@@ -63,10 +72,10 @@ class TestBackendCacheExplorer(unittest.TestCase):
         self.assertIsNotNone(explorer.backend_client)
         self.assertTrue(explorer.backend_switch.active)
 
-    @patch("src.frontend.ui.backend_cache_explorer.BackendConfig")
-    def test_backend_cache_explorer_no_backend(self, mock_config_class):
+    @patch("src.frontend.ui.backend_cache_explorer.resolve_startup_backend_url")
+    def test_backend_cache_explorer_no_backend(self, mock_backend_url):
         """Test backend cache explorer when backend not available."""
-        mock_config_class.side_effect = Exception("Backend not available")
+        mock_backend_url.side_effect = Exception("Backend not available")
 
         explorer = BackendCacheExplorerPopup()
 
@@ -78,11 +87,11 @@ class TestBackendCacheExplorer(unittest.TestCase):
     def test_backend_cache_status_display(self):
         """Test backend cache status display update."""
         with patch(
-            "src.frontend.ui.backend_cache_explorer.BackendConfig"
-        ) as mock_config_class, patch(
+            "src.frontend.ui.backend_cache_explorer.resolve_startup_backend_url"
+        ) as mock_backend_url, patch(
             "src.frontend.ui.backend_cache_explorer.BackendClient"
         ) as mock_client_class:
-            mock_config_class.return_value = self.mock_config
+            mock_backend_url.return_value = "http://test-backend.com"
             mock_client_class.return_value = self.mock_client
 
             explorer = BackendCacheExplorerPopup()
@@ -99,11 +108,11 @@ class TestBackendCacheExplorer(unittest.TestCase):
     def test_backend_toggle_functionality(self):
         """Test backend toggle switch functionality."""
         with patch(
-            "src.frontend.ui.backend_cache_explorer.BackendConfig"
-        ) as mock_config_class, patch(
+            "src.frontend.ui.backend_cache_explorer.resolve_startup_backend_url"
+        ) as mock_backend_url, patch(
             "src.frontend.ui.backend_cache_explorer.BackendClient"
         ) as mock_client_class:
-            mock_config_class.return_value = self.mock_config
+            mock_backend_url.return_value = "http://test-backend.com"
             mock_client_class.return_value = self.mock_client
 
             explorer = BackendCacheExplorerPopup()
@@ -120,13 +129,13 @@ class TestBackendCacheExplorer(unittest.TestCase):
     def test_backend_details_popup(self):
         """Test backend details popup functionality."""
         with patch(
-            "src.frontend.ui.backend_cache_explorer.BackendConfig"
-        ) as mock_config_class, patch(
+            "src.frontend.ui.backend_cache_explorer.resolve_startup_backend_url"
+        ) as mock_backend_url, patch(
             "src.frontend.ui.backend_cache_explorer.BackendClient"
         ) as mock_client_class, patch(
             "src.frontend.ui.backend_cache_explorer.Popup"
         ) as mock_popup_class:
-            mock_config_class.return_value = self.mock_config
+            mock_backend_url.return_value = "http://test-backend.com"
             mock_client_class.return_value = self.mock_client
             mock_popup = Mock()
             mock_popup_class.return_value = mock_popup
@@ -151,11 +160,13 @@ class TestCacheExplorerAdapter(unittest.TestCase):
         if not BACKEND_AVAILABLE:
             self.skipTest("Backend components not available")
 
-    @patch("src.frontend.screens.cache_explorer_adapter.BackendConfig")
+    @patch("src.frontend.screens.cache_explorer_adapter.resolve_startup_backend_url")
     @patch("src.frontend.screens.cache_explorer_adapter.BackendCacheExplorerPopup")
-    def test_adapter_with_backend_available(self, mock_backend_explorer, mock_config):
+    def test_adapter_with_backend_available(
+        self, mock_backend_explorer, mock_backend_url
+    ):
         """Test adapter when backend is available."""
-        mock_config.return_value = Mock(spec=BackendConfig)
+        mock_backend_url.return_value = "http://test-backend.com"
         mock_explorer = Mock()
         mock_backend_explorer.return_value = mock_explorer
 
@@ -166,11 +177,13 @@ class TestCacheExplorerAdapter(unittest.TestCase):
         mock_backend_explorer.assert_called_once()
         self.assertEqual(explorer, mock_explorer)
 
-    @patch("src.frontend.screens.cache_explorer_adapter.BackendConfig")
+    @patch("src.frontend.screens.cache_explorer_adapter.resolve_startup_backend_url")
     @patch("src.frontend.screens.cache_explorer_adapter.CacheExplorerPopup")
-    def test_adapter_fallback_to_standard(self, mock_standard_explorer, mock_config):
+    def test_adapter_fallback_to_standard(
+        self, mock_standard_explorer, mock_backend_url
+    ):
         """Test adapter fallback to standard cache explorer."""
-        mock_config.side_effect = Exception("Backend not available")
+        mock_backend_url.side_effect = Exception("Backend not available")
         mock_explorer = Mock()
         mock_standard_explorer.return_value = mock_explorer
 
@@ -184,11 +197,9 @@ class TestCacheExplorerAdapter(unittest.TestCase):
     def test_adapter_cache_status_info(self):
         """Test adapter cache status information."""
         with patch(
-            "src.frontend.screens.cache_explorer_adapter.BackendConfig"
-        ) as mock_config:
-            mock_backend_config = Mock(spec=BackendConfig)
-            mock_backend_config.backend_url = "http://test-backend.com"
-            mock_config.return_value = mock_backend_config
+            "src.frontend.screens.cache_explorer_adapter.resolve_startup_backend_url"
+        ) as mock_backend_url:
+            mock_backend_url.return_value = "http://test-backend.com"
 
             adapter = CacheExplorerAdapter()
             info = adapter.get_cache_status_info()
@@ -229,16 +240,14 @@ class TestCacheExplorerIntegration(unittest.TestCase):
         if not BACKEND_AVAILABLE:
             self.skipTest("Backend components not available")
 
-    @patch("src.frontend.ui.backend_cache_explorer.BackendConfig")
+    @patch("src.frontend.ui.backend_cache_explorer.resolve_startup_backend_url")
     @patch("src.frontend.ui.backend_cache_explorer.BackendClient")
-    def test_full_backend_status_flow(self, mock_client_class, mock_config_class):
+    def test_full_backend_status_flow(self, mock_client_class, mock_backend_url):
         """Test complete backend status flow."""
         # Setup mocks
-        mock_config = Mock(spec=BackendConfig)
-        mock_config.backend_url = "http://test-backend.com"
-        mock_config_class.return_value = mock_config
+        mock_backend_url.return_value = "http://test-backend.com"
 
-        mock_client = Mock(spec=BackendClient)
+        mock_client = Mock()
         mock_client.get_cache_status.return_value = {
             "hit_rate": 92.3,
             "cache_size_mb": 250.7,

@@ -7,7 +7,7 @@ import threading
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any, Dict, Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 class MockBackendHandler(BaseHTTPRequestHandler):
@@ -20,9 +20,12 @@ class MockBackendHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         """Handle GET requests."""
         parsed_path = urlparse(self.path)
+        query_params = parse_qs(parsed_path.query)
 
         if parsed_path.path == "/health":
             self._handle_health_check()
+        elif parsed_path.path == "/auth/spotify/callback":
+            self._handle_spotify_callback(query_params=query_params)
         elif parsed_path.path == "/spotify/playlists":
             self._handle_get_playlists()
         elif parsed_path.path.startswith("/spotify/playlists/") and (
@@ -58,9 +61,9 @@ class MockBackendHandler(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length)
 
         if parsed_path.path == "/auth/spotify/login":
-            self._handle_spotify_login()
+            self._handle_spotify_login(post_data)
         elif parsed_path.path == "/auth/spotify/callback":
-            self._handle_spotify_callback(post_data)
+            self._handle_spotify_callback(post_data=post_data)
         elif parsed_path.path == "/auth/spotify/refresh":
             self._handle_token_refresh()
         elif parsed_path.path.startswith("/analysis/playlist/"):
@@ -81,19 +84,42 @@ class MockBackendHandler(BaseHTTPRequestHandler):
         }
         self._send_json_response(200, response)
 
-    def _handle_spotify_login(self):
+    def _handle_spotify_login(self, post_data: bytes):
         """Handle Spotify login initiation."""
-        auth_url = "http://localhost:8080/callback?mock_auth_code=test_code_12345"
+        redirect_uri = "http://127.0.0.1:8080/callback"
+        try:
+            if post_data:
+                payload = json.loads(post_data.decode("utf-8"))
+                redirect_uri = payload.get("redirect_uri", redirect_uri)
+        except Exception:
+            pass
+
+        separator = "&" if "?" in redirect_uri else "?"
+        auth_url = (
+            f"{redirect_uri}{separator}code=test_code_12345&state=test_state_12345"
+        )
         response = {"auth_url": auth_url}
         self._send_json_response(200, response)
 
-    def _handle_spotify_callback(self, post_data: bytes):
+    def _handle_spotify_callback(
+        self,
+        post_data: Optional[bytes] = None,
+        query_params: Optional[Dict[str, list[str]]] = None,
+    ):
         """Handle Spotify OAuth callback."""
         try:
-            data = json.loads(post_data.decode("utf-8"))
-            code = data.get("code")
+            code = None
+            state = None
 
-            if code == "test_code_12345":
+            if query_params is not None:
+                code = query_params.get("code", [None])[0]
+                state = query_params.get("state", [None])[0]
+            elif post_data:
+                data = json.loads(post_data.decode("utf-8"))
+                code = data.get("code")
+                state = data.get("state")
+
+            if code == "test_code_12345" and state == "test_state_12345":
                 token_data = {
                     "token": "mock_jwt_token_abcdef123456",
                     "refresh_token": "mock_refresh_token_789012",
@@ -106,7 +132,7 @@ class MockBackendHandler(BaseHTTPRequestHandler):
                 }
                 self._send_json_response(200, token_data)
             else:
-                self._send_error(400, "Invalid authorization code")
+                self._send_error(400, "Invalid authorization code or state")
         except Exception as e:
             self._send_error(400, f"Invalid request data: {e}")
 

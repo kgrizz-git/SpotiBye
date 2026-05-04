@@ -190,8 +190,8 @@ class TracksWindow(Popup):
         except Exception as exc:
             logger.error("Error loading tracks: %s", exc)
             Clock.schedule_once(
-                lambda dt: self._show_error(
-                    f"Error loading tracks: {str(exc)[:50]}..."
+                lambda dt, err=str(exc): self._show_error(
+                    f"Error loading tracks: {err[:50]}..."
                 ),
                 0,
             )

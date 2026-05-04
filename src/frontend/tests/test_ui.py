@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from ..services.backend_client import BackendClient
 from ..services.reccobeats_backend import ReccoBeatsBackendService
@@ -277,9 +277,7 @@ class TestUIFunctionality:
 
             # Test invalid playlist ID
             try:
-                invalid_playlist = self.backend_client.get_playlist_details(
-                    "invalid_id_12345"
-                )
+                self.backend_client.get_playlist_details("invalid_id_12345")
                 # Should not reach here for invalid ID
                 self.framework.end_test(False, "Invalid playlist ID should raise error")
                 return False
@@ -289,9 +287,7 @@ class TestUIFunctionality:
 
             # Test invalid track ID
             try:
-                invalid_track = self.backend_client.get_track_details(
-                    "invalid_track_12345"
-                )
+                self.backend_client.get_track_details("invalid_track_12345")
                 # Should not reach here for invalid ID
                 self.framework.end_test(False, "Invalid track ID should raise error")
                 return False

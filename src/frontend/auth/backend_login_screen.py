@@ -248,7 +248,7 @@ class BackendLoginScreen(Screen):
         except Exception as e:
             logger.error(f"Backend login worker error: {e}")
             Clock.schedule_once(
-                lambda dt: self._on_login_error(f"Login error: {str(e)}"), 0
+                lambda dt, err=str(e): self._on_login_error(f"Login error: {err}"), 0
             )
         finally:
             Clock.schedule_once(lambda dt: self._set_login_state(False), 0)

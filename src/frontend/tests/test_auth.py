@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from unittest.mock import patch
 
 from ..services.backend_client import BackendClient
 from ..auth.backend_auth import BackendAuthenticator
 from .test_framework import BackendTestFramework
 
 logger = logging.getLogger(__name__)
+
+
+TEST_REDIRECT_URI = "http://127.0.0.1:8788/callback"
+TEST_OAUTH_STATE = "test_state_12345"
 
 
 class TestAuthenticationFlow:
@@ -51,7 +56,7 @@ class TestAuthenticationFlow:
                 return False
 
             # Test login initiation
-            auth_url = self.backend_client.initiate_spotify_login()
+            auth_url = self.backend_client.initiate_spotify_login(TEST_REDIRECT_URI)
 
             if not auth_url:
                 self.framework.end_test(False, "No auth URL returned")
@@ -79,7 +84,9 @@ class TestAuthenticationFlow:
 
             # Test callback with mock authorization code
             mock_code = "test_code_12345"
-            token_response = self.backend_client.handle_spotify_callback(mock_code)
+            token_response = self.backend_client.handle_spotify_callback(
+                mock_code, TEST_OAUTH_STATE
+            )
 
             if not token_response:
                 self.framework.end_test(False, "No token response received")
@@ -114,7 +121,9 @@ class TestAuthenticationFlow:
                 return False
 
             # Ensure we have a token first
-            self.backend_client.handle_spotify_callback("test_code_12345")
+            self.backend_client.handle_spotify_callback(
+                "test_code_12345", TEST_OAUTH_STATE
+            )
 
             # Test token refresh
             refresh_response = self.backend_client.refresh_token()
@@ -150,7 +159,9 @@ class TestAuthenticationFlow:
                 return False
 
             # Ensure we're authenticated first
-            self.backend_client.handle_spotify_callback("test_code_12345")
+            self.backend_client.handle_spotify_callback(
+                "test_code_12345", TEST_OAUTH_STATE
+            )
 
             # Test logout
             logout_success = self.authenticator.logout()
@@ -182,8 +193,16 @@ class TestAuthenticationFlow:
                 self.framework.end_test(False, "Authenticator not initialized")
                 return False
 
-            # Test complete flow: login -> callback -> logout
-            auth_success = self.authenticator.login()
+            # Simulate the browser and callback parts of the flow while exercising
+            # the current authenticator contract end-to-end.
+            with patch("webbrowser.open", return_value=True), patch.object(
+                self.authenticator, "_start_callback_server", return_value=True
+            ), patch.object(
+                self.authenticator,
+                "_wait_for_callback",
+                return_value={"code": "test_code_12345", "state": TEST_OAUTH_STATE},
+            ), patch.object(self.authenticator, "_stop_callback_server"):
+                auth_success = self.authenticator.login()
 
             if not auth_success:
                 self.framework.end_test(False, "Login flow failed")

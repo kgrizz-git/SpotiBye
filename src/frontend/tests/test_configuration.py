@@ -81,7 +81,7 @@ class TestConfiguration:
                 importlib.reload(backend_config)
 
                 # Verify development configuration
-                if backend_config.USE_PRODUCTION != False:
+                if backend_config.USE_PRODUCTION:
                     self.framework.end_test(
                         False,
                         f"USE_PRODUCTION should be False, got {backend_config.USE_PRODUCTION}",
@@ -129,7 +129,7 @@ class TestConfiguration:
                 importlib.reload(backend_config)
 
                 # Verify production configuration
-                if backend_config.USE_PRODUCTION != True:
+                if not backend_config.USE_PRODUCTION:
                     self.framework.end_test(
                         False,
                         f"USE_PRODUCTION should be True, got {backend_config.USE_PRODUCTION}",
@@ -339,8 +339,6 @@ class TestConfiguration:
             from ..auth.backend_auth import BackendAuthenticator
 
             # Test that authenticator can be configured with custom port
-            auth = BackendAuthenticator()
-
             # The authenticator uses default port, but we can test it accepts custom port
             custom_auth = BackendAuthenticator()
             custom_auth.callback_port = 9999
@@ -453,7 +451,7 @@ class TestConfiguration:
                 importlib.reload(backend_config)
 
                 # Should default to False for invalid values
-                if backend_config.USE_PRODUCTION != False:
+                if backend_config.USE_PRODUCTION:
                     self.framework.end_test(
                         False, "Should default to False for invalid boolean"
                     )

@@ -6,6 +6,19 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- The desktop app now launches maximized by default instead of entering fullscreen.
+- Backend selection now shows connection status automatically but no longer requires a successful pre-check before `Continue`; the actual Spotify connect flow remains the hard gate.
+
+### Fixed
+- Fixed backend authentication integration tests to match the current OAuth redirect/state flow used by the frontend client and authenticator.
+- Fixed backend cache explorer startup to use the current backend URL configuration API instead of the removed `BackendConfig` class.
+- Fixed backend cache statistics in frontend mode so playlist and file counts reflect environment-scoped cache files instead of incorrectly reporting zero items.
+- Fixed cache explorer playlist inspection so expired cache entries no longer crash detailed cache loading with `dictionary changed size during iteration`.
+- Fixed the visible cache explorer Close button in backend mode so it dismisses the popup that is actually open.
+- Fixed persistent cache metadata handling so partially written `cache_metadata.json` files are quarantined and future saves use atomic writes instead of leaving the cache explorer stuck behind JSON parse errors.
+- Reduced cache explorer expiry log noise by replacing one debug line per expired playlist with a single summary log during explorer loading.
+
 ## [0.1.5] - 2026-03-19
 
 ### Changed
