@@ -5,7 +5,7 @@
  * The real integration has NOT been implemented. All methods return mock data.
  *
  * Tech debt: docs/tech-debt-tracker.md item #9
- * Do not add api.spotify.com calls here — use services/spotify.ts instead.
+ * Do not add direct Spotify API calls here — use services/spotify.ts instead.
  *
  * Before implementing the real integration, clarify:
  *   1. Is Reccobeats still the intended third-party service?
