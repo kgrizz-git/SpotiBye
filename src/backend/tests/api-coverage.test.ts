@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import app from '../index';
 import type { Env } from '../types/env';
 
 // Mock JWT service
 vi.mock('../services/jwt', () => ({
   JWTService: class {
-    constructor(secret: string) {
+    constructor(_secret: string) {
       // Mock constructor
     }
     verifyToken() {

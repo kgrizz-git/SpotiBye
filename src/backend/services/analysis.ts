@@ -1,6 +1,4 @@
 import { SpotifyService } from './spotify';
-import { CacheService } from './cache';
-import type { Env } from '../types/env';
 
 export class AnalysisService {
   private accessToken: string;
@@ -178,7 +176,7 @@ export class AnalysisService {
     };
   }
 
-  private generateInsights(avgFeatures: any, energyDist: any, danceabilityDist: any): string[] {
+  private generateInsights(avgFeatures: any, energyDist: any, _danceabilityDist: any): string[] {
     const insights: string[] = [];
 
     if (avgFeatures.energy > 0.7) {

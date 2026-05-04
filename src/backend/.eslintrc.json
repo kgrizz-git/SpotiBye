@@ -53,6 +53,12 @@
           }
         ]
       }
+    },
+    {
+      "files": ["tests/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ],
   "ignorePatterns": ["dist/", "node_modules/"]
