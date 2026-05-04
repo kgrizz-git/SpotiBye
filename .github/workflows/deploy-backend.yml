@@ -19,8 +19,11 @@ permissions:
   security-events: read
 
 jobs:
+  # Only run tests if triggered manually or if CI hasn't run yet
+  # This avoids duplicate test runs when CI already validated the code
   test:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request != null
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -51,7 +54,11 @@ jobs:
   deploy-dev:
     needs: test
     runs-on: ubuntu-latest
-    if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
+    # Deploy on main branch push or manual trigger, but allow skipped test job
+    if: |
+      (github.ref == 'refs/heads/main' && github.event_name == 'push') || 
+      github.event_name == 'workflow_dispatch' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
 
     steps:
     - name: Checkout code
@@ -76,7 +83,11 @@ jobs:
   deploy-prod:
     needs: test
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    # Deploy on version tags, but allow skipped test job
+    if: |
+      startsWith(github.ref, 'refs/tags/v') && 
+      github.event_name == 'push' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
 
     steps:
     - name: Checkout code
