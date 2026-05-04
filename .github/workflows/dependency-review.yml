@@ -3,10 +3,19 @@ name: Dependency Review
 on:
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'requirements.txt'
+      - 'package*.json'
+      - 'src/backend/package*.json'
+      - '.github/workflows/dependency-review.yml'
 
 permissions:
   contents: read
   pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   dependency-review:

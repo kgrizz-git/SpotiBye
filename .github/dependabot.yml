@@ -8,11 +8,10 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "America/New_York"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     reviewers:
       - "kgrizz"
     assignees:
@@ -56,11 +55,10 @@ updates:
   - package-ecosystem: "npm"
     directory: "/src/backend"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "America/New_York"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     reviewers:
       - "kgrizz"
     assignees:
@@ -90,11 +88,10 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "America/New_York"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     reviewers:
       - "kgrizz"
     assignees:
@@ -117,11 +114,10 @@ updates:
   - package-ecosystem: "docker"
     directory: "/backend-backup"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "America/New_York"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     reviewers:
       - "kgrizz"
     labels:
