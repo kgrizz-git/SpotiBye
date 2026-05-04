@@ -70,7 +70,7 @@ const createMockPlaylist = (size: number) => {
 describe('Export Functionality Performance Tests', () => {
   describe('Mock Export Tests', () => {
     it('should handle small playlist export (1-10 tracks)', async () => {
-      const smallPlaylist = createMockPlaylist(5);
+      createMockPlaylist(5);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
         headers: {
@@ -96,7 +96,7 @@ describe('Export Functionality Performance Tests', () => {
     });
 
     it('should handle medium playlist export (50-100 tracks)', async () => {
-      const mediumPlaylist = createMockPlaylist(75);
+      createMockPlaylist(75);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
         headers: {
@@ -127,7 +127,7 @@ describe('Export Functionality Performance Tests', () => {
     });
 
     it('should handle large playlist export (500+ tracks)', async () => {
-      const largePlaylist = createMockPlaylist(500);
+      createMockPlaylist(500);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
         headers: {
@@ -160,7 +160,7 @@ describe('Export Functionality Performance Tests', () => {
 
   describe('Export Format Tests', () => {
     it('should generate CSV format correctly', async () => {
-      const playlist = createMockPlaylist(10);
+      createMockPlaylist(10);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
         headers: {
@@ -183,7 +183,7 @@ describe('Export Functionality Performance Tests', () => {
     });
 
     it('should generate JSON format correctly', async () => {
-      const playlist = createMockPlaylist(10);
+      createMockPlaylist(10);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
         headers: {
@@ -231,7 +231,7 @@ describe('Export Functionality Performance Tests', () => {
       const performanceData = [];
 
       for (const size of sizes) {
-        const playlist = createMockPlaylist(size);
+        createMockPlaylist(size);
         const request = new Request('http://localhost/export/playlist/test-playlist', {
           method: 'POST',
           headers: {
@@ -269,7 +269,7 @@ describe('Export Functionality Performance Tests', () => {
     });
 
     it('should handle memory usage for large exports', async () => {
-      const veryLargePlaylist = createMockPlaylist(1000);
+      createMockPlaylist(1000);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
         headers: {
@@ -297,7 +297,7 @@ describe('Export Functionality Performance Tests', () => {
 
   describe('Export Error Handling', () => {
     it('should handle export timeout for very large playlists', async () => {
-      const enormousPlaylist = createMockPlaylist(5000);
+      createMockPlaylist(5000);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
         headers: {
