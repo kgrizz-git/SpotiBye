@@ -18,6 +18,42 @@ from ..logging_config import logger
 from ..auth.login_screen import create_spotify_client_with_refresh
 
 
+def _is_backend_authenticated_app() -> bool:
+    app = App.get_running_app()
+    return bool(
+        app and hasattr(app, "backend_client") and hasattr(app, "backend_adapter")
+    )
+
+
+def _normalize_backend_track_items(track_items):
+    tracks = []
+    for item in track_items or []:
+        track = item.get("track") if isinstance(item, dict) else None
+        if not isinstance(track, dict):
+            continue
+
+        artists = ", ".join(
+            [artist.get("name", "Unknown") for artist in track.get("artists", [])]
+        )
+        album_name = track.get("album", {}).get("name", "Unknown Album")
+        track_name = track.get("name", "Unknown Track")
+        duration_ms = track.get("duration_ms", 0)
+        duration_min = duration_ms // 60000
+        duration_sec = (duration_ms % 60000) // 1000
+        duration_str = f"{duration_min}:{duration_sec:02d}"
+
+        tracks.append(
+            {
+                "title": track_name,
+                "artist": artists,
+                "album": album_name,
+                "duration": duration_str,
+                "explicit": track.get("explicit", False),
+            }
+        )
+    return tracks
+
+
 class TracksWindow(Popup):
     """Window to display playlist tracks with detailed information."""
 
@@ -120,6 +156,33 @@ class TracksWindow(Popup):
 
     def _load_tracks_worker(self):
         try:
+            if _is_backend_authenticated_app():
+                app = App.get_running_app()
+                backend_adapter = getattr(app, "backend_adapter", None)
+                playlist_id = self.playlist_data.get("id")
+                if not backend_adapter or not playlist_id:
+                    Clock.schedule_once(
+                        lambda dt: self._show_error(
+                            "Backend track lookup is unavailable"
+                        ),
+                        0,
+                    )
+                    return
+
+                track_items = backend_adapter.get_playlist_tracks(playlist_id)
+                if track_items is None:
+                    Clock.schedule_once(
+                        lambda dt: self._show_error(
+                            "Failed to load tracks from backend"
+                        ),
+                        0,
+                    )
+                    return
+
+                self.tracks_data = _normalize_backend_track_items(track_items)
+                Clock.schedule_once(self._display_tracks, 0)
+                return
+
             app = App.get_running_app()
             if not app.token_info or not app.token_info.get("access_token"):
                 Clock.schedule_once(

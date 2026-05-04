@@ -9,6 +9,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import spotipy
+from spotipy.exceptions import SpotifyException
 from kivy.app import App
 from kivy.clock import Clock, mainthread
 from kivy.core.window import Window
@@ -38,7 +39,10 @@ from ..caching.track_cache import (
     get_or_update_playlist_tracks,
 )
 from ..logging_config import logger
-from ..auth.login_screen import create_spotify_client_with_refresh
+from ..auth.login_screen import (
+    create_spotify_client_with_refresh,
+    notify_spotify_session_expired,
+)
 from ..config import UIConstants
 from ..state import active_analysis_tasks
 from ..services.reccobeats import ReccoBeatsAPI
@@ -47,6 +51,17 @@ from .tracks_window import TracksWindow
 
 
 reccobeats_api = ReccoBeatsAPI()
+
+
+def _is_spotify_auth_error(exc: Exception | str) -> bool:
+    message = str(exc).lower()
+    if "invalid access token" in message or "authentication" in message:
+        return True
+    if "http status: 401" in message or "http 401" in message:
+        return True
+    if isinstance(exc, SpotifyException) and exc.http_status == 401:
+        return True
+    return False
 
 
 class ProgressWindow(Popup):
@@ -144,6 +159,49 @@ class ProgressWindow(Popup):
         self.auto_dismiss = True
         self.cancel_button.text = "Close"
         self.cancel_button.background_color = (0.8, 0.3, 0.3, 1)
+
+
+def _is_backend_authenticated_app() -> bool:
+    app = App.get_running_app()
+    return bool(
+        app and hasattr(app, "backend_client") and hasattr(app, "backend_adapter")
+    )
+
+
+def _normalize_backend_track_items(
+    track_items: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    normalized_tracks: List[Dict[str, Any]] = []
+    for index, item in enumerate(track_items or [], start=1):
+        track = item.get("track") if isinstance(item, dict) else None
+        if not isinstance(track, dict):
+            continue
+
+        normalized_tracks.append(
+            {
+                "id": track.get("id"),
+                "name": track.get("name", "Unknown Track"),
+                "title": track.get("name", "Unknown Track"),
+                "artists": [
+                    artist.get("name", "Unknown") for artist in track.get("artists", [])
+                ],
+                "artist_ids": [
+                    artist.get("id")
+                    for artist in track.get("artists", [])
+                    if artist.get("id")
+                ],
+                "album": track.get("album", {}).get("name", ""),
+                "duration_ms": track.get("duration_ms", 0),
+                "popularity": track.get("popularity"),
+                "explicit": track.get("explicit"),
+                "spotify_url": track.get("external_urls", {}).get("spotify"),
+                "spotify_uri": track.get("uri"),
+                "added_at": item.get("added_at"),
+                "position": item.get("position", index - 1),
+            }
+        )
+
+    return normalized_tracks
 
 
 class PlaylistCard(BoxLayout):
@@ -650,7 +708,7 @@ class PlaylistCard(BoxLayout):
                     title_container = BoxLayout(
                         orientation="horizontal",
                         size_hint_y=None,
-                        height=dp(40),
+                        height=dp(44),
                         spacing=dp(10),
                     )
                     self.master_content_container.remove_widget(widget)
@@ -662,18 +720,39 @@ class PlaylistCard(BoxLayout):
                         color=(1, 1, 1, 1),
                         halign="left",
                         valign="center",
-                        size_hint_x=0.75,
                     )
+                    title_label.bind(
+                        size=lambda instance, value: setattr(
+                            instance, "text_size", value
+                        )
+                    )
+                    playlist_info["title_label"] = title_label
                     title_container.add_widget(title_label)
 
                     show_tracks_btn = Button(
                         text="Show Tracks",
-                        size_hint_x=0.25,
+                        size_hint=(None, 1),
+                        width=dp(160),
                         font_size=dp(14),
                         background_color=[0.3, 0.6, 0.9, 1],
                     )
                     show_tracks_btn.bind(on_press=lambda _: self.show_tracks_window())
                     title_container.add_widget(show_tracks_btn)
+
+                    refresh_btn = Button(
+                        text="Refresh",
+                        size_hint=(None, 1),
+                        width=dp(110),
+                        font_size=dp(14),
+                        background_color=[0.25, 0.55, 0.85, 1],
+                    )
+                    refresh_btn.bind(
+                        on_press=lambda _: self.refresh_playlist_from_spotify(
+                            playlist_info
+                        )
+                    )
+                    playlist_info["refresh_button"] = refresh_btn
+                    title_container.add_widget(refresh_btn)
 
                     self.master_content_container.add_widget(
                         title_container,
@@ -801,7 +880,7 @@ class PlaylistCard(BoxLayout):
                 title="Playlist Analysis",
                 title_size=dp(20),
                 title_color=(1, 1, 1, 1),
-                size_hint=(0.85, 0.8),
+                size_hint=(0.85, 0.68),
                 background_color=(0.15, 0.15, 0.15, 0.95),
                 auto_dismiss=True,
                 overlay_color=(0, 0, 0, 0.5),
@@ -849,8 +928,9 @@ class PlaylistCard(BoxLayout):
     def _create_popup_content_with_immediate_details(self, playlist_info):
         scroll_content = BoxLayout(
             orientation="horizontal",
-            padding=[dp(10), dp(20), dp(10), dp(20)],
-            spacing=dp(2),
+            padding=[dp(12), dp(8), dp(12), dp(8)],
+            spacing=dp(10),
+            size_hint_x=None,
             size_hint_y=None,  # Disable vertical size_hint for ScrollView
         )
 
@@ -867,6 +947,7 @@ class PlaylistCard(BoxLayout):
 
         # Create info layout and image container
         info_layout = self._create_basic_info_section_only(playlist_info)
+        info_layout.size_hint_x = None
         image_container = playlist_info["image_container"] = (
             self._create_image_section_with_immediate_tech(playlist_info)
         )
@@ -874,19 +955,61 @@ class PlaylistCard(BoxLayout):
             image_container  # Store as instance variable for cache refresh
         )
 
-        # Add both containers to scroll content
+        def sync_popup_columns(*_args) -> None:
+            padding_left, _padding_top, padding_right, _padding_bottom = (
+                scroll_content.padding
+            )
+            viewport_width = max(scroll_view.width, dp(520))
+            fixed_width = image_container.width + padding_left + padding_right
+            available_info_width = max(
+                dp(280), viewport_width - fixed_width - scroll_content.spacing
+            )
+
+            info_layout.width = available_info_width
+            self.master_content_container.width = available_info_width
+            scroll_content.width = (
+                fixed_width + available_info_width + scroll_content.spacing
+            )
+            # Ensure scroll_content height covers the taller of both columns
+            col_height = max(
+                image_container.minimum_height,
+                info_layout.minimum_height,
+            )
+            scroll_content.height = col_height + _padding_top + _padding_bottom
+
+        scroll_view.bind(width=sync_popup_columns)
+        image_container.bind(width=sync_popup_columns)
+        image_container.bind(
+            minimum_height=lambda *_: Clock.schedule_once(sync_popup_columns, 0)
+        )
+        info_layout.bind(
+            minimum_height=lambda *_: Clock.schedule_once(sync_popup_columns, 0)
+        )
+        Clock.schedule_once(sync_popup_columns, 0)
+
+        # Add both containers to scroll content, top-aligned
+        image_container.pos_hint = {"top": 1}
+        info_layout.pos_hint = {"top": 1}
         scroll_content.add_widget(image_container)
         scroll_content.add_widget(info_layout)
 
         main_container = BoxLayout(orientation="vertical", padding=dp(5), spacing=dp(5))
         main_container.add_widget(scroll_view)
+        refresh_status_label = self.create_info_label(
+            "Refresh checks Spotify version and updates cache when needed.",
+            font_size=dp(11),
+            color=(0.65, 0.65, 0.65, 1),
+            height=dp(18),
+        )
+        playlist_info["refresh_status_label"] = refresh_status_label
+        main_container.add_widget(refresh_status_label)
 
         close_container = RelativeLayout(size_hint_y=None, height=dp(50))
         close_button = Button(
             text="Close",
             size_hint=(None, None),
             size=(dp(100), dp(40)),
-            pos_hint={"center_x": 0.5, "center_y": 0.5},
+            pos_hint={"right": 1, "center_y": 0.5},
             font_size=dp(16),
             background_color=[0.6, 0.6, 0.6, 1],
         )
@@ -901,7 +1024,7 @@ class PlaylistCard(BoxLayout):
 
     def _create_image_section_with_immediate_tech(self, playlist_info):
         image_container = BoxLayout(
-            orientation="vertical", size_hint_x=None, width=dp(220)
+            orientation="vertical", size_hint_x=None, size_hint_y=None, width=dp(200)
         )
         image_container.bind(minimum_height=image_container.setter("height"))
 
@@ -911,7 +1034,8 @@ class PlaylistCard(BoxLayout):
                 source=image_url,
                 size_hint=(None, None),
                 size=(dp(180), dp(180)),
-                fit_mode="cover",
+                fit_mode="contain",
+                pos_hint={"center_x": 0.5},
             )
 
             def on_image_load(_instance, _value):
@@ -982,9 +1106,7 @@ class PlaylistCard(BoxLayout):
             except Exception as exc:
                 logger.warning("Error processing image info: %s", exc)
 
-        image_container.add_widget(
-            Widget(size_hint_y=None, height=dp(15))
-        )  # Reverted to original spacing
+        image_container.add_widget(Widget(size_hint_y=None, height=dp(8)))
         tech_widgets = self.create_technical_details_widgets_for_left_side(
             playlist_info["owner_id"],
             playlist_info["playlist_id"],
@@ -993,14 +1115,8 @@ class PlaylistCard(BoxLayout):
         for widget in tech_widgets:
             image_container.add_widget(widget)
 
-        image_container.add_widget(Widget())
-        # Schedule multiple layout updates to ensure proper positioning
         Clock.schedule_once(lambda _dt: image_container.do_layout(), 0)
         Clock.schedule_once(lambda _dt: image_container.do_layout(), 0.1)
-        Clock.schedule_once(lambda _dt: image_container.do_layout(), 0.2)
-        Clock.schedule_once(
-            lambda _dt: image_container.do_layout(), 0.3
-        )  # Extra refresh
         return image_container
 
     def _create_basic_info_section_only(self, playlist_info):
@@ -1068,14 +1184,17 @@ class PlaylistCard(BoxLayout):
             size_hint_y=None,
             height=dp(40),
         )
+        playlist_info["title_label"] = title_label
         layout.add_widget(title_label)
 
         owner_info = f"Created by: {playlist_info['owner_name']}"
         if playlist_info["owner_type"] not in ["Unknown", "user"]:
             owner_info += f" ({playlist_info['owner_type'].title()})"
-        layout.add_widget(
-            self.create_info_label(owner_info, font_size=dp(16), height=dp(25))
+        owner_label = self.create_info_label(
+            owner_info, font_size=dp(16), height=dp(25)
         )
+        playlist_info["owner_label"] = owner_label
+        layout.add_widget(owner_label)
 
         if playlist_info["spotify_url"]:
             layout.add_widget(
@@ -1145,7 +1264,340 @@ class PlaylistCard(BoxLayout):
         self.stats_widget = self.create_info_label(
             stats_text, font_size=dp(16), height=dp(12)
         )
+        playlist_info["stats_label"] = self.stats_widget
         layout.add_widget(self.stats_widget)
+
+    def _set_refresh_status(
+        self,
+        playlist_info: Dict[str, Any],
+        message: str,
+        color: tuple[float, float, float, float],
+    ) -> None:
+        status_label = playlist_info.get("refresh_status_label")
+        if status_label:
+            status_label.text = message
+            status_label.color = color
+
+    def _set_refresh_button_state(
+        self, playlist_info: Dict[str, Any], disabled: bool, text: str = "Refresh"
+    ) -> None:
+        refresh_button = playlist_info.get("refresh_button")
+        if refresh_button:
+            refresh_button.disabled = disabled
+            refresh_button.text = text
+
+    def refresh_playlist_from_spotify(self, playlist_info: Dict[str, Any]) -> None:
+        if _is_backend_authenticated_app():
+            if getattr(self, "_manual_playlist_refresh_in_progress", False):
+                return
+
+            self._manual_playlist_refresh_in_progress = True
+            self._set_refresh_button_state(playlist_info, True, "Refreshing...")
+            self._set_refresh_status(
+                playlist_info,
+                "Refreshing playlist details from backend...",
+                (0.8, 0.8, 0.2, 1),
+            )
+            threading.Thread(
+                target=self._refresh_playlist_from_backend_worker,
+                args=(playlist_info,),
+                daemon=True,
+            ).start()
+            return
+
+        if getattr(self, "_manual_playlist_refresh_in_progress", False):
+            return
+
+        self._manual_playlist_refresh_in_progress = True
+        self._set_refresh_button_state(playlist_info, True, "Checking...")
+        self._set_refresh_status(
+            playlist_info,
+            "Checking live playlist data on Spotify...",
+            (0.8, 0.8, 0.2, 1),
+        )
+        threading.Thread(
+            target=self._refresh_playlist_from_spotify_worker,
+            args=(playlist_info,),
+            daemon=True,
+        ).start()
+
+    def _refresh_playlist_from_backend_worker(
+        self, playlist_info: Dict[str, Any]
+    ) -> None:
+        try:
+            app = App.get_running_app()
+            backend_adapter = getattr(app, "backend_adapter", None)
+            if not backend_adapter:
+                raise RuntimeError("Backend playlist refresh is unavailable")
+
+            playlist_id = playlist_info.get("playlist_id", "")
+            if not playlist_id:
+                raise RuntimeError("Missing playlist ID")
+
+            playlist_details = backend_adapter.get_playlist_details(playlist_id)
+            if not playlist_details:
+                raise RuntimeError("Failed to load playlist details from backend")
+
+            track_items = backend_adapter.get_playlist_tracks(playlist_id) or []
+            backend_analysis = self._build_backend_track_analysis(track_items)
+
+            Clock.schedule_once(
+                lambda _dt,
+                details=dict(playlist_details),
+                analysis=backend_analysis: self._apply_backend_refresh_result(
+                    playlist_info,
+                    details,
+                    analysis,
+                )
+            )
+
+        except Exception as exc:
+            Clock.schedule_once(
+                lambda _dt, err=str(exc): self._handle_playlist_refresh_error(
+                    playlist_info, err
+                )
+            )
+
+    def _refresh_playlist_from_spotify_worker(
+        self, playlist_info: Dict[str, Any]
+    ) -> None:
+        try:
+            app = App.get_running_app()
+            token_info = getattr(app, "token_info", None)
+            if not token_info:
+                raise RuntimeError("Spotify authentication is not available")
+
+            sp = create_spotify_client_with_refresh(token_info)
+            if not sp:
+                raise RuntimeError("Failed to create Spotify client")
+
+            playlist_id = playlist_info.get("playlist_id", "")
+            if not playlist_id:
+                raise RuntimeError("Missing playlist ID")
+
+            user_id = getattr(app, "user_id", None) or sp.current_user().get("id")
+            live_playlist = sp.playlist(
+                playlist_id,
+                fields=(
+                    "name,description,tracks.total,followers.total,public,"
+                    "collaborative,snapshot_id,owner(display_name,id,type,external_urls.spotify),"
+                    "external_urls.spotify,images"
+                ),
+            )
+
+            changed_fields = self._compare_playlist_with_live_data(
+                playlist_info, live_playlist
+            )
+            cached_tracks = (
+                persistent_cache.get_cached_playlist_tracks(playlist_id, user_id)
+                if user_id
+                else None
+            )
+            refresh_needed = bool(changed_fields) or not cached_tracks
+            tracks_data = None
+
+            if refresh_needed and user_id:
+                tracks_data = get_or_update_playlist_tracks(sp, playlist_id, user_id)
+
+            persistent_cache.cache_playlist_data(playlist_id, live_playlist, user_id)
+
+            Clock.schedule_once(
+                lambda _dt,
+                playlist=dict(live_playlist),
+                changes=list(changed_fields),
+                data=tracks_data: self._apply_playlist_refresh_result(
+                    playlist_info,
+                    playlist,
+                    changes,
+                    data,
+                )
+            )
+
+        except Exception as exc:
+            if _is_spotify_auth_error(exc):
+                notify_spotify_session_expired()
+            Clock.schedule_once(
+                lambda _dt, err=str(exc): self._handle_playlist_refresh_error(
+                    playlist_info, err
+                )
+            )
+
+    def _compare_playlist_with_live_data(
+        self, playlist_info: Dict[str, Any], live_playlist: Dict[str, Any]
+    ) -> List[str]:
+        changed_fields: List[str] = []
+
+        comparisons = {
+            "version": (
+                playlist_info.get("snapshot_id"),
+                live_playlist.get("snapshot_id", "Unknown"),
+            ),
+            "track count": (
+                playlist_info.get("track_count", 0),
+                live_playlist.get("tracks", {}).get("total", 0),
+            ),
+            "name": (
+                playlist_info.get("playlist_name", ""),
+                live_playlist.get("name", ""),
+            ),
+            "description": (
+                (playlist_info.get("playlist_description", "") or "").strip(),
+                (live_playlist.get("description", "") or "").strip(),
+            ),
+            "visibility": (
+                playlist_info.get("is_public", False),
+                live_playlist.get("public", False),
+            ),
+            "collaboration": (
+                playlist_info.get("is_collaborative", False),
+                live_playlist.get("collaborative", False),
+            ),
+        }
+
+        for field_name, (cached_value, live_value) in comparisons.items():
+            if cached_value != live_value:
+                changed_fields.append(field_name)
+
+        cached_followers = playlist_info.get("followers_count")
+        live_followers = None
+        if live_playlist.get("followers"):
+            live_followers = live_playlist.get("followers", {}).get("total")
+        if cached_followers != live_followers:
+            changed_fields.append("followers")
+
+        return changed_fields
+
+    def _apply_playlist_refresh_result(
+        self,
+        playlist_info: Dict[str, Any],
+        live_playlist: Dict[str, Any],
+        changed_fields: List[str],
+        tracks_data: Optional[Dict[str, Any]],
+    ) -> None:
+        self._manual_playlist_refresh_in_progress = False
+        self._set_refresh_button_state(playlist_info, False, "Refresh")
+
+        owner = live_playlist.get("owner", {}) or {}
+        followers = live_playlist.get("followers", {}) or {}
+
+        self.playlist_data.update(live_playlist)
+        playlist_info.update(
+            {
+                "playlist_name": str(live_playlist.get("name", "Untitled Playlist")),
+                "owner_name": owner.get("display_name", "Unknown"),
+                "owner_id": owner.get("id", "Unknown"),
+                "owner_type": owner.get("type", "Unknown"),
+                "owner_url": owner.get("external_urls", {}).get("spotify", ""),
+                "playlist_description": live_playlist.get("description", ""),
+                "track_count": live_playlist.get("tracks", {}).get("total", 0),
+                "spotify_url": live_playlist.get("external_urls", {}).get(
+                    "spotify", ""
+                ),
+                "followers_count": followers.get("total"),
+                "snapshot_id": live_playlist.get("snapshot_id", "Unknown"),
+                "is_public": live_playlist.get("public", False),
+                "is_collaborative": live_playlist.get("collaborative", False),
+            }
+        )
+
+        title_label = playlist_info.get("title_label")
+        if title_label:
+            title_label.text = playlist_info["playlist_name"]
+
+        owner_label = playlist_info.get("owner_label")
+        if owner_label:
+            owner_text = f"Created by: {playlist_info['owner_name']}"
+            if playlist_info["owner_type"] not in ["Unknown", "user"]:
+                owner_text += f" ({playlist_info['owner_type'].title()})"
+            owner_label.text = owner_text
+
+        stats_label = playlist_info.get("stats_label")
+        if stats_label:
+            stats_text = f"Tracks: {playlist_info['track_count']:,}"
+            followers_count = playlist_info.get("followers_count")
+            if followers_count:
+                stats_text += f" • Followers: {followers_count:,}"
+            stats_label.text = stats_text
+
+        if changed_fields:
+            changed_summary = ", ".join(changed_fields)
+            self._set_refresh_status(
+                playlist_info,
+                f"Spotify changed: {changed_summary}. Cache refreshed.",
+                (0.2, 0.8, 0.2, 1),
+            )
+        elif tracks_data:
+            self._set_refresh_status(
+                playlist_info,
+                "Cache was missing track data. Refreshed from Spotify.",
+                (0.2, 0.8, 0.2, 1),
+            )
+        else:
+            self._set_refresh_status(
+                playlist_info,
+                "Spotify matches the cached playlist. No refresh needed.",
+                (0.65, 0.65, 0.65, 1),
+            )
+
+        if playlist_info.get("playlist_id"):
+            self.refresh_cache_statistics_display(
+                playlist_info["playlist_id"], force_refresh=True
+            )
+
+    def _apply_backend_refresh_result(
+        self,
+        playlist_info: Dict[str, Any],
+        playlist_details: Dict[str, Any],
+        backend_analysis: Optional[Dict[str, Any]],
+    ) -> None:
+        self._manual_playlist_refresh_in_progress = False
+        self._set_refresh_button_state(playlist_info, False, "Refresh")
+        self._apply_backend_playlist_details(playlist_info, playlist_details)
+
+        loading_label = playlist_info.get("loading_label")
+        info_layout = playlist_info.get("info_layout")
+        if loading_label and info_layout and backend_analysis:
+            self.display_cached_spotify_analysis(
+                loading_label,
+                info_layout,
+                backend_analysis,
+                playlist_info.get("owner_id", "Unknown"),
+                playlist_info.get("playlist_id", ""),
+                playlist_info.get("snapshot_id", "Unknown"),
+                None,
+                None,
+            )
+            self._set_refresh_status(
+                playlist_info,
+                "Playlist details refreshed from backend.",
+                (0.2, 0.8, 0.2, 1),
+            )
+        else:
+            self._set_refresh_status(
+                playlist_info,
+                "Playlist details refreshed from backend, but no tracks were returned.",
+                (0.65, 0.65, 0.65, 1),
+            )
+
+        if playlist_info.get("playlist_id"):
+            self.refresh_cache_statistics_display(
+                playlist_info["playlist_id"], force_refresh=True
+            )
+
+    def _handle_playlist_refresh_error(
+        self, playlist_info: Dict[str, Any], error_message: str
+    ) -> None:
+        self._manual_playlist_refresh_in_progress = False
+        self._set_refresh_button_state(playlist_info, False, "Refresh")
+        if _is_spotify_auth_error(error_message):
+            error_message = (
+                "Live Spotify refresh unavailable. Log out and log in again."
+            )
+        self._set_refresh_status(
+            playlist_info,
+            f"Refresh failed: {error_message[:80]}",
+            (0.8, 0.4, 0.4, 1),
+        )
 
     def create_technical_details_widgets_for_left_side(
         self, owner_id, playlist_id, snapshot_id
@@ -1160,7 +1612,7 @@ class PlaylistCard(BoxLayout):
                     bold=True,
                     size_hint_y=None,
                     height=dp(22),
-                    text_size=(dp(215), None),
+                    text_size=(dp(190), None),
                     halign="left",
                     valign="center",
                 )
@@ -1175,7 +1627,7 @@ class PlaylistCard(BoxLayout):
                             bold=True,
                             size_hint_y=None,
                             height=dp(20),
-                            text_size=(dp(215), None),
+                            text_size=(dp(190), None),
                             halign="left",
                             valign="center",
                         ),
@@ -1185,7 +1637,7 @@ class PlaylistCard(BoxLayout):
                             color=(0.7, 0.7, 0.7, 1),
                             size_hint_y=None,
                             height=dp(20),
-                            text_size=(dp(215), None),
+                            text_size=(dp(190), None),
                             halign="left",
                             valign="top",
                         ),
@@ -1204,7 +1656,7 @@ class PlaylistCard(BoxLayout):
                             bold=True,
                             size_hint_y=None,
                             height=dp(20),
-                            text_size=(dp(215), None),
+                            text_size=(dp(190), None),
                             halign="left",
                             valign="center",
                         ),
@@ -1214,7 +1666,7 @@ class PlaylistCard(BoxLayout):
                             color=(0.7, 0.7, 0.7, 1),
                             size_hint_y=None,
                             height=dp(20),
-                            text_size=(dp(215), None),
+                            text_size=(dp(190), None),
                             halign="left",
                             valign="top",
                         ),
@@ -1233,7 +1685,7 @@ class PlaylistCard(BoxLayout):
                             bold=True,
                             size_hint_y=None,
                             height=dp(20),
-                            text_size=(dp(215), None),
+                            text_size=(dp(190), None),
                             halign="left",
                             valign="center",
                         ),
@@ -1243,7 +1695,7 @@ class PlaylistCard(BoxLayout):
                             color=(0.7, 0.7, 0.7, 1),
                             size_hint_y=None,
                             height=dp(20),
-                            text_size=(dp(215), None),
+                            text_size=(dp(190), None),
                             halign="left",
                             valign="top",
                         ),
@@ -1269,6 +1721,8 @@ class PlaylistCard(BoxLayout):
             user_id = getattr(app, "user_id", None)
 
             if not user_id:
+                if _is_backend_authenticated_app():
+                    return widgets
                 # Try to get user_id from Spotify API
                 token_info = getattr(app, "token_info", None)
                 if token_info:
@@ -1317,7 +1771,7 @@ class PlaylistCard(BoxLayout):
                         bold=True,
                         size_hint_y=None,
                         height=dp(20),
-                        text_size=(dp(215), None),
+                        text_size=(dp(190), None),
                         halign="left",
                         valign="center",
                     )
@@ -1338,7 +1792,7 @@ class PlaylistCard(BoxLayout):
                         else (0.8, 0.4, 0.4, 1),
                         size_hint_y=None,
                         height=dp(18),
-                        text_size=(dp(215), None),
+                        text_size=(dp(190), None),
                         halign="left",
                         valign="center",
                     )
@@ -1359,7 +1813,7 @@ class PlaylistCard(BoxLayout):
                         else (0.8, 0.4, 0.4, 1),
                         size_hint_y=None,
                         height=dp(18),
-                        text_size=(dp(215), None),
+                        text_size=(dp(190), None),
                         halign="left",
                         valign="center",
                     )
@@ -1373,7 +1827,7 @@ class PlaylistCard(BoxLayout):
                         color=(0.6, 0.6, 0.6, 1),
                         size_hint_y=None,
                         height=dp(16),
-                        text_size=(dp(215), None),
+                        text_size=(dp(190), None),
                         halign="left",
                         valign="center",
                     )
@@ -1388,7 +1842,7 @@ class PlaylistCard(BoxLayout):
                         bold=True,
                         size_hint_y=None,
                         height=dp(20),
-                        text_size=(dp(215), None),
+                        text_size=(dp(190), None),
                         halign="left",
                         valign="center",
                     )
@@ -1404,7 +1858,7 @@ class PlaylistCard(BoxLayout):
                             color=(0.8, 0.8, 0.2, 1),
                             size_hint_y=None,
                             height=dp(18),
-                            text_size=(dp(215), None),
+                            text_size=(dp(190), None),
                             halign="left",
                             valign="center",
                         )
@@ -1417,7 +1871,7 @@ class PlaylistCard(BoxLayout):
                             color=(0.6, 0.6, 0.6, 1),
                             size_hint_y=None,
                             height=dp(36),
-                            text_size=(dp(215), None),
+                            text_size=(dp(190), None),
                             halign="left",
                             valign="center",
                         )
@@ -1905,6 +2359,16 @@ class PlaylistCard(BoxLayout):
         """Load tracks immediately for smaller playlists (original behavior)."""
         playlist_id = playlist_info["playlist_id"]
 
+        if _is_backend_authenticated_app():
+            analysis_task = AnalysisTask(playlist_id)
+            active_analysis_tasks[playlist_id] = analysis_task
+            threading.Thread(
+                target=self.fetch_analysis_with_cached_data_display,
+                args=(playlist_info, cached_data, analysis_task),
+                daemon=True,
+            ).start()
+            return
+
         # Update cache when Details window opens
         try:
             app = App.get_running_app()
@@ -1971,6 +2435,17 @@ class PlaylistCard(BoxLayout):
         track_count = playlist_info.get("track_count", 0)
         playlist_name = playlist_info.get("playlist_name", "Unknown Playlist")
 
+        if _is_backend_authenticated_app():
+            Clock.schedule_once(lambda _dt: progress_window.dismiss(), 0)
+            analysis_task = AnalysisTask(playlist_id)
+            active_analysis_tasks[playlist_id] = analysis_task
+            threading.Thread(
+                target=self.fetch_analysis_with_cached_data_display,
+                args=(playlist_info, cached_data, analysis_task),
+                daemon=True,
+            ).start()
+            return
+
         # Progress window was already created on main thread
 
         def update_progress(percent: int, message: str):
@@ -1986,14 +2461,20 @@ class PlaylistCard(BoxLayout):
                 app = App.get_running_app()
                 token_info = getattr(app, "token_info", None)
                 if not token_info:
-                    update_progress(0, "Authentication error")
-                    progress_window.set_error("Authentication failed")
+                    notify_spotify_session_expired()
+                    update_progress(0, "Live Spotify refresh unavailable")
+                    progress_window.set_error(
+                        "Live Spotify refresh unavailable; showing cached data when available"
+                    )
                     return
 
                 sp = create_spotify_client_with_refresh(token_info)
                 if not sp:
-                    update_progress(0, "Spotify client error")
-                    progress_window.set_error("Failed to connect to Spotify")
+                    notify_spotify_session_expired()
+                    update_progress(0, "Live Spotify refresh unavailable")
+                    progress_window.set_error(
+                        "Live Spotify refresh unavailable; showing cached data when available"
+                    )
                     return
 
                 user_id = getattr(app, "user_id", None) or sp.current_user().get("id")
@@ -2174,24 +2655,6 @@ class PlaylistCard(BoxLayout):
                 return
 
             app = App.get_running_app()
-            if not app.token_info or not app.token_info.get("access_token"):
-                Clock.schedule_once(
-                    lambda dt: self.update_loading_message(
-                        loading_label, "Authentication error"
-                    ),
-                    0,
-                )
-                return
-
-            sp = create_spotify_client_with_refresh(app.token_info)
-            if not sp:
-                Clock.schedule_once(
-                    lambda dt: self.update_loading_message(
-                        loading_label, "Authentication error"
-                    ),
-                    0,
-                )
-                return
 
             if cached_data and cached_data.get("spotify"):
                 spotify_analysis = cached_data["spotify"]
@@ -2208,85 +2671,15 @@ class PlaylistCard(BoxLayout):
                     ),
                     0,
                 )
-            else:
-                Clock.schedule_once(
-                    lambda dt: self.update_loading_message(
-                        loading_label, "Fetching track data from Spotify..."
-                    ),
-                    0,
-                )
-                # Add initial spacer after "Fetching track data from Spotify" message
-                Clock.schedule_once(
-                    lambda dt: self.manage_spacer("add_initial"),
-                    0.1,
-                )
-                (
-                    tracks_data,
-                    track_ids,
-                    artist_ids,
-                    total_duration_ms,
-                ) = self._fetch_playlist_tracks_cancellable(
-                    sp, playlist_id, analysis_task
-                )
-                if analysis_task and analysis_task.is_cancelled():
-                    return
-                if not tracks_data:
-                    Clock.schedule_once(
-                        lambda dt: self.update_loading_message(
-                            loading_label, "No tracks found"
-                        ),
-                        0,
-                    )
-                    return
+                return
 
-                duration_str = self._format_duration(total_duration_ms)
-                Clock.schedule_once(
-                    lambda dt: self.update_loading_message(
-                        loading_label, "Analyzing artists and genres..."
-                    ),
-                    0,
-                )
-
-                artist_genres, artist_details = self._fetch_artist_data_cancellable(
-                    sp, list(artist_ids), analysis_task
-                )
-                if analysis_task and analysis_task.is_cancelled():
-                    return
-
-                spotify_analysis = self.analyze_spotify_data(
-                    tracks_data, artist_genres, artist_details, duration_str
-                )
-                spotify_analysis["track_ids"] = track_ids
-                spotify_analysis["track_rows"] = self._build_spotify_track_rows(
-                    tracks_data
-                )
-                spotify_analysis["source"] = "spotify"
-                cache_playlist_analysis(playlist_id, spotify_data=spotify_analysis)
-
-                # Strategic refresh when Spotify analysis completes (bypass debouncing)
-                if hasattr(self, "detailed_popup") and self.detailed_popup:
-                    logger.debug(
-                        "SPOTIFY COMPLETION: Forcing cache refresh for playlist %s",
-                        playlist_id,
-                    )
-                    setattr(
-                        self, "_last_cache_refresh", 0
-                    )  # Reset debouncing to force refresh
-                    Clock.schedule_once(
-                        lambda dt: self.refresh_cache_statistics_display(playlist_id),
-                        0.2,
-                    )
-                else:
-                    logger.debug(
-                        "SPOTIFY COMPLETION: No detailed popup found for playlist %s",
-                        playlist_id,
-                    )
-
+            cached_track_analysis = self._build_cached_track_analysis(cached_data)
+            if cached_track_analysis:
                 Clock.schedule_once(
                     lambda dt: self.display_cached_spotify_analysis(
                         loading_label,
                         info_layout,
-                        spotify_analysis,
+                        cached_track_analysis,
                         owner_id,
                         playlist_id,
                         snapshot_id,
@@ -2295,16 +2688,183 @@ class PlaylistCard(BoxLayout):
                     ),
                     0,
                 )
+                return
+
+            if _is_backend_authenticated_app():
+                backend_adapter = getattr(app, "backend_adapter", None)
+                if not backend_adapter:
+                    Clock.schedule_once(
+                        lambda dt: self.update_loading_message(
+                            loading_label,
+                            "Backend playlist details are unavailable.",
+                        ),
+                        0,
+                    )
+                    return
+
+                playlist_details = backend_adapter.get_playlist_details(playlist_id)
+                track_items = backend_adapter.get_playlist_tracks(playlist_id)
+
+                if playlist_details:
+                    Clock.schedule_once(
+                        lambda dt,
+                        details=dict(
+                            playlist_details
+                        ): self._apply_backend_playlist_details(playlist_info, details),
+                        0,
+                    )
+
+                backend_analysis = self._build_backend_track_analysis(track_items or [])
+                if backend_analysis:
+                    Clock.schedule_once(
+                        lambda dt,
+                        analysis=dict(
+                            backend_analysis
+                        ): self.display_cached_spotify_analysis(
+                            loading_label,
+                            info_layout,
+                            analysis,
+                            owner_id,
+                            playlist_id,
+                            snapshot_id,
+                            analysis_task,
+                            None,
+                        ),
+                        0,
+                    )
+                    return
+
+                Clock.schedule_once(
+                    lambda dt: self.update_loading_message(
+                        loading_label,
+                        "No playlist tracks returned from backend.",
+                    ),
+                    0,
+                )
+                return
+
+            if not app.token_info or not app.token_info.get("access_token"):
+                notify_spotify_session_expired()
+                Clock.schedule_once(
+                    lambda dt: self.update_loading_message(
+                        loading_label,
+                        "Live Spotify refresh unavailable; showing cached data",
+                    ),
+                    0,
+                )
+                return
+
+            sp = create_spotify_client_with_refresh(app.token_info)
+            if not sp:
+                notify_spotify_session_expired()
+                Clock.schedule_once(
+                    lambda dt: self.update_loading_message(
+                        loading_label,
+                        "Live Spotify refresh unavailable; showing cached data",
+                    ),
+                    0,
+                )
+                return
+
+            Clock.schedule_once(
+                lambda dt: self.update_loading_message(
+                    loading_label, "Fetching track data from Spotify..."
+                ),
+                0,
+            )
+            # Add initial spacer after "Fetching track data from Spotify" message
+            Clock.schedule_once(
+                lambda dt: self.manage_spacer("add_initial"),
+                0.1,
+            )
+            (
+                tracks_data,
+                track_ids,
+                artist_ids,
+                total_duration_ms,
+            ) = self._fetch_playlist_tracks_cancellable(sp, playlist_id, analysis_task)
+            if analysis_task and analysis_task.is_cancelled():
+                return
+            if not tracks_data:
+                Clock.schedule_once(
+                    lambda dt: self.update_loading_message(
+                        loading_label, "No tracks found"
+                    ),
+                    0,
+                )
+                return
+
+            duration_str = self._format_duration(total_duration_ms)
+            Clock.schedule_once(
+                lambda dt: self.update_loading_message(
+                    loading_label, "Analyzing artists and genres..."
+                ),
+                0,
+            )
+
+            artist_genres, artist_details = self._fetch_artist_data_cancellable(
+                sp, list(artist_ids), analysis_task
+            )
+            if analysis_task and analysis_task.is_cancelled():
+                return
+
+            spotify_analysis = self.analyze_spotify_data(
+                tracks_data, artist_genres, artist_details, duration_str
+            )
+            spotify_analysis["track_ids"] = track_ids
+            spotify_analysis["track_rows"] = self._build_spotify_track_rows(tracks_data)
+            spotify_analysis["source"] = "spotify"
+            cache_playlist_analysis(playlist_id, spotify_data=spotify_analysis)
+
+            # Strategic refresh when Spotify analysis completes (bypass debouncing)
+            if hasattr(self, "detailed_popup") and self.detailed_popup:
+                logger.debug(
+                    "SPOTIFY COMPLETION: Forcing cache refresh for playlist %s",
+                    playlist_id,
+                )
+                setattr(
+                    self, "_last_cache_refresh", 0
+                )  # Reset debouncing to force refresh
+                Clock.schedule_once(
+                    lambda dt: self.refresh_cache_statistics_display(playlist_id),
+                    0.2,
+                )
+            else:
+                logger.debug(
+                    "SPOTIFY COMPLETION: No detailed popup found for playlist %s",
+                    playlist_id,
+                )
+
+            Clock.schedule_once(
+                lambda dt: self.display_cached_spotify_analysis(
+                    loading_label,
+                    info_layout,
+                    spotify_analysis,
+                    owner_id,
+                    playlist_id,
+                    snapshot_id,
+                    analysis_task,
+                    cached_data,
+                ),
+                0,
+            )
 
         except Exception as exc:
+            if _is_spotify_auth_error(exc):
+                notify_spotify_session_expired()
+                error_message = (
+                    "Live Spotify refresh unavailable. Log out and log in again."
+                )
+            else:
+                error_message = f"Analysis error: {str(exc)[:30]}..."
             logger.error(
                 "Error fetching analysis with cached data display: %s",
                 exc,
             )
             Clock.schedule_once(
-                lambda dt, err=str(exc): self.update_loading_message(
+                lambda dt, err=error_message: self.update_loading_message(
                     playlist_info["loading_label"],
-                    f"Analysis error: {err[:30]}...",
+                    err,
                 ),
                 0,
             )
@@ -2331,6 +2891,8 @@ class PlaylistCard(BoxLayout):
                 and isinstance(cached_reccobeats, dict)
                 and cached_reccobeats
             )
+            if spotify_analysis.get("source") == "backend":
+                has_cached_reccobeats = True
 
             track_ids = spotify_analysis.get("track_ids", [])
             self.update_spotify_analysis(
@@ -2345,7 +2907,7 @@ class PlaylistCard(BoxLayout):
                 skip_reccobeats=has_cached_reccobeats,
             )
 
-            if has_cached_reccobeats:
+            if has_cached_reccobeats and cached_reccobeats is not None:
                 Clock.schedule_once(
                     lambda dt: self.update_reccobeats_analysis_from_cache(
                         cached_reccobeats,
@@ -2590,6 +3152,134 @@ class PlaylistCard(BoxLayout):
         minutes = duration_ms // 60_000
         seconds = (duration_ms % 60_000) // 1_000
         return f"{minutes}:{seconds:02d}"
+
+    def _build_cached_track_analysis(
+        self, cached_data: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        if not cached_data:
+            return None
+
+        cached_tracks = cached_data.get("tracks") or []
+        if not cached_tracks:
+            return None
+
+        from collections import Counter
+
+        all_artists: List[str] = []
+        for track in cached_tracks:
+            all_artists.extend(track.get("artists", []))
+
+        artist_counts = Counter(all_artists)
+        unique_artists = len(artist_counts)
+        track_count = len(cached_tracks)
+        diversity_ratio = (unique_artists / track_count) if track_count else 0
+
+        track_rows: List[Dict[str, Any]] = []
+        track_ids: List[str] = []
+        for index, track in enumerate(cached_tracks, start=1):
+            track_id = track.get("id")
+            if track_id:
+                track_ids.append(track_id)
+            track_rows.append(
+                {
+                    "source": "cache",
+                    "track_number": track.get("position", index) + 1,
+                    "spotify_id": track_id,
+                    "title": track.get("name", ""),
+                    "artists": ", ".join(track.get("artists", [])),
+                    "album": track.get("album", ""),
+                    "duration_ms": None,
+                    "duration": "Unknown",
+                    "popularity": None,
+                    "explicit": None,
+                    "spotify_url": None,
+                    "spotify_uri": None,
+                    "added_at": track.get("added_at"),
+                }
+            )
+
+        return {
+            "duration": "Unknown",
+            "track_count": track_count,
+            "artist_stats": {
+                "unique_count": unique_artists,
+                "diversity_ratio": diversity_ratio,
+                "most_frequent": artist_counts.most_common(3),
+            },
+            "genre_analysis": {},
+            "spotify_only": True,
+            "track_ids": track_ids,
+            "track_rows": track_rows,
+            "source": "cache",
+        }
+
+    def _build_backend_track_analysis(
+        self, track_items: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        normalized_tracks = _normalize_backend_track_items(track_items)
+        if not normalized_tracks:
+            return None
+
+        total_duration_ms = sum(
+            track.get("duration_ms", 0) for track in normalized_tracks
+        )
+        analysis = self.analyze_spotify_data(
+            normalized_tracks,
+            [],
+            {},
+            self._format_duration(total_duration_ms),
+        )
+        analysis["track_ids"] = [
+            track.get("id") for track in normalized_tracks if track.get("id")
+        ]
+        analysis["track_rows"] = self._build_spotify_track_rows(normalized_tracks)
+        analysis["source"] = "backend"
+        return analysis
+
+    def _apply_backend_playlist_details(
+        self, playlist_info: Dict[str, Any], playlist_details: Dict[str, Any]
+    ) -> None:
+        owner = playlist_details.get("owner", {}) or {}
+        followers = playlist_details.get("followers", {}) or {}
+
+        self.playlist_data.update(playlist_details)
+        playlist_info.update(
+            {
+                "playlist_name": str(playlist_details.get("name", "Untitled Playlist")),
+                "owner_name": owner.get("display_name", "Unknown"),
+                "owner_id": owner.get("id", "Unknown"),
+                "owner_type": owner.get("type", "Unknown"),
+                "owner_url": owner.get("external_urls", {}).get("spotify", ""),
+                "playlist_description": playlist_details.get("description", ""),
+                "track_count": playlist_details.get("tracks", {}).get("total", 0),
+                "spotify_url": playlist_details.get("external_urls", {}).get(
+                    "spotify", ""
+                ),
+                "followers_count": followers.get("total"),
+                "snapshot_id": playlist_details.get("snapshot_id", "Unknown"),
+                "is_public": playlist_details.get("public", False),
+                "is_collaborative": playlist_details.get("collaborative", False),
+            }
+        )
+
+        title_label = playlist_info.get("title_label")
+        if title_label:
+            title_label.text = playlist_info["playlist_name"]
+
+        owner_label = playlist_info.get("owner_label")
+        if owner_label:
+            owner_text = f"Created by: {playlist_info['owner_name']}"
+            if playlist_info["owner_type"] not in ["Unknown", "user"]:
+                owner_text += f" ({playlist_info['owner_type'].title()})"
+            owner_label.text = owner_text
+
+        stats_label = playlist_info.get("stats_label")
+        if stats_label:
+            stats_text = f"Tracks: {playlist_info['track_count']:,}"
+            followers_count = playlist_info.get("followers_count")
+            if followers_count:
+                stats_text += f" • Followers: {followers_count:,}"
+            stats_label.text = stats_text
 
     def _build_spotify_track_rows(
         self, tracks_data: List[Dict[str, Any]]
@@ -3478,6 +4168,12 @@ class PlaylistCard(BoxLayout):
             for widget in reversed(existing_widgets):
                 self.master_content_container.add_widget(widget)
 
+            if reccobeats_data is None:
+                logger.warning(
+                    "update_reccobeats_analysis called with None reccobeats_data"
+                )
+                return
+
             widgets: List[Widget] = []
             if reccobeats_data.get("no_features"):
                 widgets.append(
@@ -3758,6 +4454,16 @@ class PlaylistCard(BoxLayout):
             Clock.schedule_once(lambda _: self.hide_tooltip(), 4.0)
         except Exception as exc:
             logger.error("Error showing hover tooltip: %s", exc)
+
+    def hide_tooltip(self, *_args) -> None:
+        """Dismiss the active tooltip popup and clear its reference."""
+        try:
+            if self.tooltip_popup:
+                self.tooltip_popup.dismiss()
+                self.tooltip_popup = None
+        except Exception as exc:
+            logger.warning("Error hiding tooltip: %s", exc)
+            self.tooltip_popup = None
 
     def close_detailed_popup(self):
         """Close the detailed popup and clean up resources."""

@@ -51,7 +51,7 @@ class PersistentCache:
         self.metadata = self._load_metadata()
         self._migrate_webp_cache()
 
-        self.max_cache_age_days = 7
+        self.max_cache_age_days = 30
         self.max_cache_size_mb = 100
 
         logger.info("Initialized persistent cache at: %s", self.cache_dir)

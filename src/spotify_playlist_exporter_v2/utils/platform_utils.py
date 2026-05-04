@@ -376,11 +376,9 @@ def set_window_basics(title: str) -> None:
             window.fullscreen = False
             window.minimum_width = 480
             window.minimum_height = 600
-            logger.info(
-                "Desktop window configured: %sx%s (maximize requested)", width, height
-            )
+            logger.info("Desktop window configured: %sx%s", width, height)
 
-            Clock.schedule_once(lambda dt: _maximize_and_focus_window(), 0.5)
+            Clock.schedule_once(lambda dt: _position_and_focus_window(), 0.5)
 
     except Exception as exc:
         logger.error("Error setting up window: %s", exc)
@@ -411,30 +409,6 @@ def _position_and_focus_window() -> None:
         logger.warning("Error in window positioning/focusing: %s", exc)
 
 
-def _maximize_and_focus_window() -> None:
-    """Maximize desktop window when supported, otherwise center the default size."""
-    try:
-        if is_mobile_platform():
-            return
-
-        window = _window()
-        if hasattr(window, "maximize"):
-            try:
-                window.maximize()
-                logger.info("Desktop window maximized")
-            except Exception as exc:
-                logger.info("Could not maximize window: %s", exc)
-                _position_and_focus_window()
-                return
-            set_window_on_top()
-            return
-
-        _position_and_focus_window()
-
-    except Exception as exc:
-        logger.warning("Error maximizing/focusing window: %s", exc)
-
-
 def _fallback_window_setup() -> None:
     from kivy.core.window import Window as KivyWindow
 
@@ -444,7 +418,6 @@ def _fallback_window_setup() -> None:
     else:
         KivyWindow.size = (1056, 756)
         KivyWindow.resizable = True
-        KivyWindow.fullscreen = False
         KivyWindow.minimum_width = 480
         KivyWindow.minimum_height = 600
     KivyWindow.title = "Spotify Playlist Exporter - Powered by ReccoBeats"

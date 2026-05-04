@@ -912,6 +912,9 @@ class MainScreen(Screen):
     def _export_playlists_worker(self, playlist_widgets, format_type):
         """Worker thread for exporting playlists with comprehensive error handling."""
         try:
+            if self.backend_mode_enabled:
+                raise NetworkError("Backend mode should use backend export workflow")
+
             # Validate inputs before starting export
             self._validate_export_parameters(format_type)
 
@@ -1205,7 +1208,14 @@ class MainScreen(Screen):
         if auth_related:
             self.status_label.text = "Session expired. Please login again."
             app = App.get_running_app()
-            if app and hasattr(app, "logout"):
+            if app and hasattr(app, "prompt_reauthentication"):
+                Clock.schedule_once(
+                    lambda _: app.prompt_reauthentication(
+                        "Your Spotify session expired. Log out and log in again."
+                    ),
+                    0.2,
+                )
+            elif app and hasattr(app, "logout"):
                 Clock.schedule_once(lambda _: app.logout(), 0.2)
             elif app and hasattr(app, "switch_to_login"):
                 Clock.schedule_once(lambda _: app.switch_to_login(), 0.2)
@@ -1390,6 +1400,10 @@ class MainScreen(Screen):
 
     def load_playlists_worker_with_cache(self) -> None:
         try:
+            if self.backend_mode_enabled:
+                self.backend_adapter.load_playlists(force_refresh=False)
+                return
+
             app = App.get_running_app()
             token_info = getattr(app, "token_info", None)
             if not token_info:
@@ -1442,9 +1456,18 @@ class MainScreen(Screen):
                     ),
                     0,
                 )
-                Clock.schedule_once(
-                    lambda _: App.get_running_app().switch_to_login(), 2
-                )
+                app = App.get_running_app()
+                if app and hasattr(app, "prompt_reauthentication"):
+                    Clock.schedule_once(
+                        lambda _: app.prompt_reauthentication(
+                            "Your Spotify session expired. Log out and log in again."
+                        ),
+                        0.2,
+                    )
+                else:
+                    Clock.schedule_once(
+                        lambda _: App.get_running_app().switch_to_login(), 2
+                    )
             else:
                 error_msg = f"Spotify error: {exc}"
                 Clock.schedule_once(
@@ -2295,6 +2318,13 @@ class MainScreen(Screen):
     def _check_cache_status_and_proceed(self, playlists) -> None:
         """Check cache status for selected playlists and show warning if needed."""
         try:
+            if self.backend_mode_enabled:
+                logger.debug(
+                    "Skipping desktop cache status check in backend mode; backend export handles its own preflight"
+                )
+                self._start_backend_export(playlists)
+                return
+
             self.status_label.text = "Checking cache status..."
 
             # Get current user ID for cache checking
@@ -3214,6 +3244,11 @@ class MainScreen(Screen):
     def _prepare_playlist_track_rows(
         self, sp, playlist, job_state, include_reccobeats=True
     ) -> Dict[str, Any]:
+        if self.backend_mode_enabled:
+            raise NetworkError(
+                "Backend mode should not prepare track rows via local Spotify client"
+            )
+
         playlist_id = playlist.get("id")
         result: Dict[str, Any] = {
             "combined_rows": [],

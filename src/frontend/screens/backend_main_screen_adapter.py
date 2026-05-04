@@ -279,6 +279,27 @@ class BackendMainScreenAdapter:
             self.error_callback(error_msg)
 
     # Track management
+    def get_playlist_details(
+        self, playlist_id: str, force_refresh: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """Get playlist details from backend."""
+        try:
+            if self.progress_callback:
+                self.progress_callback("Loading playlist details...")
+
+            details = self.backend_client.get_playlist_details(playlist_id)
+            return details if isinstance(details, dict) else None
+        except BackendAPIError as e:
+            error_msg = self._format_backend_api_error(e, "Playlist details failed")
+            if self.error_callback:
+                self.error_callback(error_msg)
+            return None
+        except Exception as e:
+            logger.error(f"Error getting playlist details: {e}")
+            if self.error_callback:
+                self.error_callback(f"Failed to load playlist details: {str(e)}")
+            return None
+
     def get_playlist_tracks(
         self, playlist_id: str, force_refresh: bool = False
     ) -> Optional[List[Dict[str, Any]]]:

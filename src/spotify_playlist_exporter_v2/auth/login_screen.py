@@ -35,6 +35,34 @@ from .. import state
 from .http_handler import AuthHandler
 
 
+def _is_backend_authenticated_app(app: Any | None) -> bool:
+    return bool(
+        app and hasattr(app, "backend_client") and hasattr(app, "backend_adapter")
+    )
+
+
+def notify_spotify_session_expired(
+    message: str = "Your Spotify session expired. Log out and log in again.",
+) -> None:
+    """Prompt the user to re-authenticate when Spotify rejects the session."""
+    app = App.get_running_app()
+    if app is None:
+        return
+
+    if _is_backend_authenticated_app(app):
+        logger.debug(
+            "Skipping desktop Spotify re-auth prompt in backend-authenticated app"
+        )
+        return
+
+    if hasattr(app, "prompt_reauthentication"):
+        Clock.schedule_once(lambda _dt: app.prompt_reauthentication(message), 0)
+    elif hasattr(app, "logout"):
+        Clock.schedule_once(lambda _dt: app.logout(), 0)
+    elif hasattr(app, "switch_to_login"):
+        Clock.schedule_once(lambda _dt: app.switch_to_login(), 0)
+
+
 def is_port_available(port: int) -> bool:
     """Check if a port is available on localhost."""
     try:
@@ -301,10 +329,12 @@ class LoginScreen(Screen):
                     sp = spotipy.Spotify(auth=token_info["access_token"])
                     user = sp.current_user()
                     username = user.get("display_name", user.get("id", "User"))
+                    user_id = user.get("id")
                     Clock.schedule_once(
-                        lambda dt, info=token_info, name=username: self.login_success(
-                            info, name
-                        ),
+                        lambda dt,
+                        info=token_info,
+                        name=username,
+                        uid=user_id: self.login_success(info, name, uid),
                         0,
                     )
                     return
@@ -353,10 +383,12 @@ class LoginScreen(Screen):
                 user = sp.current_user()
                 username = user.get("display_name", user.get("id", "Unknown"))
 
+                user_id = user.get("id")
                 Clock.schedule_once(
-                    lambda dt, info=token_info, name=username: self.login_success(
-                        info, name
-                    ),
+                    lambda dt,
+                    info=token_info,
+                    name=username,
+                    uid=user_id: self.login_success(info, name, uid),
                     0,
                 )
 
@@ -384,11 +416,12 @@ class LoginScreen(Screen):
             Clock.schedule_once(lambda dt: self._set_login_state(False), 0)
 
     @mainthread
-    def login_success(self, token_info, username) -> None:
+    def login_success(self, token_info, username, user_id=None) -> None:
         self.status_label.text = f"Welcome, {username}! Loading playlists..."
         app = App.get_running_app()
         app.token_info = token_info
         app.username = username
+        app.user_id = user_id
 
         # Save token to file for normal persistence (not NoCacheHandler)
         try:
@@ -439,18 +472,31 @@ def create_spotify_client_with_refresh(
             cache_handler=cache_handler,
         )
 
-        # Create Spotify client with OAuth manager for automatic refresh
-        sp = spotipy.Spotify(auth_manager=sp_oauth, auth=token_info["access_token"])
-
-        # Manually set the token info for refresh
+        # Seed the OAuth cache and let auth_manager provide tokens so Spotipy can
+        # refresh them automatically instead of pinning a stale access token.
         sp_oauth.cache_handler.save_token_to_cache(token_info)
+        refreshed_token_info = sp_oauth.validate_token(token_info)
+        if not refreshed_token_info:
+            app = App.get_running_app()
+            if not _is_backend_authenticated_app(app):
+                notify_spotify_session_expired()
+            return None
+
+        app = App.get_running_app()
+        if app is not None:
+            app.token_info = refreshed_token_info
+
+        # Create Spotify client with OAuth manager for automatic refresh.
+        sp = spotipy.Spotify(auth_manager=sp_oauth)
 
         return sp
 
     except Exception as exc:
         logger.error("Error creating Spotify client with refresh: %s", exc)
-        # Fallback to basic client without refresh
-        return spotipy.Spotify(auth=token_info["access_token"])
+        app = App.get_running_app()
+        if not _is_backend_authenticated_app(app):
+            notify_spotify_session_expired()
+        return None
 
 
 __all__ = ["LoginScreen", "create_spotify_client_with_refresh"]

@@ -7,9 +7,13 @@ from pathlib import Path
 
 import spotipy
 from kivymd.app import MDApp
+from kivy.clock import Clock
 from kivy.config import Config
 from kivy.core.text import LabelBase
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import ScreenManager
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import CacheFileHandler
@@ -31,6 +35,8 @@ class SpotifyExporterApp(MDApp):
         super().__init__(**kwargs)
         self.token_info = None
         self.username = None
+        self.user_id = None
+        self._auth_recovery_popup: Popup | None = None
         self.screen_manager: ScreenManager | None = None
         # Match previous dark styling
         self.theme_cls.theme_style = "Dark"
@@ -71,6 +77,57 @@ class SpotifyExporterApp(MDApp):
     def switch_to_login(self) -> None:
         if self.screen_manager:
             self.screen_manager.current = "login"
+
+    def prompt_reauthentication(
+        self,
+        message: str = "Your Spotify session expired. Log out and log in again.",
+    ) -> None:
+        Clock.schedule_once(lambda _dt: self._show_reauthentication_popup(message), 0)
+
+    def _show_reauthentication_popup(self, message: str) -> None:
+        if self._auth_recovery_popup:
+            popup_label = getattr(self._auth_recovery_popup, "message_label", None)
+            if popup_label is not None:
+                popup_label.text = message
+            return
+
+        content = BoxLayout(orientation="vertical", spacing=12, padding=16)
+        message_label = Label(
+            text=message,
+            halign="center",
+            valign="middle",
+        )
+        message_label.bind(
+            size=lambda instance, value: setattr(instance, "text_size", value)
+        )
+
+        relogin_button = Button(
+            text="Log Out and Log In Again",
+            size_hint_y=None,
+            height=44,
+        )
+
+        popup = Popup(
+            title="Spotify Session Expired",
+            content=content,
+            size_hint=(0.55, 0.32),
+            auto_dismiss=False,
+        )
+
+        def dismiss_and_logout(*_args) -> None:
+            popup.dismiss()
+            self.logout()
+
+        relogin_button.bind(on_press=dismiss_and_logout)
+        popup.bind(
+            on_dismiss=lambda *_args: setattr(self, "_auth_recovery_popup", None)
+        )
+
+        content.add_widget(message_label)
+        content.add_widget(relogin_button)
+        popup.message_label = message_label
+        self._auth_recovery_popup = popup
+        popup.open()
 
     # ------------------------------------------------------------------
     # Initialization helpers
@@ -137,11 +194,15 @@ class SpotifyExporterApp(MDApp):
             )
 
             token_info = sp_oauth.get_cached_token()
-            if token_info and not sp_oauth.is_token_expired(token_info):
-                sp = spotipy.Spotify(auth=token_info["access_token"])
+            validated_token = (
+                sp_oauth.validate_token(token_info) if token_info else None
+            )
+            if validated_token:
+                sp = spotipy.Spotify(auth_manager=sp_oauth)
                 user = sp.current_user()
-                self.token_info = token_info
+                self.token_info = validated_token
                 self.username = user.get("display_name", user.get("id", "User"))
+                self.user_id = user.get("id")
                 self.screen_manager.current = "main"
                 logger.info("Auto-login successful")
             else:
@@ -169,6 +230,7 @@ class SpotifyExporterApp(MDApp):
             # Clear all authentication state
             self.token_info = None
             self.username = None
+            self.user_id = None
 
             # Return to login screen
             if hasattr(self, "screen_manager"):
