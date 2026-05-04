@@ -3,7 +3,7 @@ import { authMiddleware } from '../middleware/auth';
 import { SpotifyService } from '../services/spotify';
 import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
-import type { SpotifyPlaylist, SpotifyTrack, SpotifyAudioFeatures } from '../types/spotify';
+import type { SpotifyPlaylist } from '../types/spotify';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -45,17 +45,20 @@ app.get('/playlists', async (c) => {
     let offset = 0;
     const playlists: SpotifyPlaylist[] = [];
 
-    while (true) {
+    let hasMore = true;
+    while (hasMore) {
       const page = await spotifyService.getUserPlaylists(limit, offset);
       const pageCount = Array.isArray(page) ? page.length : 0;
       console.info('[playlists] page fetched', { userId, offset, limit, pageCount });
       if (!Array.isArray(page) || page.length === 0) {
+        hasMore = false;
         break;
       }
 
       playlists.push(...page);
 
       if (page.length < limit) {
+        hasMore = false;
         break;
       }
 
@@ -64,6 +67,7 @@ app.get('/playlists', async (c) => {
       // Safety guard against infinite pagination loops caused by malformed upstream responses.
       if (offset > 10000) {
         console.warn('[playlists] pagination safety break', { userId, offset });
+        hasMore = false;
         break;
       }
     }
