@@ -1,3 +1,17 @@
+/**
+ * Reccobeats integration — STUB / MOCK.
+ *
+ * This file appears to be a placeholder for a future Reccobeats API integration.
+ * The real integration has NOT been implemented. All methods return mock data.
+ *
+ * Tech debt: docs/tech-debt-tracker.md item #9
+ * Do not add api.spotify.com calls here — use services/spotify.ts instead.
+ *
+ * Before implementing the real integration, clarify:
+ *   1. Is Reccobeats still the intended third-party service?
+ *   2. What does the real API response shape look like?
+ *   3. Should this merge with or replace the audio features from Spotify?
+ */
 // Mock Reccobeats service for testing
 export interface ReccobeatsFeatures {
   tempo?: number;
@@ -21,7 +35,7 @@ export class ReccoBeatsService {
     this.apiKey = apiKey;
   }
 
-  async getTrackFeatures(trackId: string): Promise<ReccobeatsFeatures> {
+  async getTrackFeatures(_trackId: string): Promise<ReccobeatsFeatures> {
     // Mock implementation for testing
     if (process.env.ENVIRONMENT === 'test') {
       return {

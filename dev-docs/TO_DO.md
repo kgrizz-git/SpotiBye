@@ -16,10 +16,12 @@
 
 - Check for security vulnerabilities and fix them
 
-- start new repo, after cleaning
+- start new repo, after cleaning, before widespread release-readiness
 
 - update / check build etc
 
 - decide on default size, see if can better place it
 
 * see backend analysis
+
+* see agent-first-retrofit

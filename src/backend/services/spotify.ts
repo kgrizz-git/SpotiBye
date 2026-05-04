@@ -1,3 +1,13 @@
+/**
+ * Spotify API client — the ONLY place in the backend that calls api.spotify.com.
+ *
+ * Golden Principle #2: All Spotify API calls go through this file.
+ * Do not call api.spotify.com from routes, middleware, or any other service.
+ *
+ * References:
+ *   - docs/references/spotify-api-reference.md  — endpoints, pagination, rate limits
+ *   - docs/february-2026-spotify-migration-findings.md — critical: /tracks → /items rename
+ */
 import type {
   SpotifyPlaylist,
   SpotifyTrack,

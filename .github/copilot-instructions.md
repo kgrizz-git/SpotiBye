@@ -1,5 +1,48 @@
 # Repository Copilot Instructions
 
+> Quick reference for AI coding agents. Full context is in [AGENTS.md](../AGENTS.md) and [ARCHITECTURE.md](../ARCHITECTURE.md).
+
+---
+
+## Layer Architecture Rules
+
+Violations of these rules are bugs, not style preferences. They are enforced by ESLint and structural tests.
+
+**Backend (TypeScript):**
+- `routes/` → `services/` → `types/` — one-way dependency only
+- Routes must not import from other routes
+- Services must not import from routes or middleware
+- All `api.spotify.com` calls go through `services/spotify.ts` only — no direct fetch in routes
+
+**Frontend (Python):**
+- `screens/` → `services/` → `auth/` | `caching/` | `config/`
+- `ui/` components are leaf nodes — no business logic, no service imports
+- `utils/` must not import from any other app layer
+
+---
+
+## Golden Principles
+
+Full list: [docs/golden-principles.md](../docs/golden-principles.md)
+
+1. Parse and validate data shapes at every layer boundary — never pass raw unvalidated responses inward
+2. All Spotify API calls go through `services/spotify.ts`
+3. Export cursors are always persisted before any destructive step
+4. Cache keys are namespaced: `<user_id>:<resource_type>:<identifier>`
+5. No `console.log` in non-test backend code — structured logging only
+6. No bare `except:` in Python — always name the exception type
+7. Prefer shared utilities over duplicated helpers
+
+---
+
+## PR Conventions
+
+- PRs should change one logical thing. Split changes > ~400 lines.
+- Every PR description must state what changed and why.
+- Architecture violations caught by linters must be fixed before merging.
+
+---
+
 ## Changelog Maintenance Rule
 
 When a change affects user-visible behavior, update CHANGELOG.md in the same pull request.
