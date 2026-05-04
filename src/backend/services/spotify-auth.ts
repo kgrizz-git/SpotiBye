@@ -5,12 +5,12 @@ export class SpotifyAuthService {
   private clientId: string;
   private clientSecret: string;
   private redirectUri: string = '';
-  
+
   constructor(clientId?: string, clientSecret?: string) {
     this.clientId = clientId || '';
     this.clientSecret = clientSecret || '';
   }
-  
+
   getAuthUrl(redirectUri: string, state?: string): string {
     const scopes = [
       'user-read-private',
@@ -18,7 +18,7 @@ export class SpotifyAuthService {
       'playlist-read-private',
       'playlist-read-collaborative'
     ].join(' ');
-    
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.clientId,
@@ -26,14 +26,14 @@ export class SpotifyAuthService {
       redirect_uri: redirectUri,
       state: state || this.generateState()
     });
-    
+
     return `https://accounts.spotify.com/authorize?${params.toString()}`;
   }
-  
+
   generateState(): string {
     return crypto.randomUUID();
   }
-  
+
   async exchangeCodeForTokens(code: string, redirectUri?: string): Promise<AuthTokens> {
     const callbackUri = redirectUri || this.redirectUri;
 
@@ -53,15 +53,15 @@ export class SpotifyAuthService {
         redirect_uri: callbackUri
       })
     });
-    
+
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`Failed to exchange code for tokens: ${error}`);
     }
-    
+
     return await response.json();
   }
-  
+
   async refreshAccessToken(refreshToken: string): Promise<Omit<AuthTokens, 'refresh_token'>> {
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
@@ -74,30 +74,30 @@ export class SpotifyAuthService {
         refresh_token: refreshToken
       })
     });
-    
+
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`Failed to refresh token: ${error}`);
     }
-    
+
     return await response.json();
   }
-  
+
   async getUserProfile(accessToken: string): Promise<SpotifyUser> {
     const response = await fetch('https://api.spotify.com/v1/me', {
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }
     });
-    
+
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`Failed to get user profile: ${error}`);
     }
-    
+
     return await response.json();
   }
-  
+
   private getBasicAuth(): string {
     const credentials = `${this.clientId}:${this.clientSecret}`;
     return btoa(credentials);

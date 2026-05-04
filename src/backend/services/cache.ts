@@ -1,10 +1,10 @@
 export class CacheService {
   private kv: KVNamespace;
-  
+
   constructor(kv: KVNamespace) {
     this.kv = kv;
   }
-  
+
   async get<T>(key: string): Promise<T | null> {
     try {
       const value = await this.kv.get(key);
@@ -14,7 +14,7 @@ export class CacheService {
       return null;
     }
   }
-  
+
   async set(key: string, value: any, ttlSeconds?: number): Promise<boolean> {
     try {
       const options = ttlSeconds ? { expirationTtl: ttlSeconds } : undefined;
@@ -25,7 +25,7 @@ export class CacheService {
       return false;
     }
   }
-  
+
   async delete(key: string): Promise<boolean> {
     try {
       await this.kv.delete(key);
@@ -35,7 +35,7 @@ export class CacheService {
       return false;
     }
   }
-  
+
   async clear(prefix: string): Promise<boolean> {
     try {
       const list = await this.kv.list({ prefix });
@@ -47,7 +47,7 @@ export class CacheService {
       return false;
     }
   }
-  
+
   async exists(key: string): Promise<boolean> {
     try {
       const value = await this.kv.get(key, { stream: true });
@@ -57,12 +57,12 @@ export class CacheService {
       return false;
     }
   }
-  
+
   async getMultiple<T>(keys: string[]): Promise<(T | null)[]> {
     const promises = keys.map(key => this.get<T>(key));
     return Promise.all(promises);
   }
-  
+
   async setMultiple(entries: Array<{ key: string; value: any; ttlSeconds?: number }>): Promise<boolean[]> {
     const promises = entries.map(entry => this.set(entry.key, entry.value, entry.ttlSeconds));
     return Promise.all(promises);

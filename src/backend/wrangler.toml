@@ -2,6 +2,8 @@ name = "spotibye-backend"
 main = "index.ts"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = true
 
 [vars]
 ENVIRONMENT = "development"
@@ -43,10 +45,6 @@ preview_id = "93fe695dd3b4494dbb566e316031d431"
 binding = "SESSIONS_KV"
 id = "656074c3b2dd4400ba74f888b3337d40"
 preview_id = "df6d2b4394de4335a385f97003fa986d"
-
-# Workers.dev configuration
-workers_dev = true
-preview_urls = true
 
 # Secrets (to be set via wrangler secret put)
 # SPOTIFY_CLIENT_ID

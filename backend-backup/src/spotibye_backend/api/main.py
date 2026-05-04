@@ -5,11 +5,11 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .auth import router as auth_router
-from .playlists import router as playlists_router
-from .analysis import router as analysis_router
-from .export import router as export_router
 from ..config import get_settings
+from .analysis import router as analysis_router
+from .auth import router as auth_router
+from .export import router as export_router
+from .playlists import router as playlists_router
 
 settings = get_settings()
 
@@ -35,6 +35,7 @@ app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 app.include_router(playlists_router, prefix="/api", tags=["playlists"])
 app.include_router(analysis_router, prefix="/api", tags=["analysis"])
 app.include_router(export_router, prefix="/api", tags=["export"])
+
 
 # Health check endpoint
 @app.get("/health")

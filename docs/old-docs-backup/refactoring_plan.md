@@ -242,7 +242,7 @@ from requests.auth import AuthBase
 class BackendAuth(AuthBase):
     def __init__(self, token):
         self.token = token
-    
+
     def __call__(self, r):
         r.headers['Authorization'] = f'Bearer {self.token}'
         return r
@@ -255,14 +255,14 @@ class SpotifyBackendAPI:
     def __init__(self, base_url: str):
         self.base_url = base_url
         self.session = requests.Session()
-    
+
     def get_playlists(self, token: str) -> List[dict]:
         response = self.session.get(
             f"{self.base_url}/spotify/playlists",
             auth=BackendAuth(token)
         )
         return response.json()
-    
+
     def get_playlist_tracks(self, playlist_id: str, token: str) -> List[dict]:
         response = self.session.get(
             f"{self.base_url}/spotify/playlists/{playlist_id}/tracks",
@@ -277,19 +277,19 @@ class SpotifyBackendAPI:
 class BackendAuthenticator:
     def __init__(self, backend_url: str):
         self.backend_url = backend_url
-    
+
     def login(self) -> str:
         # Get auth URL from backend
         response = requests.get(f"{self.backend_url}/auth/spotify/login")
         auth_url = response.json()['auth_url']
-        
+
         # Open browser for OAuth (same as current)
         import webbrowser
         webbrowser.open(auth_url)
-        
+
         # Wait for callback and get token
         # ... similar to current flow but through backend
-    
+
     def get_token(self) -> str:
         # Retrieve stored token from backend
         pass
@@ -299,7 +299,7 @@ class BackendAuthenticator:
 
 #### **Keep Unchanged:**
 - `ui/playlist_card.py` - UI components
-- `ui/cache_explorer.py` - Cache interface  
+- `ui/cache_explorer.py` - Cache interface
 - `screens/main_screen.py` - Main UI layout
 - `utils/platform_utils.py` - Platform-specific utilities
 - All Kivy-specific UI code
@@ -383,7 +383,7 @@ class MainScreen(Screen):
         # Keep all existing UI initialization
         self.backend_client = BackendClient(config.BACKEND_URL)
         self.build_ui()
-    
+
     def load_playlists(self):
         # Replace spotipy call with backend call
         try:
@@ -433,7 +433,7 @@ The proposed Cloudflare Worker backend architecture fully supports multiple conc
 // Value: encrypted session data
 {
   "accessToken": "user_specific_spotify_token",
-  "refreshToken": "user_specific_refresh_token", 
+  "refreshToken": "user_specific_refresh_token",
   "expiresAt": 1735123456,
   "userId": "spotify_user_123"
 }
@@ -447,7 +447,7 @@ The proposed Cloudflare Worker backend architecture fully supports multiple conc
 async function handleRequest(request, env, ctx) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   const session = await verifyToken(token);
-  
+
   // User-specific data access
   const userPlaylists = await getPlaylistsForUser(session.userId);
   return new Response(JSON.stringify(userPlaylists));
@@ -463,7 +463,7 @@ async function handleRequest(request, env, ctx) {
 "cache:user_spotify_123:playlist_abc" -> {...tracks...}
 "cache:user_spotify_123:track_xyz" -> {...features...}
 
-// User B's cache  
+// User B's cache
 "cache:user_spotify_456:playlist_abc" -> {...different_tracks...}
 "cache:user_spotify_456:track_xyz" -> {...different_features...}
 ```
@@ -476,7 +476,7 @@ export class UserSession {
     this.state = state;
     this.userId = state.id.toString();
   }
-  
+
   async getPlaylists() {
     // Only access this user's data
     return await this.state.storage.get(`playlists:${this.userId}`);
@@ -498,7 +498,7 @@ GET /spotify/playlists
 Authorization: Bearer token_for_user_A
 // → Returns User A's playlists only
 
-// User B simultaneously requests playlists  
+// User B simultaneously requests playlists
 GET /spotify/playlists
 Authorization: Bearer token_for_user_B
 // → Returns User B's playlists only
@@ -512,18 +512,18 @@ class BackendClient:
     def __init__(self):
         self.session_token = None  # User-specific token
         self.user_id = None       # Current user's ID
-    
+
     def login(self, spotify_code):
         # Get user-specific token from backend
-        response = requests.post(f"{self.backend_url}/auth/spotify/callback", 
+        response = requests.post(f"{self.backend_url}/auth/spotify/callback",
                                 data={"code": spotify_code})
         self.session_token = response.json()["token"]
         self.user_id = response.json()["user_id"]
-    
+
     def get_my_playlists(self):
         # Backend automatically isolates by token
         headers = {"Authorization": f"Bearer {self.session_token}"}
-        response = requests.get(f"{self.backend_url}/spotify/playlists", 
+        response = requests.get(f"{self.backend_url}/spotify/playlists",
                                headers=headers)
         return response.json()  # Only this user's playlists
 ```
@@ -552,25 +552,25 @@ class BackendClient:
 // auth/service.js
 export async function handleSpotifyCallback(request, env) {
   const { code } = await request.json();
-  
+
   // Exchange code for Spotify tokens (user-specific)
   const spotifyTokens = await exchangeSpotifyCode(code);
   const userProfile = await getSpotifyProfile(spotifyTokens.access_token);
-  
+
   // Create user session
   const sessionToken = await createJWT({
     sub: userProfile.id,
     spotify_access_token: spotifyTokens.access_token,
     spotify_refresh_token: spotifyTokens.refresh_token
   });
-  
+
   // Store session in KV
   await env.KV.put(`session:${userProfile.id}`, JSON.stringify({
     accessToken: spotifyTokens.access_token,
     refreshToken: spotifyTokens.refresh_token,
     expiresAt: Date.now() + 3600000
   }));
-  
+
   return Response.json({ token: sessionToken, userId: userProfile.id });
 }
 ```
@@ -581,7 +581,7 @@ export async function handleSpotifyCallback(request, env) {
 export async function getUserPlaylists(request, env) {
   const token = request.headers.get('Authorization')?.replace('Bearer ', '');
   const session = await verifyJWT(token);
-  
+
   // Use user's specific Spotify token
   const spotifyResponse = await fetch(
     'https://api.spotify.com/v1/me/playlists',
@@ -591,7 +591,7 @@ export async function getUserPlaylists(request, env) {
       }
     }
   );
-  
+
   const playlists = await spotifyResponse.json();
   return Response.json(playlists);
 }
@@ -605,13 +605,13 @@ class SpotifyExporterApp(MDApp):
         super().__init__()
         self.backend_client = BackendClient()
         # Each app instance has its own session
-    
+
     def login(self):
         # Each user gets their own authentication flow
         auth_url = self.backend_client.get_auth_url()
         webbrowser.open(auth_url)
         # User completes OAuth, gets their own token
-        
+
     def load_data(self):
         # Backend automatically returns only this user's data
         playlists = self.backend_client.get_my_playlists()
@@ -622,11 +622,11 @@ class SpotifyExporterApp(MDApp):
 
 **The architecture fully supports multiple concurrent users with:**
 
-✅ **Session Isolation** - Each user has separate authentication tokens  
-✅ **Data Separation** - User-specific caching and data access  
-✅ **Concurrent Access** - Cloudflare Workers handle simultaneous requests  
-✅ **Scalability** - Auto-scales to support any number of users  
-✅ **Security** - No cross-user data exposure  
-✅ **Performance** - One user's operations don't impact others  
+✅ **Session Isolation** - Each user has separate authentication tokens
+✅ **Data Separation** - User-specific caching and data access
+✅ **Concurrent Access** - Cloudflare Workers handle simultaneous requests
+✅ **Scalability** - Auto-scales to support any number of users
+✅ **Security** - No cross-user data exposure
+✅ **Performance** - One user's operations don't impact others
 
 The backend acts as a secure multi-tenant service while each Kivy frontend instance maintains its own user session, allowing unlimited users to connect simultaneously with complete data isolation.

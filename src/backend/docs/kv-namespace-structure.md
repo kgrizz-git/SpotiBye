@@ -139,16 +139,16 @@ const CACHE_TTL = {
   'spotify:user:playlists': 3600, // 1 hour
   'spotify:playlist:': 1800,     // 30 minutes
   'spotify:playlist:tracks:': 900, // 15 minutes
-  
+
   // Analysis results (computed data)
   'analysis:playlist:': 7200,    // 2 hours
-  
+
   // Export data (temporary)
   'export:': 86400,              // 24 hours
-  
+
   // Rate limiting (short-term)
   'ratelimit:': 60,              // 1 minute
-  
+
   // Sessions (security)
   'session:': 86400,             // 24 hours
   'oauth:state:': 600             // 10 minutes
@@ -161,7 +161,7 @@ const CACHE_TTL = {
 async function invalidateUserCache(env: Env, userId: string) {
   const pattern = `spotify:user:${userId}:*`;
   const keys = await env.CACHE_KV.list({ prefix: `spotify:user:${userId}:` });
-  
+
   for (const key of keys.keys) {
     await env.CACHE_KV.delete(key.name);
   }
@@ -174,7 +174,7 @@ async function invalidatePlaylistCache(env: Env, playlistId: string) {
     `spotify:playlist:${playlistId}:tracks:`,
     `analysis:playlist:${playlistId}`
   ];
-  
+
   for (const key of keysToDelete) {
     const keys = await env.CACHE_KV.list({ prefix: key });
     for (const k of keys.keys) {
@@ -190,12 +190,12 @@ async function invalidatePlaylistCache(env: Env, playlistId: string) {
 ```typescript
 // Batch write for multiple cache entries
 async function batchCacheUpdate(env: Env, entries: Array<{key: string, value: any, ttl?: number}>) {
-  const promises = entries.map(entry => 
+  const promises = entries.map(entry =>
     env.CACHE_KV.put(entry.key, JSON.stringify(entry.value), {
       expirationTtl: entry.ttl || 3600
     })
   );
-  
+
   await Promise.all(promises);
 }
 
@@ -208,7 +208,7 @@ async function batchCacheRead(env: Env, keys: string[]): Promise<Map<string, any
       results.set(key, JSON.parse(value));
     }
   });
-  
+
   await Promise.all(promises);
   return results;
 }
@@ -253,15 +253,15 @@ interface CacheEntry<T> {
 async function getVersionedCache<T>(env: Env, key: string, expectedVersion: number): Promise<T | null> {
   const raw = await env.CACHE_KV.get(key);
   if (!raw) return null;
-  
+
   const entry: CacheEntry<T> = JSON.parse(raw);
-  
+
   if (entry.version !== expectedVersion) {
     // Outdated version, invalidate and return null
     await env.CACHE_KV.delete(key);
     return null;
   }
-  
+
   return entry.data;
 }
 
@@ -272,7 +272,7 @@ async function setVersionedCache<T>(env: Env, key: string, data: T, ttl: number,
     cached_at: new Date().toISOString(),
     expires_at: new Date(Date.now() + ttl * 1000).toISOString()
   };
-  
+
   await env.CACHE_KV.put(key, JSON.stringify(entry), { expirationTtl: ttl });
 }
 ```
@@ -282,14 +282,14 @@ async function setVersionedCache<T>(env: Env, key: string, data: T, ttl: number,
 // Migrate from v1 to v2 cache format
 async function migrateCacheV1ToV2(env: Env) {
   const keys = await env.CACHE_KV.list();
-  
+
   for (const key of keys.keys) {
     if (key.name.startsWith('spotify:')) {
       const raw = await env.CACHE_KV.get(key.name);
       if (raw) {
         try {
           const data = JSON.parse(raw);
-          
+
           // Check if it's old format
           if (!data.version) {
             // Migrate to new format
@@ -359,7 +359,7 @@ class CacheMonitor {
 async function analyzeKVUsage(env: Env) {
   const cacheKeys = await env.CACHE_KV.list();
   const sessionKeys = await env.SESSIONS_KV.list();
-  
+
   const analysis = {
     cache: {
       totalKeys: cacheKeys.keys.length,
@@ -377,7 +377,7 @@ async function analyzeKVUsage(env: Env) {
   // Sample keys for size estimation
   const sampleSize = Math.min(100, cacheKeys.keys.length);
   let totalSampleSize = 0;
-  
+
   for (let i = 0; i < sampleSize; i++) {
     const key = cacheKeys.keys[i];
     const value = await env.CACHE_KV.get(key.name);
@@ -385,7 +385,7 @@ async function analyzeKVUsage(env: Env) {
       totalSampleSize += JSON.stringify(value).length;
     }
   }
-  
+
   if (sampleSize > 0) {
     analysis.cache.estimatedSize = (totalSampleSize / sampleSize) * cacheKeys.keys.length;
   }
@@ -405,17 +405,17 @@ function sanitizeForCache(data: any): any {
   }
 
   const sanitized = Array.isArray(data) ? [] : {};
-  
+
   for (const [key, value] of Object.entries(data)) {
     // Remove sensitive fields
     if (key.includes('token') || key.includes('secret') || key.includes('password')) {
       continue;
     }
-    
+
     // Recursively sanitize nested objects
     sanitized[key] = sanitizeForCache(value);
   }
-  
+
   return sanitized;
 }
 ```
@@ -428,12 +428,12 @@ async function canAccessCache(env: Env, userId: string, key: string): Promise<bo
   if (key.includes(`user:${userId}`)) {
     return true;
   }
-  
+
   // Public data access
   if (key.startsWith('spotify:playlist:') && !key.includes('user:')) {
     return true;
   }
-  
+
   return false;
 }
 ```
@@ -446,13 +446,13 @@ async function canAccessCache(env: Env, userId: string, key: string): Promise<bo
 async function exportKVData(env: Env, namespace: 'CACHE_KV' | 'SESSIONS_KV'): Promise<string> {
   const kv = namespace === 'CACHE_KV' ? env.CACHE_KV : env.SESSIONS_KV;
   const keys = await kv.list();
-  
+
   const backup = {
     namespace,
     exported_at: new Date().toISOString(),
     keys: []
   };
-  
+
   for (const key of keys.keys) {
     const value = await kv.get(key.name);
     if (value) {
@@ -463,7 +463,7 @@ async function exportKVData(env: Env, namespace: 'CACHE_KV' | 'SESSIONS_KV'): Pr
       });
     }
   }
-  
+
   return JSON.stringify(backup);
 }
 
@@ -471,7 +471,7 @@ async function exportKVData(env: Env, namespace: 'CACHE_KV' | 'SESSIONS_KV'): Pr
 async function restoreKVData(env: Env, backupData: string): Promise<void> {
   const backup = JSON.parse(backupData);
   const kv = backup.namespace === 'CACHE_KV' ? env.CACHE_KV : env.SESSIONS_KV;
-  
+
   for (const entry of backup.keys) {
     await kv.put(entry.key, entry.value, {
       expirationTtl: entry.expiration

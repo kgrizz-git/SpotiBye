@@ -37,7 +37,7 @@ describe('Caching Tests', () => {
 
       // Store data
       await cacheService.set(cacheKey, testData, 3600);
-      
+
       // Verify put was called
       expect(mockEnv.CACHE_KV.put).toHaveBeenCalledWith(
         cacheKey,

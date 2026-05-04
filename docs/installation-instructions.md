@@ -4,7 +4,7 @@
 
 ### Supported Operating Systems
 - **Windows**: Windows 10 or later
-- **macOS**: macOS 10.15 (Catalina) or later  
+- **macOS**: macOS 10.15 (Catalina) or later
 - **Linux**: Ubuntu 18.04+, Fedora 30+, or equivalent
 
 ### Hardware Requirements

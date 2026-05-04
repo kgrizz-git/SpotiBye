@@ -72,7 +72,7 @@ const token = jwt.sign({}, privateKey, {
 
 // Create playlist
 const response = await axios.post(
-    'https://api.music.apple.com/v1/me/library/playlists', 
+    'https://api.music.apple.com/v1/me/library/playlists',
     playlistData, {
     headers: {
         'Authorization': `Bearer ${token}`,
@@ -178,7 +178,7 @@ import applemusicpy
 # Initialize with developer credentials
 am = applemusicpy.AppleMusic(
     secret_key='private_key_content',
-    key_id='YOUR_KEY_ID', 
+    key_id='YOUR_KEY_ID',
     team_id='YOUR_TEAM_ID'
 )
 
@@ -427,7 +427,7 @@ This section provides a comprehensive implementation plan for creating and expor
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
   nvm install 18
   nvm use 18
-  
+
   # Or download from https://nodejs.org
   ```
 
@@ -435,11 +435,11 @@ This section provides a comprehensive implementation plan for creating and expor
   ```bash
   # macOS
   brew install python@3.9
-  
+
   # Ubuntu/Debian
   sudo apt update
   sudo apt install python3.9 python3.9-pip python3.9-venv
-  
+
   # Windows
   # Download from https://python.org
   ```
@@ -494,7 +494,7 @@ This section provides a comprehensive implementation plan for creating and expor
   brew install mkcert
   mkcert -install
   mkcert localhost 127.0.0.1 ::1
-  
+
   # Create SSL certificates directory
   mkdir backend/ssl
   mv localhost+2.pem backend/ssl/
@@ -520,7 +520,7 @@ This section provides a comprehensive implementation plan for creating and expor
 - [ ] **Generate MusicKit Identifier**:
   1. Sign in to Apple Developer Portal
   2. Navigate to "Certificates, Identifiers & Profiles"
-  3. Click "Identifiers" → "+" 
+  3. Click "Identifiers" → "+"
   4. Select "MusicKit IDs"
   5. Enter Description: "SpotiBye Apple Music Integration"
   6. Enter Bundle ID: "com.spotibye.applemusic"
@@ -668,14 +668,14 @@ class AppleMusicAuth {
     this.teamId = process.env.APPLE_MUSIC_TEAM_ID;
     this.privateKey = fs.readFileSync(process.env.APPLE_MUSIC_PRIVATE_KEY_PATH);
   }
-  
+
   generateDeveloperToken() {
     return jwt.sign({}, this.privateKey, {
       algorithm: 'ES256',
       expiresIn: '180d',
       issuer: this.teamId,
-      header: { 
-        alg: 'ES256', 
+      header: {
+        alg: 'ES256',
         kid: this.keyId,
         typ: 'JWT'
       }
@@ -693,11 +693,11 @@ class AppleMusicPlaylistService {
     this.client = authClient;
     this.rateLimiter = new RateLimiter(20); // 20 requests per second
   }
-  
+
   async createPlaylist(name, description, tracks = []) {
     try {
       await this.rateLimiter.waitForSlot();
-      
+
       const playlistData = {
         attributes: {
           name: name,
@@ -712,7 +712,7 @@ class AppleMusicPlaylistService {
           }
         }
       };
-      
+
       const response = await this.client.me.library.playlists.create(playlistData);
       return response.data;
     } catch (error) {
@@ -727,31 +727,31 @@ class AppleMusicPlaylistService {
 class TrackMatcher:
     def __init__(self, apple_music_client):
         self.client = apple_music_client
-    
+
     def match_track(self, spotify_track):
         # Try ISRC match first
         if hasattr(spotify_track, 'external_ids') and 'isrc' in spotify_track.external_ids:
             isrc_results = self.client.search(spotify_track.external_ids['isrc'], types=['songs'])
             if isrc_results['results']['songs']['data']:
                 return isrc_results['results']['songs']['data'][0]
-        
+
         # Fallback to metadata search
         query = f"{spotify_track.name} {spotify_track.artists[0]['name']}"
         search_results = self.client.search(query, types=['songs'], limit=10)
-        
+
         return self._find_best_match(spotify_track, search_results['results']['songs']['data'])
-    
+
     def _find_best_match(self, spotify_track, candidates):
         # Implement fuzzy matching logic
         best_match = None
         best_score = 0
-        
+
         for candidate in candidates:
             score = self._calculate_match_score(spotify_track, candidate)
             if score > best_score and score > 0.7:  # 70% confidence threshold
                 best_match = candidate
                 best_score = score
-        
+
         return best_match
 ```
 
@@ -788,7 +788,7 @@ class AppleMusicErrorHandler {
       maxDelay: 10000
     };
   }
-  
+
   async handleApiError(error, context) {
     if (error.status === 429) {
       // Rate limit exceeded
@@ -804,13 +804,13 @@ class AppleMusicErrorHandler {
       throw new AppleMusicError(`API Error: ${error.message}`, context);
     }
   }
-  
+
   async handleRateLimit(error, context) {
     const delay = Math.min(
       this.retryConfig.baseDelay * Math.pow(2, context.retryCount),
       this.retryConfig.maxDelay
     );
-    
+
     await new Promise(resolve => setTimeout(resolve, delay));
     return { retry: true, delay };
   }
@@ -867,11 +867,11 @@ describe('AppleMusicPlaylistService', () => {
     expect(result.id).toBeDefined();
     expect(result.attributes.name).toBe('Test Playlist');
   });
-  
+
   test('should handle rate limiting', async () => {
     const service = new AppleMusicPlaylistService(mockAuthClient);
     mockAuthClient.me.library.playlists.create.mockRejectedValue({ status: 429 });
-    
+
     await expect(service.createPlaylist('Test', 'Desc', []))
       .rejects.toThrow('Rate limit exceeded');
   });
@@ -912,7 +912,7 @@ describe('AppleMusicPlaylistService', () => {
   ```bash
   # Install Wrangler globally
   npm install -g wrangler
-  
+
   # Login to Cloudflare
   wrangler login
   ```
@@ -922,7 +922,7 @@ describe('AppleMusicPlaylistService', () => {
   cd backend
   wrangler init spotibye-apple-music-worker
   cd spotibye-apple-music-worker
-  
+
   # Select "Hello World" template
   # Choose "yes" for TypeScript
   # Choose "yes" for git init
@@ -934,10 +934,10 @@ describe('AppleMusicPlaylistService', () => {
   name = "spotibye-apple-music-worker"
   main = "src/index.ts"
   compatibility_date = "2023-12-01"
-  
+
   [env.production]
   vars = { ENVIRONMENT = "production" }
-  
+
   [env.development]
   vars = { ENVIRONMENT = "development" }
   ```
@@ -953,30 +953,30 @@ describe('AppleMusicPlaylistService', () => {
   ```typescript
   import { AppleMusicAuth } from './auth';
   import { AppleMusicPlaylistService } from './playlist-service';
-  
+
   export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
       const url = new URL(request.url);
-      
+
       // CORS headers
       const corsHeaders = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       };
-      
+
       if (request.method === 'OPTIONS') {
         return new Response(null, { headers: corsHeaders });
       }
-      
+
       if (url.pathname === '/api/apple-music/create-playlist' && request.method === 'POST') {
         try {
           const auth = new AppleMusicAuth(env);
           const playlistService = new AppleMusicPlaylistService(auth);
-          
+
           const { name, description, tracks } = await request.json();
           const result = await playlistService.createPlaylist(name, description, tracks);
-          
+
           return new Response(JSON.stringify(result), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
@@ -987,7 +987,7 @@ describe('AppleMusicPlaylistService', () => {
           });
         }
       }
-      
+
       return new Response('Not Found', { status: 404 });
     }
   };
@@ -999,7 +999,7 @@ describe('AppleMusicPlaylistService', () => {
   wrangler secret put APPLE_MUSIC_KEY_ID
   wrangler secret put APPLE_MUSIC_TEAM_ID
   wrangler secret put APPLE_MUSIC_PRIVATE_KEY
-  
+
   # For development
   wrangler secret put APPLE_MUSIC_KEY_ID --env development
   wrangler secret put APPLE_MUSIC_TEAM_ID --env development
@@ -1010,7 +1010,7 @@ describe('AppleMusicPlaylistService', () => {
   ```bash
   # Deploy to development
   wrangler deploy --env development
-  
+
   # Deploy to production
   wrangler deploy
   ```
@@ -1028,7 +1028,7 @@ describe('AppleMusicPlaylistService', () => {
   ```bash
   # Install Wrangler if not already installed
   npm install -g wrangler
-  
+
   # Deploy frontend
   wrangler pages deploy dist --project-name spotibye-frontend
   ```
@@ -1037,7 +1037,7 @@ describe('AppleMusicPlaylistService', () => {
   ```bash
   # Add custom domain to worker
   wrangler custom-domains add api.spotibye.com
-  
+
   # Add custom domain to pages
   wrangler pages domain put spotibye.com
   ```
@@ -1067,7 +1067,7 @@ describe('AppleMusicPlaylistService', () => {
   # 1. Go to Cloudflare Dashboard → Analytics
   # 2. Enable Web Analytics
   # 3. Set up custom events for API calls
-  
+
   # Configure logging
   wrangler tail  # View real-time logs
   ```
@@ -1084,7 +1084,7 @@ describe('AppleMusicPlaylistService', () => {
   ```bash
   # Test local development
   wrangler dev
-  
+
   # Test deployed worker
   curl -X POST https://spotibye-apple-music-worker.your-subdomain.workers.dev/api/apple-music/create-playlist \
     -H "Content-Type: application/json" \
@@ -1095,7 +1095,7 @@ describe('AppleMusicPlaylistService', () => {
   ```bash
   # View analytics
   wrangler analytics
-  
+
   # Check logs
   wrangler tail --env production
   ```
@@ -1105,11 +1105,11 @@ describe('AppleMusicPlaylistService', () => {
   Create `.github/workflows/deploy.yml`:
   ```yaml
   name: Deploy to Cloudflare
-  
+
   on:
     push:
       branches: [main]
-  
+
   jobs:
     deploy:
       runs-on: ubuntu-latest

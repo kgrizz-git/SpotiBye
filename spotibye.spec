@@ -53,10 +53,10 @@ APP_VERSION_TUPLE = to_windows_version_tuple(APP_VERSION)
 if sys.platform == 'win32':
     # Windows specific settings
     import PyInstaller.utils.win32.versioninfo as vs
-    
+
     exe_name = 'SpotiBye.exe'
     icon = str(PROJECT_ROOT / 'resources' / 'SpotiBye black edited 1-modified.ico')
-    
+
     # Version info for Windows executable
     version_info = vs.VSVersionInfo(
         ffi=vs.FixedFileInfo(

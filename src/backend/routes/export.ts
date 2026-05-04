@@ -496,23 +496,23 @@ app.post('/playlist/:id', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const requestedFormat = resolveRequestedFormat(body);
     const includeAudioFeatures = resolveIncludeAudioFeatures(body);
-    
+
     const exportService = new ExportService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
     console.info('[export] start', { requestId, traceId, userId, playlistId });
-    
+
     // Check if export already exists
     const exportKey = `export:${playlistId}:${userId}`;
     const existingExport = await cacheService.get(exportKey);
-    
+
     if (existingExport && existingExport.status === 'completed') {
       console.info('[export] using cached completed export', { requestId, userId, playlistId, exportKey });
-      return c.json({ 
+      return c.json({
         data: existingExport,
         meta: { timestamp: new Date().toISOString(), request_id: requestId }
       });
     }
-    
+
     // Start export process
     const jobId = crypto.randomUUID();
     const status = {
@@ -523,13 +523,13 @@ app.post('/playlist/:id', async (c) => {
       started_at: new Date().toISOString(),
       progress: 0
     };
-    
+
     await cacheService.set(exportKey, status, 3600); // 1 hour TTL
-    
+
     try {
       // Generate the export
       const exportData = await exportService.generatePlaylistExport(playlistId, { includeAudioFeatures });
-      
+
       // Store the export data (in production, this would be stored in R2 or similar)
       const completedStatus = {
         ...status,
@@ -541,7 +541,7 @@ app.post('/playlist/:id', async (c) => {
         file_size: JSON.stringify(exportData).length,
         track_count: exportData.tracks.length
       };
-      
+
       await cacheService.set(exportKey, completedStatus, 3600);
       await cacheService.set(`${exportKey}:data`, exportData, 3600);
 
@@ -564,8 +564,8 @@ app.post('/playlist/:id', async (c) => {
         playlistId,
         trackCount: exportData.tracks.length,
       });
-      
-      return c.json({ 
+
+      return c.json({
         data: completedStatus,
         meta: { timestamp: new Date().toISOString(), request_id: requestId }
       });
@@ -585,9 +585,9 @@ app.post('/playlist/:id', async (c) => {
         playlistId,
         error: errorMessage,
       });
-      
+
       await cacheService.set(exportKey, failedStatus, 3600);
-      
+
       return c.json(
         buildExportErrorPayload(
           'EXPORT_FAILED',
@@ -923,14 +923,14 @@ app.get('/playlist/:id/status', async (c) => {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
-    
+
     const exportKey = `export:${playlistId}:${userId}`;
     const status = await cacheService.get(exportKey);
-    
+
     if (!status) {
       return c.json({ error: { code: 'EXPORT_NOT_FOUND', message: 'Export not found' } }, 404);
     }
-    
+
     return c.json({ data: status, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get export status:', error);
@@ -944,7 +944,7 @@ app.get('/playlist/:id/download', async (c) => {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
-    
+
     const exportKey = `export:${playlistId}:${userId}`;
     const exportStatus = await cacheService.get<any>(exportKey);
     let exportData = await cacheService.get<any>(`${exportKey}:data`);
@@ -999,15 +999,15 @@ app.delete('/playlist/:id', async (c) => {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
-    
+
     const exportKey = `export:${playlistId}:${userId}`;
-    
+
     await Promise.all([
       cacheService.delete(exportKey),
       cacheService.delete(`${exportKey}:data`),
       cacheService.delete(`${exportKey}:file`)
     ]);
-    
+
     return c.json({ data: { message: 'Export deleted successfully' } });
   } catch (error) {
     console.error('Failed to delete export:', error);

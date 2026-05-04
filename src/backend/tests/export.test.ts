@@ -163,7 +163,7 @@ vi.mock('../services/export', () => ({
 vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation((c, next) => {
     // Mock authenticated user
-    c.set('user', { 
+    c.set('user', {
       id: 'test-user-id',
       email: 'test@example.com',
       name: 'Test User'
@@ -182,7 +182,7 @@ describe('Export Routes', () => {
     app.route('/export', exportRoutes);
 
     const cacheStore = new Map<string, string>();
-    
+
     mockEnv = {
       ENVIRONMENT: 'test',
       SPOTIFY_CLIENT_ID: 'test-client-id',
@@ -216,7 +216,7 @@ describe('Export Routes', () => {
     it('should generate Excel export', async () => {
       const request = new Request('http://localhost/export/playlist/playlist1', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         },
@@ -238,7 +238,7 @@ describe('Export Routes', () => {
     it('should handle export with custom options', async () => {
       const request = new Request('http://localhost/export/playlist/playlist1', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         },
@@ -259,7 +259,7 @@ describe('Export Routes', () => {
     it('should return 400 for invalid format', async () => {
       const request = new Request('http://localhost/export/playlist/playlist1', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         },
@@ -278,7 +278,7 @@ describe('Export Routes', () => {
     it('should download generated export file', async () => {
       const request = new Request('http://localhost/export/playlist/test-export-id/download', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -307,7 +307,7 @@ describe('Export Routes', () => {
 
       const request = new Request('http://localhost/export/playlist/nonexistent/download', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }
@@ -324,7 +324,7 @@ describe('Export Routes', () => {
 
       const request = new Request('http://localhost/export/playlist/expired-export/download', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer test-jwt-token',
           'Content-Type': 'application/json'
         }

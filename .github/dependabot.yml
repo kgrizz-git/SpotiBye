@@ -1,0 +1,142 @@
+version: 2
+
+# Dependabot configuration for SpotiBye project
+# Monitors Python (pip), Node.js (npm), and GitHub Actions dependencies
+
+updates:
+  # Python dependencies - Main project
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "kgrizz"
+    assignees:
+      - "kgrizz"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    versioning-strategy: "auto"
+    # Group minor/patch updates to reduce PR noise
+    groups:
+      minor-patch-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Python dependencies - Backup project
+  - package-ecosystem: "pip"
+    directory: "/SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "kgrizz"
+    labels:
+      - "dependencies"
+      - "python"
+      - "backup"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps(dev)"
+
+  # Node.js dependencies - Backend
+  - package-ecosystem: "npm"
+    directory: "/src/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "kgrizz"
+    assignees:
+      - "kgrizz"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "backend"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Group development dependencies
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        patterns:
+          - "*"
+      production-dependencies:
+        dependency-type: "production"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "kgrizz"
+    assignees:
+      - "kgrizz"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      actions-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker dependencies (if Dockerfile exists)
+  - package-ecosystem: "docker"
+    directory: "/backend-backup"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "kgrizz"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+# Security updates configuration
+# Enable automated security updates (separate from version updates)
+# Note: This requires enabling "Dependabot security updates" in GitHub repo settings
+
+# Ignore rules (if needed for known problematic updates)
+# ignore:
+#   - dependency-name: "some-package"
+#     versions: ["3.x", "4.x"]
+#     update-types: ["version-update:semver-major"]

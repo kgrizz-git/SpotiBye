@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import platform
 import subprocess
-import time
+import importlib
 from typing import Tuple
 
 from kivy.clock import Clock
-from kivy.metrics import dp
 
 from ..logging_config import logger
 
@@ -29,20 +28,22 @@ def diagnose_macos_issues() -> None:
         logger.info("=== macOS Compatibility Check ===")
 
         try:
-            from AppKit import NSScreen  # type: ignore
+            if importlib.util.find_spec("AppKit") is None:
+                raise ImportError
             logger.info("✓ AppKit available")
         except ImportError:
             logger.info("⚠ AppKit not available (install pyobjc-framework-Cocoa)")
 
         try:
-            from Quartz import CGMainDisplayID  # type: ignore
+            if importlib.util.find_spec("Quartz") is None:
+                raise ImportError
             logger.info("✓ Quartz available")
         except ImportError:
             logger.info("⚠ Quartz not available (install pyobjc-framework-Quartz)")
 
         try:
             result = subprocess.run(
-                ['system_profiler', 'SPHardwareDataType'],
+                ["system_profiler", "SPHardwareDataType"],
                 capture_output=True,
                 text=True,
                 timeout=3,
@@ -70,13 +71,17 @@ def get_screen_resolution() -> Tuple[int, int]:
         if system == "Darwin":
             try:
                 result = subprocess.run(
-                    ['osascript', '-e', 'tell application "Finder" to get bounds of window of desktop'],
+                    [
+                        "osascript",
+                        "-e",
+                        'tell application "Finder" to get bounds of window of desktop',
+                    ],
                     capture_output=True,
                     text=True,
                     timeout=3,
                 )
                 if result.returncode == 0 and result.stdout.strip():
-                    bounds = [int(x.strip()) for x in result.stdout.strip().split(', ')]
+                    bounds = [int(x.strip()) for x in result.stdout.strip().split(", ")]
                     if len(bounds) >= 4:
                         return bounds[2], bounds[3]
             except Exception as exc:
@@ -146,13 +151,15 @@ def get_screen_resolution() -> Tuple[int, int]:
                 return width, height
             except ImportError:
                 try:
-                    result = subprocess.run(['xrandr'], capture_output=True, text=True, timeout=5)
-                    for line in result.stdout.split('\n'):
-                        if ' connected' in line:
+                    result = subprocess.run(
+                        ["xrandr"], capture_output=True, text=True, timeout=5
+                    )
+                    for line in result.stdout.split("\n"):
+                        if " connected" in line:
                             for part in line.split():
-                                if 'x' in part and '+' in part:
-                                    resolution = part.split('+')[0]
-                                    w, h = resolution.split('x')
+                                if "x" in part and "+" in part:
+                                    resolution = part.split("+")[0]
+                                    w, h = resolution.split("x")
                                     return int(w), int(h)
                     return 1920, 1080
                 except Exception:
@@ -169,40 +176,44 @@ def is_mobile_platform() -> bool:
     """Check if running on mobile platform with improved detection."""
     try:
         system = platform.system()
-        if system in ['iOS', 'Android']:
+        if system in ["iOS", "Android"]:
             return True
 
         import sys
 
-        if hasattr(sys, 'platform'):
+        if hasattr(sys, "platform"):
             platform_str = sys.platform.lower()
-            if any(mobile in platform_str for mobile in ['ios', 'android', 'kivy-ios', 'python-for-android']):
+            if any(
+                mobile in platform_str
+                for mobile in ["ios", "android", "kivy-ios", "python-for-android"]
+            ):
                 return True
 
         try:
             from kivy.utils import platform as kivy_platform
 
-            if kivy_platform in ['android', 'ios']:
+            if kivy_platform in ["android", "ios"]:
                 return True
         except ImportError:
             pass
 
         try:
-            import android  # type: ignore
-
+            importlib.import_module("android")
             return True
         except ImportError:
             pass
 
         try:
-            import ios  # type: ignore
-
+            importlib.import_module("ios")
             return True
         except ImportError:
             pass
 
         machine = platform.machine().lower()
-        if any(arch in machine for arch in ['arm', 'aarch']) and system not in ['Darwin', 'Linux']:
+        if any(arch in machine for arch in ["arm", "aarch"]) and system not in [
+            "Darwin",
+            "Linux",
+        ]:
             return True
 
         return False
@@ -212,7 +223,9 @@ def is_mobile_platform() -> bool:
         return False
 
 
-def validate_window_size(width: int, height: int, screen_width: int, screen_height: int) -> Tuple[int, int]:
+def validate_window_size(
+    width: int, height: int, screen_width: int, screen_height: int
+) -> Tuple[int, int]:
     """Validate and adjust window size to ensure it fits on screen."""
     try:
         max_width = int(screen_width * 0.95)
@@ -240,7 +253,12 @@ def calculate_optimal_window_size() -> Tuple[int, int]:
     screen_width, screen_height = get_screen_resolution()
     mobile = is_mobile_platform()
 
-    logger.info("Detected screen resolution: %sx%s, Mobile: %s", screen_width, screen_height, mobile)
+    logger.info(
+        "Detected screen resolution: %sx%s, Mobile: %s",
+        screen_width,
+        screen_height,
+        mobile,
+    )
 
     if mobile:
         return screen_width, screen_height
@@ -297,6 +315,7 @@ def set_window_on_top() -> None:
 
         elif system == "Darwin":
             try:
+
                 def bring_to_front_pyobjc(dt):
                     try:
                         from AppKit import NSApplication  # type: ignore
@@ -317,14 +336,19 @@ def set_window_on_top() -> None:
 
         elif system == "Linux":
             try:
+
                 def bring_to_front_linux(dt):
                     try:
                         window = _window()
-                        subprocess.run(['wmctrl', '-a', window.title], check=False, timeout=2)
+                        subprocess.run(
+                            ["wmctrl", "-a", window.title], check=False, timeout=2
+                        )
                     except (FileNotFoundError, subprocess.TimeoutExpired):
                         logger.info("wmctrl not available or timed out")
                     except Exception as exc:
-                        logger.warning("Could not bring window to front (Linux): %s", exc)
+                        logger.warning(
+                            "Could not bring window to front (Linux): %s", exc
+                        )
 
                 Clock.schedule_once(bring_to_front_linux, 0.5)
             except Exception as exc:
@@ -345,7 +369,7 @@ def set_window_basics(title: str) -> None:
         mobile = is_mobile_platform()
         if mobile:
             window.resizable = False
-            window.fullscreen = 'auto'
+            window.fullscreen = "auto"
             logger.info("Mobile window configured: %sx%s (fullscreen)", width, height)
         else:
             window.resizable = True
@@ -390,13 +414,13 @@ def _fallback_window_setup() -> None:
 
     if is_mobile_platform():
         KivyWindow.size = (360, 640)
-        KivyWindow.fullscreen = 'auto'
+        KivyWindow.fullscreen = "auto"
     else:
         KivyWindow.size = (1056, 756)
         KivyWindow.resizable = True
         KivyWindow.minimum_width = 480
         KivyWindow.minimum_height = 600
-    KivyWindow.title = 'Spotify Playlist Exporter - Powered by ReccoBeats'
+    KivyWindow.title = "Spotify Playlist Exporter - Powered by ReccoBeats"
 
 
 __all__ = [

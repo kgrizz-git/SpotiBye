@@ -225,7 +225,7 @@ This document provides a comprehensive list of all files and folders created/mod
 2. **Import Backend Components**:
    ```python
    from src.frontend.app import create_backend_app
-   
+
    app = create_backend_app()
    app.run()
    ```
@@ -233,7 +233,7 @@ This document provides a comprehensive list of all files and folders created/mod
 3. **Or Use Adapter with Existing Code**:
    ```python
    from src.frontend.screens import create_backend_adapter
-   
+
    adapter = create_backend_adapter()
    main_screen.initialize_with_backend(adapter)
    ```
@@ -401,7 +401,7 @@ This document provides a comprehensive list of all files and folders created/mod
 **Mock/Unit Testing Complete:**
 - **Authentication Tests:** 5/5 passed ✓
   - Spotify login initiation
-  - OAuth callback handling  
+  - OAuth callback handling
   - Token refresh functionality
   - Logout flow verification
   - Complete authentication workflow

@@ -10,7 +10,7 @@ The SpotiBye backend uses a single Cloudflare worker that is automatically deplo
 
 ### Automatic Triggers
 
-1. **Development Deployment**: 
+1. **Development Deployment**:
    - Triggers on push to `main` branch when backend files change
    - Deploys to development environment
    - Runs tests and linting first
@@ -38,7 +38,7 @@ To enable automatic deployment, add these secrets to your GitHub repository:
 
 1. **CLOUDFLARE_API_TOKEN**
    - Get from Cloudflare dashboard → My Profile → API Tokens
-   - Required permissions: 
+   - Required permissions:
      - Account: `Cloudflare Workers:Edit`
      - Zone: `Zone:Read` (if using custom domains)
      - Account: `Account:Cloudflare Pages:Edit`
@@ -62,7 +62,7 @@ To enable automatic deployment, add these secrets to your GitHub repository:
 - Auto-deploys on main branch pushes
 
 ### Production Environment
-- Uses production KV namespaces  
+- Uses production KV namespaces
 - Environment variable: `ENVIRONMENT = "production"`
 - Deploys only on version tags
 

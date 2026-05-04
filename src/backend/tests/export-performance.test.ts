@@ -58,7 +58,7 @@ const createMockPlaylist = (size: number) => {
       external_urls: { spotify: `https://open.spotify.com/track/${i}` }
     });
   }
-  
+
   return {
     id: `playlist-${size}`,
     name: `Test Playlist (${size} tracks)`,
@@ -73,21 +73,21 @@ describe('Export Functionality Performance Tests', () => {
       const smallPlaylist = createMockPlaylist(5);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer mock-token'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format: 'csv',
-          include_audio_features: false 
+          include_audio_features: false
         })
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       // Should handle small playlists quickly
       expect([200, 401, 500]).toContain(response.status);
-      
+
       if (response.status === 200) {
         const data = await response.json<{ data: { export_id: string, estimated_size: number } }>();
         expect(data.data).toHaveProperty('export_id');
@@ -99,13 +99,13 @@ describe('Export Functionality Performance Tests', () => {
       const mediumPlaylist = createMockPlaylist(75);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer mock-token'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format: 'json',
-          include_audio_features: true 
+          include_audio_features: true
         })
       });
 
@@ -116,11 +116,11 @@ describe('Export Functionality Performance Tests', () => {
 
       // Should handle medium playlists within reasonable time
       expect([200, 401, 500]).toContain(response.status);
-      
+
       if (response.status === 200) {
         // Medium playlists should complete within 5 seconds in test environment
         expect(duration).toBeLessThan(5000);
-        
+
         const data = await response.json() as any;
         expect(data.data).toHaveProperty('export_id');
       }
@@ -130,13 +130,13 @@ describe('Export Functionality Performance Tests', () => {
       const largePlaylist = createMockPlaylist(500);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer mock-token'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format: 'csv',
-          include_audio_features: false 
+          include_audio_features: false
         })
       });
 
@@ -147,11 +147,11 @@ describe('Export Functionality Performance Tests', () => {
 
       // Should handle large playlists or timeout gracefully
       expect([200, 401, 500, 408]).toContain(response.status);
-      
+
       if (response.status === 200) {
         // Large playlists might take longer but should still complete
         expect(duration).toBeLessThan(10000);
-        
+
         const data = await response.json() as any;
         expect(data.data).toHaveProperty('export_id');
       }
@@ -163,18 +163,18 @@ describe('Export Functionality Performance Tests', () => {
       const playlist = createMockPlaylist(10);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer mock-token'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format: 'csv',
-          include_audio_features: false 
+          include_audio_features: false
         })
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       if (response.status === 200) {
         const data = await response.json() as any;
         expect(data.data).toHaveProperty('format', 'csv');
@@ -186,18 +186,18 @@ describe('Export Functionality Performance Tests', () => {
       const playlist = createMockPlaylist(10);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer mock-token'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format: 'json',
-          include_audio_features: true 
+          include_audio_features: true
         })
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       if (response.status === 200) {
         const data = await response.json() as any;
         expect(data.data).toHaveProperty('format', 'json');
@@ -208,18 +208,18 @@ describe('Export Functionality Performance Tests', () => {
     it('should handle invalid export format', async () => {
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer mock-token'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format: 'invalid',
-          include_audio_features: false 
+          include_audio_features: false
         })
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       // Should reject invalid formats
       expect([400, 401, 500]).toContain(response.status);
     });
@@ -234,13 +234,13 @@ describe('Export Functionality Performance Tests', () => {
         const playlist = createMockPlaylist(size);
         const request = new Request('http://localhost/export/playlist/test-playlist', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer mock-token'
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             format: 'csv',
-            include_audio_features: false 
+            include_audio_features: false
           })
         });
 
@@ -260,7 +260,7 @@ describe('Export Functionality Performance Tests', () => {
       const smallPlaylist = performanceData.find(p => p.size === 5);
       const largePlaylist = performanceData.find(p => p.size === 500);
 
-      if (smallPlaylist && largePlaylist && 
+      if (smallPlaylist && largePlaylist &&
           smallPlaylist.status === 200 && largePlaylist.status === 200) {
         // Large playlist shouldn't take disproportionately longer
         const ratio = largePlaylist.duration / smallPlaylist.duration;
@@ -272,21 +272,21 @@ describe('Export Functionality Performance Tests', () => {
       const veryLargePlaylist = createMockPlaylist(1000);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer mock-token'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format: 'json',
-          include_audio_features: true 
+          include_audio_features: true
         })
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       // Should handle very large playlists or fail gracefully
       expect([200, 401, 500, 413]).toContain(response.status);
-      
+
       if (response.status === 413) {
         // Should return payload too large if memory limits exceeded
         const data = await response.json() as any;
@@ -300,21 +300,21 @@ describe('Export Functionality Performance Tests', () => {
       const enormousPlaylist = createMockPlaylist(5000);
       const request = new Request('http://localhost/export/playlist/test-playlist', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer mock-token'
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           format: 'csv',
-          include_audio_features: true 
+          include_audio_features: true
         })
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       // Should timeout or handle gracefully
       expect([200, 401, 500, 408]).toContain(response.status);
-      
+
       if (response.status === 408) {
         const data = await response.json() as any;
         expect(data.error).toHaveProperty('code', 'TIMEOUT');
@@ -327,13 +327,13 @@ describe('Export Functionality Performance Tests', () => {
         requests.push(
           new Request('http://localhost/export/playlist/test-playlist', {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer mock-token'
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               format: 'csv',
-              include_audio_features: false 
+              include_audio_features: false
             })
           })
         );

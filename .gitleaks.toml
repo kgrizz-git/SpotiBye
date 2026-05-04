@@ -1,0 +1,61 @@
+# Gitleaks configuration to reduce false positives
+# See: https://github.com/gitleaks/gitleaks#configuration
+
+title = "SpotiBye Gitleaks Config"
+
+[extend]
+# Use default config as base
+useDefault = true
+
+[allowlist]
+# Paths to ignore (in addition to .gitignore)
+paths = [
+    '''\.env''',
+    '''\.env\..*''',
+    '''node_modules''',
+    '''\.venv''',
+    '''venv''',
+    '''__pycache__''',
+    '''\.git''',
+    '''\.pytest_cache''',
+    '''dist''',
+    '''build''',
+    '''\.idea''',
+    '''\.vscode''',
+    '''SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY''',
+    '''backend-backup''',
+    '''backups''',
+]
+
+# Allowlist specific false positives
+regexes = [
+    # Placeholder tokens in documentation
+    '''YOUR_ACCESS_TOKEN''',
+    '''YOUR_.*_TOKEN''',
+    '''YOUR_.*_KEY''',
+    '''YOUR_.*_SECRET''',
+    '''example.*token''',
+    '''test.*token''',
+    # Truncated JWT examples
+    '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.\.\.''',
+    # Example secrets in docs
+    '''CLIENT_SECRET = "BQC19azHL-e4-Cmc0S3ZMCE''',
+    '''BQC19azHL-e4-Cmc0S3ZMCE''',
+    # Environment variable examples, expressed as patterns instead of literals
+    '''SPOTIFY_CLIENT_SECRET=[A-Za-z0-9]{32}''',
+    '''RECOCOBEATS_API_KEY=rbc-[A-Za-z0-9]{16}''',
+    # More generic patterns for example values
+    '''abcdef1234567890abcdef1234567890''',
+    '''rbc-1234567890abcdef''',
+]
+
+# Stop words (known safe patterns)
+stopwords = [
+    "YOUR_",
+    "example",
+    "test",
+    "dummy",
+    "placeholder",
+    "fake",
+    "sample",
+]

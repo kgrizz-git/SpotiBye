@@ -69,5 +69,5 @@ This rule advises on securely configuring SQL and NoSQL databases to protect aga
   - MongoDB: Implement MongoDB security checklist requirements.
   - Redis: Follow Redis security guide recommendations.
 
-Summary:  
+Summary:
 Isolate database systems, enforce encrypted connections, implement strong authentication, store credentials securely using secrets management, apply least privilege permissions, harden database configurations, and maintain regular security updates and monitoring.

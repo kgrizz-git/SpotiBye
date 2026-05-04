@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import json
 import threading
-import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from kivy.clock import Clock
 from kivy.metrics import dp
@@ -17,13 +16,13 @@ from kivy.uix.popup import Popup
 from kivy.uix.switch import Switch
 
 from spotify_playlist_exporter_v2.ui.cache_explorer import CacheExplorerPopup
-from spotify_playlist_exporter_v2.caching.persistent_cache import PersistentCache
 from spotify_playlist_exporter_v2.logging_config import logger
 
 try:
     from ..services.backend_client import BackendClient
-    from ..config.backend_config import BackendConfig
+    from ..config.backend_config import resolve_startup_backend_url
     from ..caching.backend_cache import get_cache_manager
+
     BACKEND_AVAILABLE = True
 except ImportError:
     BACKEND_AVAILABLE = False
@@ -35,22 +34,22 @@ class BackendCacheExplorerPopup(Popup):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.title = 'Cache Explorer - Local & Backend'
+        self.title = "Cache Explorer - Local & Backend"
         self.size_hint = (0.95, 0.9)
         self.auto_dismiss = False
-        
+
         # Backend client for cache status
         self.backend_client = None
         self.backend_cache_status = None
         self.cache_manager = get_cache_manager() if BACKEND_AVAILABLE else None
-        
+
         # UI components
         self.main_layout = None
         self.status_bar = None
         self.cache_explorer = None
         self.backend_status_label = None
         self.backend_switch = None
-        
+
         self.build_ui()
         self.initialize_backend_client()
         self.populate_from_backend_local_cache()
@@ -58,107 +57,101 @@ class BackendCacheExplorerPopup(Popup):
 
     def build_ui(self) -> None:
         """Build the enhanced UI with backend status."""
-        self.main_layout = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(5))
-        
+        self.main_layout = BoxLayout(
+            orientation="vertical", padding=dp(10), spacing=dp(5)
+        )
+
         # Status bar with backend toggle
         self.build_status_bar()
-        
+
         # Main cache explorer (embed original)
-        self.cache_explorer = CacheExplorerPopup()
+        self.cache_explorer = CacheExplorerPopup(close_handler=self.dismiss)
         self.cache_explorer.size_hint = (1, 0.85)
         self.main_layout.add_widget(self.cache_explorer)
-        
+
         self.add_widget(self.main_layout)
 
     def build_status_bar(self) -> None:
         """Build status bar with backend toggle."""
         status_layout = BoxLayout(
-            orientation='horizontal', 
-            size_hint_y=None, 
-            height=dp(40),
-            spacing=dp(10)
+            orientation="horizontal", size_hint_y=None, height=dp(40), spacing=dp(10)
         )
-        
+
         # Backend status label
         self.backend_status_label = Label(
-            text='Backend: Checking...',
+            text="Backend: Checking...",
             size_hint_x=0.7,
             font_size=dp(12),
-            color=(0.8, 0.8, 0.8, 1)
+            color=(0.8, 0.8, 0.8, 1),
         )
         status_layout.add_widget(self.backend_status_label)
-        
+
         # Backend toggle switch
         if BACKEND_AVAILABLE:
             toggle_layout = BoxLayout(
-                orientation='horizontal',
-                size_hint_x=0.3,
-                spacing=dp(5)
+                orientation="horizontal", size_hint_x=0.3, spacing=dp(5)
             )
-            
+
             toggle_label = Label(
-                text='Backend:',
+                text="Backend:",
                 size_hint_x=0.5,
                 font_size=dp(12),
-                color=(0.8, 0.8, 0.8, 1)
+                color=(0.8, 0.8, 0.8, 1),
             )
             toggle_layout.add_widget(toggle_label)
-            
-            self.backend_switch = Switch(
-                size_hint_x=0.5,
-                active=False
-            )
+
+            self.backend_switch = Switch(size_hint_x=0.5, active=False)
             self.backend_switch.bind(active=self.on_backend_toggle)
             toggle_layout.add_widget(self.backend_switch)
-            
+
             status_layout.add_widget(toggle_layout)
-        
+
         # Refresh button
         refresh_btn = Button(
-            text='Refresh',
-            size_hint_x=None,
-            width=dp(80),
-            font_size=dp(12)
+            text="Refresh", size_hint_x=None, width=dp(80), font_size=dp(12)
         )
         refresh_btn.bind(on_press=self.refresh_backend_status)
         status_layout.add_widget(refresh_btn)
-        
+
         self.status_bar = status_layout
         self.main_layout.add_widget(self.status_bar)
 
     def initialize_backend_client(self) -> None:
         """Initialize backend client if available."""
         if not BACKEND_AVAILABLE:
-            self.backend_status_label.text = 'Backend: Not Available'
+            self.backend_status_label.text = "Backend: Not Available"
             return
-            
+
         try:
-            config = BackendConfig()
-            self.backend_client = BackendClient(config.backend_url)
-            self.backend_status_label.text = 'Backend: Connected'
+            self.backend_client = BackendClient(resolve_startup_backend_url())
+            self.backend_status_label.text = "Backend: Connected"
             self.backend_switch.active = True
         except Exception as exc:
             logger.error("Failed to initialize backend client: %s", exc)
-            self.backend_status_label.text = 'Backend: Connection Failed'
+            self.backend_status_label.text = "Backend: Connection Failed"
 
     def load_backend_cache_status(self) -> None:
         """Load backend cache status asynchronously."""
-        if not self.backend_client or not hasattr(self.backend_client, 'get_cache_status'):
+        if not self.backend_client or not hasattr(
+            self.backend_client, "get_cache_status"
+        ):
             self.update_backend_status_from_local_cache()
             return
-            
+
         def load_status():
             try:
                 # This would be a new endpoint in the backend
                 status = self.backend_client.get_cache_status()
                 self.backend_cache_status = status
-                
+
                 # Update UI on main thread
                 Clock.schedule_once(self.update_backend_status_display)
-                
+
             except Exception as exc:
                 logger.error("Failed to load backend cache status: %s", exc)
-                Clock.schedule_once(lambda dt: self.update_backend_status_from_local_cache())
+                Clock.schedule_once(
+                    lambda dt: self.update_backend_status_from_local_cache()
+                )
 
         # Run in background thread
         threading.Thread(target=load_status, daemon=True).start()
@@ -166,29 +159,29 @@ class BackendCacheExplorerPopup(Popup):
     def update_backend_status_from_local_cache(self, *_args) -> None:
         """Fallback status using local backend cache manager stats."""
         if not self.cache_manager:
-            self.backend_status_label.text = 'Backend: No cache manager'
+            self.backend_status_label.text = "Backend: No cache manager"
             return
 
         stats = self.cache_manager.get_cache_stats()
-        total_files = int(stats.get('total_files', 0) or 0)
-        playlists = int(stats.get('playlists_count', 0) or 0)
-        tracks = int(stats.get('tracks_count', 0) or 0)
-        size_mb = float(stats.get('total_size_mb', 0) or 0)
+        total_files = int(stats.get("total_files", 0) or 0)
+        playlists = int(stats.get("playlists_count", 0) or 0)
+        tracks = int(stats.get("tracks_count", 0) or 0)
+        size_mb = float(stats.get("total_size_mb", 0) or 0)
         self.backend_status_label.text = (
-            f'Backend Local Cache: {size_mb:.1f}MB, {total_files} files, '
-            f'{playlists} playlists, {tracks} track entries'
+            f"Backend Local Cache: {size_mb:.1f}MB, {total_files} files, "
+            f"{playlists} playlists, {tracks} track entries"
         )
 
     def _read_playlists_raw(self) -> List[Dict[str, Any]]:
         """Read playlists.json directly, bypassing TTL, for cache-explorer display."""
         try:
-            playlists_path = self.cache_manager.cache_dir / 'playlists.json'
+            playlists_path = self.cache_manager.cache_dir / "playlists.json"
             if not playlists_path.exists():
                 return []
-            with open(playlists_path, 'r') as fh:
+            with open(playlists_path, "r") as fh:
                 data = json.load(fh)
-            if isinstance(data, dict) and 'data' in data:
-                return data['data'] or []
+            if isinstance(data, dict) and "data" in data:
+                return data["data"] or []
             if isinstance(data, list):
                 return data
         except Exception as exc:
@@ -202,29 +195,33 @@ class BackendCacheExplorerPopup(Popup):
 
         # Try live (within-TTL) cache first, then fall back to a raw file read so the
         # explorer still shows data even when the TTL has expired.
-        cached_playlists = self.cache_manager.get_cached_playlists() or self._read_playlists_raw()
+        cached_playlists = (
+            self.cache_manager.get_cached_playlists() or self._read_playlists_raw()
+        )
         if not cached_playlists:
             return
 
         now_ts = datetime.now().timestamp()
         mapped = []
         for playlist in cached_playlists:
-            mapped.append({
-                'cache_key': f"backend_{playlist.get('id', 'unknown')}",
-                'playlist_id': playlist.get('id', ''),
-                'user_id': playlist.get('owner', {}).get('id', ''),
-                'name': playlist.get('name', 'Unknown Playlist'),
-                'tracks_count': playlist.get('tracks', {}).get('total', 0),
-                'cached_at': now_ts,
-                'size_mb': 0.0,
-            })
+            mapped.append(
+                {
+                    "cache_key": f"backend_{playlist.get('id', 'unknown')}",
+                    "playlist_id": playlist.get("id", ""),
+                    "user_id": playlist.get("owner", {}).get("id", ""),
+                    "name": playlist.get("name", "Unknown Playlist"),
+                    "tracks_count": playlist.get("tracks", {}).get("total", 0),
+                    "cached_at": now_ts,
+                    "size_mb": 0.0,
+                }
+            )
 
         self.cache_explorer.cache_data = {
-            'summary': self.cache_manager.get_cache_stats(),
-            'playlists': mapped,
-            'tracks': [],
-            'images': [],
-            'analysis': [],
+            "summary": self.cache_manager.get_cache_stats(),
+            "playlists": mapped,
+            "tracks": [],
+            "images": [],
+            "analysis": [],
         }
         self.cache_explorer.populate_playlists_column()
 
@@ -236,8 +233,8 @@ class BackendCacheExplorerPopup(Popup):
         original_method = CacheExplorerPopup._on_cache_data_loaded
 
         def _merged_on_cache_data_loaded(cache_data):
-            if not cache_data.get('playlists'):
-                cache_data['playlists'] = backend_playlists
+            if not cache_data.get("playlists"):
+                cache_data["playlists"] = backend_playlists
             original_method(self.cache_explorer, cache_data)
 
         self.cache_explorer._on_cache_data_loaded = _merged_on_cache_data_loaded
@@ -245,20 +242,22 @@ class BackendCacheExplorerPopup(Popup):
     def update_backend_status_display(self, dt) -> None:
         """Update backend status display."""
         if not self.backend_cache_status:
-            self.backend_status_label.text = 'Backend: No Data'
+            self.backend_status_label.text = "Backend: No Data"
             return
-            
+
         status = self.backend_cache_status
-        hit_rate = status.get('hit_rate', 0)
-        cache_size = status.get('cache_size_mb', 0)
-        max_size = status.get('max_cache_size_mb', 0)
-        
-        status_text = f'Backend: {hit_rate:.1f}% hit rate, {cache_size:.1f}MB/{max_size:.1f}MB'
+        hit_rate = status.get("hit_rate", 0)
+        cache_size = status.get("cache_size_mb", 0)
+        max_size = status.get("max_cache_size_mb", 0)
+
+        status_text = (
+            f"Backend: {hit_rate:.1f}% hit rate, {cache_size:.1f}MB/{max_size:.1f}MB"
+        )
         self.backend_status_label.text = status_text
 
     def update_backend_error(self, error_msg: str) -> None:
         """Update backend status with error."""
-        self.backend_status_label.text = f'Backend: Error - {error_msg[:30]}...'
+        self.backend_status_label.text = f"Backend: Error - {error_msg[:30]}..."
 
     def on_backend_toggle(self, switch, value) -> None:
         """Handle backend toggle switch."""
@@ -268,26 +267,26 @@ class BackendCacheExplorerPopup(Popup):
         else:
             self.backend_client = None
             self.backend_cache_status = None
-            self.backend_status_label.text = 'Backend: Disabled'
+            self.backend_status_label.text = "Backend: Disabled"
 
     def refresh_backend_status(self, button) -> None:
         """Refresh backend cache status."""
-        self.backend_status_label.text = 'Backend: Refreshing...'
+        self.backend_status_label.text = "Backend: Refreshing..."
         self.load_backend_cache_status()
 
     def show_backend_details(self) -> None:
         """Show detailed backend cache information in a popup."""
         if not self.backend_cache_status:
             return
-            
+
         details_popup = Popup(
-            title='Backend Cache Details',
-            size_hint=(0.6, 0.6),
-            auto_dismiss=True
+            title="Backend Cache Details", size_hint=(0.6, 0.6), auto_dismiss=True
         )
-        
-        details_layout = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(5))
-        
+
+        details_layout = BoxLayout(
+            orientation="vertical", padding=dp(10), spacing=dp(5)
+        )
+
         # Create details text
         status = self.backend_cache_status
         details_text = f"""
@@ -305,22 +304,18 @@ Cache Types:
 • Tracks: {status.get('cached_tracks', 0)} items
 • Analysis: {status.get('cached_analysis', 0)} items
         """.strip()
-        
+
         details_label = Label(
             text=details_text,
             font_size=dp(12),
             text_size=(dp(400), None),
-            halign='left',
-            valign='top'
+            halign="left",
+            valign="top",
         )
-        
-        close_btn = Button(
-            text='Close',
-            size_hint_y=None,
-            height=dp(40)
-        )
+
+        close_btn = Button(text="Close", size_hint_y=None, height=dp(40))
         close_btn.bind(on_press=details_popup.dismiss)
-        
+
         details_layout.add_widget(details_label)
         details_layout.add_widget(close_btn)
         details_popup.add_widget(details_layout)

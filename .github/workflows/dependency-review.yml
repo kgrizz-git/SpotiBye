@@ -1,0 +1,77 @@
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          # Fail on moderate or higher severity vulnerabilities
+          fail-on-severity: moderate
+          # Show all vulnerabilities, not just those in the PR
+          allow-ghsas: true
+          # Comment on PR with results
+          comment-summary-in-pr: always
+          # Check for license issues
+          deny-licenses: ''
+          # Fail on scoped packages
+          fail-on-scopes: runtime, development
+
+  python-dependencies:
+    name: Python Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          echo "## Python Dependency Audit Results" >> $GITHUB_STEP_SUMMARY
+          pip-audit --requirement=requirements.txt --format=markdown >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Check for critical vulnerabilities
+        run: pip-audit --requirement=requirements.txt --severity=high
+        continue-on-error: true
+
+  node-dependencies:
+    name: Node.js Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: src/backend
+        run: npm ci
+
+      - name: Run npm audit
+        working-directory: src/backend
+        run: |
+          echo "## Node.js Dependency Audit Results" >> $GITHUB_STEP_SUMMARY
+          npm audit --audit-level=moderate || true

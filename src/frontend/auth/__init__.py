@@ -6,6 +6,6 @@ from .backend_login_screen import BackendLoginScreen, create_backend_login_scree
 __all__ = [
     "BackendAuthenticator",
     "get_authenticator",
-    "BackendLoginScreen", 
+    "BackendLoginScreen",
     "create_backend_login_screen",
 ]

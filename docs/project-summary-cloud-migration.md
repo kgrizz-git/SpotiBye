@@ -17,7 +17,7 @@ SpotiBye is being migrated from a monolithic desktop application to a hybrid clo
 
 ### Project Timeline
 - **Phase 1**: Cloudflare Worker Backend Development (3-4 weeks)
-- **Phase 2**: Frontend Integration (2-3 weeks)  
+- **Phase 2**: Frontend Integration (2-3 weeks)
 - **Phase 3**: Production Deployment (2-3 weeks)
 - **Total Duration**: 7-10 weeks
 
@@ -117,7 +117,7 @@ Kivy App → Cloudflare Workers → Spotify API → Edge Cache → User Interfac
 ```typescript
 // Endpoints
 POST /auth/spotify/login     // Initiate OAuth flow
-GET  /auth/spotify/callback  // Handle OAuth callback  
+GET  /auth/spotify/callback  // Handle OAuth callback
 POST /auth/spotify/refresh   // Refresh access tokens
 ```
 
@@ -155,11 +155,11 @@ class BackendClient:
         self.base_url = base_url
         self.session = requests.Session()
         self.auth_token = None
-    
+
     def authenticate(self, spotify_code: str) -> str:
         # Exchange code for JWT token from backend
         pass
-    
+
     def get_playlists(self) -> List[Playlist]:
         # Call backend API with JWT authentication
         pass
@@ -172,10 +172,10 @@ class BackendAuthenticator:
         # Get auth URL from backend and initiate OAuth
         auth_url = f"{self.backend_url}/auth/spotify/login"
         webbrowser.open(auth_url)
-        
+
     def handle_callback(self, code: str) -> str:
         # Complete OAuth flow with backend
-        response = requests.post(f"{self.backend_url}/auth/spotify/callback", 
+        response = requests.post(f"{self.backend_url}/auth/spotify/callback",
                                 data={"code": code})
         return response.json()["token"]
 ```
@@ -184,7 +184,7 @@ class BackendAuthenticator:
 
 ### Phase 1: Cloudflare Worker Backend Development
 
-**Duration**: 3-4 weeks  
+**Duration**: 3-4 weeks
 **Focus**: Backend extraction and cloud implementation
 
 **Key Deliverables:**
@@ -203,7 +203,7 @@ class BackendAuthenticator:
 
 ### Phase 2: Frontend Integration Development
 
-**Duration**: 2-3 weeks  
+**Duration**: 2-3 weeks
 **Focus**: Update Kivy app to consume cloud backend
 
 **Key Deliverables:**
@@ -222,7 +222,7 @@ class BackendAuthenticator:
 
 ### Phase 3: Production Deployment
 
-**Duration**: 2-3 weeks  
+**Duration**: 2-3 weeks
 **Focus**: Deployment, monitoring, and maintenance
 
 **Key Deliverables:**
@@ -347,7 +347,7 @@ interface AnalysisJob {
 - Authentication and security
 - Performance optimization
 
-#### Frontend Developer  
+#### Frontend Developer
 **Primary Responsibilities:**
 - Kivy application updates and integration
 - Backend client implementation
@@ -483,7 +483,7 @@ interface AnalysisJob {
 
 ### Development Resources
 - **Backend Developer**: 1.0 FTE for 4 weeks
-- **Frontend Developer**: 1.0 FTE for 3 weeks  
+- **Frontend Developer**: 1.0 FTE for 3 weeks
 - **DevOps Engineer**: 0.5 FTE for 3 weeks
 - **QA Engineer**: 0.5 FTE for 2 weeks
 
@@ -512,7 +512,7 @@ interface AnalysisJob {
 3. **Development Environment**: Set up local development with Wrangler
 4. **Testing Strategy**: Define testing approach and automation
 
-### Phase 2 Preparation  
+### Phase 2 Preparation
 1. **Frontend Analysis**: Review Kivy codebase for integration points
 2. **Backend Client Design**: Design HTTP client architecture
 3. **Authentication Flow**: Plan OAuth integration approach

@@ -19,6 +19,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -39,10 +43,14 @@ jobs:
     # (Windows→windows, macOS→macos, Linux→linux).
     - name: Set platform skip flag
       shell: bash
+      env:
+        PLATFORM_INPUT: ${{ github.event.inputs.platform }}
+        RUNNER_OS: ${{ runner.os }}
+        EVENT_NAME: ${{ github.event_name }}
       run: |
-        PLATFORM="${{ github.event.inputs.platform }}"
-        OS_LOWER=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && \
+        PLATFORM="$PLATFORM_INPUT"
+        OS_LOWER=$(echo "$RUNNER_OS" | tr '[:upper:]' '[:lower:]')
+        if [[ "$EVENT_NAME" == "workflow_dispatch" ]] && \
            [[ -n "$PLATFORM" ]] && \
            [[ "$PLATFORM" != "all" ]] && \
            [[ "$OS_LOWER" != "$PLATFORM" ]]; then

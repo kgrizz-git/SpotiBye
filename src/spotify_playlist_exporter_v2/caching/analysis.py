@@ -29,7 +29,7 @@ class AnalysisTask:
 
 def get_cached_playlist_analysis(playlist_id: str) -> Optional[Dict[str, Any]]:
     """Get cached analysis data for a playlist."""
-    return persistent_cache.get_cached_analysis_data(playlist_id, 'combined')
+    return persistent_cache.get_cached_analysis_data(playlist_id, "combined")
 
 
 def cache_playlist_analysis(
@@ -39,33 +39,35 @@ def cache_playlist_analysis(
 ) -> None:
     """Cache analysis data for a playlist with persistent storage."""
     try:
-        existing_data = persistent_cache.get_cached_analysis_data(playlist_id, 'combined') or {
-            'spotify': None,
-            'reccobeats': None,
-            'timestamp': time.time(),
+        existing_data = persistent_cache.get_cached_analysis_data(
+            playlist_id, "combined"
+        ) or {
+            "spotify": None,
+            "reccobeats": None,
+            "timestamp": time.time(),
         }
 
         if spotify_data is not None:
-            existing_data['spotify'] = spotify_data
-            existing_data['timestamp'] = time.time()
+            existing_data["spotify"] = spotify_data
+            existing_data["timestamp"] = time.time()
 
         if reccobeats_data is not None:
-            existing_data['reccobeats'] = reccobeats_data
-            existing_data['timestamp'] = time.time()
+            existing_data["reccobeats"] = reccobeats_data
+            existing_data["timestamp"] = time.time()
 
-        persistent_cache.cache_analysis_data(playlist_id, existing_data, 'combined')
+        persistent_cache.cache_analysis_data(playlist_id, existing_data, "combined")
 
         sources = []
         if spotify_data is not None:
-            sources.append('spotify')
+            sources.append("spotify")
         if reccobeats_data is not None:
-            sources.append('reccobeats')
+            sources.append("reccobeats")
         if not sources:
-            for key in ('spotify', 'reccobeats'):
+            for key in ("spotify", "reccobeats"):
                 if existing_data.get(key):
                     sources.append(key)
         if not sources:
-            sources.append('unknown')
+            sources.append("unknown")
 
         logger.info(
             "Cached analysis data for playlist: %s (sources: %s)",

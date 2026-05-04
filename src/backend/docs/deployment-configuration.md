@@ -9,7 +9,7 @@ This guide covers deployment configuration for the SpotiBye Cloudflare Workers b
 - **Purpose**: Development and testing
 - **Features**: Debug logging, relaxed rate limits
 
-### Staging  
+### Staging
 - **URL**: `https://spotibye-api-staging.workers.dev`
 - **Purpose**: Pre-production testing
 - **Features**: Production-like configuration
@@ -32,7 +32,7 @@ compatibility_date = "2023-12-01"
 name = "spotibye-api-dev"
 vars = { ENVIRONMENT = "development" }
 
-# Staging environment  
+# Staging environment
 [env.staging]
 name = "spotibye-api-staging"
 vars = { ENVIRONMENT = "staging" }
@@ -159,24 +159,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          
+
       - name: Install dependencies
         run: npm ci
-        
+
       - name: Run tests
         run: npm test
-        
+
       - name: Deploy to staging
         if: github.ref == 'refs/heads/develop'
         run: wrangler deploy --env staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          
+
       - name: Deploy to production
         if: github.ref == 'refs/heads/main'
         run: wrangler deploy --env production
@@ -273,7 +273,7 @@ wrangler rollback --env production <deployment-id>
 // Configure cache TTLs
 const CACHE_TTL = {
   development: 60, // 1 minute
-  staging: 300,    // 5 minutes  
+  staging: 300,    // 5 minutes
   production: 3600 // 1 hour
 };
 ```

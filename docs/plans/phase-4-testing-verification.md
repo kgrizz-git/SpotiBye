@@ -3,7 +3,7 @@
 > **IMPORTANT**: The `SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY` folder contains the original code and **MAY NOT BE EDITED** under any circumstances. It is for reference only to understand the original monolithic implementation before we split it into front-end and back-end components.
 >
 > **Project Context**: This is Phase 4 of the SpotiBye cloud migration project. See [`project-summary-overview.md`](project-summary-overview.md) for the complete project overview, timeline, and architecture details.
-> 
+>
 > **Prerequisites**: Phases 1-3 must be completed - Cloudflare Worker backend, frontend integration, and production deployment.
 
 ## Who Runs This Code
@@ -286,7 +286,7 @@ class TestBackendClient:
         # Test authentication workflow
         auth_url = client.get_auth_url()
         assert auth_url.startswith("http://localhost:8787/auth/spotify/login")
-    
+
     def test_playlist_retrieval(self):
         client = BackendClient("http://localhost:8787")
         client.auth_token = "test_token"
@@ -442,7 +442,7 @@ jobs:
         run: npm test
       - name: Run security scan
         run: npm audit
-  
+
   frontend-tests:
     runs-on: ${{ matrix.os }}
     strategy:

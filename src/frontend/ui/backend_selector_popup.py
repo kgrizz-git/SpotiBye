@@ -37,6 +37,8 @@ class BackendSelectorPopup(Popup):
         self._on_apply = on_apply
         self._on_cancel = on_cancel
         self._last_tested_url: str | None = None
+        self._auto_test_event = None
+        self._health_check_request_id = 0
 
         self._preset_names = list(BACKEND_PRESETS.keys()) + ["Custom"]
         self._build_ui()
@@ -67,14 +69,16 @@ class BackendSelectorPopup(Popup):
         layout.add_widget(self.url_input)
 
         self.status_label = Label(
-            text="Choose a backend and test connection.",
+            text="Choose a backend. Connection status updates automatically.",
             size_hint_y=None,
             height=dp(44),
             color=(0.7, 0.7, 0.7, 1),
         )
         layout.add_widget(self.status_label)
 
-        buttons = BoxLayout(orientation="horizontal", spacing=dp(8), size_hint_y=None, height=dp(42))
+        buttons = BoxLayout(
+            orientation="horizontal", spacing=dp(8), size_hint_y=None, height=dp(42)
+        )
 
         self.test_button = Button(text="Test Connection")
         self.test_button.bind(on_press=self._on_test_pressed)  # type: ignore[attr-defined]
@@ -107,23 +111,66 @@ class BackendSelectorPopup(Popup):
             self.url_input.text = self._default_url
             self.url_input.readonly = False
 
+        self._schedule_auto_health_check(0.1)
+
     def _on_preset_changed(self, _instance, selected: str) -> None:
         if selected == "Custom":
             self.url_input.readonly = False
             if not self.url_input.text:
                 self.url_input.text = self._default_url
+            self._update_status(
+                "Custom URL selected. Connection will be checked automatically.",
+                (0.7, 0.7, 0.7, 1),
+            )
+            self._schedule_auto_health_check()
             return
 
         self.url_input.readonly = True
         self.url_input.text = BACKEND_PRESETS[selected]
         self._last_tested_url = None
-        self._update_status("Preset selected. Click Test Connection.", (0.7, 0.7, 0.7, 1))
+        self._update_status(
+            "Preset selected. Connection will be checked automatically.",
+            (0.7, 0.7, 0.7, 1),
+        )
+        self._schedule_auto_health_check()
 
     def _on_url_changed(self, _instance, _text: str) -> None:
         self._last_tested_url = None
+        if self._auto_test_event is not None:
+            self._auto_test_event.cancel()
+            self._auto_test_event = None
+
+        url = self._get_selected_url()
+        if not url:
+            self._update_status(
+                "Enter a backend URL.",
+                (0.7, 0.7, 0.7, 1),
+            )
+            return
+
+        if not is_valid_backend_url(url):
+            self._update_status(
+                "Invalid URL. Use http:// or https://",
+                (1, 0.3, 0.3, 1),
+            )
+            return
+
+        self._update_status(
+            "Connection will be checked automatically. You can also test manually.",
+            (0.7, 0.7, 0.7, 1),
+        )
+        self._schedule_auto_health_check()
 
     def _get_selected_url(self) -> str:
         return self.url_input.text.strip().rstrip("/")
+
+    def _schedule_auto_health_check(self, delay: float = 0.5) -> None:
+        if self._auto_test_event is not None:
+            self._auto_test_event.cancel()
+
+        self._auto_test_event = Clock.schedule_once(
+            lambda _dt: self._start_health_check(manual=False), delay
+        )
 
     def _set_busy(self, busy: bool) -> None:
         self.test_button.disabled = busy
@@ -134,38 +181,68 @@ class BackendSelectorPopup(Popup):
             self.url_input.readonly = busy
 
     def _on_test_pressed(self, _instance) -> None:
+        self._start_health_check(manual=True)
+
+    def _start_health_check(self, manual: bool) -> None:
         url = self._get_selected_url()
         if not is_valid_backend_url(url):
-            self._update_status("Invalid URL. Use http:// or https://", (1, 0.3, 0.3, 1))
+            if manual:
+                self._update_status(
+                    "Invalid URL. Use http:// or https://", (1, 0.3, 0.3, 1)
+                )
             return
 
-        self._set_busy(True)
-        self._update_status("Testing backend health...", (0.7, 0.7, 0.7, 1))
+        self._health_check_request_id += 1
+        request_id = self._health_check_request_id
+
+        if manual:
+            self._set_busy(True)
+            self._update_status("Testing backend health...", (0.7, 0.7, 0.7, 1))
+        else:
+            self._update_status("Checking backend status...", (0.7, 0.7, 0.7, 1))
 
         def worker() -> None:
             try:
                 health = BackendClient(url).health_check()
+                if request_id != self._health_check_request_id:
+                    return
                 if health.get("status") == "healthy":
                     self._last_tested_url = url
-                    self._update_status("Connection successful.", (0.3, 1, 0.3, 1))
+                    success_text = (
+                        "Connection successful."
+                        if manual
+                        else "Backend reachable. You can continue or connect now."
+                    )
+                    self._update_status(success_text, (0.3, 1, 0.3, 1))
                 else:
                     error = health.get("error", "Unknown backend health error")
-                    self._update_status(f"Backend unhealthy: {error}", (1, 0.3, 0.3, 1))
+                    failure_text = (
+                        f"Backend unhealthy: {error}"
+                        if manual
+                        else f"Backend unavailable right now: {error}"
+                    )
+                    self._update_status(failure_text, (1, 0.3, 0.3, 1))
             except Exception as exc:  # pragma: no cover - network path
-                self._update_status(f"Connection failed: {exc}", (1, 0.3, 0.3, 1))
+                if request_id != self._health_check_request_id:
+                    return
+                failure_text = (
+                    f"Connection failed: {exc}"
+                    if manual
+                    else "Backend unavailable right now. You can continue and retry on login."
+                )
+                self._update_status(failure_text, (1, 0.3, 0.3, 1))
             finally:
-                Clock.schedule_once(lambda _dt: self._set_busy(False), 0)
+                if manual and request_id == self._health_check_request_id:
+                    Clock.schedule_once(lambda _dt: self._set_busy(False), 0)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_continue_pressed(self, _instance) -> None:
         url = self._get_selected_url()
         if not is_valid_backend_url(url):
-            self._update_status("Invalid URL. Use http:// or https://", (1, 0.3, 0.3, 1))
-            return
-
-        if self._last_tested_url != url:
-            self._update_status("Please test this URL before continuing.", (1, 0.6, 0.2, 1))
+            self._update_status(
+                "Invalid URL. Use http:// or https://", (1, 0.3, 0.3, 1)
+            )
             return
 
         self.dismiss()

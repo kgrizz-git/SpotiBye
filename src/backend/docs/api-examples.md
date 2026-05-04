@@ -416,7 +416,7 @@ try {
 
   if (!response.ok) {
     const error = await response.json();
-    
+
     switch (response.status) {
       case 401:
         console.error('Unauthorized - please log in again');
@@ -499,7 +499,7 @@ class SpotiByeAPI {
     });
 
     const { data } = await loginResponse.json();
-    
+
     // Redirect user to Spotify
     window.location.href = data.auth_url;
   }
@@ -512,10 +512,10 @@ class SpotiByeAPI {
 
     const { data } = await callbackResponse.json();
     this.token = data.access_token;
-    
+
     // Store token
     localStorage.setItem('spotibye_token', this.token);
-    
+
     return data.user;
   }
 
@@ -643,7 +643,7 @@ if (!api.isAuthenticated()) {
 
     if (playlists.length > 0) {
       const firstPlaylist = playlists[0];
-      
+
       // Analyze the first playlist
       const analysis = await api.analyzePlaylist(firstPlaylist.id, {
         include_recommendations: true
@@ -656,7 +656,7 @@ if (!api.isAuthenticated()) {
 
       // Download the export
       const blob = await api.downloadExport(firstPlaylist.id, exportData.export_id);
-      
+
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -669,7 +669,7 @@ if (!api.isAuthenticated()) {
     }
   } catch (error) {
     console.error('API Error:', error);
-    
+
     // Handle expired token
     if (error.message.includes('401')) {
       api.logout();
@@ -702,7 +702,7 @@ function useSpotiByeAPI() {
   const login = useCallback(async (redirectUri) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch('https://spotibye-api.workers.dev/auth/spotify/login', {
         method: 'POST',
@@ -722,7 +722,7 @@ function useSpotiByeAPI() {
   const handleCallback = useCallback(async (code, state) => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch(
         `https://spotibye-api.workers.dev/auth/spotify/callback?code=${code}&state=${state}`
@@ -817,10 +817,10 @@ function PlaylistManager() {
     <div>
       <h2>Welcome, {user.display_name}!</h2>
       <button onClick={logout}>Logout</button>
-      
+
       {loading && <p>Loading...</p>}
       {error && <p>Error: {error}</p>}
-      
+
       <h3>Your Playlists</h3>
       <ul>
         {playlists.map(playlist => (
@@ -870,7 +870,7 @@ class MockSpotiByeAPI extends SpotiByeAPI {
   async getPlaylists() {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     return [
       {
         id: 'mock-playlist-1',
@@ -889,7 +889,7 @@ class MockSpotiByeAPI extends SpotiByeAPI {
 
   async analyzePlaylist(playlistId) {
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     return {
       playlist_id: playlistId,
       total_tracks: 25,

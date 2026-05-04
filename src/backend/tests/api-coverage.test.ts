@@ -70,7 +70,7 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should not return 404 (endpoint exists)
         expect(response.status).not.toBe(404);
         expect([200, 400, 401, 500]).toContain(response.status);
@@ -93,7 +93,7 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should not return 404 (endpoint exists)
         expect(response.status).not.toBe(404);
         expect([200, 400, 401, 404, 500]).toContain(response.status);
@@ -115,7 +115,7 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should not return 404 (endpoint exists)
         expect(response.status).not.toBe(404);
         expect([200, 400, 401, 404, 500]).toContain(response.status);
@@ -136,7 +136,7 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should not return 404 (endpoint exists)
         expect(response.status).not.toBe(404);
         expect([200, 400, 401, 404, 500]).toContain(response.status);
@@ -155,7 +155,7 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Health endpoint should work
         expect(response.status).toBe(200);
       }
@@ -179,10 +179,10 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         if (response.status >= 400) {
           const data = await response.json() as any;
-          
+
           // Error responses should have consistent structure
           if (response.status === 404) {
             expect(data).toHaveProperty('error');
@@ -216,10 +216,10 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         if (response.status === 200) {
           const data = await response.json();
-          
+
           // Success responses should have consistent structure
           if (req.path === '/health') {
             expect(data).toHaveProperty('status', 'healthy');
@@ -254,7 +254,7 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Protected endpoints should require authentication
         expect([401, 500]).toContain(response.status);
       }
@@ -275,7 +275,7 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Public endpoints should not require authentication
         expect(response.status).not.toBe(401);
       }
@@ -299,7 +299,7 @@ describe('API Coverage Tests', () => {
         });
 
         const response = await app.fetch(request, mockEnv);
-        
+
         // Should include CORS headers
         expect(response.headers.get('access-control-allow-origin')).toBeTruthy();
       }
@@ -313,7 +313,7 @@ describe('API Coverage Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      
+
       // Should return JSON content type
       expect(response.headers.get('content-type')).toContain('application/json');
     });

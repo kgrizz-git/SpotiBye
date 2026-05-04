@@ -5,12 +5,12 @@ import type { ErrorResponse } from '../types/api';
 export const errorHandler: ErrorHandler = (err, c) => {
   console.error('Error occurred:', err);
   const requestId = crypto.randomUUID();
-  
+
   // Default error response
   let status = 500;
   let message = 'Internal Server Error';
   let code = 'INTERNAL_ERROR';
-  
+
   // Preserve explicit HTTP statuses thrown by middleware/routes (e.g. auth 401).
   if (err instanceof HTTPException) {
     status = err.status;
@@ -39,7 +39,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
     message = 'Not Found';
     code = 'NOT_FOUND';
   }
-  
+
   const errorResponse: ErrorResponse = {
     error: {
       code,
@@ -52,6 +52,6 @@ export const errorHandler: ErrorHandler = (err, c) => {
       },
     },
   };
-  
+
   return c.json(errorResponse, status);
 };

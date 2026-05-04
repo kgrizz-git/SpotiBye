@@ -205,14 +205,14 @@ class SpotiByeAPI:
     def __init__(self, base_url, access_token):
         self.base_url = base_url
         self.headers = {"Authorization": f"Bearer {access_token}"}
-    
+
     def get_playlists(self):
         response = requests.get(f"{self.base_url}/api/playlists", headers=self.headers)
         return response.json()
-    
+
     def start_analysis(self, playlist_id):
         data = {"playlist_id": playlist_id, "include_reccobeats": True}
-        response = requests.post(f"{self.base_url}/api/analysis/start", 
+        response = requests.post(f"{self.base_url}/api/analysis/start",
                                headers=self.headers, json=data)
         return response.json()
 
@@ -232,14 +232,14 @@ class SpotiByeAPI {
             'Content-Type': 'application/json'
         };
     }
-    
+
     async getPlaylists() {
         const response = await fetch(`${this.baseUrl}/api/playlists`, {
             headers: this.headers
         });
         return response.json();
     }
-    
+
     async startAnalysis(playlistId) {
         const response = await fetch(`${this.baseUrl}/api/analysis/start`, {
             method: 'POST',

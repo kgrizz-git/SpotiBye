@@ -128,7 +128,7 @@ RECOCOBEATS_API_KEY = ""
    # Create KV namespaces
    wrangler kv:namespace create "CACHE_KV"
    wrangler kv:namespace create "SESSIONS_KV"
-   
+
    # Create preview namespaces
    wrangler kv:namespace create "CACHE_KV" --preview
    wrangler kv:namespace create "SESSIONS_KV" --preview
@@ -190,7 +190,7 @@ The application validates required variables on startup:
 // Required environment variables
 const requiredVars = [
   'ENVIRONMENT',
-  'SPOTIFY_CLIENT_ID', 
+  'SPOTIFY_CLIENT_ID',
   'SPOTIFY_CLIENT_SECRET',
   'JWT_SECRET'
 ];

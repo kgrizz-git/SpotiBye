@@ -9,23 +9,23 @@ import type { Variables } from '../types/variables';
 
 export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) => {
   const authHeader = c.req.header('Authorization');
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new HTTPException(401, { message: 'Missing or invalid authorization header' });
   }
-  
+
   const token = authHeader.substring(7);
   const jwtService = new JWTService(c.env.JWT_SECRET);
-  
+
   try {
     const payload = await jwtService.verifyToken(token) as JWTPayload;
-    
+
     // Get session data
     const sessionData = await c.env.SESSIONS_KV.get(payload.session_id);
     if (!sessionData) {
       throw new HTTPException(401, { message: 'Session expired or invalid' });
     }
-    
+
     let session = JSON.parse(sessionData);
 
     // Refresh the Spotify access token transparently when it expires.
@@ -52,7 +52,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
         throw new HTTPException(401, { message: 'Token expired' });
       }
     }
-    
+
     // Add user and session info to context
     c.set('user', {
       id: payload.sub,
@@ -62,7 +62,7 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
     });
     c.set('session_id', payload.session_id);
     c.set('access_token', session.access_token);
-    
+
     await next();
   } catch (error) {
     if (error instanceof HTTPException) {

@@ -57,8 +57,8 @@ describe('Authentication Flow Tests', () => {
       const loginRequest = new Request('http://localhost/auth/spotify/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          redirect_uri: 'http://localhost:3000/callback' 
+        body: JSON.stringify({
+          redirect_uri: 'http://localhost:3000/callback'
         })
       });
 
@@ -68,9 +68,9 @@ describe('Authentication Flow Tests', () => {
       expect(loginResponse.status).toBe(200);
       expect(loginData.data).toHaveProperty('auth_url');
       expect(loginData.data).toHaveProperty('state');
-      
+
       const { auth_url, state } = loginData.data;
-      
+
       // Verify auth URL structure
       expect(auth_url).toContain('accounts.spotify.com/authorize');
       expect(auth_url).toContain('client_id=test-client-id');
@@ -109,13 +109,13 @@ describe('Authentication Flow Tests', () => {
       const refreshRequest = new Request('http://localhost/auth/spotify/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          refresh_token: 'test-refresh-token' 
+        body: JSON.stringify({
+          refresh_token: 'test-refresh-token'
         })
       });
 
       const refreshResponse = await app.fetch(refreshRequest, mockEnv);
-      
+
       // Without a valid auth session this can now return 401 instead of being masked as 500.
       expect([200, 400, 401, 500]).toContain(refreshResponse.status);
     });
@@ -143,7 +143,7 @@ describe('Authentication Flow Tests', () => {
       });
 
       const protectedResponse = await app.fetch(protectedRequest, mockEnv);
-      
+
       // Should return 401 (Unauthorized) or 500 (if auth middleware throws unhandled error)
       expect([401, 500]).toContain(protectedResponse.status);
     });
@@ -151,14 +151,14 @@ describe('Authentication Flow Tests', () => {
     it('should reject requests with invalid authorization header', async () => {
       const protectedRequest = new Request('http://localhost/spotify/playlists', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Invalid token',
           'Content-Type': 'application/json'
         }
       });
 
       const protectedResponse = await app.fetch(protectedRequest, mockEnv);
-      
+
       // Should return 401 (Unauthorized) or 500 (if auth middleware throws unhandled error)
       expect([401, 500]).toContain(protectedResponse.status);
     });
@@ -166,14 +166,14 @@ describe('Authentication Flow Tests', () => {
     it('should reject requests with malformed JWT', async () => {
       const protectedRequest = new Request('http://localhost/spotify/playlists', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Authorization': 'Bearer invalid.jwt.token',
           'Content-Type': 'application/json'
         }
       });
 
       const protectedResponse = await app.fetch(protectedRequest, mockEnv);
-      
+
       // Should return 401 (Unauthorized) or 500 (if auth middleware throws unhandled error)
       expect([401, 500]).toContain(protectedResponse.status);
     });
@@ -201,7 +201,7 @@ describe('Authentication Flow Tests', () => {
       });
 
       await app.fetch(callbackRequest, envWithSessions);
-      
+
       // Verify that session storage was attempted (even if it failed due to invalid code)
       // This tests the flow rather than the actual Spotify integration
       expect(mockSessionsKV.put).toHaveBeenCalled();
