@@ -3,16 +3,38 @@ name: Security Scan
 on:
   push:
     branches: [main, develop]
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.ts'
+      - '**.json'
+      - 'requirements.txt'
+      - 'package*.json'
+      - 'src/**'
+      - '.github/workflows/security.yml'
   pull_request:
     branches: [main, develop]
-  schedule:
-    - cron: '0 0 * * 1'  # Weekly on Monday
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.ts'
+      - '**.json'
+      - 'requirements.txt'
+      - 'package*.json'
+      - 'src/**'
+      - '.github/workflows/security.yml'
+  # Removed scheduled runs to reduce Actions usage
+  # Schedule can be re-enabled if needed: cron: '0 0 1 * *' (monthly)
   workflow_dispatch:
 
 permissions:
   contents: read
   security-events: write
   actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Secret Scanning
