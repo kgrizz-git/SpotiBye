@@ -91,7 +91,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      await response.json();
 
       // Should return 401 or 500 due to missing auth token
       expect([401, 500]).toContain(response.status);
