@@ -1,0 +1,228 @@
+{
+  "_meta": {
+    "description": "Internal import graph for SpotiBye. Keys are source files; values are the internal project files they import. Third-party packages are excluded. Generated from actual import statements.",
+    "entrypoint": "run_frontend_backend.py",
+    "last_updated": "2026-05",
+    "notes": {
+      "dead_code": ["src/backend/services/reccobeats.ts — test stub, never imported by any route"],
+      "http_boundary": "src/frontend/services/backend_client.py is the only file that crosses the Python→Cloudflare HTTP boundary"
+    }
+  },
+  "run_frontend_backend.py": [
+    "src/frontend/app/__init__.py"
+  ],
+  "src/frontend/app/__init__.py": [
+    "src/frontend/app/backend_app.py"
+  ],
+  "src/frontend/app/backend_app.py": [
+    "src/frontend/auth/backend_auth.py",
+    "src/frontend/auth/backend_login_screen.py",
+    "src/frontend/services/backend_client.py",
+    "src/frontend/caching/backend_cache.py",
+    "src/frontend/config/backend_config.py",
+    "src/frontend/screens/backend_main_screen_adapter.py",
+    "src/frontend/screens/cache_explorer_adapter.py",
+    "src/frontend/ui/backend_selector_popup.py",
+    "src/frontend/ui/backend_cache_explorer.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/utils/platform_utils.py"
+  ],
+  "src/frontend/auth/backend_auth.py": [
+    "src/frontend/services/backend_client.py",
+    "src/frontend/config/backend_config.py"
+  ],
+  "src/frontend/auth/backend_login_screen.py": [
+    "src/frontend/auth/backend_auth.py",
+    "src/frontend/services/backend_client.py",
+    "src/frontend/utils/network_utils.py"
+  ],
+  "src/frontend/services/backend_client.py": [
+    "src/frontend/config/backend_config.py"
+  ],
+  "src/frontend/services/reccobeats_backend.py": [
+    "src/frontend/services/backend_client.py",
+    "src/frontend/utils/network_utils.py"
+  ],
+  "src/frontend/caching/backend_cache.py": [
+    "src/frontend/config/backend_config.py",
+    "src/frontend/services/backend_client.py"
+  ],
+  "src/frontend/config/backend_config.py": [],
+  "src/frontend/screens/backend_main_screen_adapter.py": [
+    "src/frontend/services/backend_client.py",
+    "src/frontend/services/reccobeats_backend.py",
+    "src/frontend/utils/network_utils.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/screens/main_screen.py"
+  ],
+  "src/frontend/screens/cache_explorer_adapter.py": [
+    "src/frontend/ui/backend_cache_explorer.py",
+    "src/frontend/config/backend_config.py",
+    "src/spotify_playlist_exporter_v2/ui/cache_explorer.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/frontend/ui/backend_selector_popup.py": [
+    "src/frontend/config/backend_config.py",
+    "src/frontend/services/backend_client.py"
+  ],
+  "src/frontend/ui/backend_cache_explorer.py": [
+    "src/spotify_playlist_exporter_v2/ui/cache_explorer.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/frontend/utils/network_utils.py": [],
+  "src/spotify_playlist_exporter_v2/app.py": [
+    "src/spotify_playlist_exporter_v2/config.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/state.py",
+    "src/spotify_playlist_exporter_v2/auth/login_screen.py",
+    "src/spotify_playlist_exporter_v2/screens/main_screen.py",
+    "src/spotify_playlist_exporter_v2/utils/platform_utils.py"
+  ],
+  "src/spotify_playlist_exporter_v2/__main__.py": [
+    "src/spotify_playlist_exporter_v2/app.py"
+  ],
+  "src/spotify_playlist_exporter_v2/config.py": [],
+  "src/spotify_playlist_exporter_v2/logging_config.py": [],
+  "src/spotify_playlist_exporter_v2/state.py": [],
+  "src/spotify_playlist_exporter_v2/auth/login_screen.py": [
+    "src/spotify_playlist_exporter_v2/config.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/state.py",
+    "src/spotify_playlist_exporter_v2/auth/http_handler.py"
+  ],
+  "src/spotify_playlist_exporter_v2/auth/http_handler.py": [
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/state.py"
+  ],
+  "src/spotify_playlist_exporter_v2/screens/main_screen.py": [
+    "src/spotify_playlist_exporter_v2/config.py",
+    "src/spotify_playlist_exporter_v2/auth/login_screen.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/services/reccobeats.py",
+    "src/spotify_playlist_exporter_v2/state.py",
+    "src/spotify_playlist_exporter_v2/caching/persistent_cache.py",
+    "src/spotify_playlist_exporter_v2/caching/track_cache.py",
+    "src/spotify_playlist_exporter_v2/caching/analysis.py",
+    "src/spotify_playlist_exporter_v2/ui/playlist_card.py",
+    "src/spotify_playlist_exporter_v2/ui/cache_explorer.py",
+    "src/spotify_playlist_exporter_v2/ui/cached_async_image.py",
+    "src/spotify_playlist_exporter_v2/ui/hover_manager.py",
+    "src/spotify_playlist_exporter_v2/ui/layouts.py",
+    "src/spotify_playlist_exporter_v2/ui/tracks_window.py"
+  ],
+  "src/spotify_playlist_exporter_v2/services/reccobeats.py": [
+    "src/spotify_playlist_exporter_v2/config.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/spotify_playlist_exporter_v2/caching/persistent_cache.py": [
+    "src/spotify_playlist_exporter_v2/config.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/spotify_playlist_exporter_v2/caching/track_cache.py": [
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/caching/persistent_cache.py"
+  ],
+  "src/spotify_playlist_exporter_v2/caching/analysis.py": [
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/state.py",
+    "src/spotify_playlist_exporter_v2/caching/persistent_cache.py"
+  ],
+  "src/spotify_playlist_exporter_v2/ui/playlist_card.py": [
+    "src/spotify_playlist_exporter_v2/caching/analysis.py",
+    "src/spotify_playlist_exporter_v2/caching/persistent_cache.py",
+    "src/spotify_playlist_exporter_v2/caching/track_cache.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/spotify_playlist_exporter_v2/ui/cache_explorer.py": [
+    "src/spotify_playlist_exporter_v2/caching/persistent_cache.py",
+    "src/spotify_playlist_exporter_v2/caching/track_cache.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/spotify_playlist_exporter_v2/ui/cached_async_image.py": [
+    "src/spotify_playlist_exporter_v2/caching/persistent_cache.py",
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/spotify_playlist_exporter_v2/ui/hover_manager.py": [
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/spotify_playlist_exporter_v2/ui/layouts.py": [
+    "src/spotify_playlist_exporter_v2/logging_config.py"
+  ],
+  "src/spotify_playlist_exporter_v2/ui/tracks_window.py": [
+    "src/spotify_playlist_exporter_v2/logging_config.py",
+    "src/spotify_playlist_exporter_v2/auth/login_screen.py"
+  ],
+  "src/spotify_playlist_exporter_v2/utils/platform_utils.py": [],
+  "src/backend/index.ts": [
+    "src/backend/routes/auth.ts",
+    "src/backend/routes/spotify.ts",
+    "src/backend/routes/analysis.ts",
+    "src/backend/routes/export.ts",
+    "src/backend/middleware/error.ts"
+  ],
+  "src/backend/middleware/auth.ts": [
+    "src/backend/services/jwt.ts",
+    "src/backend/services/spotify-auth.ts",
+    "src/backend/types/env.ts",
+    "src/backend/types/auth.ts",
+    "src/backend/types/variables.ts"
+  ],
+  "src/backend/middleware/error.ts": [
+    "src/backend/types/api.ts"
+  ],
+  "src/backend/routes/auth.ts": [
+    "src/backend/middleware/auth.ts",
+    "src/backend/services/spotify-auth.ts",
+    "src/backend/services/jwt.ts",
+    "src/backend/services/cache.ts",
+    "src/backend/types/env.ts",
+    "src/backend/types/auth.ts"
+  ],
+  "src/backend/routes/spotify.ts": [
+    "src/backend/middleware/auth.ts",
+    "src/backend/services/spotify.ts",
+    "src/backend/services/cache.ts",
+    "src/backend/types/env.ts",
+    "src/backend/types/variables.ts",
+    "src/backend/types/spotify.ts"
+  ],
+  "src/backend/routes/analysis.ts": [
+    "src/backend/middleware/auth.ts",
+    "src/backend/services/analysis.ts",
+    "src/backend/services/cache.ts",
+    "src/backend/types/env.ts",
+    "src/backend/types/variables.ts"
+  ],
+  "src/backend/routes/export.ts": [
+    "src/backend/middleware/auth.ts",
+    "src/backend/services/export.ts",
+    "src/backend/services/cache.ts",
+    "src/backend/types/env.ts",
+    "src/backend/types/variables.ts"
+  ],
+  "src/backend/services/spotify.ts": [
+    "src/backend/types/spotify.ts",
+    "src/backend/types/spotify-api.ts"
+  ],
+  "src/backend/services/spotify-auth.ts": [
+    "src/backend/types/auth.ts",
+    "src/backend/types/spotify.ts"
+  ],
+  "src/backend/services/jwt.ts": [
+    "src/backend/types/auth.ts"
+  ],
+  "src/backend/services/cache.ts": [],
+  "src/backend/services/analysis.ts": [
+    "src/backend/services/spotify.ts"
+  ],
+  "src/backend/services/export.ts": [
+    "src/backend/services/spotify.ts"
+  ],
+  "src/backend/services/reccobeats.ts": [],
+  "src/backend/types/auth.ts": [],
+  "src/backend/types/spotify.ts": [],
+  "src/backend/types/spotify-api.ts": [],
+  "src/backend/types/env.ts": [],
+  "src/backend/types/variables.ts": [],
+  "src/backend/types/api.ts": []
+}

@@ -30,11 +30,15 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 | `CHANGELOG.md` | User-visible changes by release |
 | `SECURITY.md` | Security policy |
 | `.github/copilot-instructions.md` | Coding conventions and golden principle pointers |
+| `dev-docs/code-map.md` | **Start here for navigation** — file index, Mermaid diagrams, and role of every source file |
+| `dev-docs/dependency-graph.json` | Machine-readable import graph (file → internal deps); use for impact analysis and dead-code detection |
 
 ---
 
 ## Key Design Docs
 
+- **File map & diagrams:** [dev-docs/code-map.md](dev-docs/code-map.md) — every source file, its role, and Mermaid import graphs
+- **Import graph (machine-readable):** [dev-docs/dependency-graph.json](dev-docs/dependency-graph.json) — JSON adjacency list for impact analysis
 - Architecture decision: [docs/design-docs/cloudflare-worker-choice.md](docs/design-docs/cloudflare-worker-choice.md)
 - Resumable export: [docs/design-docs/resumable-export-cursors.md](docs/design-docs/resumable-export-cursors.md)
 - Spotify API migration notes: [docs/february-2026-spotify-migration-findings.md](docs/february-2026-spotify-migration-findings.md)
