@@ -8,7 +8,7 @@ Recent GitHub Actions runs show both the **Backend (TypeScript)** and **Frontend
 ---
 
 ## 🔴 1. Backend TypeScript Compilation Failures
-**Symptom:** `tsc` exits with ~80+ type errors across multiple files.  
+**Symptom:** `tsc` exits with ~80+ type errors across multiple files.
 **Root Causes & Fixes:**
 
 ### A. Incorrect Hono Response Signatures ✅ FIXED
@@ -56,7 +56,7 @@ Recent GitHub Actions runs show both the **Backend (TypeScript)** and **Frontend
 ---
 
 ## 🔴 2. Frontend Python Collection Failure
-**Symptom:** `pytest src/frontend/tests/` exits with code `102`.  
+**Symptom:** `pytest src/frontend/tests/` exits with code `102`.
 **Root Cause:** Exit code `102` in pytest universally indicates a **collection failure**, almost always triggered by:
 - Import errors (`ModuleNotFoundError`, `ImportError`)
 - Circular imports in `conftest.py` or test modules
@@ -68,7 +68,7 @@ Recent GitHub Actions runs show both the **Backend (TypeScript)** and **Frontend
    ```python
    # ❌ Fails on some runners
    from .services.spotify_service import fetch_playlists
-   
+
    # ✅ Works reliably
    from src.frontend.services.spotify_service import fetch_playlists
    ```

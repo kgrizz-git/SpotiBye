@@ -35,14 +35,14 @@ repos:
         name: Gitleaks Secret Scan
         description: Detect hardcoded secrets using Gitleaks
 
-  # Semgrep - lightweight SAST
+  # Semgrep - secrets only on commit (fast, no network); full SAST scan deferred to pre-push and CI
   - repo: https://github.com/returntocorp/semgrep
     rev: v1.59.0
     hooks:
       - id: semgrep
-        name: Semgrep SAST
-        description: Run Semgrep static analysis
-        args: ['--config=auto', '--error', '--skip-unknown-extensions']
+        name: Semgrep Secrets (pre-commit)
+        description: Fast secrets-only scan on commit; full SAST runs pre-push and in CI
+        args: ['--config=p/secrets', '--error', '--skip-unknown-extensions']
         exclude: '^tests/|^docs/|^src/backend/docs/|^\.venv/|^venv/|^node_modules/|^build/|^dist/|^backups/|^backend-backup/|^SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY/|^docs/old-docs-backup/|^srcamas/'
         stages: [pre-commit]
 
@@ -102,6 +102,17 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+        stages: [pre-push]
+
+  # Full Semgrep SAST before push (mirrors CI ruleset)
+  - repo: https://github.com/returntocorp/semgrep
+    rev: v1.59.0
+    hooks:
+      - id: semgrep
+        name: Semgrep SAST (pre-push)
+        description: Full SAST scan matching CI — OWASP Top 10, CWE Top 25, JS/TS/Python
+        args: ['--config=p/security-audit', '--config=p/owasp-top-ten', '--config=p/cwe-top-25', '--error', '--skip-unknown-extensions']
+        exclude: '^tests/|^docs/|^src/backend/docs/|^\.venv/|^venv/|^node_modules/|^build/|^dist/|^backups/|^backend-backup/|^SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY/|^docs/old-docs-backup/|^srcamas/'
         stages: [pre-push]
 
   # Comprehensive security scan before push
