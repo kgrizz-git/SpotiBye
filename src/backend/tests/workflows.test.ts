@@ -36,7 +36,7 @@ describe('Complete Workflow Integration Tests', () => {
       });
 
       const loginResponse = await app.fetch(loginRequest, mockEnv);
-      const loginData = await loginResponse.json();
+      const loginData = (await loginResponse.json()) as any;
 
       expect(loginResponse.status).toBe(200);
       expect(loginData.data).toHaveProperty('auth_url');
@@ -55,7 +55,7 @@ describe('Complete Workflow Integration Tests', () => {
       });
 
       const callbackResponse = await app.fetch(callbackRequest, mockEnv);
-      const callbackData = await callbackResponse.json();
+      const callbackData = (await callbackResponse.json()) as any;
 
       expect(callbackResponse.status).toBe(400);
       expect(callbackData.error).toHaveProperty('code', 'OAUTH_ERROR');
@@ -227,7 +227,7 @@ describe('Complete Workflow Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data).toHaveProperty('status', 'healthy');

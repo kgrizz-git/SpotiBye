@@ -116,7 +116,7 @@ describe('Spotify Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(Array.isArray(data.data)).toBe(true);
@@ -172,7 +172,7 @@ describe('Spotify Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(Array.isArray(data.data)).toBe(true);
@@ -194,7 +194,7 @@ describe('Spotify Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('id', 'playlist1');
@@ -211,7 +211,7 @@ describe('Spotify Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('id', 'playlist1');
@@ -229,7 +229,7 @@ describe('Spotify Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('items');
@@ -250,7 +250,7 @@ describe('Spotify Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('id', 'track1');
@@ -269,7 +269,7 @@ describe('Spotify Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('danceability');

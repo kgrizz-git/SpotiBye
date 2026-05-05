@@ -14,6 +14,13 @@ import type {
   SpotifyAudioFeatures,
   SpotifyPlaylistTrackItem,
 } from '../types/spotify';
+import type {
+  SpotifyPlaylistsResponse,
+  SpotifyPlaylistResponse,
+  SpotifyTrackResponse,
+  SpotifyAudioFeaturesResponse,
+} from '../types/spotify-api';
+import { parseSpotifyResponse } from '../types/spotify-api';
 
 export interface NormalizedPlaylistItemsResponse {
   href?: string;
@@ -35,14 +42,17 @@ export class SpotifyService {
     url.searchParams.set('offset', offset.toString());
 
     const response = await this.fetchWithRetry(url.toString());
-    const data = await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<SpotifyPlaylistsResponse>(rawData, ['items', 'total']);
 
-    return data.items;
+    return rawData.items as SpotifyPlaylist[];
   }
 
   async getPlaylist(playlistId: string): Promise<SpotifyPlaylist> {
     const response = await this.fetchWithRetry(`${this.baseUrl}/playlists/${playlistId}`);
-    return await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<SpotifyPlaylistResponse>(rawData, ['id', 'name', 'owner']);
+    return rawData as SpotifyPlaylist;
   }
 
   async getPlaylistTracks(playlistId: string, limit: number = 50, offset: number = 0): Promise<NormalizedPlaylistItemsResponse> {
@@ -51,8 +61,9 @@ export class SpotifyService {
     url.searchParams.set('offset', offset.toString());
 
     const response = await this.fetchWithRetry(url.toString());
-    const data = await response.json();
-    return this.normalizePlaylistItemsResponse(data);
+    const rawData = await response.json();
+    parseSpotifyResponse<Record<string, unknown>>(rawData, ['items', 'total']);
+    return this.normalizePlaylistItemsResponse(rawData);
   }
 
   private normalizePlaylistItemsResponse(data: any): NormalizedPlaylistItemsResponse {
@@ -81,12 +92,16 @@ export class SpotifyService {
 
   async getTrack(trackId: string): Promise<SpotifyTrack> {
     const response = await this.fetchWithRetry(`${this.baseUrl}/tracks/${trackId}`);
-    return await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<SpotifyTrackResponse>(rawData, ['id', 'name', 'artists', 'album']);
+    return rawData as SpotifyTrack;
   }
 
   async getAudioFeatures(trackId: string): Promise<SpotifyAudioFeatures> {
     const response = await this.fetchWithRetry(`${this.baseUrl}/audio-features/${trackId}`);
-    return await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<Record<string, unknown>>(rawData, ['id']);
+    return rawData as unknown as SpotifyAudioFeatures;
   }
 
   async getMultipleAudioFeatures(trackIds: string[]): Promise<SpotifyAudioFeatures[]> {
@@ -94,9 +109,10 @@ export class SpotifyService {
     url.searchParams.set('ids', trackIds.join(','));
 
     const response = await this.fetchWithRetry(url.toString());
-    const data = await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<SpotifyAudioFeaturesResponse>(rawData, ['audio_features']);
 
-    return data.audio_features;
+    return rawData.audio_features as unknown as SpotifyAudioFeatures[];
   }
 
   private async fetchWithRetry(url: string, retries: number = 3): Promise<Response> {

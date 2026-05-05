@@ -100,7 +100,7 @@ describe('Analysis Routes', () => {
       }));
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('job_id');
@@ -138,7 +138,7 @@ describe('Analysis Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('job_id');
@@ -158,7 +158,7 @@ describe('Analysis Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(404);
       expect(data.error).toHaveProperty('code', 'ANALYSIS_NOT_FOUND');
@@ -176,7 +176,7 @@ describe('Analysis Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(404);
       expect(data.error).toHaveProperty('code', 'ANALYSIS_RESULTS_NOT_FOUND');
@@ -199,7 +199,7 @@ describe('Analysis Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('status', 'processing');

@@ -1,4 +1,5 @@
 import type { ErrorHandler } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { HTTPException } from 'hono/http-exception';
 import type { ErrorResponse } from '../types/api';
 
@@ -53,5 +54,5 @@ export const errorHandler: ErrorHandler = (err, c) => {
     },
   };
 
-  return c.json(errorResponse, status);
+  return c.json(errorResponse, { status: status as ContentfulStatusCode });
 };

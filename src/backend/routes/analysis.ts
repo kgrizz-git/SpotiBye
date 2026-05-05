@@ -1,10 +1,12 @@
 import { Hono } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { authMiddleware } from '../middleware/auth';
 import { AnalysisService } from '../services/analysis';
 import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
+import type { Variables } from '../types/variables';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
@@ -21,9 +23,9 @@ app.post('/playlist/:id', async (c) => {
 
     // Check if analysis is already in progress or completed
     const statusKey = `analysis:${playlistId}:${userId}:status`;
-    const existingStatus = await cacheService.get(statusKey);
+    const existingStatus = await cacheService.get<Record<string, unknown>>(statusKey);
 
-    if (existingStatus && existingStatus.status !== 'failed') {
+    if (existingStatus && (existingStatus as Record<string, unknown>)?.status !== 'failed') {
       return c.json({
         data: existingStatus,
         meta: { timestamp: new Date().toISOString() }
@@ -62,7 +64,7 @@ app.post('/playlist/:id', async (c) => {
     });
   } catch (error) {
     console.error('Failed to start analysis:', error);
-    return c.json({ error: { code: 'ANALYSIS_START_FAILED', message: 'Failed to start analysis' } }, 500);
+    return c.json({ error: { code: 'ANALYSIS_START_FAILED', message: 'Failed to start analysis' } }, { status: 500 as ContentfulStatusCode });
   }
 });
 
@@ -77,13 +79,13 @@ app.get('/playlist/:id/status', async (c) => {
     const status = await cacheService.get(statusKey);
 
     if (!status) {
-      return c.json({ error: { code: 'ANALYSIS_NOT_FOUND', message: 'Analysis not found' } }, 404);
+      return c.json({ error: { code: 'ANALYSIS_NOT_FOUND', message: 'Analysis not found' } }, { status: 404 as ContentfulStatusCode });
     }
 
     return c.json({ data: status, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get analysis status:', error);
-    return c.json({ error: { code: 'ANALYSIS_STATUS_FAILED', message: 'Failed to get analysis status' } }, 500);
+    return c.json({ error: { code: 'ANALYSIS_STATUS_FAILED', message: 'Failed to get analysis status' } }, { status: 500 as ContentfulStatusCode });
   }
 });
 
@@ -98,13 +100,13 @@ app.get('/playlist/:id/results', async (c) => {
     const results = await cacheService.get(resultsKey);
 
     if (!results) {
-      return c.json({ error: { code: 'ANALYSIS_RESULTS_NOT_FOUND', message: 'Analysis results not found' } }, 404);
+      return c.json({ error: { code: 'ANALYSIS_RESULTS_NOT_FOUND', message: 'Analysis results not found' } }, { status: 404 as ContentfulStatusCode });
     }
 
     return c.json({ data: results, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get analysis results:', error);
-    return c.json({ error: { code: 'ANALYSIS_RESULTS_FAILED', message: 'Failed to get analysis results' } }, 500);
+    return c.json({ error: { code: 'ANALYSIS_RESULTS_FAILED', message: 'Failed to get analysis results' } }, { status: 500 as ContentfulStatusCode });
   }
 });
 
@@ -126,7 +128,7 @@ app.delete('/playlist/:id', async (c) => {
     return c.json({ data: { message: 'Analysis deleted successfully' } });
   } catch (error) {
     console.error('Failed to delete analysis:', error);
-    return c.json({ error: { code: 'ANALYSIS_DELETE_FAILED', message: 'Failed to delete analysis' } }, 500);
+    return c.json({ error: { code: 'ANALYSIS_DELETE_FAILED', message: 'Failed to delete analysis' } }, { status: 500 as ContentfulStatusCode });
   }
 });
 

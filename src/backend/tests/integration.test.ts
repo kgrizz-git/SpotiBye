@@ -29,7 +29,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data).toHaveProperty('status', 'healthy');
@@ -47,7 +47,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data).toHaveProperty('data');
@@ -64,7 +64,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(400);
       expect(data).toHaveProperty('error');
@@ -158,7 +158,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(404);
       expect(data).toHaveProperty('error');

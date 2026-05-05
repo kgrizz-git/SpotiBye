@@ -6,6 +6,7 @@ import type { Env } from '../types/env';
 import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
 import type { JWTPayload } from '../types/auth';
 import type { Variables } from '../types/variables';
+import type { AuthTokenResponse } from '../types/spotify-api';
 
 export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) => {
   const authHeader = c.req.header('Authorization');
@@ -36,11 +37,11 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
 
       try {
         const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
-        const refreshed = await spotifyAuth.refreshAccessToken(session.refresh_token);
+        const refreshed = await spotifyAuth.refreshAccessToken(session.refresh_token) as AuthTokenResponse;
         session = {
           ...session,
           access_token: refreshed.access_token,
-          refresh_token: (refreshed as any).refresh_token || session.refresh_token,
+          refresh_token: refreshed.refresh_token || session.refresh_token,
           expires_at: Date.now() + (refreshed.expires_in * 1000),
         };
 

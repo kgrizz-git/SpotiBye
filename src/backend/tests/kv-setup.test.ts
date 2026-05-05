@@ -106,7 +106,7 @@ describe('KV Namespace Setup Tests', () => {
       const jwtService = new JWTService('test-secret');
 
       // Test JWT operations
-      const payload = { sub: 'test-user', email: 'test@example.com', name: 'Test User' };
+      const payload = { sub: 'test-user', email: 'test@example.com', name: 'Test User', session_id: 'test-session' };
       const token = await jwtService.generateToken(payload);
 
       expect(typeof token).toBe('string');

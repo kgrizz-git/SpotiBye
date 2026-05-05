@@ -227,7 +227,7 @@ describe('Export Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('job_id');
@@ -250,7 +250,7 @@ describe('Export Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('job_id');
@@ -314,7 +314,7 @@ describe('Export Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(404);
       expect(data.error).toHaveProperty('code', 'EXPORT_DATA_NOT_FOUND');
@@ -331,7 +331,7 @@ describe('Export Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(404);
       expect(data.error).toHaveProperty('code', 'EXPORT_DATA_NOT_FOUND');
@@ -355,7 +355,7 @@ describe('Export Routes', () => {
       });
 
       const firstResponse = await app.request(firstRequest, undefined, mockEnv);
-      const firstData = await firstResponse.json();
+      const firstData = (await firstResponse.json()) as any;
 
       expect(firstResponse.status).toBe(200);
       expect(firstData.data).toHaveProperty('job_id');
@@ -379,7 +379,7 @@ describe('Export Routes', () => {
       });
 
       const secondResponse = await app.request(secondRequest, undefined, mockEnv);
-      const secondData = await secondResponse.json();
+      const secondData = (await secondResponse.json()) as any;
 
       expect(secondResponse.status).toBe(200);
       expect(secondData.data).toHaveProperty('status', 'completed');
@@ -404,7 +404,7 @@ describe('Export Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('job_id');
@@ -428,7 +428,7 @@ describe('Export Routes', () => {
       });
 
       const createResponse = await app.request(createRequest, undefined, mockEnv);
-      const createData = await createResponse.json();
+      const createData = (await createResponse.json()) as any;
 
       const stepOneRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/step`, {
         method: 'POST',
@@ -444,7 +444,7 @@ describe('Export Routes', () => {
       });
 
       const stepOneResponse = await app.request(stepOneRequest, undefined, mockEnv);
-      const stepOneData = await stepOneResponse.json();
+      const stepOneData = (await stepOneResponse.json()) as any;
 
       expect(stepOneResponse.status).toBe(200);
       expect(stepOneData.data).toHaveProperty('status', 'running');
@@ -465,7 +465,7 @@ describe('Export Routes', () => {
       });
 
       const stepTwoResponse = await app.request(stepTwoRequest, undefined, mockEnv);
-      const stepTwoData = await stepTwoResponse.json();
+      const stepTwoData = (await stepTwoResponse.json()) as any;
 
       expect(stepTwoResponse.status).toBe(200);
       expect(stepTwoData.data).toHaveProperty('status', 'completed');
@@ -488,7 +488,7 @@ describe('Export Routes', () => {
       });
 
       const createResponse = await app.request(createRequest, undefined, mockEnv);
-      const createData = await createResponse.json();
+      const createData = (await createResponse.json()) as any;
 
       const firstStepRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/step`, {
         method: 'POST',
@@ -519,7 +519,7 @@ describe('Export Routes', () => {
       });
 
       const staleResponse = await app.request(staleStepRequest, undefined, mockEnv);
-      const staleData = await staleResponse.json();
+      const staleData = (await staleResponse.json()) as any;
 
       expect(staleResponse.status).toBe(409);
       expect(staleData.error).toHaveProperty('code', 'EXPORT_JOB_CONFLICT');
@@ -541,7 +541,7 @@ describe('Export Routes', () => {
       });
 
       const createResponse = await app.request(createRequest, undefined, mockEnv);
-      const createData = await createResponse.json();
+      const createData = (await createResponse.json()) as any;
 
       const statusRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/status`, {
         method: 'GET',
@@ -552,7 +552,7 @@ describe('Export Routes', () => {
       });
 
       const statusResponse = await app.request(statusRequest, undefined, mockEnv);
-      const statusData = await statusResponse.json();
+      const statusData = (await statusResponse.json()) as any;
 
       expect(statusResponse.status).toBe(200);
       expect(statusData.data).toHaveProperty('job_id', createData.data.job_id);
@@ -572,7 +572,7 @@ describe('Export Routes', () => {
       });
 
       const createResponse = await app.request(createRequest, undefined, mockEnv);
-      const createData = await createResponse.json();
+      const createData = (await createResponse.json()) as any;
 
       const stepRequest = new Request(`http://localhost/export/jobs/${createData.data.job_id}/step`, {
         method: 'POST',
@@ -616,7 +616,7 @@ describe('Export Routes', () => {
       });
 
       const response = await app.request(request, undefined, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(404);
       expect(data.error).toHaveProperty('code', 'EXPORT_NOT_FOUND');
