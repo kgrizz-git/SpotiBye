@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 
-from spotify_playlist_exporter_v2.logging_config import logger
+from ...shared.logging_config import logger
 
 try:
     from ..ui.backend_cache_explorer import BackendCacheExplorerPopup
@@ -16,7 +16,7 @@ except ImportError:
     BACKEND_AVAILABLE = False
     logger.debug("Backend cache explorer not available")
 
-from spotify_playlist_exporter_v2.ui.cache_explorer import CacheExplorerPopup
+from ..ui.cache_explorer import CacheExplorerPopup
 
 
 class CacheExplorerAdapter:

@@ -34,8 +34,8 @@ from ..ui.backend_selector_popup import BackendSelectorPopup
 
 # Import original components for compatibility
 from ...spotify_playlist_exporter_v2.screens.main_screen import MainScreen
-from ...spotify_playlist_exporter_v2.logging_config import logger as original_logger
-from ...spotify_playlist_exporter_v2.utils.platform_utils import (
+from ...shared.logging_config import logger as original_logger
+from ..utils.platform_utils import (
     diagnose_macos_issues,
     set_window_basics,
 )
@@ -301,7 +301,7 @@ class BackendSpotifyExporterApp(MDApp):
         """Handle app stop event."""
         try:
             # Cancel any ongoing export jobs
-            from ...spotify_playlist_exporter_v2.state import current_export_job
+            from ..state import current_export_job
 
             if current_export_job:
                 current_export_job["cancelled"] = True

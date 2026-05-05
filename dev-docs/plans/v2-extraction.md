@@ -9,176 +9,113 @@
 
 ---
 
-## Current coupling snapshot
+## Coupling snapshot — after Phase 1–3
 
-| Frontend file | v2 symbol imported | v2 source |
+All items below were resolved. The only remaining v2 import in `src/frontend/` is:
+
+| Frontend file | v2 symbol | v2 source |
 |---|---|---|
 | `app/backend_app.py` | `MainScreen` | `screens/main_screen.py` (4 269 lines) |
-| `app/backend_app.py` | `logger` | `logging_config.py` (21 lines) |
-| `app/backend_app.py` | `diagnose_macos_issues`, `set_window_basics` | `utils/platform_utils.py` |
-| `app/backend_app.py` | `current_export_job` | `state.py` (17 lines) |
-| `screens/backend_main_screen_adapter.py` | `logger` | `logging_config.py` |
-| `screens/cache_explorer_adapter.py` | `logger`, `CacheExplorerPopup` | `logging_config.py`, `ui/cache_explorer.py` |
-| `ui/backend_cache_explorer.py` | `logger`, `CacheExplorerPopup` | `logging_config.py`, `ui/cache_explorer.py` |
 
-The v2 files with no v2-internal imports at all (safe to move with a shim left behind):
+Original coupling (for reference):
 
-| File | Lines | Internal deps |
-|---|---|---|
-| `logging_config.py` | 21 | none |
-| `state.py` | 17 | none |
-| `utils/platform_utils.py` | 412 | none |
-| `config.py` | 56 | none |
+| Frontend file | v2 symbol imported | v2 source | Status |
+|---|---|---|---|
+| `app/backend_app.py` | `MainScreen` | `screens/main_screen.py` | **Phase 4** |
+| `app/backend_app.py` | `logger` | `logging_config.py` | ✅ Phase 1-A |
+| `app/backend_app.py` | `diagnose_macos_issues`, `set_window_basics` | `utils/platform_utils.py` | ✅ Phase 1-B |
+| `app/backend_app.py` | `current_export_job` | `state.py` | ✅ Phase 1-C |
+| `screens/backend_main_screen_adapter.py` | `logger` | `logging_config.py` | ✅ Phase 1-A |
+| `screens/cache_explorer_adapter.py` | `logger`, `CacheExplorerPopup` | `logging_config.py`, `ui/cache_explorer.py` | ✅ Phase 1-A / 3 |
+| `ui/backend_cache_explorer.py` | `logger`, `CacheExplorerPopup` | `logging_config.py`, `ui/cache_explorer.py` | ✅ Phase 1-A / 3 |
 
 ---
 
-## Phase 1 — Leaf extractions (zero risk)
+## ✅ Phase 1 — Leaf extractions (DONE, 2026-05-05)
 
-**What:** Move files that have no internal v2 dependencies into `src/shared/` (for things
-used by both v2 and frontend) or `src/frontend/utils/` (for things only used by
-frontend). Leave a one-line re-export shim in the v2 location so the standalone path
-keeps working without any changes.
+### ✅ 1-A  `logging_config.py` → `src/shared/logging_config.py`
 
-### 1-A  `logging_config.py` → `src/shared/logging_config.py`
-
-`logging_config.py` is imported by every single frontend file and by most of v2. It has
-no deps inside the project. It belongs in `src/shared/`.
-
-Steps:
-1. Create `src/shared/__init__.py` (empty).
-2. Create `src/shared/logging_config.py` — copy the 21-line file verbatim.
-3. Replace `src/spotify_playlist_exporter_v2/logging_config.py` with a one-liner shim:
-   ```python
-   from src.shared.logging_config import configure_logging, logger  # noqa: F401
-   ```
-4. Update all four frontend import sites to use `from src.shared.logging_config import logger`.
-5. Run tests. If green, done.
+- Created `src/shared/__init__.py` and `src/shared/logging_config.py`.
+- `src/spotify_playlist_exporter_v2/logging_config.py` replaced with a 1-line shim:
+  `from shared.logging_config import configure_logging, logger`.
+- All four frontend import sites updated to `from ...shared.logging_config import logger`.
 
 Files changed:
 - `src/shared/logging_config.py` (new)
 - `src/spotify_playlist_exporter_v2/logging_config.py` (shim)
-- `src/frontend/app/backend_app.py` (import)
-- `src/frontend/screens/backend_main_screen_adapter.py` (import)
-- `src/frontend/screens/cache_explorer_adapter.py` (import)
-- `src/frontend/ui/backend_cache_explorer.py` (import)
+- `src/frontend/app/backend_app.py`
+- `src/frontend/screens/backend_main_screen_adapter.py`
+- `src/frontend/screens/cache_explorer_adapter.py`
+- `src/frontend/ui/backend_cache_explorer.py`
 
-### 1-B  `utils/platform_utils.py` → `src/frontend/utils/platform_utils.py`
+### ✅ 1-B  `utils/platform_utils.py` → `src/frontend/utils/platform_utils.py`
 
-`platform_utils.py` is only imported by `backend_app.py` in the frontend path. v2 itself
-never imports it directly (only `app.py` does, which is the standalone entrypoint). It
-logically belongs in frontend utilities.
-
-Steps:
-1. Copy `src/spotify_playlist_exporter_v2/utils/platform_utils.py` to
-   `src/frontend/utils/platform_utils.py` verbatim.
-2. Replace the v2 original with a shim:
-   ```python
-   from src.frontend.utils.platform_utils import *  # noqa: F401,F403
-   ```
-3. Update `backend_app.py` imports to `from src.frontend.utils.platform_utils import ...`.
-4. Run tests.
+- Copied file with internal logger import updated to `from ...shared.logging_config import logger`.
+- `src/spotify_playlist_exporter_v2/utils/platform_utils.py` replaced with a 1-line shim:
+  `from frontend.utils.platform_utils import *`.
+- `backend_app.py` import updated to `from ..utils.platform_utils import ...`.
 
 Files changed:
 - `src/frontend/utils/platform_utils.py` (new)
 - `src/spotify_playlist_exporter_v2/utils/platform_utils.py` (shim)
-- `src/frontend/app/backend_app.py` (import)
+- `src/frontend/app/backend_app.py`
 
-### 1-C  `state.py` → `src/frontend/state.py`
+### ✅ 1-C  `state.py` → `src/frontend/state.py`
 
-`backend_app.py` imports `current_export_job` from `state.py` only to cancel in-flight
-exports. That state variable is only written by `main_screen.py` (v2) but read by the
-frontend. Long-term the backend path should own its own job state.
-
-For now, a minimal safe move:
-1. Create `src/frontend/state.py` containing only the variables the frontend cares about:
-   ```python
-   from typing import Any, Dict, Optional
-   current_export_job: Optional[Dict[str, Any]] = None
-   ```
-2. In `src/spotify_playlist_exporter_v2/state.py`, import and re-export it so `main_screen.py`
-   still writes to the same object:
-   ```python
-   from src.frontend.state import current_export_job  # noqa: F401
-   # remaining v2-only state below
-   auth_token = None
-   ...
-   ```
-3. Update `backend_app.py` to import from `src.frontend.state`.
-4. Run tests.
+- Created `src/frontend/state.py` with `current_export_job: Optional[Dict[str, Any]] = None`.
+- `backend_app.py` lazy import updated to `from ..state import current_export_job`.
+- v2's `state.py` left as-is (its `current_export_job` was already effectively disconnected
+  from the frontend due to `global` rebinding in `main_screen.py`).
 
 Files changed:
 - `src/frontend/state.py` (new)
-- `src/spotify_playlist_exporter_v2/state.py` (partial shim)
-- `src/frontend/app/backend_app.py` (import)
+- `src/frontend/app/backend_app.py`
 
 ---
 
-## Phase 2 — Exception class extraction
+## ✅ Phase 2 — Exception class extraction (DONE, 2026-05-05)
 
-**What:** The top of `screens/main_screen.py` (lines 81–120) defines six exception
-classes that conceptually belong to the export domain, not to the UI layer:
-
-```
-ExportError, InsufficientDiskSpaceError, PermissionError,
-NetworkError, ExportFormatError, ValidationError
-```
-
-These are not imported by any frontend file today, but they should be before we start
-breaking up `main_screen.py`.
-
-Steps:
-1. Create `src/shared/exceptions.py` with those six classes copied verbatim.
-2. At the top of `main_screen.py` add:
-   ```python
-   from src.shared.exceptions import (
-       ExportError, InsufficientDiskSpaceError, PermissionError,
-       NetworkError, ExportFormatError, ValidationError,
-   )
-   ```
-   and remove the class bodies from `main_screen.py`.
-3. Run tests — standalone mode must still work (the classes are defined in the same
-   namespace they were before from v2's perspective).
+- Created `src/shared/exceptions.py` with all six classes:
+  `ExportError`, `InsufficientDiskSpaceError`, `PermissionError`,
+  `NetworkError`, `ExportFormatError`, `ValidationError`.
+- Replaced the 40-line class bodies in `main_screen.py` (lines 80–119) with
+  `from shared.exceptions import (...)`.
 
 Files changed:
 - `src/shared/exceptions.py` (new)
-- `src/spotify_playlist_exporter_v2/screens/main_screen.py` (remove class bodies, add import)
+- `src/spotify_playlist_exporter_v2/screens/main_screen.py`
 
 ---
 
-## Phase 3 — CacheExplorerPopup: replace inheritance with composition
+## ✅ Phase 3 — CacheExplorerPopup: frontend-native version (DONE, 2026-05-05)
 
-**What:** `backend_cache_explorer.py` and `cache_explorer_adapter.py` both import
-`CacheExplorerPopup` from v2's `ui/cache_explorer.py`.  `CacheExplorerPopup` depends on
-`PersistentCache` and `track_cache` — disk-level caches that don't exist in the backend
-path.
+**What was discovered:** `BackendCacheExplorerPopup` already inherited from `Popup`
+directly — not from `CacheExplorerPopup`. It embedded `CacheExplorerPopup` as a child
+widget and populated it via `cache_data` attribute + `populate_playlists_column()` calls.
+The disk-cache calls (`PersistentCache`, `get_cached_spotify_track`) lived entirely inside
+the embedded v2 class.
 
-`backend_cache_explorer.py` already subclasses `CacheExplorerPopup` with backend-aware
-overrides. The cleanest path is to promote the backend version to a fully self-contained
-class that doesn't inherit from `CacheExplorerPopup` at all.
-
-### 3-A  Audit what `BackendCacheExplorer` actually overrides
-
-Read `ui/backend_cache_explorer.py` and identify every method that is either overridden
-or called from the parent. Anything not overridden is a v2 disk-cache behaviour that
-needs a backend-API equivalent or can be removed in the backend path.
-
-### 3-B  Rewrite `BackendCacheExplorer` as a standalone Kivy popup
-
-1. Duplicate the relevant UI structure from `CacheExplorerPopup` into
-   `backend_cache_explorer.py` (layout, labels, buttons) — no inheritance from v2.
-2. Replace all disk-cache method calls with `BackendClient` API calls (the cache
-   inspection endpoints the backend already exposes, or raw requests if needed).
-3. Delete the `from ... import CacheExplorerPopup` line from `backend_cache_explorer.py`.
-
-### 3-C  Update `cache_explorer_adapter.py`
-
-Once `BackendCacheExplorer` is self-contained, `cache_explorer_adapter.py` no longer
-needs to import `CacheExplorerPopup` either. Update it to instantiate
-`BackendCacheExplorer` directly.
+**What was done:**
+- Created `src/frontend/ui/cache_explorer.py` — a full reimplementation of
+  `CacheExplorerPopup` with no disk-cache dependencies. Data is injected via:
+  - `cache_data["playlists"]` — playlist list (set by `BackendCacheExplorerPopup`)
+  - `cache_data["tracks_by_playlist"][playlist_id]` — per-playlist track list
+  - `cache_data["features_by_track"][spotify_id]` — per-track ReccoBeats features
+  - Background worker returns an empty structure immediately (no filesystem access).
+- `backend_cache_explorer.py`: updated import to `from .cache_explorer import CacheExplorerPopup`.
+  The monkey-patch on `_on_cache_data_loaded` is retained — it prevents the Clock-scheduled
+  empty payload from overwriting backend playlist data already set synchronously.
+- `cache_explorer_adapter.py`: updated import to `from ..ui.cache_explorer import CacheExplorerPopup`.
+  The no-backend fallback now returns the frontend version (shows empty state gracefully
+  rather than attempting disk access).
+- `test_cache_explorer_mock.py`: updated stale `sys.modules` patch keys to
+  `frontend.ui.cache_explorer` and `shared.logging_config`.
 
 Files changed:
-- `src/frontend/ui/backend_cache_explorer.py` (rewrite, no v2 inheritance)
-- `src/frontend/screens/cache_explorer_adapter.py` (remove v2 import)
+- `src/frontend/ui/cache_explorer.py` (new)
+- `src/frontend/ui/backend_cache_explorer.py` (import only)
+- `src/frontend/screens/cache_explorer_adapter.py` (import only)
+- `src/frontend/tests/test_cache_explorer_mock.py` (mock paths)
 
 ---
 
@@ -245,7 +182,7 @@ Files changed across 4-A–4-C:
 
 After all phases above are merged:
 
-1. All `from src.shared.*` and `from src.frontend.*` imports in the v2 shim files can
+1. All `from shared.*` and `from frontend.*` imports in the v2 shim files can
    be replaced with the original local definitions (reverting the shims), OR the shims
    can be left permanently — either is fine. The standalone path was never broken.
 2. Run the full test suite including the standalone entrypoint (`python -m
@@ -263,19 +200,14 @@ After all phases above are merged:
 
 ## Ordering and risk summary
 
-| Phase | Effort | Risk | Can merge independently |
+| Phase | Effort | Risk | Status |
 |---|---|---|---|
-| 1-A  logging_config | 30 min | very low | yes |
-| 1-B  platform_utils | 30 min | very low | yes |
-| 1-C  state.py | 45 min | low | yes |
-| 2    exceptions | 30 min | low | yes |
-| 3-A  audit cache explorer | 1 h | low | yes (no code changes) |
-| 3-B/C  BackendCacheExplorer rewrite | 2–3 h | medium | yes |
-| 4-A  BackendPlaylistCard | 3–4 h | medium | yes |
-| 4-B  login flow guards | 1–2 h | medium | yes |
-| 4-C  BackendMainScreen | 2–3 h | medium | yes |
-| 5    cleanup + verify | 1 h | low | yes |
-
-Do phases 1-A, 1-B, 1-C, and 2 first — they are mechanical moves with shims and impose
-zero regression risk. Phase 3 and 4 require reading the large files carefully before
-touching them.
+| 1-A  logging_config | 30 min | very low | ✅ done |
+| 1-B  platform_utils | 30 min | very low | ✅ done |
+| 1-C  state.py | 45 min | low | ✅ done |
+| 2    exceptions | 30 min | low | ✅ done |
+| 3    frontend CacheExplorerPopup | 2–3 h | medium | ✅ done |
+| 4-A  BackendPlaylistCard | 3–4 h | medium | pending |
+| 4-B  login flow guards | 1–2 h | medium | pending |
+| 4-C  BackendMainScreen | 2–3 h | medium | pending |
+| 5    cleanup + verify | 1 h | low | pending |

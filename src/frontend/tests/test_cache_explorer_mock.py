@@ -44,9 +44,8 @@ class TestCacheExplorerMock(unittest.TestCase):
         with patch.dict(
             "sys.modules",
             {
-                "spotify_playlist_exporter_v2.ui.cache_explorer": Mock(),
-                "spotify_playlist_exporter_v2.caching.persistent_cache": Mock(),
-                "spotify_playlist_exporter_v2.logging_config": Mock(),
+                "frontend.ui.cache_explorer": Mock(),
+                "shared.logging_config": Mock(),
             },
         ):
             # Mock the backend cache explorer module

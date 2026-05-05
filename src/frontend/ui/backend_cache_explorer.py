@@ -15,8 +15,8 @@ from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.switch import Switch
 
-from spotify_playlist_exporter_v2.ui.cache_explorer import CacheExplorerPopup
-from spotify_playlist_exporter_v2.logging_config import logger
+from ...shared.logging_config import logger
+from .cache_explorer import CacheExplorerPopup
 
 try:
     from ..services.backend_client import BackendClient
