@@ -3,40 +3,6 @@ import { Hono } from 'hono';
 import { analysisRoutes } from '../routes/analysis';
 import type { Env } from '../types/env';
 
-// Mock the services
-vi.mock('../services/reccobeats', () => ({
-  ReccoBeatsService: vi.fn().mockImplementation(() => ({
-    analyzePlaylist: vi.fn().mockResolvedValue({
-      job_id: 'test-job-id',
-      status: 'processing',
-      created_at: new Date().toISOString()
-    }),
-    getAnalysisStatus: vi.fn().mockResolvedValue({
-      job_id: 'test-job-id',
-      status: 'completed',
-      progress: 100,
-      created_at: new Date().toISOString(),
-      completed_at: new Date().toISOString()
-    }),
-    getAnalysisResults: vi.fn().mockResolvedValue({
-      job_id: 'test-job-id',
-      status: 'completed',
-      results: {
-        overall_score: 8.5,
-        danceability: 0.8,
-        energy: 0.7,
-        valence: 0.6,
-        recommendations: [
-          'Great energy level for workouts',
-          'Good variety in tempo'
-        ]
-      },
-      created_at: new Date().toISOString(),
-      completed_at: new Date().toISOString()
-    })
-  }))
-}));
-
 vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation((c, next) => {
     // Mock authenticated user

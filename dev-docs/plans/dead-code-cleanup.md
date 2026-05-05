@@ -17,7 +17,7 @@
 
 ---
 
-## Group 1 — Delete Immediately
+## Group 1 — Delete Immediately - DONE
 
 These files have no imports, no references in any tooling config, and no value at rest.
 
@@ -63,7 +63,7 @@ No `.gitignore` change needed — the rule already exists.
 
 ---
 
-## Group 2 — Delete After One Small Prerequisite
+## Group 2 — Delete After One Small Prerequisite - DONE
 
 ### `src/backend/services/reccobeats.ts`
 
@@ -118,67 +118,44 @@ cat backend-backup/.env   # inspect for real values
 
 ---
 
-## Group 3 — Investigate Before Deleting
+## Group 3 — Investigate Before Deleting - DONE
 
-### `src/frontend/tests/run_tests.py`
+### `src/frontend/tests/run_tests.py` — FIXED
 
-A custom test runner that predates pytest adoption. It instantiates test classes directly (`TestAuthenticationFlow(framework).run_all_tests()`) and manages a `MockBackendServer` lifecycle manually. It is **not** collected by pytest (no `test_` class/function pattern at the top level). However:
+**Original finding:** pytest collected **0 tests** from the 6 files `run_tests.py` orchestrates because every test class had an `__init__` constructor (causes `PytestCollectionWarning` / silent skip).
 
-- `tests/__init__.py` re-exports `MockBackendServer` from `mock_backend.py`
-- `test_framework.py` imports and uses `MockBackendServer`
-- `run_tests.py` is the only file that calls `framework.setup_mock_backend()` / `teardown_mock_backend()` end-to-end
+**Fix applied (2026-05):** Refactored all 6 test classes to use pytest fixtures instead of the custom `BackendTestFramework` runner:
+- Removed `__init__` from all 6 classes (`TestAuthenticationFlow`, `TestUIFunctionality`, `TestPerformance`, `TestCachePerformance`, `TestUIResponsiveness`, `TestConfiguration`)
+- Created `conftest.py` with a session-scoped `mock_backend_server` fixture (uses `port=0` for OS-assigned port)
+- Added `@pytest.fixture(autouse=True)` setup in each class to inject the server and initialize client objects
+- Converted `return False` / `self.framework.end_test()` patterns to `assert` / `pytest.fail()` so test failures propagate correctly
+- Updated `mock_backend.py` to capture actual bound port (`self.port = self.server.server_address[1]`) enabling `port=0`
+- Rewrote `run_tests.py` as a thin subprocess wrapper around `pytest` (backward compat CLI preserved)
+- Fixed a latent test bug: `test_backend_client_configuration` was asserting against `CURRENT_BACKEND_URL` but `BackendClient` hardcodes `http://localhost:8787` as default
 
-**The question:** Are the integration tests in `test_auth.py`, `test_ui.py`, `test_performance.py`, `test_cache.py`, `test_ui_responsiveness.py`, `test_configuration.py` written to work with *both* the custom runner and pytest, or only the custom runner?
-
-If they contain standard `unittest.TestCase` or `def test_*` methods, pytest collects them directly and `run_tests.py` is redundant. If they rely on the `BackendTestFramework` class being pre-configured by `run_tests.py`, they may only run correctly through it.
-
-**Recommended check:**
-```bash
-python -m pytest src/frontend/tests/test_auth.py -v
-```
-If all tests pass, `run_tests.py` is safe to delete. If they error on missing framework state, keep `run_tests.py` and document the two-runner situation.
+**Result:** `pytest src/frontend/tests` now collects and runs **53 tests** (was 0). 52 pass, 1 skipped (psutil not installed).
 
 ---
 
-### `.cursor/rules/` and `.windsurf/rules/`
+### `.cursor/rules/` and `.windsurf/rules/` — KEEP
 
-Twenty-two CodeGuard security rule files exist in both `.cursor/rules/` (`.mdc` format) and `.windsurf/rules/` (`.md` format). These are AI IDE security guidance files — they are consumed by Cursor and Windsurf respectively, not by any build tooling.
-
-**`.cursor/rules/`** — 22 files covering: authentication/MFA, client-side security, input validation, file handling, session management, DevOps/CI-CD, cloud/Kubernetes, hardcoded credentials, data storage, API security, XML/serialization, supply chain, privacy, access control, frameworks, digital certificates, mobile apps, crypto, additional cryptography, logging, IaC security.
-
-**`.windsurf/rules/`** — identical set in `.md` format.
-
-These files are harmless but they add noise to the tree and may confuse agents into thinking they are project-specific constraints rather than generic IDE plug-in configs.
-
-**Options:**
-- If the team uses Claude Code exclusively: delete both directories.
-- If Cursor or Windsurf are used by any team member: keep the relevant one.
-- If unsure: keep both; they are read-only config and do not affect builds or tests.
-
-There is also a `.vscode/settings.json` — that is active and should stay.
+Decision made: keep both AI IDE rule sets. They are harmless, read-only config consumed by Cursor/Windsurf and do not affect builds or tests.
 
 ---
 
-### `src/backend/docs/`
+### `src/backend/docs/` — KEEP (not duplicates)
 
-A second documentation tree embedded inside the backend source tree. Contents:
+**Finding:** Diffed all three overlapping files against their root `docs/` counterparts — all are substantively different:
 
-| File | Notes |
-|------|-------|
-| `README.md` | Backend-specific readme |
-| `api-examples.md` | HTTP request examples |
-| `authentication-flow.md` | May duplicate `docs/authentication-flow.md` |
-| `deployment-configuration.md` | May duplicate `docs/cloudflare-deployment.md` |
-| `environment-variables.md` | Detailed env var reference |
-| `kv-namespace-structure.md` | KV key schema — potentially unique |
-| `monitoring-logging.md` | Logging setup |
-| `openapi.yaml` | OpenAPI 3.x spec for the Worker API |
-| `swagger-ui.html` | Swagger UI served as a static file |
-| `troubleshooting-guide.md` | May duplicate `docs/troubleshooting-network.md` |
+| Backend doc | Root counterpart | Verdict |
+|-------------|-----------------|---------|
+| `authentication-flow.md` (635 lines) | `docs/authentication-flow.md` | Different audience — backend doc is a frontend *developer integration guide*; root doc explains the flow to end users |
+| `troubleshooting-guide.md` (536 lines) | `docs/troubleshooting-network.md` | Backend doc covers Worker-side diagnosis (KV, cold starts, CPU limits); root doc covers user-facing network errors |
+| `deployment-configuration.md` (305 lines) | `docs/cloudflare-deployment.md` | Backend doc covers multi-environment config, secrets, wrangler flags; root doc covers the automated deploy pipeline |
 
-`openapi.yaml` and `kv-namespace-structure.md` are the most likely to be unique. The others may overlap with root `docs/`.
+All 10 files in `src/backend/docs/` (5040 lines total) are unique developer-facing content — env var references, KV key schema, monitoring/logging setup, the OpenAPI spec, and Swagger UI. None duplicate root `docs/`.
 
-**Recommended check:** Diff against root `docs/` counterparts to identify true duplicates, then consolidate. At minimum, `openapi.yaml` and `swagger-ui.html` should move to root `docs/` rather than live inside the TypeScript source tree.
+**Decision: Keep all of `src/backend/docs/`.** The location inside the TypeScript source tree is intentional — these docs are for contributors working on the backend, not for users.
 
 ---
 
