@@ -54,8 +54,8 @@ String[] featuresToDisable = {
 };
 
 for (String feature : featuresToDisable) {
-    try {    
-        dbf.setFeature(feature, false); 
+    try {
+        dbf.setFeature(feature, false);
     } catch (ParserConfigurationException e) {
         logger.info("ParserConfigurationException was thrown. The feature '" + feature
         + "' is probably not supported by your XML processor.");

@@ -63,5 +63,5 @@ This rule advises on secure file upload practices to prevent malicious file atta
   - Provide user reporting mechanisms for illegal content.
   - Use secure extraction methods for compressed files.
 
-Summary:  
+Summary:
 Implement defense-in-depth for file uploads through multi-layered validation, secure storage practices, proper access controls, and comprehensive monitoring. Never rely on single validation methods and always generate safe filenames to prevent attacks.

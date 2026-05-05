@@ -89,7 +89,7 @@ repos:
       - id: python-tests
         name: Python Tests
         description: Run Python test suite before push
-        entry: python -m pytest src/frontend/tests -v --tb=short
+        entry: python -m pytest src/frontend/tests -v --tb=long
         language: system
         pass_filenames: false
         always_run: true
