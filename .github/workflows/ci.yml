@@ -56,4 +56,11 @@ jobs:
           pip install -r requirements.txt
 
       - name: Test
+        env:
+          # Prevent kivy from trying to initialize SDL2/OpenGL on this headless runner.
+          # Without these, importing kivy.uix widgets calls sys.exit() (code 102) and
+          # kills pytest before any tests run. Tests that require a real window are
+          # skipped via KIVY_DISPLAY_AVAILABLE checks in the test files.
+          KIVY_WINDOW: headless
+          KIVY_NO_ENV_CONFIG: "1"
         run: pytest src/frontend/tests/ -v
