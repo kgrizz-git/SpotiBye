@@ -171,23 +171,38 @@ loaded at runtime via `backend_main_screen.py`.  Breaking that inheritance is Ph
 
 ---
 
-## Phase 5 — Remove v2 shims and verify standalone still works
+## ✅ Phase 5 — Remove v2 shims and verify standalone still works (DONE, 2026-05-07)
 
-After all phases above are merged:
+**What was done:**
 
-1. All `from shared.*` and `from frontend.*` imports in the v2 shim files can
-   be replaced with the original local definitions (reverting the shims), OR the shims
-   can be left permanently — either is fine. The standalone path was never broken.
-2. Run the full test suite including the standalone entrypoint (`python -m
-   spotify_playlist_exporter_v2`) to confirm nothing regressed.
-3. `backend_app.py` should no longer import anything from `src/spotify_playlist_exporter_v2/`.
-   Verify with:
-   ```
-   grep -r "spotify_playlist_exporter_v2" src/frontend/
-   ```
-   Expected result: no output.
-4. Update `dev-docs/dependency-graph.json` and `dev-docs/code-map.md` to remove all
-   frontend→v2 edges.
+1. **`ResponsiveGridLayout`** extracted to `src/frontend/ui/layouts.py`. v2's
+   `ui/layouts.py` replaced with a shim: `from frontend.ui.layouts import ResponsiveGridLayout`.
+
+2. **`src/frontend/screens/main_screen.py`** — new backend-mode-only `MainScreen`.
+   Copies the full UI + backend-mode methods from v2's `main_screen.py` but strips all
+   standalone-only code (export_worker, begin_export, persistent_cache, ReccoBeats analysis,
+   PlaylistCard). Zero imports from `spotify_playlist_exporter_v2`. Uses `shared.*`,
+   `frontend.*`, and Kivy only.
+
+3. **`BackendMainScreen`** updated: `from .main_screen import MainScreen` (was v2 import).
+
+4. **Grep check passed**: `grep -r "spotify_playlist_exporter_v2" src/frontend/` → no output.
+
+5. **52 tests passed, 1 skipped** (same as pre-phase baseline).
+
+6. **`dev-docs/dependency-graph.json`** and **`dev-docs/code-map.md`** updated — all
+   frontend→v2 edges removed.
+
+v2's `main_screen.py` was left as-is (full standalone implementation, untouched). The
+existing v2 shims (`logging_config.py`, `utils/platform_utils.py`) were left permanently.
+
+Files changed:
+- `src/frontend/ui/layouts.py` (new)
+- `src/frontend/screens/main_screen.py` (new)
+- `src/frontend/screens/backend_main_screen.py` (import updated)
+- `src/spotify_playlist_exporter_v2/ui/layouts.py` (shim)
+- `dev-docs/dependency-graph.json`
+- `dev-docs/code-map.md`
 
 ---
 
@@ -203,4 +218,4 @@ After all phases above are merged:
 | 4-A  BackendPlaylistCard | 3–4 h | medium | ✅ done |
 | 4-B  login flow guards | 1–2 h | medium | ✅ done (no-op — already guarded) |
 | 4-C  BackendMainScreen | 2–3 h | medium | ✅ done |
-| 5    cleanup + verify | 1 h | low | pending |
+| 5    cleanup + verify | 1 h | low | ✅ done |

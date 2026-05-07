@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...spotify_playlist_exporter_v2.screens.main_screen import MainScreen
+from .main_screen import MainScreen
 from ..ui.backend_playlist_card import BackendPlaylistCard
 from ...shared.logging_config import logger
 

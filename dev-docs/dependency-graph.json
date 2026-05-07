@@ -5,7 +5,12 @@
     "last_updated": "2026-05",
     "notes": {
       "dead_code": ["src/backend/services/reccobeats.ts — test stub, never imported by any route"],
-      "http_boundary": "src/frontend/services/backend_client.py is the only file that crosses the Python→Cloudflare HTTP boundary"
+      "http_boundary": "src/frontend/services/backend_client.py is the only file that crosses the Python→Cloudflare HTTP boundary",
+      "v2_shims": [
+        "src/spotify_playlist_exporter_v2/logging_config.py → src/shared/logging_config.py (Phase 1-A)",
+        "src/spotify_playlist_exporter_v2/utils/platform_utils.py → src/frontend/utils/platform_utils.py (Phase 1-B)",
+        "src/spotify_playlist_exporter_v2/ui/layouts.py → src/frontend/ui/layouts.py (Phase 5)"
+      ]
     }
   },
   "run_frontend_backend.py": [
@@ -15,17 +20,15 @@
     "src/frontend/app/backend_app.py"
   ],
   "src/frontend/app/backend_app.py": [
-    "src/frontend/auth/backend_auth.py",
     "src/frontend/auth/backend_login_screen.py",
     "src/frontend/services/backend_client.py",
     "src/frontend/caching/backend_cache.py",
     "src/frontend/config/backend_config.py",
     "src/frontend/screens/backend_main_screen_adapter.py",
-    "src/frontend/screens/cache_explorer_adapter.py",
+    "src/frontend/screens/backend_main_screen.py",
     "src/frontend/ui/backend_selector_popup.py",
-    "src/frontend/ui/backend_cache_explorer.py",
-    "src/spotify_playlist_exporter_v2/logging_config.py",
-    "src/spotify_playlist_exporter_v2/utils/platform_utils.py"
+    "src/frontend/utils/platform_utils.py",
+    "src/shared/logging_config.py"
   ],
   "src/frontend/auth/backend_auth.py": [
     "src/frontend/services/backend_client.py",
@@ -51,25 +54,52 @@
   "src/frontend/screens/backend_main_screen_adapter.py": [
     "src/frontend/services/backend_client.py",
     "src/frontend/services/reccobeats_backend.py",
+    "src/frontend/caching/backend_cache.py",
     "src/frontend/utils/network_utils.py",
-    "src/spotify_playlist_exporter_v2/logging_config.py",
-    "src/spotify_playlist_exporter_v2/screens/main_screen.py"
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/backend_main_screen.py": [
+    "src/frontend/screens/main_screen.py",
+    "src/frontend/ui/backend_playlist_card.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/main_screen.py": [
+    "src/frontend/config/backend_config.py",
+    "src/frontend/state.py",
+    "src/frontend/ui/cache_explorer.py",
+    "src/frontend/ui/layouts.py",
+    "src/frontend/utils/platform_utils.py",
+    "src/shared/exceptions.py",
+    "src/shared/logging_config.py"
   ],
   "src/frontend/screens/cache_explorer_adapter.py": [
-    "src/frontend/ui/backend_cache_explorer.py",
-    "src/frontend/config/backend_config.py",
-    "src/spotify_playlist_exporter_v2/ui/cache_explorer.py",
-    "src/spotify_playlist_exporter_v2/logging_config.py"
+    "src/frontend/ui/cache_explorer.py",
+    "src/shared/logging_config.py"
   ],
   "src/frontend/ui/backend_selector_popup.py": [
     "src/frontend/config/backend_config.py",
     "src/frontend/services/backend_client.py"
   ],
   "src/frontend/ui/backend_cache_explorer.py": [
-    "src/spotify_playlist_exporter_v2/ui/cache_explorer.py",
-    "src/spotify_playlist_exporter_v2/logging_config.py"
+    "src/frontend/ui/cache_explorer.py",
+    "src/shared/logging_config.py"
   ],
+  "src/frontend/ui/backend_playlist_card.py": [
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/ui/cache_explorer.py": [
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/ui/layouts.py": [
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/state.py": [],
   "src/frontend/utils/network_utils.py": [],
+  "src/frontend/utils/platform_utils.py": [
+    "src/shared/logging_config.py"
+  ],
+  "src/shared/logging_config.py": [],
+  "src/shared/exceptions.py": [],
   "src/spotify_playlist_exporter_v2/app.py": [
     "src/spotify_playlist_exporter_v2/config.py",
     "src/spotify_playlist_exporter_v2/logging_config.py",
@@ -82,7 +112,9 @@
     "src/spotify_playlist_exporter_v2/app.py"
   ],
   "src/spotify_playlist_exporter_v2/config.py": [],
-  "src/spotify_playlist_exporter_v2/logging_config.py": [],
+  "src/spotify_playlist_exporter_v2/logging_config.py": [
+    "src/shared/logging_config.py"
+  ],
   "src/spotify_playlist_exporter_v2/state.py": [],
   "src/spotify_playlist_exporter_v2/auth/login_screen.py": [
     "src/spotify_playlist_exporter_v2/config.py",
@@ -146,13 +178,15 @@
     "src/spotify_playlist_exporter_v2/logging_config.py"
   ],
   "src/spotify_playlist_exporter_v2/ui/layouts.py": [
-    "src/spotify_playlist_exporter_v2/logging_config.py"
+    "src/frontend/ui/layouts.py"
   ],
   "src/spotify_playlist_exporter_v2/ui/tracks_window.py": [
     "src/spotify_playlist_exporter_v2/logging_config.py",
     "src/spotify_playlist_exporter_v2/auth/login_screen.py"
   ],
-  "src/spotify_playlist_exporter_v2/utils/platform_utils.py": [],
+  "src/spotify_playlist_exporter_v2/utils/platform_utils.py": [
+    "src/frontend/utils/platform_utils.py"
+  ],
   "src/backend/index.ts": [
     "src/backend/routes/auth.ts",
     "src/backend/routes/spotify.ts",

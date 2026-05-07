@@ -2,7 +2,7 @@
 
 > Definitive file map generated from actual imports starting at `run_frontend_backend.py`.
 > Use this to orient quickly in the codebase without reading every file.
-> Last updated: 2026-05.
+> Last updated: 2026-05 (Phase 5 — all frontend→v2 coupling removed).
 
 ---
 
@@ -23,7 +23,12 @@ There is a second, legacy entrypoint — `python -m spotify_playlist_exporter_v2
 graph TD
     ENTRY["run_frontend_backend.py"]
 
-    subgraph FE ["src/frontend/ — backend-integrated layer"]
+    subgraph SH ["src/shared/ — shared utilities"]
+        SH_LOG["logging_config.py\nlogger"]
+        SH_EXC["exceptions.py\nExportError etc."]
+    end
+
+    subgraph FE ["src/frontend/ — backend-integrated layer (zero v2 coupling)"]
         APP["app/backend_app.py\nBackendSpotifyExporterApp"]
         AUTH_FE["auth/backend_auth.py\nBackendAuthenticator"]
         LOGIN_FE["auth/backend_login_screen.py\nBackend login UI"]
@@ -31,21 +36,28 @@ graph TD
         RB_FE["services/reccobeats_backend.py\nReccoBeats via backend"]
         CACHE_FE["caching/backend_cache.py\nBackendCacheManager"]
         CFG["config/backend_config.py\nURLs · flags · timeouts"]
-        ADAPTER["screens/backend_main_screen_adapter.py\nWraps original MainScreen"]
+        ADAPTER["screens/backend_main_screen_adapter.py\nBridges MainScreen to backend services"]
+        BMS["screens/backend_main_screen.py\nBackendMainScreen"]
+        MS["screens/main_screen.py\nMainScreen (backend-only base)"]
         CACHE_EXP_ADAPTER["screens/cache_explorer_adapter.py"]
         SEL["ui/backend_selector_popup.py\nBackend URL picker"]
         CACHE_UI["ui/backend_cache_explorer.py"]
+        BCARD["ui/backend_playlist_card.py\nBackendPlaylistCard"]
+        FE_CEXP["ui/cache_explorer.py\nCacheExplorerPopup"]
+        FE_LAY["ui/layouts.py\nResponsiveGridLayout"]
+        STATE["state.py\ncurrent_export_job"]
+        PLAT["utils/platform_utils.py\nplatform helpers"]
         NET["utils/network_utils.py\nretry · error helpers"]
     end
 
-    subgraph V2 ["src/spotify_playlist_exporter_v2/ — original app (wrapped)"]
+    subgraph V2 ["src/spotify_playlist_exporter_v2/ — standalone app (self-contained)"]
         V2_APP["app.py\nSpotifyExporterApp (original)"]
         V2_CFG["config.py"]
-        V2_LOG["logging_config.py"]
+        V2_LOG["logging_config.py\n(shim → shared)"]
         V2_STATE["state.py"]
         V2_LOGIN["auth/login_screen.py"]
         V2_HTTP["auth/http_handler.py"]
-        V2_MAIN["screens/main_screen.py\noriginal MainScreen"]
+        V2_MAIN["screens/main_screen.py\nMainScreen (standalone)"]
         V2_RB["services/reccobeats.py\nReccoBeats direct HTTP"]
         V2_PCACHE["caching/persistent_cache.py"]
         V2_TCACHE["caching/track_cache.py"]
@@ -54,22 +66,28 @@ graph TD
         V2_CEXP["ui/cache_explorer.py"]
         V2_IMG["ui/cached_async_image.py"]
         V2_HOVER["ui/hover_manager.py"]
-        V2_LAYOUT["ui/layouts.py"]
+        V2_LAYOUT["ui/layouts.py\n(shim → frontend)"]
         V2_TRACKS["ui/tracks_window.py"]
-        V2_PLAT["utils/platform_utils.py"]
+        V2_PLAT["utils/platform_utils.py\n(shim → frontend)"]
     end
 
     ENTRY --> APP
-    APP --> AUTH_FE & CLIENT & CACHE_FE & CFG & ADAPTER & SEL & V2_LOG & V2_PLAT
+    APP --> LOGIN_FE & CLIENT & CACHE_FE & CFG & ADAPTER & BMS & SEL & PLAT & SH_LOG
     AUTH_FE --> CLIENT & CFG
     LOGIN_FE --> AUTH_FE & CLIENT & NET
     CLIENT --> CFG
     RB_FE --> CLIENT & NET
     CACHE_FE --> CFG & CLIENT
-    ADAPTER --> CLIENT & RB_FE & NET & V2_LOG & V2_MAIN
-    CACHE_EXP_ADAPTER --> CACHE_UI & CFG & V2_CEXP & V2_LOG
+    ADAPTER --> CLIENT & RB_FE & CACHE_FE & NET & SH_LOG
+    BMS --> MS & BCARD & SH_LOG
+    MS --> CFG & STATE & FE_CEXP & FE_LAY & PLAT & SH_LOG & SH_EXC
+    CACHE_EXP_ADAPTER --> FE_CEXP & SH_LOG
     SEL --> CFG & CLIENT
-    CACHE_UI --> V2_CEXP & V2_LOG
+    CACHE_UI --> FE_CEXP & SH_LOG
+    BCARD --> SH_LOG
+    FE_CEXP --> SH_LOG
+    FE_LAY --> SH_LOG
+    PLAT --> SH_LOG
 
     V2_APP --> V2_CFG & V2_LOG & V2_STATE & V2_LOGIN & V2_MAIN & V2_PLAT
     V2_LOGIN --> V2_CFG & V2_LOG & V2_STATE & V2_HTTP
@@ -83,6 +101,9 @@ graph TD
     V2_CEXP --> V2_PCACHE & V2_TCACHE & V2_LOG
     V2_IMG --> V2_PCACHE & V2_LOG
     V2_TRACKS --> V2_LOG & V2_LOGIN
+    V2_LOG --> SH_LOG
+    V2_PLAT --> PLAT
+    V2_LAYOUT --> FE_LAY
 ```
 
 ---
@@ -168,7 +189,14 @@ graph TD
 
 ## File Index
 
-### src/frontend/ — backend-integrated layer
+### src/shared/ — shared utilities (no v2 or frontend dependencies)
+
+| File | Class / Role |
+|------|-------------|
+| [shared/logging_config.py](../src/shared/logging_config.py) | `logger`, `configure_logging` — used by both frontend and v2 |
+| [shared/exceptions.py](../src/shared/exceptions.py) | `ExportError`, `NetworkError`, `ValidationError` etc. |
+
+### src/frontend/ — backend-integrated layer (zero v2 coupling)
 
 | File | Class / Role |
 |------|-------------|
@@ -179,25 +207,32 @@ graph TD
 | [services/backend_client.py](../src/frontend/services/backend_client.py) | `BackendClient`, `BackendAPIError` — all HTTP to Cloudflare Worker |
 | [services/reccobeats_backend.py](../src/frontend/services/reccobeats_backend.py) | `ReccoBeatsBackendService` — analysis requests via backend |
 | [caching/backend_cache.py](../src/frontend/caching/backend_cache.py) | `BackendCacheManager` — disk cache for tokens, jobs, analysis |
-| [config/backend_config.py](../src/frontend/config/backend_config.py) | URLs, feature flags, timeouts, `OAUTH_CALLBACK_PORT` |
-| [screens/backend_main_screen_adapter.py](../src/frontend/screens/backend_main_screen_adapter.py) | `BackendMainScreenAdapter` — bridges original `MainScreen` to backend services |
+| [config/backend_config.py](../src/frontend/config/backend_config.py) | URLs, feature flags, timeouts, `OAUTH_CALLBACK_PORT`, `EXPORT_DIR` |
+| [screens/main_screen.py](../src/frontend/screens/main_screen.py) | `MainScreen` — backend-only base screen (no standalone/v2 deps) |
+| [screens/backend_main_screen.py](../src/frontend/screens/backend_main_screen.py) | `BackendMainScreen(MainScreen)` — overrides widget factory methods with frontend-native components |
+| [screens/backend_main_screen_adapter.py](../src/frontend/screens/backend_main_screen_adapter.py) | `BackendMainScreenAdapter` — bridges `MainScreen` to backend services |
 | [screens/cache_explorer_adapter.py](../src/frontend/screens/cache_explorer_adapter.py) | Bridges `CacheExplorer` widget to backend-aware version |
 | [ui/backend_selector_popup.py](../src/frontend/ui/backend_selector_popup.py) | `BackendSelectorPopup` — startup URL picker |
 | [ui/backend_cache_explorer.py](../src/frontend/ui/backend_cache_explorer.py) | `BackendCacheExplorer` — enhanced cache browser |
+| [ui/backend_playlist_card.py](../src/frontend/ui/backend_playlist_card.py) | `BackendPlaylistCard` — playlist card widget (no v2/cache deps) |
+| [ui/cache_explorer.py](../src/frontend/ui/cache_explorer.py) | `CacheExplorerPopup` — cache browser popup (data-injection based) |
+| [ui/layouts.py](../src/frontend/ui/layouts.py) | `ResponsiveGridLayout` — adaptive grid for playlist cards |
+| [state.py](../src/frontend/state.py) | `current_export_job` — global export job state |
+| [utils/platform_utils.py](../src/frontend/utils/platform_utils.py) | `diagnose_macos_issues`, `set_window_basics`, `is_mobile_platform` |
 | [utils/network_utils.py](../src/frontend/utils/network_utils.py) | Network monitoring, retry decorators, `BackendAPIError` helpers |
 
-### src/spotify_playlist_exporter_v2/ — original app (wrapped)
+### src/spotify_playlist_exporter_v2/ — standalone app (self-contained; no frontend coupling)
 
 | File | Class / Role |
 |------|-------------|
 | [app.py](../src/spotify_playlist_exporter_v2/app.py) | `SpotifyExporterApp` — original Kivy MDApp (standalone mode) |
 | [__main__.py](../src/spotify_playlist_exporter_v2/__main__.py) | CLI entry (`python -m spotify_playlist_exporter_v2`) |
 | [config.py](../src/spotify_playlist_exporter_v2/config.py) | OAuth creds, local cache paths, timeouts |
-| [logging_config.py](../src/spotify_playlist_exporter_v2/logging_config.py) | Logger setup — used by both standalone and backend paths |
-| [state.py](../src/spotify_playlist_exporter_v2/state.py) | Global export job state |
+| [logging_config.py](../src/spotify_playlist_exporter_v2/logging_config.py) | **shim** → `src/shared/logging_config.py` |
+| [state.py](../src/spotify_playlist_exporter_v2/state.py) | Global export job state (standalone) |
 | [auth/login_screen.py](../src/spotify_playlist_exporter_v2/auth/login_screen.py) | `LoginScreen` — Kivy login UI for standalone OAuth |
 | [auth/http_handler.py](../src/spotify_playlist_exporter_v2/auth/http_handler.py) | Local HTTP server that handles Spotify OAuth callback |
-| [screens/main_screen.py](../src/spotify_playlist_exporter_v2/screens/main_screen.py) | `MainScreen` — playlist grid, export trigger, original UI |
+| [screens/main_screen.py](../src/spotify_playlist_exporter_v2/screens/main_screen.py) | `MainScreen` — full standalone playlist screen (disk cache + ReccoBeats) |
 | [services/reccobeats.py](../src/spotify_playlist_exporter_v2/services/reccobeats.py) | `ReccoBeatsAPI` — direct HTTP to ReccoBeats (standalone path only) |
 | [caching/persistent_cache.py](../src/spotify_playlist_exporter_v2/caching/persistent_cache.py) | `PersistentCache` — JSON disk cache (`~/.spotibye/cache/`) |
 | [caching/track_cache.py](../src/spotify_playlist_exporter_v2/caching/track_cache.py) | Track-level cache helpers |
@@ -206,9 +241,9 @@ graph TD
 | [ui/cache_explorer.py](../src/spotify_playlist_exporter_v2/ui/cache_explorer.py) | `CacheExplorer` — disk cache browser popup |
 | [ui/cached_async_image.py](../src/spotify_playlist_exporter_v2/ui/cached_async_image.py) | `CachedAsyncImage` — image loading with disk cache |
 | [ui/hover_manager.py](../src/spotify_playlist_exporter_v2/ui/hover_manager.py) | Hover effect state manager |
-| [ui/layouts.py](../src/spotify_playlist_exporter_v2/ui/layouts.py) | Responsive grid layout |
+| [ui/layouts.py](../src/spotify_playlist_exporter_v2/ui/layouts.py) | **shim** → `src/frontend/ui/layouts.py` |
 | [ui/tracks_window.py](../src/spotify_playlist_exporter_v2/ui/tracks_window.py) | Track list window |
-| [utils/platform_utils.py](../src/spotify_playlist_exporter_v2/utils/platform_utils.py) | Platform-specific diagnostics, window setup |
+| [utils/platform_utils.py](../src/spotify_playlist_exporter_v2/utils/platform_utils.py) | **shim** → `src/frontend/utils/platform_utils.py` |
 
 ### src/backend/ — Cloudflare Worker (TypeScript)
 
