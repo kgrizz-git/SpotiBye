@@ -85,6 +85,17 @@ export interface SpotifyAlbumResponse {
   uri: string;
 }
 
+export interface SpotifyArtistsResponse {
+  artists: Array<{
+    id: string;
+    name: string;
+    genres: string[];
+    popularity: number;
+    external_urls: { spotify: string };
+    uri: string;
+  }>;
+}
+
 export interface SpotifyAudioFeaturesResponse {
   audio_features: Array<SpotifyAudioFeaturesData | null>;
 }

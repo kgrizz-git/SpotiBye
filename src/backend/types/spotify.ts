@@ -65,6 +65,11 @@ export interface SpotifyArtist {
   uri: string;
 }
 
+export interface SpotifyArtistFull extends SpotifyArtist {
+  genres: string[];
+  popularity: number;
+}
+
 export interface SpotifyAlbum {
   id: string;
   name: string;

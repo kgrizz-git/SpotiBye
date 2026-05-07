@@ -13,12 +13,14 @@ import type {
   SpotifyTrack,
   SpotifyAudioFeatures,
   SpotifyPlaylistTrackItem,
+  SpotifyArtistFull,
 } from '../types/spotify';
 import type {
   SpotifyPlaylistsResponse,
   SpotifyPlaylistResponse,
   SpotifyTrackResponse,
   SpotifyAudioFeaturesResponse,
+  SpotifyArtistsResponse,
 } from '../types/spotify-api';
 import { parseSpotifyResponse } from '../types/spotify-api';
 
@@ -102,6 +104,20 @@ export class SpotifyService {
     const rawData = await response.json();
     parseSpotifyResponse<Record<string, unknown>>(rawData, ['id']);
     return rawData as unknown as SpotifyAudioFeatures;
+  }
+
+  async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
+    const results: SpotifyArtistFull[] = [];
+    for (let i = 0; i < artistIds.length; i += 50) {
+      const batch = artistIds.slice(i, i + 50);
+      const url = new URL(`${this.baseUrl}/artists`);
+      url.searchParams.set('ids', batch.join(','));
+      const response = await this.fetchWithRetry(url.toString());
+      const rawData = await response.json() as SpotifyArtistsResponse;
+      parseSpotifyResponse<SpotifyArtistsResponse>(rawData, ['artists']);
+      results.push(...(rawData.artists as SpotifyArtistFull[]));
+    }
+    return results;
   }
 
   async getMultipleAudioFeatures(trackIds: string[]): Promise<SpotifyAudioFeatures[]> {
