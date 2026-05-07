@@ -9,13 +9,16 @@
 
 ---
 
-## Coupling snapshot — after Phase 1–3
+## Coupling snapshot — after Phase 1–4
 
-All items below were resolved. The only remaining v2 import in `src/frontend/` is:
+All direct v2 imports from `src/frontend/` are resolved. The only remaining coupling is:
 
-| Frontend file | v2 symbol | v2 source |
+| Frontend file | v2 dependency | nature |
 |---|---|---|
-| `app/backend_app.py` | `MainScreen` | `screens/main_screen.py` (4 269 lines) |
+| `screens/backend_main_screen.py` | `MainScreen` (base class) | indirect — v2 still loaded at runtime |
+
+This is addressed in Phase 5 by cutting the inheritance and reimplementing (or inlining)
+the backend-mode-only logic directly in `BackendMainScreen`.
 
 Original coupling (for reference):
 
@@ -119,62 +122,52 @@ Files changed:
 
 ---
 
-## Phase 4 — Decompose `main_screen.py` (multi-step)
+## ✅ Phase 4 — Decompose `main_screen.py` (DONE, 2026-05-06)
 
-**Context:** `main_screen.py` is 4 269 lines and is the last hard dependency between
-`backend_app.py` and v2. It already has the `initialize_with_backend()` seam, so the
-screen *runs* in backend mode, but it still pulls in `LoginScreen`, `ReccoBeatsAPI`,
-`PersistentCache`, `TrackCache`, `AnalysisTask`, and every UI component in v2.
+**What was discovered:** `PlaylistCard` already branches on `_is_backend_authenticated_app()`
+for its refresh flow, so it was mostly backend-aware. The real problems were:
 
-The strategy is extract-and-replace in vertical slices, not a full rewrite at once.
+1. `display_playlists_with_cache` and `_perform_sort` both instantiated v2 `PlaylistCard`
+   unconditionally — dragging in `ReccoBeatsAPI`, `PersistentCache`, `AnalysisTask` etc.
+2. `update_status_with_cache_info` called `persistent_cache.get_cache_stats()` in the
+   backend path (meaningless and a v2 dependency).
+3. `backend_app.py` imported `MainScreen` directly from v2.
+4. `LoginScreen` is not imported by `main_screen.py` — only `create_spotify_client_with_refresh`
+   is, and it is already fully guarded by `if self.backend_mode_enabled` / early-raises,
+   so 4-B required no changes to `main_screen.py`.
 
-### 4-A  Extract `PlaylistCard` logic needed by the backend path
+**What was done:**
 
-`main_screen.py` creates `PlaylistCard` widgets (from `ui/playlist_card.py`, 4 552
-lines). In backend mode, `PlaylistCard` still tries to use local disk cache and direct
-ReccoBeats HTTP. The goal is a `BackendPlaylistCard` in `src/frontend/ui/` that:
+### ✅ 4-A  `BackendPlaylistCard` — `src/frontend/ui/backend_playlist_card.py`
 
-- Takes `BackendClient` as its data source.
-- Removes the direct ReccoBeats / PersistentCache calls.
-- Is instantiated by `MainScreen` when `backend_mode_enabled` is True (branch on
-  `self.backend_mode_enabled` in `_create_playlist_widgets()` or equivalent).
+- Fresh `BackendPlaylistCard(BoxLayout)` — zero v2 imports.
+- Builds the same card visual: `AsyncImage` cover, name/tracks/owner labels, `CheckBox`.
+- Exposes `self.playlist_data` and `self.checkbox` — the full interface `MainScreen` needs.
+- Uses standard Kivy `AsyncImage` in place of v2's `CachedAsyncImage`.
 
-Steps:
-1. Read `playlist_card.py` lines 207+ (`PlaylistCard` class) and identify which methods
-   hit disk cache or ReccoBeats directly.
-2. Create `src/frontend/ui/backend_playlist_card.py` — a subclass or full replacement
-   that delegates those calls to `BackendClient`.
-3. In `main_screen.py`, conditionally import and use `BackendPlaylistCard` when in
-   backend mode.
+### ✅ 4-B  Login flow audit — no changes needed
 
-### 4-B  Replace standalone login flow in `main_screen.py` backend path
+- `main_screen.py` imports `create_spotify_client_with_refresh` (not `LoginScreen`).
+- Every call site is already behind `if self.backend_mode_enabled` guards or raises
+  `NetworkError` immediately in backend mode.  No edits required.
 
-`main_screen.py` imports `LoginScreen` from v2's auth module and uses it for the
-standalone OAuth flow. In backend mode, the login is already handled by
-`BackendLoginScreen`. Audit all references to `login_screen` / `LoginScreen` inside
-`main_screen.py` behind `backend_mode_enabled` checks, and short-circuit or skip them
-when in backend mode so the import can eventually be removed.
+### ✅ 4-C  `BackendMainScreen` — `src/frontend/screens/backend_main_screen.py`
 
-### 4-C  Create `src/frontend/screens/backend_main_screen.py`
+- `BackendMainScreen(MainScreen)` subclasses v2 `MainScreen` and overrides three methods:
+  - `display_playlists_with_cache` — uses `BackendPlaylistCard` instead of `PlaylistCard`
+  - `_perform_sort` — same swap for the sort/rebuild path
+  - `update_status_with_cache_info` — replaces `persistent_cache.get_cache_stats()` with
+    a simple playlist-count string
+- `backend_app.py` now imports `BackendMainScreen` from `frontend.screens.backend_main_screen`
+  and instantiates it.  **The direct v2 import in `backend_app.py` is gone.**
 
-Once 4-A and 4-B are done, the only reason `main_screen.py` is still used in backend
-mode is that `backend_app.py` instantiates it directly. At that point:
-
-1. Create `src/frontend/screens/backend_main_screen.py` that subclasses `MainScreen`
-   but:
-   - Overrides `build_ui()` to inject backend-only widgets where needed.
-   - Removes all conditional `if not self.backend_mode_enabled` dead paths.
-   - Does not import `LoginScreen`, `ReccoBeatsAPI`, `PersistentCache`, or `TrackCache`.
-2. Update `backend_app.py` to instantiate `BackendMainScreen` instead of `MainScreen`.
-3. The v2 `MainScreen` now has no frontend callers. Leave it in place for the standalone
-   path.
-
-Files changed across 4-A–4-C:
+Files changed:
 - `src/frontend/ui/backend_playlist_card.py` (new)
 - `src/frontend/screens/backend_main_screen.py` (new)
-- `src/frontend/app/backend_app.py` (swap import to `BackendMainScreen`)
-- `src/spotify_playlist_exporter_v2/screens/main_screen.py` (add backend-mode guards,
-  no removals until Phase 5)
+- `src/frontend/app/backend_app.py` (swap import + instantiation)
+
+**Remaining coupling:** `BackendMainScreen` still subclasses v2 `MainScreen`, so v2 is
+loaded at runtime via `backend_main_screen.py`.  Breaking that inheritance is Phase 5 work.
 
 ---
 
@@ -207,7 +200,7 @@ After all phases above are merged:
 | 1-C  state.py | 45 min | low | ✅ done |
 | 2    exceptions | 30 min | low | ✅ done |
 | 3    frontend CacheExplorerPopup | 2–3 h | medium | ✅ done |
-| 4-A  BackendPlaylistCard | 3–4 h | medium | pending |
-| 4-B  login flow guards | 1–2 h | medium | pending |
-| 4-C  BackendMainScreen | 2–3 h | medium | pending |
+| 4-A  BackendPlaylistCard | 3–4 h | medium | ✅ done |
+| 4-B  login flow guards | 1–2 h | medium | ✅ done (no-op — already guarded) |
+| 4-C  BackendMainScreen | 2–3 h | medium | ✅ done |
 | 5    cleanup + verify | 1 h | low | pending |

@@ -9,7 +9,7 @@ from typing import Tuple
 
 from kivy.clock import Clock
 
-from ...shared.logging_config import logger
+from shared.logging_config import logger
 
 
 def _window():

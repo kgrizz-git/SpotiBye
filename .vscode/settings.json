@@ -1,4 +1,13 @@
 {
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.terminal.shellIntegration.enabled": true,
+    "terminal.integrated.enablePersistentSessions": false,
+    "terminal.integrated.env.osx": {
+        "VIRTUAL_ENV": "/Users/kevingrizzard/Documents/Repos/SpotiBye/.venv",
+        "PATH": "/Users/kevingrizzard/Documents/Repos/SpotiBye/.venv/bin:${env:PATH}"
+    },
     "chat.tools.terminal.autoApprove": {
         "git ls-remote": true
     }

@@ -33,7 +33,7 @@ from ..screens.backend_main_screen_adapter import (
 from ..ui.backend_selector_popup import BackendSelectorPopup
 
 # Import original components for compatibility
-from ...spotify_playlist_exporter_v2.screens.main_screen import MainScreen
+from ..screens.backend_main_screen import BackendMainScreen
 from ...shared.logging_config import logger as original_logger
 from ..utils.platform_utils import (
     diagnose_macos_issues,
@@ -124,8 +124,8 @@ class BackendSpotifyExporterApp(MDApp):
             )
             self.login_screen.name = "login"
 
-            # Create main screen (original version)
-            self.main_screen = MainScreen(name="main")
+            # Create main screen (backend-native version)
+            self.main_screen = BackendMainScreen(name="main")
 
             self.screen_manager.add_widget(self.login_screen)
             self.screen_manager.add_widget(self.main_screen)
