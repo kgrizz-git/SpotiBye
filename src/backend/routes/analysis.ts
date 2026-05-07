@@ -25,11 +25,20 @@ app.post('/playlist/:id', async (c) => {
     const statusKey = `analysis:${playlistId}:${userId}:status`;
     const existingStatus = await cacheService.get<Record<string, unknown>>(statusKey);
 
-    if (existingStatus && (existingStatus as Record<string, unknown>)?.status !== 'failed') {
-      return c.json({
-        data: existingStatus,
-        meta: { timestamp: new Date().toISOString() }
-      });
+    if (existingStatus) {
+      const s = existingStatus as Record<string, unknown>;
+      const isTerminal = s.status === 'completed' || s.status === 'processing';
+      const isPendingStale =
+        s.status === 'pending' &&
+        typeof s.started_at === 'string' &&
+        Date.now() - new Date(s.started_at).getTime() < 120_000;
+
+      if (isTerminal || isPendingStale) {
+        return c.json({
+          data: existingStatus,
+          meta: { timestamp: new Date().toISOString() }
+        });
+      }
     }
 
     // Start analysis
