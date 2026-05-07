@@ -20,7 +20,8 @@
 
 - decide on default size, see if can better place it
 
-* see backend analysis
+* see [backend analysis routes](backend-analysis-routes.md) and [playlist analysis popup notes](playlist-analysis-popup.md)
+* [fix ReccoBeats pipeline and wire to backend route](plans/reccobeats-wiring.md)
 
 * see agent-first-retrofit, quality review/assessment md
 
