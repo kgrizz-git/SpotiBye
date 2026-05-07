@@ -27,13 +27,16 @@ app.post('/playlist/:id', async (c) => {
 
     if (existingStatus) {
       const s = existingStatus as Record<string, unknown>;
-      const isTerminal = s.status === 'completed' || s.status === 'processing';
-      const isPendingStale =
-        s.status === 'pending' &&
-        typeof s.started_at === 'string' &&
-        Date.now() - new Date(s.started_at).getTime() < 120_000;
+      // completed: always return cached result
+      // processing: return if started within last 5 minutes (still running)
+      // pending/failed/anything else: restart
+      const isCompleted = s.status === 'completed';
+      const isActivelyProcessing =
+        s.status === 'processing' &&
+        (typeof s.started_at !== 'string' ||
+          Date.now() - new Date(s.started_at).getTime() < 300_000);
 
-      if (isTerminal || isPendingStale) {
+      if (isCompleted || isActivelyProcessing) {
         return c.json({
           data: existingStatus,
           meta: { timestamp: new Date().toISOString() }
@@ -47,7 +50,7 @@ app.post('/playlist/:id', async (c) => {
       job_id: jobId,
       playlist_id: playlistId,
       user_id: userId,
-      status: 'pending',
+      status: 'processing',
       started_at: new Date().toISOString(),
       progress: 0
     };
@@ -56,26 +59,30 @@ app.post('/playlist/:id', async (c) => {
 
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
 
-    c.executionCtx.waitUntil(
-      analysisService.analyzePlaylist(playlistId, userId, jobId)
-        .then(async (result) => {
-          await cacheService.set(resultsKey, result, 86400);
-          await cacheService.set(statusKey, {
-            ...status,
-            status: 'completed',
-            completed_at: new Date().toISOString()
-          }, 3600);
-        })
-        .catch(async (error) => {
-          console.error('Analysis failed:', error);
-          await cacheService.set(statusKey, {
-            ...status,
-            status: 'failed',
-            error: error.message,
-            completed_at: new Date().toISOString()
-          }, 3600);
-        })
-    );
+    const analysisPromise = analysisService.analyzePlaylist(playlistId, userId, jobId)
+      .then(async (result) => {
+        await cacheService.set(resultsKey, result, 86400);
+        await cacheService.set(statusKey, {
+          ...status,
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        }, 3600);
+      })
+      .catch(async (error) => {
+        console.error('Analysis failed:', error);
+        await cacheService.set(statusKey, {
+          ...status,
+          status: 'failed',
+          error: error.message,
+          completed_at: new Date().toISOString()
+        }, 3600);
+      });
+
+    try {
+      c.executionCtx.waitUntil(analysisPromise);
+    } catch {
+      // executionCtx unavailable outside Cloudflare Workers runtime — promise runs detached
+    }
 
     return c.json({
       data: { ...status, status: 'processing' },
