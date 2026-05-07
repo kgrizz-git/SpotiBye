@@ -43,20 +43,30 @@ app.post('/playlist/:id', async (c) => {
       progress: 0
     };
 
-    await cacheService.set(statusKey, status, 3600); // 1 hour TTL
+    await cacheService.set(statusKey, status, 3600);
 
-    // Start async analysis (in Workers, this would typically use a Durable Object or Queue)
-    // For now, we'll start it synchronously but mark it as async
-    analysisService.analyzePlaylist(playlistId, userId, jobId).catch(error => {
-      console.error('Analysis failed:', error);
-      // Update status to failed
-      cacheService.set(statusKey, {
-        ...status,
-        status: 'failed',
-        error: error.message,
-        completed_at: new Date().toISOString()
-      }, 3600);
-    });
+    const resultsKey = `analysis:${playlistId}:${userId}:results`;
+
+    c.executionCtx.waitUntil(
+      analysisService.analyzePlaylist(playlistId, userId, jobId)
+        .then(async (result) => {
+          await cacheService.set(resultsKey, result, 86400);
+          await cacheService.set(statusKey, {
+            ...status,
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          }, 3600);
+        })
+        .catch(async (error) => {
+          console.error('Analysis failed:', error);
+          await cacheService.set(statusKey, {
+            ...status,
+            status: 'failed',
+            error: error.message,
+            completed_at: new Date().toISOString()
+          }, 3600);
+        })
+    );
 
     return c.json({
       data: { ...status, status: 'processing' },
