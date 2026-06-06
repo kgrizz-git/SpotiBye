@@ -1,9 +1,28 @@
+/**
+ * Spotify API client — the ONLY place in the backend that calls api.spotify.com.
+ *
+ * Golden Principle #2: All Spotify API calls go through this file.
+ * Do not call api.spotify.com from routes, middleware, or any other service.
+ *
+ * References:
+ *   - docs/references/spotify-api-reference.md  — endpoints, pagination, rate limits
+ *   - docs/february-2026-spotify-migration-findings.md — critical: /tracks → /items rename
+ */
 import type {
   SpotifyPlaylist,
   SpotifyTrack,
   SpotifyAudioFeatures,
   SpotifyPlaylistTrackItem,
+  SpotifyArtistFull,
 } from '../types/spotify';
+import type {
+  SpotifyPlaylistsResponse,
+  SpotifyPlaylistResponse,
+  SpotifyTrackResponse,
+  SpotifyAudioFeaturesResponse,
+  SpotifyArtistsResponse,
+} from '../types/spotify-api';
+import { parseSpotifyResponse } from '../types/spotify-api';
 
 export interface NormalizedPlaylistItemsResponse {
   href?: string;
@@ -25,14 +44,17 @@ export class SpotifyService {
     url.searchParams.set('offset', offset.toString());
 
     const response = await this.fetchWithRetry(url.toString());
-    const data = await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<SpotifyPlaylistsResponse>(rawData, ['items', 'total']);
 
-    return data.items;
+    return rawData.items as SpotifyPlaylist[];
   }
 
   async getPlaylist(playlistId: string): Promise<SpotifyPlaylist> {
     const response = await this.fetchWithRetry(`${this.baseUrl}/playlists/${playlistId}`);
-    return await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<SpotifyPlaylistResponse>(rawData, ['id', 'name', 'owner']);
+    return rawData as SpotifyPlaylist;
   }
 
   async getPlaylistTracks(playlistId: string, limit: number = 50, offset: number = 0): Promise<NormalizedPlaylistItemsResponse> {
@@ -41,8 +63,9 @@ export class SpotifyService {
     url.searchParams.set('offset', offset.toString());
 
     const response = await this.fetchWithRetry(url.toString());
-    const data = await response.json();
-    return this.normalizePlaylistItemsResponse(data);
+    const rawData = await response.json();
+    parseSpotifyResponse<Record<string, unknown>>(rawData, ['items', 'total']);
+    return this.normalizePlaylistItemsResponse(rawData);
   }
 
   private normalizePlaylistItemsResponse(data: any): NormalizedPlaylistItemsResponse {
@@ -71,12 +94,30 @@ export class SpotifyService {
 
   async getTrack(trackId: string): Promise<SpotifyTrack> {
     const response = await this.fetchWithRetry(`${this.baseUrl}/tracks/${trackId}`);
-    return await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<SpotifyTrackResponse>(rawData, ['id', 'name', 'artists', 'album']);
+    return rawData as SpotifyTrack;
   }
 
   async getAudioFeatures(trackId: string): Promise<SpotifyAudioFeatures> {
     const response = await this.fetchWithRetry(`${this.baseUrl}/audio-features/${trackId}`);
-    return await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<Record<string, unknown>>(rawData, ['id']);
+    return rawData as unknown as SpotifyAudioFeatures;
+  }
+
+  async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
+    const results: SpotifyArtistFull[] = [];
+    for (let i = 0; i < artistIds.length; i += 50) {
+      const batch = artistIds.slice(i, i + 50);
+      const url = new URL(`${this.baseUrl}/artists`);
+      url.searchParams.set('ids', batch.join(','));
+      const response = await this.fetchWithRetry(url.toString());
+      const rawData = await response.json() as SpotifyArtistsResponse;
+      parseSpotifyResponse<SpotifyArtistsResponse>(rawData, ['artists']);
+      results.push(...(rawData.artists as SpotifyArtistFull[]));
+    }
+    return results;
   }
 
   async getMultipleAudioFeatures(trackIds: string[]): Promise<SpotifyAudioFeatures[]> {
@@ -84,9 +125,10 @@ export class SpotifyService {
     url.searchParams.set('ids', trackIds.join(','));
 
     const response = await this.fetchWithRetry(url.toString());
-    const data = await response.json();
+    const rawData = await response.json();
+    parseSpotifyResponse<SpotifyAudioFeaturesResponse>(rawData, ['audio_features']);
 
-    return data.audio_features;
+    return rawData.audio_features as unknown as SpotifyAudioFeatures[];
   }
 
   private async fetchWithRetry(url: string, retries: number = 3): Promise<Response> {

@@ -1,3 +1,18 @@
+/**
+ * Hand-rolled JWT implementation (HMAC-SHA256 using crypto.subtle).
+ *
+ * Why hand-rolled: Cloudflare Workers do not support Node.js crypto or most
+ * npm JWT libraries at the time of writing. crypto.subtle is the only
+ * available cryptographic primitive.
+ *
+ * Limitations / known gaps (tech-debt-tracker.md item #2):
+ *   - Clock-skew tolerance is not implemented
+ *   - Token revocation is not supported
+ *   - Edge cases (malformed header/payload) are lightly tested
+ *
+ * Do not replace this with an external library without verifying Workers
+ * compatibility first.
+ */
 import { APP_JWT_TTL_SECONDS } from '../types/auth';
 import type { JWTPayload } from '../types/auth';
 
@@ -81,7 +96,7 @@ export class JWTService {
 
   private base64UrlDecode(data: string): string {
     data += '='.repeat((4 - data.length % 4) % 4);
-    data = data.replace(/\-/g, '+').replace(/_/g, '/');
+    data = data.replace(/-/g, '+').replace(/_/g, '/');
     return atob(data);
   }
 }

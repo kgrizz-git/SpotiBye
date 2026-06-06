@@ -14,12 +14,16 @@
 
 - Check for pyright issues and fix them
 
-- Check for security vulnerabilities and fix them
-
-- start new repo, after cleaning
+- start new repo, after cleaning, before widespread release-readiness
 
 - update / check build etc
 
 - decide on default size, see if can better place it
 
-* see backend analysis
+* see [backend analysis routes](backend-analysis-routes.md) and [playlist analysis popup notes](playlist-analysis-popup.md)
+* [fix ReccoBeats pipeline and wire to backend route](plans/reccobeats-wiring.md)
+* [Spotify API enrichment — available data for playlist details](spotify-api-enrichment.md)
+
+* see agent-first-retrofit, quality review/assessment md
+
+- fix issues with RECOCOBEATS vs RECCOBEATS

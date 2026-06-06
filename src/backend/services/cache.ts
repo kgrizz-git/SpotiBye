@@ -15,7 +15,7 @@ export class CacheService {
     }
   }
 
-  async set(key: string, value: any, ttlSeconds?: number): Promise<boolean> {
+  async set(key: string, value: unknown, ttlSeconds?: number): Promise<boolean> {
     try {
       const options = ttlSeconds ? { expirationTtl: ttlSeconds } : undefined;
       await this.kv.put(key, JSON.stringify(value), options);
@@ -50,7 +50,7 @@ export class CacheService {
 
   async exists(key: string): Promise<boolean> {
     try {
-      const value = await this.kv.get(key, { stream: true });
+      const value = await (this.kv.get as (key: string, options?: { stream: boolean }) => Promise<string | null>)(key, { stream: true });
       return value !== null;
     } catch (error) {
       console.error('Cache exists error:', error);
@@ -63,7 +63,7 @@ export class CacheService {
     return Promise.all(promises);
   }
 
-  async setMultiple(entries: Array<{ key: string; value: any; ttlSeconds?: number }>): Promise<boolean[]> {
+  async setMultiple(entries: Array<{ key: string; value: unknown; ttlSeconds?: number }>): Promise<boolean[]> {
     const promises = entries.map(entry => this.set(entry.key, entry.value, entry.ttlSeconds));
     return Promise.all(promises);
   }

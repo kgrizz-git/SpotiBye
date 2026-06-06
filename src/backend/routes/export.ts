@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { authMiddleware } from '../middleware/auth';
 import {
   ExportService,
@@ -8,8 +9,9 @@ import {
 } from '../services/export';
 import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
+import type { Variables } from '../types/variables';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 type BatchExportStatus = {
   job_id: string;
@@ -163,7 +165,7 @@ app.post('/jobs', async (c) => {
     const includeAudioFeatures = resolveIncludeAudioFeatures(body);
 
     if (playlistIds.length === 0) {
-      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, 400);
+      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, { status: 400 });
     }
 
     const cacheService = new CacheService(c.env.CACHE_KV);
@@ -191,7 +193,7 @@ app.post('/jobs', async (c) => {
       buildExportErrorPayload('EXPORT_JOB_CREATE_FAILED', `Failed to create export job: ${errorMessage}`, requestId, {
         trace_id: traceId,
       }),
-      resolveErrorStatus('EXPORT_JOB_CREATE_FAILED', errorMessage),
+      { status: resolveErrorStatus('EXPORT_JOB_CREATE_FAILED', errorMessage) as ContentfulStatusCode },
     );
   }
 });
@@ -217,7 +219,7 @@ app.post('/jobs/:jobId/step', async (c) => {
     const assemblyState = await cacheService.get<ResumableExportAssemblyState>(assemblyKey);
 
     if (!job) {
-      return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, { status: 404 as ContentfulStatusCode });
     }
 
     try {
@@ -241,7 +243,7 @@ app.post('/jobs/:jobId/step', async (c) => {
               trace_id: traceId,
             },
           },
-        }, 409);
+        }, { status: 409 as ContentfulStatusCode });
       }
       throw error;
     }
@@ -325,7 +327,7 @@ app.post('/jobs/:jobId/step', async (c) => {
       buildExportErrorPayload('EXPORT_JOB_STEP_FAILED', `Failed to process export job step: ${errorMessage}`, requestId, {
         trace_id: traceId,
       }),
-      resolveErrorStatus('EXPORT_JOB_STEP_FAILED', errorMessage),
+      { status: resolveErrorStatus('EXPORT_JOB_STEP_FAILED', errorMessage) as ContentfulStatusCode },
     );
   }
 });
@@ -339,7 +341,7 @@ app.get('/jobs/:jobId/status', async (c) => {
     const job = await cacheService.get<ResumableExportJobStatus>(buildExportJobKey(jobId, userId));
 
     if (!job) {
-      return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_JOB_NOT_FOUND', message: 'Export job not found' } }, { status: 404 as ContentfulStatusCode });
     }
 
     const jobKey = buildExportJobKey(jobId, userId);
@@ -360,7 +362,7 @@ app.get('/jobs/:jobId/status', async (c) => {
     });
   } catch (error) {
     console.error('Failed to get export job status:', error);
-    return c.json({ error: { code: 'EXPORT_JOB_STATUS_FAILED', message: 'Failed to get export job status' } }, 500);
+    return c.json({ error: { code: 'EXPORT_JOB_STATUS_FAILED', message: 'Failed to get export job status' } }, { status: 500 as ContentfulStatusCode });
   }
 });
 
@@ -375,10 +377,10 @@ app.get('/jobs/:jobId/download', async (c) => {
     const assemblyKey = buildExportJobAssemblyKey(jobId, userId);
     const exportStatus = await cacheService.get<ResumableExportJobStatus>(jobKey);
     if (!exportStatus) {
-      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, { status: 404 as ContentfulStatusCode });
     }
     if (exportStatus.status !== 'completed') {
-      return c.json({ error: { code: 'EXPORT_NOT_READY', message: 'Export job is not completed yet' } }, 409);
+      return c.json({ error: { code: 'EXPORT_NOT_READY', message: 'Export job is not completed yet' } }, { status: 409 as ContentfulStatusCode });
     }
     const requestedMode = parseXlsxRenderMode(c.req.query('mode'));
     const fileFormat = (exportStatus.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
@@ -463,7 +465,7 @@ app.get('/jobs/:jobId/download', async (c) => {
 
     const exportDataList = await cacheService.get<any[]>(buildExportJobDataKey(jobId, userId));
     if (!Array.isArray(exportDataList) || exportDataList.length === 0) {
-      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, { status: 404 as ContentfulStatusCode });
     }
     const exportService = new ExportService(c.get('access_token'));
     const fallbackBytes = await generateFileBytes(exportService, exportDataList, fileFormat);
@@ -480,7 +482,7 @@ app.get('/jobs/:jobId/download', async (c) => {
         crypto.randomUUID(),
         { trace_id: traceId },
       ),
-      resolveErrorStatus('EXPORT_JOB_DOWNLOAD_FAILED', errorMessage),
+      { status: resolveErrorStatus('EXPORT_JOB_DOWNLOAD_FAILED', errorMessage) as ContentfulStatusCode },
     );
   }
 });
@@ -503,9 +505,9 @@ app.post('/playlist/:id', async (c) => {
 
     // Check if export already exists
     const exportKey = `export:${playlistId}:${userId}`;
-    const existingExport = await cacheService.get(exportKey);
+    const existingExport = await cacheService.get<Record<string, unknown>>(exportKey);
 
-    if (existingExport && existingExport.status === 'completed') {
+    if (existingExport && (existingExport as Record<string, unknown>)?.status === 'completed') {
       console.info('[export] using cached completed export', { requestId, userId, playlistId, exportKey });
       return c.json({
         data: existingExport,
@@ -600,7 +602,7 @@ app.post('/playlist/:id', async (c) => {
             include_audio_features: includeAudioFeatures,
           },
         ),
-        resolveErrorStatus('EXPORT_FAILED', errorMessage)
+        { status: resolveErrorStatus('EXPORT_FAILED', errorMessage) as ContentfulStatusCode }
       );
     }
   } catch (error) {
@@ -612,7 +614,7 @@ app.post('/playlist/:id', async (c) => {
         `Failed to start export: ${errorMessage}`,
         requestId,
       ),
-      resolveErrorStatus('EXPORT_START_FAILED', errorMessage)
+      { status: resolveErrorStatus('EXPORT_START_FAILED', errorMessage) as ContentfulStatusCode }
     );
   }
 });
@@ -632,7 +634,7 @@ app.post('/playlists', async (c) => {
     const includeAudioFeatures = resolveIncludeAudioFeatures(body);
 
     if (playlistIds.length === 0) {
-      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, 400);
+      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, { status: 400 as ContentfulStatusCode });
     }
 
     const exportService = new ExportService(accessToken);
@@ -707,7 +709,7 @@ app.post('/playlists', async (c) => {
         `Failed to generate combined export: ${errorMessage}`,
         requestId,
       ),
-      resolveErrorStatus('EXPORT_BATCH_FAILED', errorMessage)
+      { status: resolveErrorStatus('EXPORT_BATCH_FAILED', errorMessage) as ContentfulStatusCode }
     );
   }
 });
@@ -733,7 +735,7 @@ app.post('/playlists/chunk', async (c) => {
     const chunkSize = Math.min(Math.max(requestedChunkSize, 1), 3);
 
     if (playlistIds.length === 0) {
-      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, 400);
+      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, { status: 400 as ContentfulStatusCode });
     }
 
     const exportService = new ExportService(accessToken);
@@ -839,7 +841,7 @@ app.post('/playlists/chunk', async (c) => {
         `Failed to process combined export chunk: ${errorMessage}`,
         requestId,
       ),
-      resolveErrorStatus('EXPORT_BATCH_CHUNK_FAILED', errorMessage)
+      { status: resolveErrorStatus('EXPORT_BATCH_CHUNK_FAILED', errorMessage) as ContentfulStatusCode }
     );
   }
 });
@@ -854,13 +856,13 @@ app.get('/playlists/:jobId/status', async (c) => {
     const status = await cacheService.get<BatchExportStatus>(batchKey);
 
     if (!status) {
-      return c.json({ error: { code: 'EXPORT_NOT_FOUND', message: 'Combined export not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_NOT_FOUND', message: 'Combined export not found' } }, { status: 404 as ContentfulStatusCode });
     }
 
     return c.json({ data: status, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get combined export status:', error);
-    return c.json({ error: { code: 'EXPORT_STATUS_FAILED', message: 'Failed to get combined export status' } }, 500);
+    return c.json({ error: { code: 'EXPORT_STATUS_FAILED', message: 'Failed to get combined export status' } }, { status: 500 as ContentfulStatusCode });
   }
 });
 
@@ -873,11 +875,11 @@ app.get('/playlists/:jobId/download', async (c) => {
     const cacheService = new CacheService(c.env.CACHE_KV);
 
     const batchKey = `export:batch:${jobId}:${userId}`;
-    const exportStatus = await cacheService.get(batchKey);
+    const exportStatus = await cacheService.get<Record<string, unknown>>(batchKey);
     if (!exportStatus) {
-      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, { status: 404 as ContentfulStatusCode });
     }
-    const batchFileFormat = (exportStatus.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
+    const batchFileFormat = ((exportStatus as Record<string, unknown>).file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
     const [bContentType, bExt] = batchFileFormat === 'csv'
       ? ['text/csv; charset=utf-8', 'csv']
       : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
@@ -894,7 +896,7 @@ app.get('/playlists/:jobId/download', async (c) => {
     // Fallback: regenerate from cached track data.
     const exportDataList = await cacheService.get(`${batchKey}:data`);
     if (!exportDataList || !Array.isArray(exportDataList) || exportDataList.length === 0) {
-      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, { status: 404 as ContentfulStatusCode });
     }
     const exportService = new ExportService(c.get('access_token'));
     const fallbackBytes = await generateFileBytes(exportService, exportDataList, batchFileFormat);
@@ -912,7 +914,7 @@ app.get('/playlists/:jobId/download', async (c) => {
         crypto.randomUUID(),
         { trace_id: traceId },
       ),
-      resolveErrorStatus('EXPORT_DOWNLOAD_FAILED', errorMessage)
+      { status: resolveErrorStatus('EXPORT_DOWNLOAD_FAILED', errorMessage) as ContentfulStatusCode }
     );
   }
 });
@@ -928,13 +930,13 @@ app.get('/playlist/:id/status', async (c) => {
     const status = await cacheService.get(exportKey);
 
     if (!status) {
-      return c.json({ error: { code: 'EXPORT_NOT_FOUND', message: 'Export not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_NOT_FOUND', message: 'Export not found' } }, { status: 404 as ContentfulStatusCode });
     }
 
     return c.json({ data: status, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get export status:', error);
-    return c.json({ error: { code: 'EXPORT_STATUS_FAILED', message: 'Failed to get export status' } }, 500);
+    return c.json({ error: { code: 'EXPORT_STATUS_FAILED', message: 'Failed to get export status' } }, { status: 500 as ContentfulStatusCode });
   }
 });
 
@@ -953,7 +955,7 @@ app.get('/playlist/:id/download', async (c) => {
       exportData = exportStatus;
     }
     if (!exportStatus && !exportData) {
-      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, { status: 404 as ContentfulStatusCode });
     }
     const singleFileFormat = (exportStatus?.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
     const [spContentType, spExt] = singleFileFormat === 'csv'
@@ -971,7 +973,7 @@ app.get('/playlist/:id/download', async (c) => {
 
     // Fallback: regenerate from cached track data.
     if (!exportData) {
-      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, 404);
+      return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, { status: 404 as ContentfulStatusCode });
     }
     const exportService = new ExportService(c.get('access_token'));
     const fallbackBytes = await generateFileBytes(exportService, [exportData], singleFileFormat);
@@ -988,7 +990,7 @@ app.get('/playlist/:id/download', async (c) => {
         `Failed to download export: ${errorMessage}`,
         crypto.randomUUID(),
       ),
-      resolveErrorStatus('EXPORT_DOWNLOAD_FAILED', errorMessage)
+      { status: resolveErrorStatus('EXPORT_DOWNLOAD_FAILED', errorMessage) as ContentfulStatusCode }
     );
   }
 });
@@ -1011,7 +1013,7 @@ app.delete('/playlist/:id', async (c) => {
     return c.json({ data: { message: 'Export deleted successfully' } });
   } catch (error) {
     console.error('Failed to delete export:', error);
-    return c.json({ error: { code: 'EXPORT_DELETE_FAILED', message: 'Failed to delete export' } }, 500);
+    return c.json({ error: { code: 'EXPORT_DELETE_FAILED', message: 'Failed to delete export' } }, { status: 500 as ContentfulStatusCode });
   }
 });
 

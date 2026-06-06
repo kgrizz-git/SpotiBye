@@ -38,26 +38,14 @@ class TestCacheExplorerMock(unittest.TestCase):
         self.mock_switch = Mock()
         self.mock_switch.active = True
 
-    @patch("kivy.uix.popup.Popup")
-    @patch("kivy.uix.boxlayout.BoxLayout")
-    @patch("kivy.uix.label.Label")
-    @patch("kivy.uix.switch.Switch")
-    def test_backend_cache_explorer_mock_creation(
-        self, mock_switch, mock_label, mock_layout, mock_popup
-    ):
+    def test_backend_cache_explorer_mock_creation(self):
         """Test backend cache explorer creation with mocked Kivy components."""
-        # Setup mocks
-        mock_popup.return_value = self.mock_popup
-        mock_label.return_value = self.mock_label
-        mock_switch.return_value = self.mock_switch
-
         # Mock the backend components
         with patch.dict(
             "sys.modules",
             {
-                "spotify_playlist_exporter_v2.ui.cache_explorer": Mock(),
-                "spotify_playlist_exporter_v2.caching.persistent_cache": Mock(),
-                "spotify_playlist_exporter_v2.logging_config": Mock(),
+                "frontend.ui.cache_explorer": Mock(),
+                "shared.logging_config": Mock(),
             },
         ):
             # Mock the backend cache explorer module

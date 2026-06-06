@@ -16,7 +16,8 @@ export interface ApiError {
   code: string;
   message: string;
   timestamp: string;
-  details?: any;
+  request_id?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface ErrorResponse {

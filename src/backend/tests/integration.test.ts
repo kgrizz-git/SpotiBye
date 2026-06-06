@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import app from '../index';
 import type { Env } from '../types/env';
 
@@ -29,7 +29,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data).toHaveProperty('status', 'healthy');
@@ -47,7 +47,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data).toHaveProperty('data');
@@ -64,7 +64,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(400);
       expect(data).toHaveProperty('error');
@@ -91,7 +91,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      await response.json();
 
       // Should return 401 or 500 due to missing auth token
       expect([401, 500]).toContain(response.status);
@@ -158,7 +158,7 @@ describe('API Integration Tests', () => {
       });
 
       const response = await app.fetch(request, mockEnv);
-      const data = await response.json();
+      const data = (await response.json()) as any;
 
       expect(response.status).toBe(404);
       expect(data).toHaveProperty('error');

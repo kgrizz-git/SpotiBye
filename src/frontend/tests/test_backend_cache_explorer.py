@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import platform
 import sys
 import unittest
 from pathlib import Path
@@ -33,6 +35,25 @@ except ImportError:
         BACKEND_AVAILABLE = False
 
 
+def _kivy_display_available() -> bool:
+    """Return True only when a real kivy window can be created.
+
+    Instantiating kivy widgets (Popup, Switch, etc.) requires SDL2 to initialize
+    a window. On headless CI runners there is no display server, so SDL2 calls
+    sys.exit() instead of raising ImportError. Tests that construct kivy widgets
+    must be skipped in those environments.
+    """
+    if os.environ.get("KIVY_WINDOW") in ("headless", "mock"):
+        return False
+    if platform.system() == "Linux":
+        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            return False
+    return True
+
+
+KIVY_DISPLAY_AVAILABLE = _kivy_display_available()
+
+
 class TestBackendCacheExplorer(unittest.TestCase):
     """Test backend cache explorer functionality."""
 
@@ -40,6 +61,8 @@ class TestBackendCacheExplorer(unittest.TestCase):
         """Set up test fixtures."""
         if not BACKEND_AVAILABLE:
             self.skipTest("Backend components not available")
+        if not KIVY_DISPLAY_AVAILABLE:
+            self.skipTest("Kivy window not available in this environment")
 
         # Mock backend client
         self.mock_client = Mock()
@@ -239,6 +262,8 @@ class TestCacheExplorerIntegration(unittest.TestCase):
         """Set up test fixtures."""
         if not BACKEND_AVAILABLE:
             self.skipTest("Backend components not available")
+        if not KIVY_DISPLAY_AVAILABLE:
+            self.skipTest("Kivy window not available in this environment")
 
     @patch("src.frontend.ui.backend_cache_explorer.resolve_startup_backend_url")
     @patch("src.frontend.ui.backend_cache_explorer.BackendClient")

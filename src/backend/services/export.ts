@@ -1,3 +1,14 @@
+/**
+ * Export service — orchestrates multi-playlist export to CSV, XLSX, or JSON.
+ *
+ * Uses a two-phase cursor approach (Collection → Assembly) to survive Cloudflare
+ * Worker CPU time limits when processing large playlists.
+ *
+ * Golden Principle #3: Cursors are persisted to KV before any destructive step.
+ * Never remove cursor persistence or move it after data consumption.
+ *
+ * Reference: docs/design-docs/resumable-export-cursors.md
+ */
 import { SpotifyService } from './spotify';
 import ExcelJS from 'exceljs';
 import * as XLSX from 'xlsx';
@@ -463,11 +474,12 @@ export class ExportService {
     let offset = 0;
     const limit = 100;
 
-    while (true) {
+    let hasMore = true;
+    while (hasMore) {
       const tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
       allTracks.push(...tracksData.items);
 
-      if (tracksData.items.length < limit) break;
+      if (tracksData.items.length < limit) { hasMore = false; break; }
       offset += limit;
     }
 
@@ -1038,7 +1050,7 @@ export class ExportService {
   }
 
   private sanitizeSheetName(name: string): string {
-    const cleaned = name.replace(/[\\/*?:\[\]]/g, ' ').trim();
+    const cleaned = name.replace(/[\\/*?:[\]]/g, ' ').trim();
     return (cleaned || 'Playlist').slice(0, 31);
   }
 

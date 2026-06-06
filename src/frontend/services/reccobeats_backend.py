@@ -102,7 +102,7 @@ class ReccoBeatsBackendService:
                 elif status == "failed":
                     error_msg = status_response.get("error", "Analysis failed")
                     raise BackendAPIError(f"Analysis failed: {error_msg}")
-                elif status in ["pending", "running"]:
+                elif status in ["pending", "processing", "running"]:
                     # Update progress if analysis task is provided
                     if analysis_task:
                         analysis_task.update_progress(

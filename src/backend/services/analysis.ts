@@ -1,6 +1,5 @@
 import { SpotifyService } from './spotify';
-import { CacheService } from './cache';
-import type { Env } from '../types/env';
+import type { SpotifyArtistFull } from '../types/spotify';
 
 export class AnalysisService {
   private accessToken: string;
@@ -29,6 +28,21 @@ export class AnalysisService {
       // Get audio features for all tracks
       const audioFeatures = await spotifyService.getMultipleAudioFeatures(trackIds);
 
+      // Collect unique artist IDs and fetch full artist objects (for genre data)
+      const artistIdSet = new Set<string>();
+      for (const item of tracksData.items) {
+        for (const artist of (item.track?.artists ?? [])) {
+          if (artist.id) artistIdSet.add(artist.id);
+        }
+      }
+      const artistData = await spotifyService.getArtists([...artistIdSet]);
+
+      const spotifyInsights = await this.generatePlaylistInsights(
+        tracksData.items.map((item: any) => item.track),
+        audioFeatures,
+        artistData
+      );
+
       // Prepare data for ReccoBeats analysis
       const analysisData = {
         playlist_id: playlistId,
@@ -45,17 +59,16 @@ export class AnalysisService {
       };
 
       // Call ReccoBeats API
-      const analysisResults = await this.callReccoBeatsAPI(analysisData);
-
-      // Store results (this would be done via the cache service passed in)
-      // For now, we'll just return the results
+      const reccoBeatsResult = await this.callReccoBeatsAPI(analysisData);
 
       return {
         job_id: jobId,
         playlist_id: playlistId,
         user_id: userId,
         status: 'completed',
-        results: analysisResults,
+        computed_at: new Date().toISOString(),
+        ...spotifyInsights,
+        reccobeats_raw: reccoBeatsResult,
         completed_at: new Date().toISOString()
       };
     } catch (error) {
@@ -92,7 +105,7 @@ export class AnalysisService {
     };
   }
 
-  async generatePlaylistInsights(tracks: any[], audioFeatures: any[]): Promise<any> {
+  async generatePlaylistInsights(tracks: any[], audioFeatures: any[], artistData: SpotifyArtistFull[] = []): Promise<any> {
     // Calculate various metrics
     const totalTracks = tracks.length;
     const totalDuration = tracks.reduce((sum, track) => sum + track.duration_ms, 0);
@@ -128,10 +141,30 @@ export class AnalysisService {
       },
       artists: {
         unique_artists: Object.keys(artistCounts).length,
-        top_artists: topArtists
+        top_artists: topArtists,
+        diversity: totalTracks > 0 ? Object.keys(artistCounts).length / totalTracks : 0,
       },
+      genre_distribution: this.aggregateGenres(artistData),
       insights: this.generateInsights(avgFeatures, energyDistribution, danceabilityDistribution)
     };
+  }
+
+  private aggregateGenres(artists: SpotifyArtistFull[]): Record<string, { count: number; percentage: number }> {
+    const raw: Record<string, number> = {};
+    for (const artist of artists) {
+      for (const genre of (artist.genres ?? [])) {
+        raw[genre] = (raw[genre] ?? 0) + 1;
+      }
+    }
+    const total = Object.values(raw).reduce((s, n) => s + n, 0);
+    if (total === 0) return {};
+
+    return Object.fromEntries(
+      Object.entries(raw)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 15)
+        .map(([genre, count]) => [genre, { count, percentage: Math.round((count / total) * 1000) / 10 }])
+    );
   }
 
   private calculateAverageAudioFeatures(features: any[]): any {
@@ -178,7 +211,7 @@ export class AnalysisService {
     };
   }
 
-  private generateInsights(avgFeatures: any, energyDist: any, danceabilityDist: any): string[] {
+  private generateInsights(avgFeatures: any, energyDist: any, _danceabilityDist: any): string[] {
     const insights: string[] = [];
 
     if (avgFeatures.energy > 0.7) {

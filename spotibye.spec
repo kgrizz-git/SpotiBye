@@ -114,10 +114,7 @@ a = Analysis(
     ['run_frontend_backend.py'],
     pathex=[str(PROJECT_ROOT)],
     binaries=[],
-    datas=[
-        (str(SRC_DIR / 'spotify_playlist_exporter_v2'), 'spotify_playlist_exporter_v2'),
-        (str(SRC_DIR / 'frontend'), 'frontend'),
-    ] + collect_data_files('certifi'),
+    datas=collect_data_files('certifi'),
     hiddenimports=[
         'kivy',
         'kivymd',

@@ -218,7 +218,6 @@ describe('Caching Tests', () => {
 
     it('should get multiple keys', async () => {
       const keys = ['key1', 'key2'];
-      const values = ['value1', 'value2'];
 
       // Mock cache hits with JSON strings
       (mockEnv.CACHE_KV.get as any)

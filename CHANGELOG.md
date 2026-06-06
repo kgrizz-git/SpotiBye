@@ -6,6 +6,14 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- Optimized GitHub Actions workflows to reduce redundant CI runs by 40-60% while maintaining full test coverage on protected branches
+  - CI now runs only on main/develop/WIP branches instead of all branches
+  - Security scans run only on PRs (not duplicate push events) with weekly baseline scans
+  - Language-specific security jobs (Bandit, npm audit) skip when irrelevant files change
+  - Deployment workflows skip redundant test runs when CI already validated the code
+  - Streamlined dependency review to single job, removing duplicates
+
 ### Fixed
 - Fixed backend authentication integration tests to match the current OAuth redirect/state flow used by the frontend client and authenticator.
 - Fixed backend cache explorer startup to use the current backend URL configuration API instead of the removed `BackendConfig` class.

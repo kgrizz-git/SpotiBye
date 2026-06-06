@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import json
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -33,9 +36,9 @@ from ..screens.backend_main_screen_adapter import (
 from ..ui.backend_selector_popup import BackendSelectorPopup
 
 # Import original components for compatibility
-from ...spotify_playlist_exporter_v2.screens.main_screen import MainScreen
-from ...spotify_playlist_exporter_v2.logging_config import logger as original_logger
-from ...spotify_playlist_exporter_v2.utils.platform_utils import (
+from ..screens.backend_main_screen import BackendMainScreen
+from ...shared.logging_config import logger as original_logger
+from ..utils.platform_utils import (
     diagnose_macos_issues,
     set_window_basics,
 )
@@ -124,8 +127,8 @@ class BackendSpotifyExporterApp(MDApp):
             )
             self.login_screen.name = "login"
 
-            # Create main screen (original version)
-            self.main_screen = MainScreen(name="main")
+            # Create main screen (backend-native version)
+            self.main_screen = BackendMainScreen(name="main")
 
             self.screen_manager.add_widget(self.login_screen)
             self.screen_manager.add_widget(self.main_screen)
@@ -235,36 +238,38 @@ class BackendSpotifyExporterApp(MDApp):
     # ------------------------------------------------------------------
     def _try_auto_login(self) -> None:
         """Attempt to auto-login using cached token."""
+        if not self.cache_manager:
+            original_logger.debug("No cache manager available for auto-login")
+            return
+
+        cached_token = self.cache_manager.load_auth_token()
+        if not cached_token or not cached_token.get("token"):
+            original_logger.debug("No valid cached token found")
+            return
+
+        token = cached_token["token"]
+
+        if _is_jwt_expired(token):
+            original_logger.info(
+                "Cached JWT is expired — clearing and requiring fresh login"
+            )
+            self.cache_manager.clear_auth_token()
+            return
+
         try:
-            if not self.cache_manager:
-                original_logger.debug("No cache manager available for auto-login")
-                return
+            if self.backend_client:
+                self.backend_client.set_auth_token(token)
 
-            # Load cached token
-            cached_token = self.cache_manager.load_auth_token()
-            if cached_token and cached_token.get("token"):
-                # Set token in backend client
-                if self.backend_client:
-                    self.backend_client.set_auth_token(cached_token["token"])
+            self.token_info = {"access_token": token}
+            self.username = cached_token.get("username", "User")
 
-                # Extract user info if available
-                username = cached_token.get("username", "User")
-
-                # Set app state
-                self.token_info = {"access_token": cached_token["token"]}
-                self.username = username
-
-                original_logger.info(f"Auto-login successful for user: {username}")
-                # Use standard transition so backend adapter hooks are initialized.
-                self.switch_to_main()
-            else:
-                original_logger.debug("No valid cached token found")
+            original_logger.info(f"Auto-login successful for user: {self.username}")
+            self.switch_to_main()
 
         except Exception as e:
-            original_logger.error(f"Auto-login failed: {e}")
-            # Clear invalid token
-            if self.cache_manager:
-                self.cache_manager.clear_auth_token()
+            # Don't wipe the cached token for non-auth errors (e.g. UI init failures).
+            # The token will be replaced naturally when the user completes a new login.
+            original_logger.error(f"Auto-login failed during screen transition: {e}")
 
     def logout(self) -> None:
         """Logout user and clear all authentication state."""
@@ -294,6 +299,38 @@ class BackendSpotifyExporterApp(MDApp):
         except Exception as e:
             original_logger.error(f"Error during logout: {e}")
 
+    def handle_session_expired(
+        self, message: str = "Session expired. Please login again."
+    ) -> None:
+        """Handle a backend session expiry without wiping the persisted token.
+
+        Called when the backend returns 401 mid-session. Unlike a full logout,
+        this only clears the in-memory credential so the cached token file is
+        preserved. The file will be overwritten when the user completes the next
+        OAuth flow, so there is no stale-token risk.
+        """
+        try:
+            if self.backend_client:
+                self.backend_client.clear_auth_token()
+            self.token_info = None
+            self.username = None
+
+            if hasattr(self, "screen_manager") and self.screen_manager:
+                self.screen_manager.current = "login"
+
+            login = getattr(self, "login_screen", None)
+            if login:
+                status = getattr(login, "status_label", None)
+                if status:
+                    status.text = message
+                    status.color = (1, 0.7, 0.3, 1)
+
+        except Exception as exc:
+            original_logger.error("Error handling session expiry: %s", exc)
+
+    # Alias expected by main_screen._on_backend_error
+    prompt_reauthentication = handle_session_expired
+
     # ------------------------------------------------------------------
     # App lifecycle
     # ------------------------------------------------------------------
@@ -301,7 +338,7 @@ class BackendSpotifyExporterApp(MDApp):
         """Handle app stop event."""
         try:
             # Cancel any ongoing export jobs
-            from ...spotify_playlist_exporter_v2.state import current_export_job
+            from ..state import current_export_job
 
             if current_export_job:
                 current_export_job["cancelled"] = True
@@ -484,6 +521,22 @@ class BackendSpotifyExporterApp(MDApp):
 
         except Exception as e:
             original_logger.error(f"Error refreshing backend connection: {e}")
+
+
+def _is_jwt_expired(token: str) -> bool:
+    """Return True if the JWT payload's exp claim is in the past."""
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return True
+        padded = parts[1] + "=" * (4 - len(parts[1]) % 4)
+        payload = json.loads(
+            base64.b64decode(padded.replace("-", "+").replace("_", "/"))
+        )
+        exp = payload.get("exp")
+        return exp is not None and time.time() > exp
+    except Exception:
+        return False  # Can't decode — let the backend decide
 
 
 # Factory function for easy instantiation

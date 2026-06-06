@@ -85,7 +85,7 @@ Notes:
 ### Desktop executable workflow
 - File: `.github/workflows/build.yml`
 - Triggered by:
-  - tag push matching `v*`
+  - tag push matching `v*`, when the tagged commit is on `main`
   - manual run (`workflow_dispatch`)
 - Builds on `windows-latest`, `macos-latest`, `ubuntu-latest`
 - Produces artifacts:

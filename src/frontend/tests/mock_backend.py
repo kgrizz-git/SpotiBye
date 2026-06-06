@@ -372,6 +372,9 @@ class MockBackendServer:
                 return MockBackendHandler(self.test_data, *args, **kwargs)
 
             self.server = HTTPServer((self.host, self.port), handler)
+            self.port = self.server.server_address[
+                1
+            ]  # capture actual port (handles port=0)
             self.server_thread = threading.Thread(target=self.server.serve_forever)
             self.server_thread.daemon = True
             self.server_thread.start()

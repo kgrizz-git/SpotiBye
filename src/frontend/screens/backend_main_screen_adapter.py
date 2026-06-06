@@ -12,7 +12,7 @@ from ..services.backend_client import BackendClient, BackendAPIError
 from ..services.reccobeats_backend import ReccoBeatsBackendService
 from ..caching.backend_cache import get_cache_manager
 from ..utils.network_utils import NetworkStatusMonitor, format_error_message
-from ...spotify_playlist_exporter_v2.logging_config import logger
+from ...shared.logging_config import logger
 
 
 class BackendMainScreenAdapter:

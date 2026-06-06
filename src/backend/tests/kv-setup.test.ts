@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import app from '../index';
 import type { Env } from '../types/env';
 
@@ -36,12 +36,12 @@ describe('KV Namespace Setup Tests', () => {
 
       // Test cache KV operations
       await mockEnv.CACHE_KV.put(testKey, JSON.stringify(testValue));
-      const cachedValue = await mockEnv.CACHE_KV.get(testKey);
+      await mockEnv.CACHE_KV.get(testKey);
       expect(mockEnv.CACHE_KV.put).toHaveBeenCalledWith(testKey, JSON.stringify(testValue));
 
       // Test session KV operations
       await mockEnv.SESSIONS_KV.put(testKey, JSON.stringify(testValue));
-      const sessionValue = await mockEnv.SESSIONS_KV.get(testKey);
+      await mockEnv.SESSIONS_KV.get(testKey);
       expect(mockEnv.SESSIONS_KV.put).toHaveBeenCalledWith(testKey, JSON.stringify(testValue));
     });
 
@@ -96,7 +96,7 @@ describe('KV Namespace Setup Tests', () => {
       await cacheService.set(testKey, testValue);
       expect(mockKV.put).toHaveBeenCalledWith(testKey, JSON.stringify(testValue), undefined);
 
-      const retrievedValue = await cacheService.get(testKey);
+      await cacheService.get(testKey);
       expect(mockKV.get).toHaveBeenCalledWith(testKey);
     });
 
@@ -106,7 +106,7 @@ describe('KV Namespace Setup Tests', () => {
       const jwtService = new JWTService('test-secret');
 
       // Test JWT operations
-      const payload = { sub: 'test-user', email: 'test@example.com', name: 'Test User' };
+      const payload = { sub: 'test-user', email: 'test@example.com', name: 'Test User', session_id: 'test-session' };
       const token = await jwtService.generateToken(payload);
 
       expect(typeof token).toBe('string');

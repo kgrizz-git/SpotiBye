@@ -1,3 +1,0 @@
-"""Spotify Playlist Exporter V2 package."""
-
-__version__ = "0.1.5"

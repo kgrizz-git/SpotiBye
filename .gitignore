@@ -27,3 +27,7 @@ docs/api_key_security.md
 .env.local
 .env.production
 .env.development
+
+# AI/IDE tooling (local agent config, not project code)
+.kilo/
+.windsurf/

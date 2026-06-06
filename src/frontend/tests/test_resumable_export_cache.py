@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.frontend.caching.backend_cache import BackendCacheManager
+from ..caching.backend_cache import BackendCacheManager
 
 
 class TestResumableExportCache(unittest.TestCase):

@@ -1,182 +1,50 @@
-"""Test runner for frontend backend integration."""
+"""Thin wrapper around pytest for frontend integration tests.
+
+All test classes are now standard pytest classes collected automatically.
+Use this script for quick local runs; the pre-push hook calls pytest directly.
+"""
 
 from __future__ import annotations
 
-import logging
+import subprocess
 import sys
-from typing import Dict, Any
+from pathlib import Path
 
-from .test_framework import BackendTestFramework
-from .test_auth import TestAuthenticationFlow
-from .test_ui import TestUIFunctionality
-from .test_performance import TestPerformance
-from .test_cache import TestCachePerformance
-from .test_ui_responsiveness import TestUIResponsiveness
-from .test_configuration import TestConfiguration
+_TESTS_DIR = Path(__file__).parent
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-
-logger = logging.getLogger(__name__)
+_TEST_FILES: dict[str, str] = {
+    "auth": "test_auth.py",
+    "ui": "test_ui.py",
+    "performance": "test_performance.py",
+    "cache": "test_cache.py",
+    "ui-responsiveness": "test_ui_responsiveness.py",
+    "config": "test_configuration.py",
+}
 
 
-def run_ui_responsiveness_tests_only() -> Dict[str, Any]:
-    """Run only UI responsiveness tests."""
-    framework = BackendTestFramework()
-
-    if not framework.setup_mock_backend():
-        return {"success": False, "message": "Failed to setup mock backend"}
-
-    try:
-        ui_responsiveness_tests = TestUIResponsiveness(framework)
-        return ui_responsiveness_tests.run_all_tests()
-    finally:
-        framework.teardown_mock_backend()
+def _run_pytest(target: Path) -> int:
+    # args are fully controlled: executable + hardcoded flags + resolved Path
+    cmd = [sys.executable, "-m", "pytest", str(target), "-v"]
+    # cmd contains only sys.executable, hardcoded flags, and a Path derived from _TEST_FILES values
+    return subprocess.run(
+        cmd
+    ).returncode  # nosemgrep: dangerous-subprocess-use-tainted-env-args
 
 
-def run_configuration_tests_only() -> Dict[str, Any]:
-    """Run only configuration tests."""
-    framework = BackendTestFramework()
+def main() -> int:
+    if len(sys.argv) < 2:
+        return _run_pytest(_TESTS_DIR)
 
-    try:
-        config_tests = TestConfiguration(framework)
-        return config_tests.run_all_tests()
-    finally:
-        # Configuration tests don't need mock backend
-        pass
+    test_type = sys.argv[1].lower()
+    filename = _TEST_FILES.get(test_type)
+    if filename is None:
+        print(f"Unknown test type: {test_type!r}")
+        print(f"Available: {', '.join(_TEST_FILES)}")
+        return 1
 
-
-def run_all_tests() -> Dict[str, Any]:
-    """Run all backend integration tests."""
-    framework = BackendTestFramework()
-
-    print("Starting backend integration tests...")
-
-    # Setup mock backend
-    if not framework.setup_mock_backend():
-        return {"success": False, "message": "Failed to setup mock backend"}
-
-    try:
-        # Run authentication tests
-        auth_tests = TestAuthenticationFlow(framework)
-        auth_results = auth_tests.run_all_tests()
-
-        # Clear results for next test suite
-        framework.clear_results()
-
-        # Run UI functionality tests
-        ui_tests = TestUIFunctionality(framework)
-        ui_results = ui_tests.run_all_tests()
-
-        # Clear results for next test suite
-        framework.clear_results()
-
-        # Run performance tests
-        perf_tests = TestPerformance(framework)
-        perf_results = perf_tests.run_all_tests()
-
-        # Get overall summary
-        summary = framework.get_summary()
-
-        print("\nTest Results Summary:")
-        print(f"Total Tests: {summary['total_tests']}")
-        print(f"Passed: {summary['passed_tests']}")
-        print(f"Failed: {summary['failed_tests']}")
-        print(f"Success Rate: {summary['success_rate']:.1f}%")
-
-        return {
-            "success": True,
-            "auth_results": auth_results,
-            "ui_results": ui_results,
-            "performance_results": perf_results,
-            "overall_summary": summary,
-        }
-
-    finally:
-        # Cleanup
-        framework.teardown_mock_backend()
-
-
-def run_auth_tests_only() -> Dict[str, Any]:
-    """Run only authentication tests."""
-    framework = BackendTestFramework()
-
-    if not framework.setup_mock_backend():
-        return {"success": False, "message": "Failed to setup mock backend"}
-
-    try:
-        auth_tests = TestAuthenticationFlow(framework)
-        return auth_tests.run_all_tests()
-    finally:
-        framework.teardown_mock_backend()
-
-
-def run_ui_tests_only() -> Dict[str, Any]:
-    """Run only UI functionality tests."""
-    framework = BackendTestFramework()
-
-    if not framework.setup_mock_backend():
-        return {"success": False, "message": "Failed to setup mock backend"}
-
-    try:
-        ui_tests = TestUIFunctionality(framework)
-        return ui_tests.run_all_tests()
-    finally:
-        framework.teardown_mock_backend()
-
-
-def run_performance_tests_only() -> Dict[str, Any]:
-    """Run only performance tests."""
-    framework = BackendTestFramework()
-
-    if not framework.setup_mock_backend():
-        return {"success": False, "message": "Failed to setup mock backend"}
-
-    try:
-        perf_tests = TestPerformance(framework)
-        return perf_tests.run_all_tests()
-    finally:
-        framework.teardown_mock_backend()
-
-
-def run_cache_tests_only() -> Dict[str, Any]:
-    """Run only cache performance tests."""
-    framework = BackendTestFramework()
-
-    if not framework.setup_mock_backend():
-        return {"success": False, "message": "Failed to setup mock backend"}
-
-    try:
-        cache_tests = TestCachePerformance(framework)
-        return cache_tests.run_all_tests()
-    finally:
-        framework.teardown_mock_backend()
+    # filename comes from the controlled dict above, never from raw user input
+    return _run_pytest(_TESTS_DIR / filename)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        test_type = sys.argv[1].lower()
-
-        if test_type == "auth":
-            results = run_auth_tests_only()
-        elif test_type == "ui":
-            results = run_ui_tests_only()
-        elif test_type == "performance":
-            results = run_performance_tests_only()
-        elif test_type == "cache":
-            results = run_cache_tests_only()
-        elif test_type == "ui-responsiveness":
-            results = run_ui_responsiveness_tests_only()
-        elif test_type == "config":
-            results = run_configuration_tests_only()
-        else:
-            print(f"Unknown test type: {test_type}")
-            print("Available: auth, ui, performance, cache, ui-responsiveness, config")
-            sys.exit(1)
-    else:
-        results = run_all_tests()
-
-    # Exit with appropriate code
-    sys.exit(0 if results["success"] else 1)
+    sys.exit(main())
