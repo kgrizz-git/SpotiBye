@@ -15,13 +15,13 @@ This document explains the optimizations made to reduce redundant GitHub Actions
 ## Optimizations Implemented
 
 ### 1. CI Workflow (`ci.yml`)
-**Before**: Ran on all branch pushes and PRs  
+**Before**: Ran on all branch pushes and PRs
 **After**: Only runs on pushes/PRs to `main`, `develop`, and `WIP` branches
 
 **Impact**: Reduces CI runs on feature branches while maintaining coverage on important branches
 
 ### 2. Security Workflow (`security.yml`)
-**Before**: 
+**Before**:
 - Ran on every push to main/develop
 - Ran on every PR to main/develop
 - No scheduled runs
@@ -31,7 +31,7 @@ This document explains the optimizations made to reduce redundant GitHub Actions
 - Added weekly scheduled scan (every Monday)
 - Added conditional execution for language-specific scans
 
-**Impact**: 
+**Impact**:
 - Eliminates duplicate runs (PR + push)
 - Adds weekly baseline security scan
 - Skips Python scans when only JS/TS files changed, and vice versa
@@ -41,7 +41,7 @@ This document explains the optimizations made to reduce redundant GitHub Actions
 
 **After**: Streamlined to single GitHub dependency-review action with license compliance
 
-**Impact**: 
+**Impact**:
 - Removed duplicate Python/Node dependency audits (already in `security.yml`)
 - Maintains license compliance checking
 - Faster execution with single job
@@ -49,7 +49,7 @@ This document explains the optimizations made to reduce redundant GitHub Actions
 ### 4. Deploy Backend (`deploy-backend.yml`)
 **Before**: Always ran full test suite before deployment
 
-**After**: 
+**After**:
 - Skips tests on push to main (CI already ran them)
 - Only runs tests for manual triggers or PRs
 - Deployment proceeds if tests pass OR are skipped

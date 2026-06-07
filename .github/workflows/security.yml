@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if Python files were changed
     if: |
-      github.event_name == 'schedule' || 
+      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.changed_files, '.py') ||
       contains(github.event.pull_request.changed_files, 'requirements.txt')
@@ -140,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if Node.js dependencies changed
     if: |
-      github.event_name == 'schedule' || 
+      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.changed_files, 'package') ||
       contains(github.event.pull_request.changed_files, '.js') ||

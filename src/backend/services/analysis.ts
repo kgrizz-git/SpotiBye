@@ -1,5 +1,50 @@
 import { SpotifyService } from './spotify';
-import type { SpotifyArtistFull } from '../types/spotify';
+import type { SpotifyArtistFull, SpotifyTrack, SpotifyPlaylistTrackItem } from '../types/spotify';
+
+interface AnalysisResult {
+  job_id: string;
+  playlist_id: string;
+  user_id: string;
+  status: string;
+  computed_at: string;
+  completed_at: string;
+  overview?: {
+    total_tracks: number;
+    total_duration_ms: number;
+    average_duration_ms: number;
+    formatted_duration: string;
+  };
+  artists?: {
+    unique_artists: number;
+    top_artists: Array<{ artist: string; count: number }>;
+    diversity: number;
+  };
+  genre_distribution?: Record<string, { count: number; percentage: number }>;
+  insights?: string[];
+}
+
+interface JobStatus {
+  job_id: string;
+  status: string;
+  progress: number;
+  started_at: string;
+}
+
+interface PlaylistInsights {
+  overview: {
+    total_tracks: number;
+    total_duration_ms: number;
+    average_duration_ms: number;
+    formatted_duration: string;
+  };
+  artists: {
+    unique_artists: number;
+    top_artists: Array<{ artist: string; count: number }>;
+    diversity: number;
+  };
+  genre_distribution: Record<string, { count: number; percentage: number }>;
+  insights: string[];
+}
 
 export class AnalysisService {
   private accessToken: string;
@@ -9,57 +54,30 @@ export class AnalysisService {
     this.accessToken = accessToken;
   }
 
-  async analyzePlaylist(playlistId: string, userId: string, jobId: string): Promise<any> {
+  async analyzePlaylist(playlistId: string, userId: string, jobId: string): Promise<AnalysisResult> {
     try {
-      // This would typically run in a Durable Object or background job
-      // For now, we'll implement it as a synchronous process
-
       const spotifyService = new SpotifyService(this.accessToken);
 
       // Get playlist details and tracks
-      const playlist = await spotifyService.getPlaylist(playlistId);
       const tracksData = await spotifyService.getPlaylistTracks(playlistId, 100, 0);
 
-      // Extract track IDs
-      const trackIds = tracksData.items
-        .filter((item: any) => item.track && item.track.id)
-        .map((item: any) => item.track.id);
-
-      // Get audio features for all tracks
-      const audioFeatures = await spotifyService.getMultipleAudioFeatures(trackIds);
+      // Normalize items: handle both .track (old) and .item (Feb-2026 shape)
+      const tracks = tracksData.items
+        .map((item: SpotifyPlaylistTrackItem) => item.track ?? item.item)
+        .filter((t): t is SpotifyTrack => t?.id !== undefined);
 
       // Collect unique artist IDs and fetch full artist objects (for genre data)
       const artistIdSet = new Set<string>();
-      for (const item of tracksData.items) {
-        for (const artist of (item.track?.artists ?? [])) {
+      for (const track of tracks) {
+        for (const artist of (track.artists ?? [])) {
           if (artist.id) artistIdSet.add(artist.id);
         }
       }
       const artistData = await spotifyService.getArtists([...artistIdSet]);
 
-      const spotifyInsights = await this.generatePlaylistInsights(
-        tracksData.items.map((item: any) => item.track),
-        audioFeatures,
-        artistData
-      );
-
-      // Prepare data for ReccoBeats analysis
-      const analysisData = {
-        playlist_id: playlistId,
-        playlist_name: playlist.name,
-        tracks: tracksData.items.map((item: any, index: number) => ({
-          id: item.track.id,
-          name: item.track.name,
-          artists: item.track.artists.map((artist: any) => artist.name),
-          album: item.track.album.name,
-          duration_ms: item.track.duration_ms,
-          popularity: item.track.popularity ?? 0,
-          audio_features: audioFeatures[index] || null
-        }))
-      };
-
-      // Call ReccoBeats API
-      const reccoBeatsResult = await this.callReccoBeatsAPI(analysisData);
+      // NOTE: Spotify /audio-features was removed in the Feb 2026 API migration and
+      // returns HTTP 403. Insights are built from track metadata + artist genres only.
+      const spotifyInsights = await this.generatePlaylistInsights(tracks, artistData);
 
       return {
         job_id: jobId,
@@ -68,7 +86,6 @@ export class AnalysisService {
         status: 'completed',
         computed_at: new Date().toISOString(),
         ...spotifyInsights,
-        reccobeats_raw: reccoBeatsResult,
         completed_at: new Date().toISOString()
       };
     } catch (error) {
@@ -77,7 +94,7 @@ export class AnalysisService {
     }
   }
 
-  private async callReccoBeatsAPI(data: any): Promise<any> {
+  private async callReccoBeatsAPI(data: unknown): Promise<unknown> {
     const response = await fetch(`${this.reccoBeatsUrl}/analyze`, {
       method: 'POST',
       headers: {
@@ -94,7 +111,7 @@ export class AnalysisService {
     return await response.json();
   }
 
-  async getAnalysisJobStatus(jobId: string): Promise<any> {
+  async getAnalysisJobStatus(jobId: string): Promise<JobStatus> {
     // This would typically query a Durable Object or database for job status
     // For now, we'll return a placeholder
     return {
@@ -105,25 +122,28 @@ export class AnalysisService {
     };
   }
 
-  async generatePlaylistInsights(tracks: any[], audioFeatures: any[], artistData: SpotifyArtistFull[] = []): Promise<any> {
-    // Calculate various metrics
+  async generatePlaylistInsights(tracks: SpotifyTrack[], artistData: SpotifyArtistFull[] = []): Promise<PlaylistInsights> {
     const totalTracks = tracks.length;
-    const totalDuration = tracks.reduce((sum, track) => sum + track.duration_ms, 0);
+    if (totalTracks === 0) {
+      return {
+        overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
+        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
+        genre_distribution: {},
+        insights: []
+      };
+    }
+
+    const totalDuration = tracks.reduce((sum, track) => sum + (track.duration_ms ?? 0), 0);
     const avgDuration = totalDuration / totalTracks;
 
-    // Audio feature averages
-    const avgFeatures = this.calculateAverageAudioFeatures(audioFeatures);
-
-    // Genre analysis (simplified - would need Spotify API for genres)
     const artistCounts = this.countArtists(tracks);
     const topArtists = Object.entries(artistCounts)
-      .sort(([,a], [,b]) => (b as number) - (a as number))
+      .sort(([, a], [, b]) => (b as number) - (a as number))
       .slice(0, 10)
       .map(([artist, count]) => ({ artist, count }));
 
-    // Energy and danceability distribution
-    const energyDistribution = this.calculateDistribution(audioFeatures.map(f => f.energy));
-    const danceabilityDistribution = this.calculateDistribution(audioFeatures.map(f => f.danceability));
+    const genreDistribution = this.aggregateGenres(artistData);
+    const insights = this.generateInsightsFromMetadata(tracks, genreDistribution);
 
     return {
       overview: {
@@ -132,20 +152,13 @@ export class AnalysisService {
         average_duration_ms: avgDuration,
         formatted_duration: this.formatDuration(totalDuration)
       },
-      audio_features: {
-        averages: avgFeatures,
-        distributions: {
-          energy: energyDistribution,
-          danceability: danceabilityDistribution
-        }
-      },
       artists: {
         unique_artists: Object.keys(artistCounts).length,
         top_artists: topArtists,
-        diversity: totalTracks > 0 ? Object.keys(artistCounts).length / totalTracks : 0,
+        diversity: Object.keys(artistCounts).length / totalTracks,
       },
-      genre_distribution: this.aggregateGenres(artistData),
-      insights: this.generateInsights(avgFeatures, energyDistribution, danceabilityDistribution)
+      genre_distribution: genreDistribution,
+      insights
     };
   }
 
@@ -167,7 +180,7 @@ export class AnalysisService {
     );
   }
 
-  private calculateAverageAudioFeatures(features: any[]): any {
+  private calculateAverageAudioFeatures(features: Record<string, number>[]): Record<string, number> {
     if (features.length === 0) return {};
 
     const sums = features.reduce((acc, feature) => {
@@ -180,7 +193,7 @@ export class AnalysisService {
     }, {});
 
     const count = features.length;
-    const averages: any = {};
+    const averages: Record<string, number> = {};
 
     Object.keys(sums).forEach(key => {
       averages[key] = sums[key] / count;
@@ -189,9 +202,9 @@ export class AnalysisService {
     return averages;
   }
 
-  private countArtists(tracks: any[]): Record<string, number> {
-    return tracks.reduce((acc, track) => {
-      track.artists.forEach((artist: any) => {
+  private countArtists(tracks: SpotifyTrack[]): Record<string, number> {
+    return tracks.reduce((acc: Record<string, number>, track) => {
+      track.artists.forEach((artist) => {
         acc[artist.name] = (acc[artist.name] || 0) + 1;
       });
       return acc;
@@ -211,27 +224,32 @@ export class AnalysisService {
     };
   }
 
-  private generateInsights(avgFeatures: any, energyDist: any, _danceabilityDist: any): string[] {
+  private generateInsightsFromMetadata(
+    tracks: SpotifyTrack[],
+    genreDistribution: Record<string, { count: number; percentage: number }>
+  ): string[] {
     const insights: string[] = [];
+    const total = tracks.length;
+    if (total === 0) return insights;
 
-    if (avgFeatures.energy > 0.7) {
-      insights.push('This playlist has high energy - great for workouts or parties!');
-    } else if (avgFeatures.energy < 0.3) {
-      insights.push('This playlist is quite relaxing - perfect for studying or background music.');
+    // Duration-based insight
+    const avgDurationMin = tracks.reduce((s, t) => s + (t.duration_ms ?? 0), 0) / total / 60_000;
+    if (avgDurationMin > 5) {
+      insights.push('This playlist features longer tracks — great for immersive listening.');
+    } else if (avgDurationMin < 2.5) {
+      insights.push('Short, punchy tracks — this playlist keeps things moving fast.');
     }
 
-    if (avgFeatures.danceability > 0.7) {
-      insights.push('Very danceable tracks - this playlist will get people moving!');
+    // Genre diversity
+    const topGenres = Object.entries(genreDistribution)
+      .sort(([, a], [, b]) => b.count - a.count)
+      .slice(0, 3)
+      .map(([g]) => g);
+    if (topGenres.length > 0) {
+      insights.push(`Top genres: ${topGenres.join(', ')}.`);
     }
-
-    if (avgFeatures.valence > 0.7) {
-      insights.push('This playlist has a very positive and happy mood.');
-    } else if (avgFeatures.valence < 0.3) {
-      insights.push('This playlist has a more melancholic or serious tone.');
-    }
-
-    if (energyDist.high > 60) {
-      insights.push('Most tracks are high energy - this is an intense playlist!');
+    if (Object.keys(genreDistribution).length > 10) {
+      insights.push('This playlist spans a wide variety of genres.');
     }
 
     return insights;

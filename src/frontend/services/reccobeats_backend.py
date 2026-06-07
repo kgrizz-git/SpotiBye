@@ -89,35 +89,37 @@ class ReccoBeatsBackendService:
                 logger.info("Analysis cancelled by user")
                 return {}
 
+            # Fetch current status; only catch transient request-level errors here.
+            # Terminal states (completed / failed) must not be swallowed by this handler.
             try:
                 status_response = self.backend_client.get_analysis_status(playlist_id)
-                status = status_response.get("status", "unknown")
-                progress = status_response.get("progress", 0)
-
-                logger.debug(f"Analysis status: {status}, progress: {progress}%")
-
-                if status == "completed":
-                    logger.info("Analysis completed successfully")
-                    return self.backend_client.get_analysis_results(playlist_id)
-                elif status == "failed":
-                    error_msg = status_response.get("error", "Analysis failed")
-                    raise BackendAPIError(f"Analysis failed: {error_msg}")
-                elif status in ["pending", "processing", "running"]:
-                    # Update progress if analysis task is provided
-                    if analysis_task:
-                        analysis_task.update_progress(
-                            progress, f"Analyzing playlist... {progress}%"
-                        )
-
-                    # Exponential backoff for polling
-                    time.sleep(min(poll_interval, max_poll_interval))
-                    poll_interval *= 1.5
-                else:
-                    logger.warning(f"Unknown analysis status: {status}")
-                    time.sleep(poll_interval)
-
             except BackendAPIError as e:
                 logger.error(f"Error checking analysis status: {e}")
+                time.sleep(poll_interval)
+                continue
+
+            status = status_response.get("status", "unknown")
+            progress = status_response.get("progress", 0)
+
+            logger.debug(f"Analysis status: {status}, progress: {progress}%")
+
+            if status == "completed":
+                logger.info("Analysis completed successfully")
+                return self.backend_client.get_analysis_results(playlist_id)
+            elif status == "failed":
+                # Terminal failure — stop polling immediately and propagate.
+                error_msg = status_response.get("error", "Analysis failed")
+                raise BackendAPIError(f"Analysis failed: {error_msg}")
+            elif status in ["pending", "processing", "running"]:
+                if analysis_task:
+                    analysis_task.update_progress(
+                        progress, f"Analyzing playlist... {progress}%"
+                    )
+                # Exponential backoff for polling
+                time.sleep(min(poll_interval, max_poll_interval))
+                poll_interval *= 1.5
+            else:
+                logger.warning(f"Unknown analysis status: {status}")
                 time.sleep(poll_interval)
 
         raise TimeoutError(f"Analysis timed out after {max_wait_time} seconds")
