@@ -23,6 +23,7 @@
 * see [backend analysis routes](backend-analysis-routes.md) and [playlist analysis popup notes](playlist-analysis-popup.md)
 * [fix ReccoBeats pipeline and wire to backend route](plans/reccobeats-wiring.md)
 * [Spotify API enrichment — available data for playlist details](spotify-api-enrichment.md)
+* restore reccobeats analysis functionality
 
 * see agent-first-retrofit, quality review/assessment md
 

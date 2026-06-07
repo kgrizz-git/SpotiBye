@@ -2,7 +2,7 @@
 
 > Definitive file map generated from actual imports starting at `run_frontend_backend.py`.
 > Use this to orient quickly in the codebase without reading every file.
-> Last updated: 2026-05 (Phase 5 — all frontend→v2 coupling removed).
+> Last updated: 2026-06 (v2 standalone app removed; Mermaid diagram below is stale for the v2 subgraph — see File Index for current frontend layout).
 
 ---
 
@@ -13,7 +13,7 @@ run_frontend_backend.py
   └─ src.frontend.app.SpotifyExporterApp   (re-exported from backend_app.py)
 ```
 
-There is a second, legacy entrypoint — `python -m spotify_playlist_exporter_v2` — that runs the original standalone desktop app without the Cloudflare backend. It is still functional but not the primary path.
+The `python -m spotify_playlist_exporter_v2` legacy entrypoint and the `src/spotify_playlist_exporter_v2/` directory have been removed. The backend-integrated path via `run_frontend_backend.py` is the only entrypoint.
 
 ---
 
@@ -274,32 +274,31 @@ graph TD
 
 ## Known Dead / Stub Code
 
-| File | Status | Note |
-|------|--------|------|
-| [services/reccobeats.ts](../src/backend/services/reccobeats.ts) | Test stub | Returns fake features in test env, throws otherwise. Never imported by any route. See [backend-analysis-routes.md](backend-analysis-routes.md) |
+None currently. `services/reccobeats.ts` (previously a test stub) has been removed. Analysis is now performed locally by `services/analysis.ts` using Spotify track metadata only.
 
 ---
 
-## ReccoBeats: Two Separate Paths
+## Analysis: Local Computation (no external API)
 
-ReccoBeats analysis works differently depending on mode:
+`services/analysis.ts` fetches all tracks for a playlist via `services/spotify.ts` and computes stats locally:
+- Overview: track count, total duration, average duration
+- Artists: unique artist count, top artists by frequency, diversity score
+- Genres: distribution across Spotify genre tags
+- Insights: generated text summaries
 
-| Mode | Entry point | Implementation |
-|------|-------------|---------------|
-| Standalone (no backend) | `ui/playlist_card.py` → `services/reccobeats.py` | Direct HTTP to ReccoBeats |
-| Backend-connected | `screens/backend_main_screen_adapter.py` → `services/reccobeats_backend.py` → `BackendClient` | Proxied through Cloudflare Worker → `services/analysis.ts` → ReccoBeats |
+Results are persisted to KV under `analysis:<playlistId>:<userId>:results` once complete. The previously-documented gap (results not written to KV) has been fixed.
 
-The backend proxy path has a known gap: `AnalysisService.analyzePlaylist()` returns results that the route handler never writes to KV, so `GET /analysis/playlist/:id/results` always returns 404. See [backend-analysis-routes.md](backend-analysis-routes.md) for the fix.
+The frontend uses `services/reccobeats_backend.py` → `BackendClient` → `POST /analysis/playlist/:id` for the backend-connected analysis path.
 
 ---
 
 ## Caching: Two Independent Layers
 
-When in backend mode, caching happens at two levels that can drift:
+Caching happens at two levels that can drift:
 
 | Layer | Location | TTL (playlists) | What it stores |
 |-------|----------|-----------------|----------------|
 | Python disk cache | `~/.spotibye/cache/` JSON | 1 hour | Playlists, tracks, analysis |
 | Cloudflare KV | Worker-side per-user keys | 5 minutes | Playlists, tracks, audio features |
 
-The Python layer checks first, so a 1-hour stale playlist list can be served even after the Worker would have refreshed from Spotify. See [backend-analysis-routes.md](backend-analysis-routes.md#2-backend-path-has-two-separate-cache-layers-that-can-go-stale-independently) for fix options.
+The Python layer checks first, so a 1-hour stale playlist list can be served even after the Worker would have refreshed from Spotify.

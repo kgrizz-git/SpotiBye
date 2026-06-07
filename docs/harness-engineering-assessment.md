@@ -1,654 +1,203 @@
 # Harness Engineering Assessment & Improvement Plan
 
-**Date:** June 23, 2026
-**Based on:** OpenAI Harness Engineering principles (via HumanLayer blog post)
+**Date:** June 6, 2026
+**Based on:** OpenAI harness engineering article (openai.com/index/harness-engineering/) and the gtcode.com framework (gtcode.com/articles/harness-engineering/)
+
+> Previous assessment (dated June 23, 2026) was based on a secondary blog post summary. This version is based on reading the source articles directly.
 
 ---
 
-## Executive Summary
+## Maturity Level
 
-The SpotiBye repository has a solid foundation with well-structured documentation and good test coverage, but it currently implements only ~30% of harness engineering best practices. The repo lacks progressive disclosure mechanisms, context-efficient verification, sub-agents for context control, and automated hooks for guardrails.
+The repo sits at **Level 3 (Mechanical)** on the 0–7 harness maturity scale:
 
-**Key Gaps:**
-- No skills for progressive disclosure
-- No context-efficient back-pressure mechanisms
-- No sub-agents for context-heavy tasks
-- No agent lifecycle hooks
-- Security rules flood context window unnecessarily
+| Level | Name | Status |
+|-------|------|--------|
+| 0 | Chat-assisted | ✅ Past |
+| 1 | Instructions | ✅ Done — AGENTS.md, docs/ |
+| 2 | Reproducible | ✅ Done — one-command setup, clean tests, sandboxed |
+| 3 | Mechanical | ✅ Done — linters, formatters, layer rules, CI gates |
+| 4 | Observable | ❌ Missing — runtime legibility, structured logs, browser automation |
+| 5 | Graphs | ❌ Missing — ImplementationGraph, topology, API diffs |
+| 6 | Normal form | ❌ Not started |
+| 7 | Learning | ❌ Not started |
 
-**Opportunity:** Implementing high-leverage, low-effort changes (skills + hooks) would significantly improve agent performance and task success rates.
-
----
-
-## Current State Analysis
-
-### What Exists ✅
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| `AGENTS.md` | ✅ Present | 114 lines, concise, well-structured |
-| `.github/copilot-instructions.md` | ✅ Present | 66 lines, coding conventions |
-| Codeguard security rules | ⚠️ Present | 22 rules in `.cursor/rules/` and `.github/instructions/` |
-| Backend tests | ✅ Present | 17 test files (vitest) |
-| Frontend tests | ✅ Present | 11 test files (pytest) |
-| Architecture enforcement | ✅ Present | Validates layer contracts |
-| Permissions config | ✅ Present | `.claude/settings.local.json` |
-
-### What's Missing ❌
-
-| Component | Status | Impact |
-|-----------|--------|--------|
-| MCP servers | ❌ None | Low impact - CLIs are sufficient |
-| Skills directory | ❌ None | **High** - No progressive disclosure |
-| Sub-agents | ❌ None | **High** - Context rot on complex tasks |
-| Hooks | ❌ None | **High** - No automated verification |
-| Back-pressure mechanisms | ❌ None | **High** - Tests flood context |
+The framework is explicit: move through levels in order. The next gate is Level 4.
 
 ---
 
-## Adherence to Harness Engineering Principles
+## Current State
 
-### 1. AGENTS.md / CLAUDE.md Files
+### Implemented ✅
 
-**Strengths:**
-- Concise (114 lines) - follows "less is more" principle
-- Universally applicable instructions (layer contracts, golden principles)
-- Progressive disclosure via links to deeper context
-- Not auto-generated, carefully crafted
+| Component | Notes |
+|-----------|-------|
+| `AGENTS.md` | 89 lines, navigation map with links — matches OpenAI's ~100-line target |
+| `docs/` + `dev-docs/` | Structured, indexed, extensively linked |
+| `ARCHITECTURE.md` | Layer contracts, data flow, dependency rules |
+| `dev-docs/code-map.md` | Three Mermaid diagrams (module graph, sequence, backend layers) |
+| Layered architecture + enforcement | ESLint rules + structural test enforce layer contracts |
+| Pre-commit hooks | Formatting, secrets scanning (gitleaks), SAST (semgrep) |
+| Verification scripts | `scripts/verify-all.sh` — silent on success, errors only on failure |
+| Skills (progressive disclosure) | 6 skills: spotify-api, cloudflare-worker, testing, export-formats, dependency-analysis, security |
+| Sub-agents | 4 configured: architecture-analyst, dependency-analyst, test-coverage-analyst, security-scanner |
+| Permissions config | `.claude/settings.local.json` |
 
-**Weaknesses:**
-- Contains some conditional rules that could be simplified
-- No instructions for context-efficient verification
-- Security rules (codeguard) are injected separately and flood context
+### Not Implemented ❌
 
-**Assessment:** **Partial Adherence (70%)**
+| Gap | Impact | Priority |
+|-----|--------|----------|
+| Claude Code agent lifecycle hooks | Verify scripts exist but nothing triggers them — easiest win remaining | High |
+| Runtime legibility | Agents can't observe the running app (logs, screenshots, browser) | High |
+| Context anxiety mitigation | No mechanism to prevent premature task wrap-up as context fills | Medium |
+| Planner/Generator/Evaluator structure | Current sub-agents are research analysts, not an adversarial quality loop | Medium |
+| Scheduled drift detection | No background agent scanning for principle violations | Low |
 
-### 2. MCP Servers
+---
 
-**Status:** Not implemented
+## Gaps in Detail
 
-**Assessment:** **Appropriate (N/A)**
-- The article recommends avoiding MCP when CLIs are well-represented in training data
-- SpotiBye uses standard tooling (npm, python, pytest, vitest, wrangler) that models know well
-- No need for MCP servers at this time
+### 1. Agent Lifecycle Hooks (Quick Win)
 
-### 3. Skills
+`settings.local.json` has a `permissions` block but no `hooks` block. `./scripts/verify-all.sh` is written and ready — it just needs to be wired.
 
-**Status:** Not implemented
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/verify-all.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
-**Assessment:** **Missing (0%)**
-- No `.skills/` directory exists
-- All knowledge is loaded upfront via AGENTS.md and security rules
-- No progressive disclosure mechanism
+---
 
-**Impact:** High - Context window fills with irrelevant instructions, pushing agent into "dumb zone"
+### 2. Runtime Legibility (Level 4 Gate)
 
-### 4. Sub-Agents
+The OpenAI article calls this the second major problem they solved: agents couldn't verify their own output at runtime. Their fix was Chrome DevTools Protocol — screenshots, runtime events, log/metric queries, concrete thresholds (e.g., service startup under 800ms).
 
-**Status:** Not implemented
+For SpotiBye this means:
+- Structured, machine-readable log output (JSON logs queryable by agents)
+- A way for agents to launch the frontend and observe UI state — even screenshot-based
+- Backend: structured response logging so agents can diff behavior before/after a change
 
-**Assessment:** **Missing (0%)**
-- No sub-agent configuration
-- Context-heavy tasks (analysis, tracing) pollute main agent session
-- No context isolation for research tasks
+Without this, an agent editing UI or API behavior has no way to verify the result other than reading code.
 
-**Impact:** High - Context rot on complex tasks, degraded performance at longer context lengths
+---
 
-### 5. Hooks
+### 3. Context Anxiety Mitigation
 
-**Status:** Not implemented
+The OpenAI article specifically identifies **context anxiety**: agents prematurely wrap up tasks as the context window fills, cutting corners before running out of capacity. The fix is architectural — cap the apparent context budget so the model always believes it has runway.
 
-**Assessment:** **Missing (0%)**
-- No agent lifecycle hooks
-- No automated verification before agent stops
-- No guardrails for dangerous operations
+The prior assessment framed this as "context bloat from test output," which is a symptom. The underlying issue is model behavior under perceived context pressure. Skills and sub-agents help but don't directly address it.
 
-**Impact:** High - No back-pressure, no automated quality gates
+---
 
-### 6. Back-Pressure
+### 4. Sub-Agent Structure: Analysts vs. Adversarial Loop
 
-**Status:** Partial (tests exist, not context-efficient)
+The repo has 4 analyst sub-agents (architecture, dependency, test coverage, security). These isolate context for research tasks — that's valid.
 
-**Assessment:** **Partial (30%)**
-- Tests exist in both backend and frontend
-- Architecture enforcement test validates contracts
-- **But:** Test runs likely flood context with passing test output
-- No context-efficient verification (success should be silent, errors only)
+What OpenAI actually validated was a **Planner / Generator / Evaluator** separation:
+- **Planner**: expands intent into full specs, leaves implementation details open
+- **Generator**: implements in bounded sprints, commits to a "done" contract
+- **Evaluator**: tests behavior via browser automation like a real user, not just reads code
 
-**Impact:** Medium - Verification exists but inefficient, context bloat
+The Evaluator is the critical missing piece. It's adversarial by design — structurally separate from the Generator and testing against observable behavior, not code review. For SpotiBye, an Evaluator would: launch the app, attempt a Spotify login flow, trigger an export, verify the file lands on disk.
+
+---
+
+### 5. Scheduled Drift Detection
+
+The OpenAI team ran background agents on a cron schedule to scan for principle violations and auto-submit refactoring PRs. The repo has no equivalent. Tech debt is caught only when a human or agent happens to look. Low priority until Level 4 is stable.
 
 ---
 
 ## Improvement Plan
 
-### Priority 1: Context-Efficient Verification (Back-Pressure)
+### Priority 1: Wire the Hooks (1 hour)
 
-**Goal:** Implement hooks that run verification but only surface errors.
+Add the `hooks` block to `.claude/settings.local.json`. The scripts are already written and tested. This is the only true quick win left.
 
-**Actions:**
-1. Create verification script for backend (`scripts/verify-backend.sh`):
-   ```bash
-   #!/bin/bash
-   set -e
-   cd src/backend
-
-   # Check if dependencies are installed
-   if [ ! -d "node_modules" ]; then
-     echo "Error: node_modules not found. Run 'npm install' first." >&2
-     exit 1
-   fi
-
-   # Run TypeScript compiler (no emit, check only)
-   OUTPUT=$(npx tsc --noEmit 2>&1)
-   if [ $? -ne 0 ]; then
-     echo "TypeScript errors:" >&2
-     echo "$OUTPUT" >&2
-     exit 1
-   fi
-
-   # Run linter
-   OUTPUT=$(npm run lint 2>&1)
-   if [ $? -ne 0 ]; then
-     echo "Lint errors:" >&2
-     echo "$OUTPUT" >&2
-     exit 1
-   fi
-
-   # Silent on success
-   exit 0
-   ```
-
-2. Create verification script for frontend (`scripts/verify-frontend.sh`):
-   ```bash
-   #!/bin/bash
-   set -e
-   cd src/frontend
-
-   # Check if virtual environment exists
-   if [ ! -d "venv" ] && [ ! -d ".venv" ]; then
-     echo "Warning: No virtual environment found. Tests may fail." >&2
-   fi
-
-   # Run pytest in quiet mode
-   OUTPUT=$(python -m pytest tests/ -q 2>&1)
-   if [ $? -ne 0 ]; then
-     echo "Test failures:" >&2
-     echo "$OUTPUT" >&2
-     exit 1
-   fi
-
-   # Silent on success
-   exit 0
-   ```
-
-3. Create combined verification script (`scripts/verify-all.sh`):
-   ```bash
-   #!/bin/bash
-   set -e
-
-   echo "Verifying backend..."
-   ./scripts/verify-backend.sh
-
-   echo "Verifying frontend..."
-   ./scripts/verify-frontend.sh
-
-   echo "All verifications passed."
-   exit 0
-   ```
-
-4. Make scripts executable:
-   ```bash
-   chmod +x scripts/verify-*.sh
-   ```
-
-5. Configure as pre-stop hook in Claude Code settings (`.claude/settings.local.json`):
-   ```json
-   {
-     "hooks": {
-       "preStop": "./scripts/verify-all.sh"
-     }
-   }
-   ```
-
-6. Add dry-run mode for testing:
-   ```bash
-   # Add to verify-all.sh:
-   if [ "$1" = "--dry-run" ]; then
-     echo "Dry run mode - would run verifications"
-     exit 0
-   fi
-   ```
-
-**Expected Impact:** High - Agent can verify work without context bloat
-
-**Effort:** Low (2-3 hours)
-
-**Test Cases:**
-- [ ] Script exits 0 on clean repository
-- [ ] Script exits 1 with error output when TypeScript has errors
-- [ ] Script exits 1 with error output when tests fail
-- [ ] Script handles missing dependencies gracefully
-- [ ] Dry-run mode works without executing verifications
-- [ ] Pre-stop hook triggers before agent stops
+**Done when:** `./scripts/verify-all.sh` runs automatically before agent stops. Silent on clean repo, errors surface on broken repo.
 
 ---
 
-### Priority 2: Skills for Progressive Disclosure
+### Priority 2: Runtime Legibility (Level 4) (1–2 weeks)
 
-**Goal:** Create skills that load only when relevant.
+**Backend:**
+- Structured JSON logging in the Cloudflare Worker — every request/response logged with enough context for an agent to diff behavior
+- Add response shape assertions to existing vitest tests so agents get failing evidence, not just silent success
 
-**Actions:**
-1. Create `.skills/` directory structure:
-   ```
-   .skills/
-     spotify-api/
-       SKILL.md
-       auth-flow-patterns.md
-       rate-limits.md
-     cloudflare-worker/
-       SKILL.md
-       deployment-guide.md
-       wrangler-commands.md
-     testing/
-       SKILL.md
-       backend-testing.md
-       frontend-testing.md
-     export-formats/
-       SKILL.md
-       csv-excel-json.md
-     dependency-analysis/
-       SKILL.md
-       using-dependency-graph.md
-   ```
+**Frontend:**
+- Add a headless smoke-test mode: launch app, attempt auth flow, verify backend connection — producible by `pytest tests/smoke/`
+- Even a screenshot-on-failure mechanism would be meaningful progress
 
-2. Write concise SKILL.md files (each < 50 lines):
-   - When to activate the skill (keyword triggers)
-   - What files/bundles are available
-   - How to use them
-
-3. Example SKILL.md for Spotify API:
-   ```markdown
-   # Spotify API Skill
-
-   **Activate when:** User mentions "spotify", "playlist", "track", "album", "artist", or changes files in `src/backend/services/spotify.ts`
-
-   **Available bundles:**
-   - `auth-flow-patterns.md`: OAuth 2.0 PKCE flow details
-   - `rate-limits.md`: API rate limits and retry strategies
-
-   **Usage:** Load these bundles when working on Spotify API integration or authentication.
-   ```
-
-4. Example SKILL.md for Cloudflare Worker:
-   ```markdown
-   # Cloudflare Worker Skill
-
-   **Activate when:** User mentions "cloudflare", "worker", "wrangler", "deployment", or changes files in `src/backend/`
-
-   **Available bundles:**
-   - `deployment-guide.md`: How to deploy to Cloudflare Workers
-   - `wrangler-commands.md`: Common wrangler CLI commands
-
-   **Usage:** Load these bundles when deploying or configuring Cloudflare Workers.
-   ```
-
-5. Reference skills in AGENTS.md for progressive disclosure:
-   ```markdown
-   ## Skills
-
-   This repo uses skills for progressive disclosure. Skills load automatically based on context:
-   - Spotify API: activates on "spotify", "playlist", "auth"
-   - Cloudflare Worker: activates on "cloudflare", "worker", "deployment"
-   - Testing: activates on "test", "pytest", "vitest"
-   - Export formats: activates on "export", "csv", "excel", "json"
-   - Dependency analysis: activates on "dependency", "impact", "graph"
-   ```
-
-**Expected Impact:** High - Reduces context window usage, keeps agent in "smart zone"
-
-**Effort:** Medium (4-6 hours)
-
-**Test Cases:**
-- [ ] Skills directory structure created
-- [ ] Each SKILL.md is under 50 lines
-- [ ] Skills load when relevant keywords appear in user request
-- [ ] Skills load when relevant files are modified
-- [ ] Context window usage decreases by measurable amount
-- [ ] AGENTS.md references skills correctly
+**Done when:** An agent can make a change to the backend or frontend, run a command, and get observable evidence (log diff, test output with response shapes, or screenshot) confirming the change behaved as intended.
 
 ---
 
-### Priority 3: Simplify AGENTS.md
+### Priority 3: Evaluator Sub-Agent (2–3 weeks)
 
-**Goal:** Reduce conditional rules, focus on essentials.
+Create `.claude/sub-agents/evaluator.md` defining an adversarial evaluator that:
+- Receives a "done" contract from the Generator (which endpoints changed, what behavior is expected)
+- Runs the smoke test suite and compares response shapes against the contract
+- Returns pass/fail with specific evidence (log lines, response diffs) — not code review
 
-**Actions:**
-1. Move detailed layer contract rules to architecture test (already exists)
-2. Keep only:
-   - What the repo is (2-3 sentences)
-   - How to navigate (link to code-map.md)
-   - Key principles (3-5 max)
-   - How to run tests/verification (link to skills)
-3. Target: Reduce from 114 lines to ~60 lines
+This requires Priority 2 (runtime legibility) to be meaningful.
 
-**Expected Impact:** Medium - Reduces instruction budget usage
-
-**Effort:** Low (1-2 hours)
+**Done when:** Generator sub-agent can hand off a contract to Evaluator and receive evidence-backed acceptance or rejection.
 
 ---
 
-### Priority 4: Sub-Agents for Context-Heavy Tasks
+### Priority 4: Context Anxiety Mitigation (1 week)
 
-**Goal:** Isolate context-heavy research tasks.
+Options in order of effort:
+1. Add explicit "context budget" reminder to AGENTS.md — tell agents to plan for partial completion and leave clean stopping points
+2. Break complex tasks into bounded sprints in sub-agent configs — each sprint has a defined completion artifact
+3. Investigate whether Claude Code's context window settings can be capped at a lower limit
 
-**Actions:**
-1. Create sub-agent configuration directory (`.claude/sub-agents/`):
-   ```
-   .claude/
-     sub-agents/
-       architecture-analyst.md
-       dependency-analyst.md
-       test-coverage-analyst.md
-       security-scanner.md
-   ```
-
-2. Example sub-agent configuration (`architecture-analyst.md`):
-   ```markdown
-   # Architecture Analyst Sub-Agent
-
-   **Purpose:** Analyze codebase architecture and return condensed findings.
-
-   **Contract:**
-   - Input: Specific architecture question (e.g., "What are the layer contract violations?")
-   - Output: Condensed answer with `filepath:line` citations
-   - Constraint: Maximum 500 tokens in output
-   - No intermediate tool calls in parent context
-
-   **Available resources:**
-   - `ARCHITECTURE.md`
-   - `dev-docs/code-map.md`
-   - `dev-docs/dependency-graph.json`
-
-   **Example output:**
-   > Found 2 layer contract violations:
-   > - Route imports another route (src/backend/routes/user.ts:15 imports routes/admin.ts)
-   > - Service imports from routes (src/backend/services/auth.ts:8 imports routes/index.ts)
-   ```
-
-3. Example sub-agent configuration (`dependency-analyst.md`):
-   ```markdown
-   # Dependency Analyst Sub-Agent
-
-   **Purpose:** Analyze dependency impact using existing graph.
-
-   **Contract:**
-   - Input: File path or function name
-   - Output: List of affected files with impact level
-   - Constraint: Maximum 300 tokens in output
-   - Use `dev-docs/dependency-graph.json` as source of truth
-
-   **Example output:**
-   > Changing src/backend/services/spotify.ts affects:
-   > - High impact: routes/playlists.ts, routes/tracks.ts
-   > - Medium impact: services/export.ts
-   > - Low impact: middleware/auth.ts
-   ```
-
-4. Define sub-agent activation patterns:
-   - Architecture analyst: activates on "analyze architecture", "layer violations", "code structure"
-   - Dependency analyst: activates on "impact", "dependencies", "what breaks if"
-   - Test coverage analyst: activates on "test coverage", "untested code", "coverage gaps"
-   - Security scanner: activates on "security", "vulnerability", "audit"
-
-5. Document sub-agent usage patterns in AGENTS.md:
-   ```markdown
-   ## Sub-Agents
-
-   For context-heavy analysis tasks, use sub-agents to prevent context rot:
-   - Architecture analysis: invoke architecture-analyst
-   - Dependency impact: invoke dependency-analyst
-   - Test coverage: invoke test-coverage-analyst
-   - Security scanning: invoke security-scanner
-
-   Sub-agents return condensed findings with citations, keeping parent context clean.
-   ```
-
-**Expected Impact:** High - Prevents context rot on complex tasks
-
-**Effort:** Medium (6-8 hours)
-
-**Test Cases:**
-- [ ] Sub-agent configurations created in correct directory
-- [ ] Sub-agents return output under token limits
-- [ ] Sub-agent output includes filepath:line citations
-- [ ] Sub-agents activate on relevant keywords
-- [ ] Parent context stays clean (no intermediate tool calls)
-- [ ] Context rot measured before/after on complex tasks
+**Done when:** Agents on complex tasks leave clean stopping points rather than cutting corners as context fills.
 
 ---
 
-### Priority 5: Optimize Security Rules Injection
+### Priority 5: Scheduled Drift Detection (future)
 
-**Goal:** Reduce context bloat from codeguard rules.
+Once Level 4 is stable, configure a scheduled agent (Claude Code cron or equivalent) to:
+- Run `./scripts/verify-all.sh` and structural tests
+- Scan for principle violations (bare `except:`, `console.log` in non-test code, cross-layer imports)
+- Auto-submit a PR for mechanical fixes; escalate for judgment calls
 
-**Actions:**
-1. Audit which codeguard rules are actually relevant to this codebase
-2. Move rarely-needed rules to a skill that activates only for security-related tasks
-3. Keep only high-frequency rules in main context
-
-**Expected Impact:** Medium - Reduces context window usage
-
-**Effort:** Low (2-3 hours)
+Low priority until the evaluation infrastructure is solid enough for it to be reliable.
 
 ---
 
-## Implementation Roadmap
+## What the Previous Assessment Got Wrong
 
-### Phase 1: Quick Wins (1 week)
-- [ ] Implement context-efficient verification scripts (Priority 1)
-  - [ ] Create `scripts/verify-backend.sh` with error handling
-  - [ ] Create `scripts/verify-frontend.sh` with error handling
-  - [ ] Create `scripts/verify-all.sh` combined script
-  - [ ] Add dry-run mode for testing
-  - [ ] Make scripts executable
-  - [ ] Test scripts exit 0 on clean repo
-  - [ ] Test scripts exit 1 with errors on broken repo
-- [ ] Simplify AGENTS.md (Priority 3)
-  - [ ] Reduce from 114 lines to ~60 lines
-  - [ ] Move detailed rules to architecture test
-  - [ ] Keep only essential navigation and principles
-- [ ] Configure pre-stop hooks
-  - [ ] Add hook configuration to `.claude/settings.local.json`
-  - [ ] Test hook triggers before agent stops
-  - [ ] Verify silent success, noisy failure
+The prior assessment (based on a secondary blog post) identified the right components but misdescribed two things:
 
-**Acceptance Criteria:**
-- Verification scripts exit 0 on clean repository, exit 1 with error output on broken repository
-- AGENTS.md reduced to ~60 lines while retaining essential information
-- Pre-stop hook configured and tested in Claude Code settings
-- Dry-run mode works for testing without execution
+1. **Sub-agents as the key gap** — framed as "context isolation for research tasks." The OpenAI article's actual finding was about adversarial evaluation (Planner/Generator/Evaluator), not research isolation. Research analyst sub-agents help but miss the point.
 
-### Phase 2: Progressive Disclosure (2 weeks)
-- [ ] Create `.skills/` directory structure
-  - [ ] Create subdirectories: spotify-api, cloudflare-worker, testing, export-formats, dependency-analysis
-- [ ] Write SKILL.md files
-  - [ ] Spotify API skill (< 50 lines)
-  - [ ] Cloudflare Worker skill (< 50 lines)
-  - [ ] Testing skill (< 50 lines)
-  - [ ] Export formats skill (< 50 lines)
-  - [ ] Dependency analysis skill (< 50 lines)
-- [ ] Write supporting bundle files
-  - [ ] auth-flow-patterns.md
-  - [ ] rate-limits.md
-  - [ ] deployment-guide.md
-  - [ ] wrangler-commands.md
-  - [ ] backend-testing.md
-  - [ ] frontend-testing.md
-  - [ ] csv-excel-json.md
-  - [ ] using-dependency-graph.md
-- [ ] Update AGENTS.md to reference skills
-- [ ] Test skill activation
-  - [ ] Verify skills load on keyword triggers
-  - [ ] Verify skills load on file modifications
-  - [ ] Measure context window reduction
+2. **Back-pressure as "test output flooding context"** — the real problem is context anxiety (premature task wrap-up), which is a model behavior issue, not just a tooling issue. Silent verification scripts help with output volume but don't address the underlying behavior.
 
-**Acceptance Criteria:**
-- All SKILL.md files under 50 lines
-- Skills load automatically when relevant keywords appear
-- Skills load automatically when relevant files are modified
-- Context window usage reduced by 20-30%
-- AGENTS.md references skills correctly for progressive disclosure
-
-### Phase 3: Context Control (2 weeks)
-- [ ] Configure sub-agents for architecture analysis
-  - [ ] Create `.claude/sub-agents/architecture-analyst.md`
-  - [ ] Define contract (input, output format, token limits)
-  - [ ] Test with sample architecture question
-- [ ] Configure sub-agents for dependency analysis
-  - [ ] Create `.claude/sub-agents/dependency-analyst.md`
-  - [ ] Define contract using dependency-graph.json
-  - [ ] Test with sample dependency question
-- [ ] Configure sub-agents for test coverage
-  - [ ] Create `.claude/sub-agents/test-coverage-analyst.md`
-  - [ ] Define contract for coverage analysis
-  - [ ] Test with sample coverage question
-- [ ] Configure sub-agents for security scanning
-  - [ ] Create `.claude/sub-agents/security-scanner.md`
-  - [ ] Define contract for vulnerability detection
-  - [ ] Test with sample security question
-- [ ] Define sub-agent contracts and test
-  - [ ] All sub-agents return output under token limits
-  - [ ] All sub-agents include filepath:line citations
-  - [ ] Parent context stays clean (no intermediate tool calls)
-- [ ] Document sub-agent usage patterns
-  - [ ] Add sub-agent section to AGENTS.md
-  - [ ] Document activation patterns
-  - [ ] Create examples for each sub-agent
-
-**Acceptance Criteria:**
-- All 4 sub-agents configured and tested
-- Sub-agent outputs under token limits (300-500 tokens)
-- Sub-agent outputs include filepath:line citations
-- Parent context remains clean during sub-agent execution
-- Context rot reduced on complex multi-step tasks
-- AGENTS.md documents sub-agent usage patterns
-
-### Phase 4: Optimization (1 week)
-- [ ] Audit and optimize codeguard rules injection (Priority 5)
-  - [ ] Identify which codeguard rules are high-frequency
-  - [ ] Identify which codeguard rules are low-frequency
-  - [ ] Move low-frequency rules to security skill
-  - [ ] Keep only high-frequency rules in main context
-  - [ ] Test that security skill loads for security-related tasks
-- [ ] Measure context window usage before/after
-  - [ ] Run baseline measurement script
-  - [ ] Measure after all phases complete
-  - [ ] Calculate reduction percentage
-- [ ] Iterate based on agent performance metrics
-  - [ ] Track agent task success rate
-  - [ ] Track time to first correct solution
-  - [ ] Adjust if metrics don't meet targets
-
-**Acceptance Criteria:**
-- Codeguard rules audited and categorized by frequency
-- Low-frequency rules moved to security skill
-- Context window usage reduced by 30-40% from baseline
-- Agent task success rate increased by 15-20%
-- Time to first correct solution reduced by 25%
-
-**Total Timeline:** 6 weeks
+The prior plan's Phase 1–3 work (skills, verify scripts, sub-agents) was worth doing and has been done. The remaining work is Level 4 (runtime legibility), which the prior plan didn't address.
 
 ---
 
 ## Success Metrics
 
-### Quantitative
-- **Context window usage:** Reduce average context size by 30-40%
-- **Agent task success rate:** Increase from baseline by 15-20%
-- **Time to first correct solution:** Reduce by 25%
-
-### Qualitative
-- Agent stays in "smart zone" longer
-- Fewer context-related failures (hallucinations, lost track)
-- Better performance on complex, multi-step tasks
-- Reduced need for manual intervention
-
-### Baseline Measurement Methodology
-
-Before starting Phase 1, establish baseline metrics:
-
-1. **Context window usage:**
-   ```bash
-   # Create scripts/measure-context.sh
-   #!/bin/bash
-   # This script would be run by the harness to log context size
-   # Actual implementation depends on harness capabilities
-   echo "Measuring baseline context usage..."
-   # Log average tokens per conversation over 10 sample tasks
-   ```
-
-2. **Agent task success rate:**
-   - Define 10 representative tasks (e.g., "add new route", "fix test", "update dependency")
-   - Run each task 3 times with current setup
-   - Record success/failure and time to completion
-   - Calculate baseline success rate
-
-3. **Time to first correct solution:**
-   - From the same 10 representative tasks
-   - Measure time from task start to first working solution
-   - Calculate average baseline time
-
-4. **Context rot measurement:**
-   - Run a complex multi-step task (e.g., "analyze architecture and suggest refactoring")
-   - Measure context size at steps 1, 5, 10, 15
-   - Plot growth curve to identify "dumb zone" onset
-
----
-
-## Risks & Mitigations
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Skills add complexity | Medium | Low | Keep skills simple, document clearly |
-| Sub-agents introduce latency | Low | Medium | Use only for truly context-heavy tasks |
-| Hook configuration varies by harness | Medium | Low | Focus on Claude Code first, document for others |
-| Over-optimization | Low | Medium | Follow "start simple, add when needed" philosophy |
-| Verification scripts break CI | Low | High | Test scripts in isolation before integrating |
-| Skills don't activate reliably | Medium | Medium | Add fallback to manual loading in AGENTS.md |
-| Sub-agent output too verbose | Medium | Medium | Enforce token limits with validation tests |
-
-## Integration with Existing Tooling
-
-### GitHub Workflows
-- Verification scripts should be integrated into existing CI workflows (`.github/workflows/ci.yml`)
-- Add step to run `scripts/verify-all.sh` before deployment
-- Ensure scripts work in CI environment (may need CI-specific adjustments)
-
-### Pre-commit Hooks
-- Existing pre-commit hooks (`.pre-commit-config.yaml`) should be reviewed
-- Avoid duplication between pre-commit hooks and verification scripts
-- Consider whether verification scripts replace or complement pre-commit hooks
-
-### Dependency Management
-- Verification scripts assume dependencies are installed
-- CI workflows should handle dependency installation separately
-- Document dependency requirements in verification script comments
-
-### Harness Compatibility
-- Initial implementation targets Claude Code (`.claude/settings.local.json`)
-- Document hook configuration format for other harnesses (Cursor, Windsurf, etc.)
-- Skills and sub-agents should be harness-agnostic where possible
-
----
-
-## Conclusion
-
-The SpotiBye repository has a strong foundation but significant room for improvement in harness engineering. The biggest opportunities are:
-
-1. **Implementing skills for progressive disclosure** - High leverage, medium effort
-2. **Adding context-efficient verification hooks** - High leverage, low effort
-3. **Configuring sub-agents for context control** - High leverage, medium effort
-
-Following the "start simple, add when needed" philosophy from the harness engineering article, we recommend beginning with Priority 1 (verification hooks) and Priority 2 (skills), then measuring impact before proceeding to sub-agents.
-
-The expected outcome is a 30-40% reduction in context window usage and a 15-20% improvement in agent task success rates, with better performance on complex, multi-step tasks.
+| Metric | Current | Target |
+|--------|---------|--------|
+| Maturity level | 3 (Mechanical) | 4 (Observable) |
+| Agent lifecycle hooks | Not wired | `preStop` triggers verify-all.sh |
+| Runtime evidence | None | Agents can observe behavior change after edit |
+| Evaluator sub-agent | Not present | Evidence-backed accept/reject on behavior contracts |
+| Context task completion | Unknown | Agents leave clean stopping points on complex tasks |

@@ -58,8 +58,13 @@ For context-heavy analysis tasks, use sub-agents to prevent context rot:
 - Dependency impact: invoke dependency-analyst (activates on "impact", "dependencies")
 - Test coverage: invoke test-coverage-analyst (activates on "test coverage", "coverage gaps")
 - Security scanning: invoke security-scanner (activates on "security", "vulnerability")
+- Behavior evaluation: invoke evaluator (activates on "evaluate this change", "verify behavior", "does this satisfy")
 
 Sub-agents return condensed findings with citations, keeping parent context clean.
+
+## Context Budget
+
+On complex multi-step tasks, plan for partial completion: finish each step to a clean stopping point (tests passing, no broken imports) before moving to the next. If context is filling up, stop at the current clean state and summarize what remains rather than rushing to finish.
 
 ---
 

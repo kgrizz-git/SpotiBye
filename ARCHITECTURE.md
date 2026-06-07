@@ -19,7 +19,7 @@ SpotiBye is a two-tier application:
   api.spotify.com
 ```
 
-The frontend is a local desktop executable. It never calls Spotify directly — all Spotify API traffic is proxied through the backend. This keeps secrets server-side and allows token refresh without the user re-authenticating.
+The frontend is a local desktop executable. It never calls Spotify directly — all Spotify API traffic is proxied through the backend. This keeps secrets server-side and allows transparent token refresh without the user re-authenticating.
 
 ---
 
@@ -49,24 +49,24 @@ types/           ← Shared TypeScript interfaces and enums; no logic
 
 | File | Responsibility |
 |------|---------------|
-| `routes/auth.ts` | OAuth PKCE initiation, callback, token exchange, logout |
-| `routes/spotify.ts` | Playlist listing, track fetching, audio features |
-| `routes/export.ts` | Batch export jobs, resumable export assembly, format conversion |
-| `routes/analysis.ts` | Playlist analysis and scoring |
-| `middleware/auth.ts` | JWT verification middleware |
-| `middleware/error.ts` | Global error handler |
-| `services/spotify.ts` | Spotify API client — all `api.spotify.com` fetch calls live here |
-| `services/spotify-auth.ts` | Token refresh, OAuth exchange |
-| `services/export.ts` | Export logic: CSV/XLSX/JSON generation, cursor persistence |
-| `services/analysis.ts` | Analysis scoring logic |
-| `services/cache.ts` | KV-backed cache with namespaced keys |
+| `routes/auth.ts` | OAuth PKCE flow: `POST /auth/spotify/login`, `GET /auth/spotify/callback`, `POST /auth/spotify/refresh`, `POST /auth/logout`, `GET /auth/me` |
+| `routes/spotify.ts` | Playlists and tracks: `GET /spotify/playlists`, `GET /spotify/playlists/:id`, `GET /spotify/playlists/:id/items`, `GET /spotify/playlists/:id/tracks` (alias), `GET /spotify/tracks/:id`, `GET /spotify/tracks/:id/audio-features` |
+| `routes/export.ts` | Single-playlist export (`POST /export/playlist/:id`), combined export (`POST /export/playlists`), chunked combined export (`POST /export/playlists/chunk`), resumable job API (`POST /export/jobs`, `POST /export/jobs/:jobId/step`, `GET /export/jobs/:jobId/status`, `GET /export/jobs/:jobId/download`), status and download endpoints for each |
+| `routes/analysis.ts` | Playlist analysis job lifecycle: `POST /analysis/playlist/:id`, `GET /analysis/playlist/:id/status`, `GET /analysis/playlist/:id/results`, `DELETE /analysis/playlist/:id` |
+| `middleware/auth.ts` | JWT verification; loads full session from SESSIONS_KV; transparently refreshes Spotify access token when expired |
+| `middleware/error.ts` | Global error → structured `ErrorResponse` |
+| `services/spotify.ts` | Spotify API client — **only** caller of `api.spotify.com` |
+| `services/spotify-auth.ts` | OAuth code exchange, token refresh, user profile fetch |
+| `services/export.ts` | Export logic: CSV/XLSX/JSON generation, resumable job state machine, cursor persistence, render modes (rich/lite/auto) |
+| `services/analysis.ts` | Playlist analysis using Spotify track metadata — computes overview stats, artist diversity, genre distribution, insights. No external analysis API dependency. |
+| `services/cache.ts` | KV wrapper with namespaced keys |
 | `services/jwt.ts` | JWT sign/verify using HMAC-SHA256 (no external library) |
-| `services/reccobeats.ts` | ReccoBeats audio features API client |
-| `types/auth.ts` | JWT payload shape, token TTL constants |
-| `types/env.ts` | Cloudflare Worker `Env` bindings interface |
-| `types/spotify.ts` | Spotify API response shapes |
-| `types/api.ts` | Shared API response envelope types |
-| `types/variables.ts` | Shared constants |
+| `types/auth.ts` | `JWTPayload` (contains `session_id`, not access token), `AuthTokens`, `SessionData`, TTL constants |
+| `types/env.ts` | Cloudflare Worker `Env` bindings — `CACHE_KV`, `SESSIONS_KV`, Spotify credentials, `JWT_SECRET` |
+| `types/spotify.ts` | Spotify response shapes |
+| `types/spotify-api.ts` | API response schemas, `parseSpotifyResponse()` |
+| `types/api.ts` | `ErrorResponse` envelope |
+| `types/variables.ts` | Hono context variable types |
 
 ---
 
@@ -99,14 +99,15 @@ utils/           ← Pure utility functions (no imports from other app layers)
 ## Auth Flow (PKCE)
 
 1. Frontend opens a local HTTP server on a random port to receive the OAuth callback
-2. Frontend calls `GET /auth/login` on the backend with a PKCE `code_challenge`
+2. Frontend calls `POST /auth/spotify/login` on the backend with a PKCE `code_challenge`
 3. Backend redirects the user's browser to Spotify's authorization endpoint
 4. Spotify redirects to the backend callback URL with `code`
 5. Backend exchanges `code` for `access_token` + `refresh_token` with Spotify
-6. Backend issues a signed JWT to the frontend containing `user_id` and `access_token`
+6. Backend creates a session record in `SESSIONS_KV` (stores access/refresh tokens + expiry) and issues a signed JWT to the frontend containing `user_id`, `session_id`, and user metadata — **not** the access token directly
 7. Frontend stores the JWT locally; sends it as `Authorization: Bearer <jwt>` on every request
+8. `middleware/auth.ts` verifies the JWT, loads the full session from `SESSIONS_KV`, and transparently refreshes the Spotify access token if it has expired before delegating to the route handler
 
-**Why JWT instead of session cookies:** The frontend is a native desktop app, not a browser. Cookies are not natively managed. JWTs are stored locally and sent explicitly. See `services/jwt.ts` for the HMAC-SHA256 implementation (no external JWT library is used, avoiding a dependency that would be opaque to agents).
+**Why session-backed JWT:** The JWT is long-lived (30 days) but contains only a `session_id`. The actual Spotify access token (1 hour TTL) lives in `SESSIONS_KV` and is refreshed transparently by the middleware. This avoids re-issuing JWTs on every token refresh and keeps short-lived secrets out of the JWT payload.
 
 Full flow doc: [docs/authentication-flow.md](docs/authentication-flow.md)
 
@@ -114,27 +115,59 @@ Full flow doc: [docs/authentication-flow.md](docs/authentication-flow.md)
 
 ## Export Flow
 
-1. User selects playlist(s) and format (CSV / XLSX / JSON)
-2. Frontend calls `POST /export/batch` — backend creates a job record in KV
-3. Backend fetches tracks page-by-page, writing a cursor to KV after each page
-4. If the worker is interrupted, the next invocation resumes from the last cursor
-5. When all pages are fetched, backend assembles the file and marks the job complete
-6. Frontend polls `GET /export/batch/:job_id` until `status === 'completed'`
-7. Frontend downloads the assembled file
+### Resumable Job API (primary path for multi-playlist exports)
 
-Cursor persistence design: [docs/design-docs/resumable-export-cursors.md](docs/design-docs/resumable-export-cursors.md)
+1. Frontend calls `POST /export/jobs` with `playlist_ids` and format — backend creates a job record in KV and returns a `job_id`
+2. Frontend calls `POST /export/jobs/:jobId/step` repeatedly, advancing a cursor through playlists (1–3 per step, respects CPU time limits)
+3. Each step validates the cursor/resume token to prevent stale concurrent writes; returns `409` on conflict with the latest cursor
+4. When all playlists are processed, the final step pre-builds the file bytes (XLSX rich/lite or CSV) and caches them in KV
+5. Frontend polls `GET /export/jobs/:jobId/status` until `status === 'completed'`
+6. Frontend downloads via `GET /export/jobs/:jobId/download?mode=rich|lite|auto`
+
+### Single-playlist path
+
+`POST /export/playlist/:id` — synchronous, returns completed status in one call. Pre-builds file bytes in KV for zero-CPU download.
+
+### Combined (legacy batch) path
+
+`POST /export/playlists` — synchronous combined export for multiple playlists. `POST /export/playlists/chunk` — incremental version that carries state across invocations via `job_id` cursor.
+
+---
+
+## Analysis Flow
+
+1. Frontend calls `POST /analysis/playlist/:id`
+2. Backend checks KV for an existing completed or actively-processing job; returns it if found
+3. Otherwise, starts a new job (writes `processing` status to KV) and fires `analysisService.analyzePlaylist()` via `executionCtx.waitUntil`
+4. Analysis fetches all tracks from Spotify, computes stats (track count, duration, artist diversity, genre distribution, text insights) using only Spotify metadata — no external analysis API
+5. Results written to KV under `analysis:<playlistId>:<userId>:results`; status updated to `completed`
+6. Frontend polls `GET /analysis/playlist/:id/status` then fetches `GET /analysis/playlist/:id/results`
 
 ---
 
 ## Caching Strategy
 
-All cache keys follow the pattern: `<user_id>:<resource_type>:<identifier>`
+**Backend (Cloudflare KV):**
 
-Examples:
-- `abc123:playlists:all` — full playlist list for user `abc123`
-- `abc123:tracks:playlist_456` — tracks for playlist `456`
+Cache keys in the backend do not follow a single format — each service uses its own scheme:
 
-Cache is backed by Cloudflare KV. TTLs are set per resource type in `types/variables.ts`.
+| Resource | Key pattern | TTL |
+|----------|-------------|-----|
+| Playlists | `playlists:v2:<userId>` | 5 min |
+| Single playlist | `playlist:<playlistId>` | 10 min |
+| Playlist tracks | `playlist:<playlistId>:tracks:<limit>:<offset>` | 5 min |
+| Track | `track:<trackId>` | 1 hr |
+| Audio features | `track:<trackId>:audio-features` | 1 hr |
+| Analysis status | `analysis:<playlistId>:<userId>:status` | 1 hr |
+| Analysis results | `analysis:<playlistId>:<userId>:results` | 24 hr |
+| Export job | `export:job:<jobId>:<userId>` | 1 hr |
+| Export file bytes | `export:job:<jobId>:<userId>:file[:<mode>]` | 1 hr |
+
+Sessions are stored separately in `SESSIONS_KV` (not `CACHE_KV`) with a 30-day TTL.
+
+**Frontend (Python disk cache):**
+
+`BackendCacheManager` maintains a local disk cache at `~/.spotibye/cache/` for tokens, job state, and analysis results. This layer is checked before calling the backend. Its TTLs are longer than the backend's KV TTLs, so the frontend can serve stale data even after the backend would have refreshed from Spotify.
 
 ---
 
@@ -143,7 +176,8 @@ Cache is backed by Cloudflare KV. TTLs are set per resource type in `types/varia
 | Dependency | Why used | Agent notes |
 |-----------|---------|-------------|
 | [Hono](https://hono.dev) | Lightweight, Cloudflare-native HTTP framework | Well-documented; prefer Hono middleware patterns over custom solutions |
-| Cloudflare KV | Persistent key-value store for cache + job state | Has eventual-consistency caveats; don't use for counters |
-| Cloudflare Workers | Edge serverless runtime | CPU time limit 30s (unbundled); see `docs/references/cloudflare-workers-constraints.md` |
+| Cloudflare KV (`CACHE_KV`) | Cache for playlists, tracks, analysis, export data | Eventual consistency — don't use for counters or mutex state |
+| Cloudflare KV (`SESSIONS_KV`) | Session storage — access/refresh tokens keyed by session_id | 30-day TTL; auth middleware reads this on every authenticated request |
+| Cloudflare Workers | Edge serverless runtime | CPU time limit applies; export steps are bounded to 1–3 playlists to stay within budget |
 | CustomTkinter | Python GUI toolkit | Limited agent training data; keep UI layer thin |
 | Spotify Web API | Music data source | See `docs/references/spotify-api-reference.md` and `docs/february-2026-spotify-migration-findings.md` |
