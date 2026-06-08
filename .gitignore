@@ -28,6 +28,10 @@ docs/api_key_security.md
 .env.production
 .env.development
 
+# VSCode
+.vscode/
+
 # AI/IDE tooling (local agent config, not project code)
+.claude/
 .kilo/
 .windsurf/

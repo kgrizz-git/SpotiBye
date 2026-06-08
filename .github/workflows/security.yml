@@ -46,6 +46,16 @@ jobs:
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
           extra_args: --debug --only-verified
+        # Only run commit diff mode on PRs; for schedule/dispatch, scan full history
+        if: github.event_name == 'pull_request'
+
+      - name: TruffleHog OSS (Full History)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          extra_args: --debug --only-verified
+        # Run full history scan on schedule/dispatch
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
   # SAST - Multi-language (JavaScript, TypeScript, Python)
   semgrep:

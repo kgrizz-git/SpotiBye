@@ -28,3 +28,6 @@
 * see agent-first-retrofit, quality review/assessment md
 
 - fix issues with RECOCOBEATS vs RECCOBEATS
+
+- Fix playlist analysis 403 error — Spotify API February 2026 migration removed `GET /artists` batch endpoint
+    * [Fix plan](plans/fix-analysis-403-spotify-api-migration.md)
