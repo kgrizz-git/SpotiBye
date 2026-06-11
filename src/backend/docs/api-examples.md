@@ -57,7 +57,7 @@ const response = await fetch('https://spotibye-api.workers.dev/auth/spotify/call
 // Response (200 OK)
 {
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsIm5hbWUiOiJUZXN0IFVzZXIiLCJpYXQiOjE3MDI0MTQwMDAsImV4cCI6MTcwMjQxNzYwMH0.signature",
+    "access_token": "[JWT_TOKEN]",
     "refresh_token": "refresh-token-string",
     "expires_in": 3600,
     "user": {

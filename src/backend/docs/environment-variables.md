@@ -40,7 +40,7 @@ The SpotiBye backend uses environment variables for configuration, API keys, and
 - **Type**: String (Secret)
 - **Required**: Yes
 - **Description**: Spotify application client secret from Spotify Developer Dashboard
-- **Example**: `SPOTIFY_CLIENT_SECRET=abcdef1234567890abcdef1234567890`
+- **Example**: `SPOTIFY_CLIENT_SECRET=[YOUR_SPOTIFY_CLIENT_SECRET]`
 - **Source**: Spotify Developer Console → Your App → Client Secret
 - **Security**: Must be kept confidential, never expose in client-side code
 
