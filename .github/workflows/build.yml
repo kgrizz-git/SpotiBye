@@ -186,7 +186,7 @@ jobs:
       run: |
         pyinstaller spotibye.spec --noconfirm --clean
         cd dist
-        hdiutil create -volname "SpotiBye" -srcfolder SpotiBye.app -ov -format UDZO SpotiBye-macOS-v${APP_VERSION}.dmg
+        hdiutil create -volname "SpotiBye" -srcfolder SpotiBye.app -ov -format UDZO "SpotiBye-macOS-v${APP_VERSION}.dmg"
         cd ..
 
     - name: Build executable (Linux)
@@ -208,6 +208,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: SpotiBye-${{ runner.os }}-v${{ env.APP_VERSION }}
+        retention-days: 2
         path: |
           ${{ runner.os == 'Windows' && format('SpotiBye-Windows-v{0}.zip', env.APP_VERSION) || '' }}
           ${{ runner.os == 'macOS' && format('dist/SpotiBye-macOS-v{0}.dmg', env.APP_VERSION) || '' }}

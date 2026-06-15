@@ -113,6 +113,7 @@ jobs:
         if: always()
         with:
           name: bandit-report
+          retention-days: 30
           path: bandit-report.json
 
   # Dependency Scanning - Python
@@ -142,6 +143,7 @@ jobs:
         if: always()
         with:
           name: pip-audit-report
+          retention-days: 30
           path: pip-audit-report.json
 
   # Dependency Scanning - Node.js (only on Node.js file changes)
@@ -181,6 +183,7 @@ jobs:
         if: always()
         with:
           name: npm-audit-report
+          retention-days: 30
           path: src/backend/npm-audit-report.json
 
   # Infrastructure as Code Scanning (if wrangler.toml exists)
@@ -195,9 +198,9 @@ jobs:
         id: check_file
         run: |
           if [ -f "src/backend/wrangler.toml" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkov Scan
@@ -218,11 +221,13 @@ jobs:
     steps:
       - name: Security Check Summary
         run: |
-          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Secret Scan (TruffleHog) | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| SAST (Semgrep) | ${{ needs.semgrep.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python SAST (Bandit) | ${{ needs.bandit.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python Dependencies (pip-audit) | ${{ needs.pip-audit.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Node.js Dependencies (npm-audit) | ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Security Scan Results"
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| Secret Scan (TruffleHog) | ${{ needs.secret-scan.result }} |"
+            echo "| SAST (Semgrep) | ${{ needs.semgrep.result }} |"
+            echo "| Python SAST (Bandit) | ${{ needs.bandit.result }} |"
+            echo "| Python Dependencies (pip-audit) | ${{ needs.pip-audit.result }} |"
+            echo "| Node.js Dependencies (npm-audit) | ${{ needs.npm-audit.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
