@@ -15,6 +15,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
   - Streamlined dependency review to single job, removing duplicates
 
 ### Fixed
+- Fixed frontend verification so the script recognizes the repo-level `.venv` and no longer emits a misleading missing-virtualenv warning.
 - Fixed backend authentication integration tests to match the current OAuth redirect/state flow used by the frontend client and authenticator.
 - Fixed backend cache explorer startup to use the current backend URL configuration API instead of the removed `BackendConfig` class.
 - Fixed backend cache statistics in frontend mode so playlist and file counts reflect environment-scoped cache files instead of incorrectly reporting zero items.
