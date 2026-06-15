@@ -2,6 +2,9 @@
 
 ## Major Tasks
 
+- Track backend npm security overrides
+    Remove the `esbuild` and `uuid` overrides in `src/backend/package.json` once Wrangler and ExcelJS publish versions that depend on patched releases directly. Keep `npm audit --audit-level=moderate`, `npm run build`, `npm run test:run`, and `npx wrangler deploy --dry-run` green when removing them.
+
 - Refactor Code and Extract Necessary Sections
     Extract and refactor necessary sections from the old `src/spotify_playlist_exporter_v2/` codebase. Identify reusable components, utilities, and logic that should be migrated to the new project structure.
 

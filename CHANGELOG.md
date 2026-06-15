@@ -7,6 +7,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Changed
+- Hardened backend npm dependencies by upgrading Wrangler, Workers types, and TypeScript ESLint, replacing SheetJS `xlsx` usage with ExcelJS, and overriding vulnerable transitive `esbuild` and `uuid` releases until upstream packages publish patched dependency ranges.
 - Optimized GitHub Actions workflows to reduce redundant CI runs by 40-60% while maintaining full test coverage on protected branches
   - CI now runs only on main/develop/WIP branches instead of all branches
   - Security scans run only on PRs (not duplicate push events) with weekly baseline scans

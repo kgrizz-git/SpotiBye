@@ -11,7 +11,6 @@
  */
 import { SpotifyService } from './spotify';
 import ExcelJS from 'exceljs';
-import * as XLSX from 'xlsx';
 
 interface ExportTrack {
   Artist: string;
@@ -658,82 +657,90 @@ export class ExportService {
     return this.generateCombinedExcelFile(exportDataList);
   }
 
-  private generateCombinedExcelFileFromAssemblyLite(assemblyState: ResumableExportAssemblyState): ArrayBuffer {
-    const workbook = XLSX.utils.book_new();
+  private async generateCombinedExcelFileFromAssemblyLite(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {
+    const workbook = new ExcelJS.Workbook();
 
-    const summarySheet = XLSX.utils.aoa_to_sheet([
-      assemblyState.summary_headers,
-      ...assemblyState.summary_rows,
-    ]);
-    summarySheet['!cols'] = [
-      { wch: 29 },
-      { wch: 24 },
-      { wch: 16 },
-      { wch: 19 },
+    const summarySheet = workbook.addWorksheet('Playlists');
+    summarySheet.columns = [
+      { key: 'A', width: 29 },
+      { key: 'B', width: 24 },
+      { key: 'C', width: 16 },
+      { key: 'D', width: 19 },
     ];
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Playlists');
+    summarySheet.addRow(assemblyState.summary_headers);
+    for (const row of assemblyState.summary_rows) {
+      summarySheet.addRow(row);
+    }
 
     for (const worksheet of assemblyState.worksheets) {
-      const sheetRows: ExportCellValue[][] = [
-        [worksheet.playlist_name],
-        [`Created by: ${worksheet.playlist_owner}`],
-        [`Followers: ${worksheet.playlist_followers}`],
-        [`Tracks exported: ${worksheet.rows.length}`],
-        [`Total duration: ${worksheet.total_duration}`],
-        [worksheet.playlist_url ? `Playlist URL: ${worksheet.playlist_url}` : 'Playlist URL: N/A'],
-        [`Description: ${worksheet.playlist_description || 'N/A'}`],
-        [],
-        [],
-        [],
-        worksheet.headers,
-        ...worksheet.rows,
+      const sheet = workbook.addWorksheet(worksheet.sheet_name);
+      sheet.columns = [
+        { key: 'A', width: 30 },
+        { key: 'B', width: 40 },
+        { key: 'C', width: 40 },
+        { key: 'D', width: 15 },
+        { key: 'E', width: 60 },
+        { key: 'F', width: 12 },
+        { key: 'G', width: 14 },
+        { key: 'H', width: 12 },
+        { key: 'I', width: 12 },
+        { key: 'J', width: 12 },
+        { key: 'K', width: 12 },
+        { key: 'L', width: 16 },
+        { key: 'M', width: 12 },
+        { key: 'N', width: 12 },
+        { key: 'O', width: 12 },
+        { key: 'P', width: 14 },
       ];
 
-      const sheet = XLSX.utils.aoa_to_sheet(sheetRows);
-      sheet['!cols'] = [
-        { wch: 30 },
-        { wch: 40 },
-        { wch: 40 },
-        { wch: 15 },
-        { wch: 60 },
-        { wch: 12 },
-        { wch: 14 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 16 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 12 },
-        { wch: 14 },
-      ];
-
+      sheet.addRow([worksheet.playlist_name]);
+      sheet.addRow([`Created by: ${worksheet.playlist_owner}`]);
+      sheet.addRow([`Followers: ${worksheet.playlist_followers}`]);
+      sheet.addRow([`Tracks exported: ${worksheet.rows.length}`]);
+      sheet.addRow([`Total duration: ${worksheet.total_duration}`]);
       if (worksheet.playlist_url) {
-        const urlCell = sheet['A6'];
-        if (urlCell) {
-          (urlCell as any).l = { Target: worksheet.playlist_url };
+        sheet.addRow([{
+          text: `Playlist URL: ${worksheet.playlist_url}`,
+          hyperlink: worksheet.playlist_url,
+        }]);
+      } else {
+        sheet.addRow(['Playlist URL: N/A']);
+      }
+      sheet.addRow([`Description: ${worksheet.playlist_description || 'N/A'}`]);
+      sheet.addRow([]);
+      sheet.addRow([]);
+      sheet.addRow([]);
+      sheet.addRow(worksheet.headers);
+
+      for (const row of worksheet.rows) {
+        const excelRow = sheet.addRow(row);
+        const spotifyUrl = row[4];
+        if (typeof spotifyUrl === 'string' && spotifyUrl.startsWith('http')) {
+          const cell = excelRow.getCell(5);
+          cell.value = { text: spotifyUrl, hyperlink: spotifyUrl };
+          cell.font = {
+            color: { argb: 'FF0563C1' },
+            underline: true,
+          };
         }
       }
 
       if (worksheet.rows.length > 0) {
-        for (let index = 0; index < worksheet.rows.length; index += 1) {
-          const spotifyUrl = worksheet.rows[index][4];
-          if (typeof spotifyUrl === 'string' && spotifyUrl.startsWith('http')) {
-            const address = XLSX.utils.encode_cell({ r: 11 + index, c: 4 });
-            const cell = sheet[address];
-            if (cell) {
-              (cell as any).l = { Target: spotifyUrl };
-            }
+        sheet.autoFilter = {
+          from: {
+            row: 11,
+            column: 1,
+          },
+          to: {
+            row: 11 + worksheet.rows.length,
+            column: worksheet.headers.length,
           }
-        }
-        (sheet as any)['!autofilter'] = { ref: `A11:P${11 + worksheet.rows.length}` };
+        };
       }
-
-      XLSX.utils.book_append_sheet(workbook, sheet, worksheet.sheet_name);
     }
 
-    return XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer as ArrayBuffer;
   }
 
   async generateCombinedCsvFromAssembly(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {

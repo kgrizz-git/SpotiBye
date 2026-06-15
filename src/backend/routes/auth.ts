@@ -30,7 +30,7 @@ app.post('/spotify/login', async (c) => {
         state
       }
     });
-  } catch (error) {
+  } catch {
     return c.json({ error: { code: 'OAUTH_INIT_FAILED', message: 'Failed to initiate OAuth flow' } }, 500);
   }
 });
@@ -156,7 +156,7 @@ app.post('/logout', authMiddleware, async (c) => {
     await c.env.SESSIONS_KV.delete(sessionId);
 
     return c.json({ data: { message: 'Logged out successfully' } });
-  } catch (error) {
+  } catch {
     return c.json({ error: { code: 'LOGOUT_FAILED', message: 'Failed to logout' } }, 500);
   }
 });
@@ -166,7 +166,7 @@ app.get('/me', authMiddleware, async (c) => {
   try {
     const user = c.get('user');
     return c.json({ data: user });
-  } catch (error) {
+  } catch {
     return c.json({ error: { code: 'USER_INFO_FAILED', message: 'Failed to get user info' } }, 500);
   }
 });
