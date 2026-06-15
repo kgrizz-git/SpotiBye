@@ -11,7 +11,7 @@ export class SpotifyAuthService {
     this.clientSecret = clientSecret || '';
   }
 
-  getAuthUrl(redirectUri: string, state?: string): string {
+  getAuthUrl(redirectUri: string, state?: string, codeChallenge?: string): string {
     const scopes = [
       'user-read-private',
       'user-read-email',
@@ -27,6 +27,12 @@ export class SpotifyAuthService {
       state: state || this.generateState()
     });
 
+    // PKCE: bind the authorization request to a verifier held server-side.
+    if (codeChallenge) {
+      params.set('code_challenge_method', 'S256');
+      params.set('code_challenge', codeChallenge);
+    }
+
     return `https://accounts.spotify.com/authorize?${params.toString()}`;
   }
 
@@ -34,11 +40,46 @@ export class SpotifyAuthService {
     return crypto.randomUUID();
   }
 
-  async exchangeCodeForTokens(code: string, redirectUri?: string): Promise<AuthTokens> {
+  /**
+   * Generate a high-entropy PKCE code_verifier (RFC 7636): 43-128 chars from the
+   * unreserved set. We emit 43 base64url chars (32 random bytes).
+   */
+  generateCodeVerifier(): string {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return SpotifyAuthService.base64UrlEncode(bytes.buffer);
+  }
+
+  /** Derive the S256 code_challenge for a verifier: base64url(SHA-256(verifier)). */
+  async computeCodeChallenge(codeVerifier: string): Promise<string> {
+    const data = new TextEncoder().encode(codeVerifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return SpotifyAuthService.base64UrlEncode(digest);
+  }
+
+  private static base64UrlEncode(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 1) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async exchangeCodeForTokens(code: string, redirectUri?: string, codeVerifier?: string): Promise<AuthTokens> {
     const callbackUri = redirectUri || this.redirectUri;
 
     if (!callbackUri) {
       throw new Error('Missing redirect URI for token exchange');
+    }
+
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: callbackUri
+    });
+    if (codeVerifier) {
+      body.set('code_verifier', codeVerifier);
     }
 
     const response = await fetch('https://accounts.spotify.com/api/token', {
@@ -47,11 +88,7 @@ export class SpotifyAuthService {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Basic ${this.getBasicAuth()}`
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: callbackUri
-      })
+      body
     });
 
     if (!response.ok) {

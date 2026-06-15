@@ -8,6 +8,8 @@ vi.mock('../services/spotify-auth', () => ({
     return {
       getAuthUrl: vi.fn().mockReturnValue('https://accounts.spotify.com/authorize?test'),
       generateState: vi.fn().mockReturnValue('test-state'),
+      generateCodeVerifier: vi.fn().mockReturnValue('test-code-verifier'),
+      computeCodeChallenge: vi.fn().mockResolvedValue('test-code-challenge'),
       exchangeCodeForTokens: vi.fn().mockResolvedValue({
         access_token: 'test-access-token',
         refresh_token: 'test-refresh-token',
@@ -88,6 +90,15 @@ describe('Auth Routes', () => {
       expect(data).toHaveProperty('data.auth_url');
       expect(data).toHaveProperty('data.state');
       expect(data.data.auth_url).toContain('accounts.spotify.com');
+
+      // PKCE verifier is persisted alongside redirect_uri for the callback.
+      const putCall = (mockEnv.CACHE_KV.put as any).mock.calls.find(
+        ([key]: [string]) => key.startsWith('oauth_state:')
+      );
+      expect(putCall).toBeDefined();
+      const stored = JSON.parse(putCall[1]);
+      expect(stored).toHaveProperty('redirect_uri', 'http://localhost:3000/callback');
+      expect(stored).toHaveProperty('code_verifier', 'test-code-verifier');
     });
 
     it('returns 400 when redirect_uri is missing', async () => {

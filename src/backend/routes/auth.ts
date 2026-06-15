@@ -19,10 +19,16 @@ app.post('/spotify/login', async (c) => {
 
     const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     const state = spotifyAuth.generateState();
-    const authUrl = spotifyAuth.getAuthUrl(redirect_uri, state);
+    const codeVerifier = spotifyAuth.generateCodeVerifier();
+    const codeChallenge = await spotifyAuth.computeCodeChallenge(codeVerifier);
+    const authUrl = spotifyAuth.getAuthUrl(redirect_uri, state, codeChallenge);
 
-    // Persist redirect_uri for callback token exchange.
-    await c.env.CACHE_KV.put(`oauth_state:${state}`, redirect_uri, { expirationTtl: 600 });
+    // Persist redirect_uri + PKCE verifier for callback token exchange.
+    await c.env.CACHE_KV.put(
+      `oauth_state:${state}`,
+      JSON.stringify({ redirect_uri, code_verifier: codeVerifier }),
+      { expirationTtl: 600 }
+    );
 
     return c.json({
       data: {
@@ -50,14 +56,30 @@ app.get('/spotify/callback', async (c) => {
       return c.json({ error: { code: 'INVALID_CALLBACK', message: 'Missing code or state parameter' } }, 400);
     }
 
-    const redirectUri = await c.env.CACHE_KV.get(`oauth_state:${state}`);
+    const storedState = await c.env.CACHE_KV.get(`oauth_state:${state}`);
+    if (!storedState) {
+      return c.json({ error: { code: 'INVALID_CALLBACK', message: 'Missing or expired OAuth state' } }, 400);
+    }
+
+    // State is stored as JSON ({ redirect_uri, code_verifier }); tolerate the
+    // legacy bare-string form for in-flight sessions during rollout.
+    let redirectUri: string;
+    let codeVerifier: string | undefined;
+    try {
+      const parsed = JSON.parse(storedState) as { redirect_uri?: string; code_verifier?: string };
+      redirectUri = parsed.redirect_uri || '';
+      codeVerifier = parsed.code_verifier;
+    } catch {
+      redirectUri = storedState;
+    }
+
     if (!redirectUri) {
       return c.json({ error: { code: 'INVALID_CALLBACK', message: 'Missing or expired OAuth state' } }, 400);
     }
 
     // Exchange code for tokens
     const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
-    const tokens: AuthTokens = await spotifyAuth.exchangeCodeForTokens(code, redirectUri);
+    const tokens: AuthTokens = await spotifyAuth.exchangeCodeForTokens(code, redirectUri, codeVerifier);
 
     // One-time state usage.
     await c.env.CACHE_KV.delete(`oauth_state:${state}`);

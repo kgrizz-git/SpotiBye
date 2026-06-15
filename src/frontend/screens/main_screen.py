@@ -634,6 +634,13 @@ class MainScreen(Screen):
         extensions = {"xlsx": ".xlsx", "csv": ".csv", "json": ".json"}
         return extensions.get(format_type, ".xlsx")
 
+    def _selected_export_format(self) -> str:
+        """Return the user-selected export format ('xlsx', 'csv', or 'json')."""
+        spinner = getattr(self, "format_spinner", None)
+        text = (spinner.text if spinner else "") or "xlsx"
+        fmt = text.strip().lower()
+        return fmt if fmt in ("xlsx", "csv", "json") else "xlsx"
+
     def _show_error_dialog(self, title: str, message: str) -> None:
         """Show user-friendly error dialog."""
 
@@ -1163,8 +1170,9 @@ class MainScreen(Screen):
         if not filename:
             filename = os.path.splitext(self._generate_default_filename())[0]
 
-        if not filename.lower().endswith(".xlsx"):
-            filename = f"{os.path.splitext(filename)[0]}.xlsx"
+        extension = self._get_file_extension(self._selected_export_format())
+        if not filename.lower().endswith(extension):
+            filename = f"{os.path.splitext(filename)[0]}{extension}"
 
         output_path = os.path.join(SAVE_DIR, filename)
 
@@ -1279,7 +1287,8 @@ class MainScreen(Screen):
 
         base_dir = os.path.dirname(base_output_path)
         base_name = os.path.splitext(os.path.basename(base_output_path))[0]
-        return os.path.join(base_dir, f"{base_name}.xlsx")
+        extension = self._get_file_extension(self._selected_export_format())
+        return os.path.join(base_dir, f"{base_name}{extension}")
 
     def backend_export_worker(
         self, playlists, output_path, resume_saved_job: bool = False
@@ -1343,7 +1352,7 @@ class MainScreen(Screen):
             self._set_backend_error_context("chunked-combined", "generate")
             export_info = self.backend_adapter.generate_batch_export_chunked(
                 playlist_ids,
-                "xlsx",
+                self._selected_export_format(),
                 chunk_size=1,
                 report_errors=False,
                 resume_context=resume_context,
@@ -1452,7 +1461,7 @@ class MainScreen(Screen):
                 )
                 recovered_info = self.backend_adapter.generate_batch_export_chunked(
                     playlist_ids,
-                    "xlsx",
+                    self._selected_export_format(),
                     chunk_size=1,
                     max_steps=240,
                     report_errors=False,
@@ -1576,6 +1585,7 @@ class MainScreen(Screen):
         total = len(playlists)
         base_dir = os.path.dirname(base_output_path)
         base_name = os.path.splitext(os.path.basename(base_output_path))[0]
+        export_format = self._selected_export_format()
         success_count = 0
         failed_playlist_ids: List[str] = []
 
@@ -1588,7 +1598,8 @@ class MainScreen(Screen):
                 playlist.get("name", "playlist")
             )
             safe_id = self._sanitize_export_filename_component(playlist_id)
-            target_file = f"{base_name} - {playlist_name} ({safe_id}).xlsx"
+            extension = self._get_file_extension(export_format)
+            target_file = f"{base_name} - {playlist_name} ({safe_id}){extension}"
             target_path = os.path.join(base_dir, target_file)
 
             Clock.schedule_once(
@@ -1611,7 +1622,7 @@ class MainScreen(Screen):
             )
 
             export_info = self.backend_adapter.generate_export(
-                playlist_id, "xlsx", report_errors=False
+                playlist_id, export_format, report_errors=False
             )
             if not export_info:
                 failed_playlist_ids.append(playlist_id)

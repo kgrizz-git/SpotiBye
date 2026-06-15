@@ -13,6 +13,8 @@ import type { Variables } from '../types/variables';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+type ExportFormat = 'xlsx' | 'csv' | 'json';
+
 type BatchExportStatus = {
   job_id: string;
   user_id: string;
@@ -21,7 +23,7 @@ type BatchExportStatus = {
   completed_at?: string;
   progress: number;
   file_url?: string;
-  file_format: 'xlsx' | 'csv';
+  file_format: ExportFormat;
   file_size?: number;
   playlist_count: number;
   processed_count: number;
@@ -70,8 +72,23 @@ function parseXlsxRenderMode(value: string | undefined): XlsxRenderMode {
   return 'auto';
 }
 
-function resolveRequestedFormat(body: any): 'xlsx' | 'csv' {
-  return body && body.format === 'csv' ? 'csv' : 'xlsx';
+function resolveRequestedFormat(body: any): ExportFormat {
+  const format = String(body?.format || '').toLowerCase();
+  if (format === 'csv') return 'csv';
+  if (format === 'json') return 'json';
+  return 'xlsx';
+}
+
+// Normalize a persisted file_format value (untrusted KV/JSON) to a known format.
+function resolveStoredFormat(value: unknown): ExportFormat {
+  return value === 'csv' ? 'csv' : value === 'json' ? 'json' : 'xlsx';
+}
+
+// HTTP Content-Type + filename extension for a given export format.
+function formatHttpMeta(format: ExportFormat): [string, string] {
+  if (format === 'csv') return ['text/csv; charset=utf-8', 'csv'];
+  if (format === 'json') return ['application/json; charset=utf-8', 'json'];
+  return ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
 }
 
 function resolveIncludeAudioFeatures(body: any): boolean {
@@ -119,12 +136,15 @@ function buildExportErrorPayload(code: string, message: string, requestId: strin
   };
 }
 
-// Shared helper: build the final download bytes for a completed export (xlsx or csv).
+// Shared helper: build the final download bytes for a completed export (xlsx, csv, or json).
 async function generateFileBytes(
   exportService: ExportService,
   exportDataList: any[],
-  fileFormat: 'xlsx' | 'csv',
+  fileFormat: ExportFormat,
 ): Promise<ArrayBuffer> {
+  if (fileFormat === 'json') {
+    return exportService.generateCombinedJson(exportDataList);
+  }
   if (fileFormat === 'csv') {
     const chunks: string[] = [];
     for (const item of exportDataList) {
@@ -139,9 +159,12 @@ async function generateFileBytes(
 async function generateFileBytesFromAssembly(
   exportService: ExportService,
   assemblyState: ResumableExportAssemblyState,
-  fileFormat: 'xlsx' | 'csv',
+  fileFormat: ExportFormat,
   renderMode: XlsxRenderMode = 'auto',
 ): Promise<ArrayBuffer> {
+  if (fileFormat === 'json') {
+    return exportService.generateCombinedJsonFromAssembly(assemblyState);
+  }
   if (fileFormat === 'csv') {
     return exportService.generateCombinedCsvFromAssembly(assemblyState);
   }
@@ -277,11 +300,14 @@ app.post('/jobs/:jobId/step', async (c) => {
 
       await cacheService.set(jobKey, result.job, 3600);
 
-      if (result.job.file_format === 'csv') {
-        const completedFormat = 'csv' as const;
+      if (result.job.file_format !== 'xlsx') {
+        // csv and json are single-variant: prebuild one file (cheap, no rich/lite).
+        const completedFormat = result.job.file_format;
         try {
           const fileBytes = await generateFileBytesFromAssembly(exportService, result.assemblyState, completedFormat);
-          await cacheService.setBuffer(buildExportFileKey(jobKey, 'csv'), fileBytes, 3600);
+          if (completedFormat === 'csv') {
+            await cacheService.setBuffer(buildExportFileKey(jobKey, 'csv'), fileBytes, 3600);
+          }
           await cacheService.setBuffer(buildExportFileKey(jobKey), fileBytes, 3600);
           console.info('[export-job] file cached', { jobId, fileFormat: completedFormat });
         } catch (genErr) {
@@ -383,23 +409,23 @@ app.get('/jobs/:jobId/download', async (c) => {
       return c.json({ error: { code: 'EXPORT_NOT_READY', message: 'Export job is not completed yet' } }, { status: 409 as ContentfulStatusCode });
     }
     const requestedMode = parseXlsxRenderMode(c.req.query('mode'));
-    const fileFormat = (exportStatus.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
-    const [dlContentType, dlExt] = fileFormat === 'csv'
-      ? ['text/csv; charset=utf-8', 'csv']
-      : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
+    const fileFormat = resolveStoredFormat(exportStatus.file_format);
+    const [dlContentType, dlExt] = formatHttpMeta(fileFormat);
     const dlFilename = `playlists_export_${Date.now()}.${dlExt}`;
 
     const renderMode = fileFormat === 'xlsx'
       ? (requestedMode === 'auto' ? (exportStatus.render_mode_hint || 'auto') : requestedMode)
-      : 'csv';
+      : fileFormat;
 
     const prebuiltKeyOrder = fileFormat === 'csv'
       ? [buildExportFileKey(jobKey, 'csv'), buildExportFileKey(jobKey)]
-      : renderMode === 'rich'
-        ? [buildExportFileKey(jobKey, 'rich'), buildExportFileKey(jobKey), buildExportFileKey(jobKey, 'lite')]
-        : renderMode === 'lite'
-          ? [buildExportFileKey(jobKey, 'lite'), buildExportFileKey(jobKey)]
-          : [buildExportFileKey(jobKey), buildExportFileKey(jobKey, 'lite'), buildExportFileKey(jobKey, 'rich')];
+      : fileFormat === 'json'
+        ? [buildExportFileKey(jobKey)]
+        : renderMode === 'rich'
+          ? [buildExportFileKey(jobKey, 'rich'), buildExportFileKey(jobKey), buildExportFileKey(jobKey, 'lite')]
+          : renderMode === 'lite'
+            ? [buildExportFileKey(jobKey, 'lite'), buildExportFileKey(jobKey)]
+            : [buildExportFileKey(jobKey), buildExportFileKey(jobKey, 'lite'), buildExportFileKey(jobKey, 'rich')];
 
     for (const key of prebuiltKeyOrder) {
       const prebuiltBytes = await cacheService.getBuffer(key);
@@ -456,7 +482,9 @@ app.get('/jobs/:jobId/download', async (c) => {
       }
 
       const fallbackBytes = await generateFileBytesFromAssembly(exportService, assemblyState, fileFormat);
-      await cacheService.setBuffer(buildExportFileKey(jobKey, 'csv'), fallbackBytes, 3600);
+      if (fileFormat === 'csv') {
+        await cacheService.setBuffer(buildExportFileKey(jobKey, 'csv'), fallbackBytes, 3600);
+      }
       await cacheService.setBuffer(buildExportFileKey(jobKey), fallbackBytes, 3600);
       return new Response(fallbackBytes, {
         headers: { 'Content-Type': dlContentType, 'Content-Disposition': `attachment; filename="${dlFilename}"` },
@@ -548,7 +576,7 @@ app.post('/playlist/:id', async (c) => {
       await cacheService.set(`${exportKey}:data`, exportData, 3600);
 
       // Pre-build file bytes so the download endpoint only needs a KV read (avoids ExcelJS CPU spike).
-      const singleFormat = requestedFormat as 'xlsx' | 'csv';
+      const singleFormat = requestedFormat;
       try {
         const fileBytes = await generateFileBytes(exportService, [exportData], singleFormat);
         await cacheService.setBuffer(`${exportKey}:file`, fileBytes, 3600);
@@ -675,9 +703,10 @@ app.post('/playlists', async (c) => {
     await cacheService.set(batchKey, status, 3600);
     await cacheService.set(`${batchKey}:data`, exportDataList, 3600);
 
-    if (requestedFormat === 'csv') {
+    if (requestedFormat !== 'xlsx') {
+      // csv and json prebuild cheaply; xlsx regenerates on demand.
       try {
-        const fileBytes = await generateFileBytes(exportService, exportDataList, 'csv');
+        const fileBytes = await generateFileBytes(exportService, exportDataList, requestedFormat);
         await cacheService.setBuffer(`${batchKey}:file`, fileBytes, 3600);
       } catch (genErr) {
         console.warn('[export-batch] file pre-build failed; download will regenerate', {
@@ -811,11 +840,11 @@ app.post('/playlists/chunk', async (c) => {
         playlistCount: exportDataList.length,
         totalTracks: status.track_count,
       });
-      if (requestedFormat === 'csv') {
+      if (requestedFormat !== 'xlsx') {
         try {
-          const fileBytes = await generateFileBytes(exportService, exportDataList, 'csv');
+          const fileBytes = await generateFileBytes(exportService, exportDataList, requestedFormat);
           await cacheService.setBuffer(`${batchKey}:file`, fileBytes, 3600);
-          console.info('[export-batch-chunk] file cached', { jobId, fileFormat: 'csv' });
+          console.info('[export-batch-chunk] file cached', { jobId, fileFormat: requestedFormat });
         } catch (genErr) {
           console.warn('[export-batch-chunk] file pre-build failed; download will regenerate', {
             jobId,
@@ -879,10 +908,8 @@ app.get('/playlists/:jobId/download', async (c) => {
     if (!exportStatus) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, { status: 404 as ContentfulStatusCode });
     }
-    const batchFileFormat = ((exportStatus as Record<string, unknown>).file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
-    const [bContentType, bExt] = batchFileFormat === 'csv'
-      ? ['text/csv; charset=utf-8', 'csv']
-      : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
+    const batchFileFormat = resolveStoredFormat((exportStatus as Record<string, unknown>).file_format);
+    const [bContentType, bExt] = formatHttpMeta(batchFileFormat);
     const bFilename = `playlists_export_${Date.now()}.${bExt}`;
 
     // Serve pre-built bytes when available.
@@ -957,10 +984,8 @@ app.get('/playlist/:id/download', async (c) => {
     if (!exportStatus && !exportData) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, { status: 404 as ContentfulStatusCode });
     }
-    const singleFileFormat = (exportStatus?.file_format === 'csv' ? 'csv' : 'xlsx') as 'xlsx' | 'csv';
-    const [spContentType, spExt] = singleFileFormat === 'csv'
-      ? ['text/csv; charset=utf-8', 'csv']
-      : ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
+    const singleFileFormat = resolveStoredFormat(exportStatus?.file_format);
+    const [spContentType, spExt] = formatHttpMeta(singleFileFormat);
     const spFilename = `playlist_${playlistId}_export_${Date.now()}.${spExt}`;
 
     // Serve pre-built bytes (written during POST) — zero CPU re-generation.

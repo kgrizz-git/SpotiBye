@@ -9,6 +9,21 @@ The authentication flow consists of three main steps:
 2. **Handle Callback** - Exchange authorization code for JWT tokens
 3. **Maintain Session** - Use JWT token for authenticated requests
 
+### PKCE (Authorization Code + PKCE)
+
+The flow is backend-mediated and uses PKCE (RFC 7636) in addition to the
+confidential client secret. PKCE is handled entirely server-side, so the
+frontend does not need to generate or send any verifier/challenge:
+
+- On `POST /auth/spotify/login`, the backend generates a `code_verifier`,
+  derives the S256 `code_challenge`, appends `code_challenge` and
+  `code_challenge_method=S256` to the Spotify authorize URL, and persists the
+  verifier alongside the `redirect_uri` under the one-time `oauth_state:<state>`
+  key (KV, 10-minute TTL).
+- On the callback, the backend reads the verifier back from KV and includes it
+  as `code_verifier` in the token exchange (still authenticated with the client
+  secret via Basic auth).
+
 ## Prerequisites
 
 Before implementing authentication, ensure you have:

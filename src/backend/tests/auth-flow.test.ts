@@ -9,6 +9,8 @@ vi.mock('../services/spotify-auth', () => ({
       `https://accounts.spotify.com/authorize?response_type=code&client_id=test-client-id&scope=user-read-private+user-read-email+playlist-read-private+playlist-read-collaborative&redirect_uri=${encodeURIComponent(redirectUri)}&state=test-state`
     ),
     generateState: vi.fn().mockReturnValue('test-state'),
+    generateCodeVerifier: vi.fn().mockReturnValue('test-code-verifier'),
+    computeCodeChallenge: vi.fn().mockResolvedValue('test-code-challenge'),
     exchangeCodeForTokens: vi.fn().mockResolvedValue({
       access_token: 'test-access-token',
       refresh_token: 'test-refresh-token',

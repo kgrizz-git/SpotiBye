@@ -96,7 +96,7 @@ export interface ResumableExportJobState {
   playlist_count: number;
   processed_count: number;
   track_count: number;
-  file_format: 'xlsx' | 'csv';
+  file_format: 'xlsx' | 'csv' | 'json';
   include_audio_features: boolean;
   current_cursor: string;
   current_resume_token: string;
@@ -216,7 +216,7 @@ export class ExportService {
     jobId: string;
     userId: string;
     playlistIds: string[];
-    fileFormat: 'xlsx' | 'csv';
+    fileFormat: 'xlsx' | 'csv' | 'json';
     includeAudioFeatures: boolean;
     traceId?: string;
   }): ResumableExportJobState {
@@ -745,6 +745,60 @@ export class ExportService {
 
   async generateCombinedCsvFromAssembly(assemblyState: ResumableExportAssemblyState): Promise<ArrayBuffer> {
     return new TextEncoder().encode(assemblyState.csv_chunks.join('\n\n')).buffer as ArrayBuffer;
+  }
+
+  /**
+   * Serialize export data as nested per-playlist JSON: a top-level object with
+   * a `playlists` array, each carrying playlist metadata and a `tracks` array
+   * of track objects (same fields as the XLSX columns).
+   */
+  generateCombinedJson(exportDataList: ExportData[]): ArrayBuffer {
+    const payload = {
+      generated_at: new Date().toISOString(),
+      playlist_count: exportDataList.length,
+      playlists: exportDataList.map((exportData) => ({
+        name: exportData.playlist.name,
+        owner: exportData.playlist.owner,
+        followers: exportData.playlist.followers,
+        description: exportData.playlist.description || '',
+        url: exportData.playlist.url || '',
+        cover_image_url: exportData.playlist.cover_image_url,
+        total_tracks: exportData.playlist.total_tracks,
+        total_duration: this.formatDuration(exportData.total_duration_ms),
+        tracks: exportData.tracks,
+      })),
+    };
+    return new TextEncoder().encode(JSON.stringify(payload, null, 2)).buffer as ArrayBuffer;
+  }
+
+  /**
+   * Same nested per-playlist JSON, reconstructed from the assembly worksheets
+   * used by the resumable export path (track objects are zipped back from the
+   * worksheet headers + rows).
+   */
+  generateCombinedJsonFromAssembly(assemblyState: ResumableExportAssemblyState): ArrayBuffer {
+    const payload = {
+      generated_at: new Date().toISOString(),
+      playlist_count: assemblyState.worksheets.length,
+      playlists: assemblyState.worksheets.map((worksheet) => ({
+        name: worksheet.playlist_name,
+        owner: worksheet.playlist_owner,
+        followers: worksheet.playlist_followers,
+        description: worksheet.playlist_description || '',
+        url: worksheet.playlist_url || '',
+        cover_image_url: worksheet.playlist_cover_image_url,
+        total_tracks: worksheet.rows.length,
+        total_duration: worksheet.total_duration,
+        tracks: worksheet.rows.map((row) => {
+          const track: Record<string, ExportCellValue> = {};
+          for (let i = 0; i < worksheet.headers.length; i += 1) {
+            track[worksheet.headers[i]] = row[i] ?? '';
+          }
+          return track;
+        }),
+      })),
+    };
+    return new TextEncoder().encode(JSON.stringify(payload, null, 2)).buffer as ArrayBuffer;
   }
 
   private buildPlaylistMetadata(playlist: any, fallbackTrackCount: number): ExportData['playlist'] {
