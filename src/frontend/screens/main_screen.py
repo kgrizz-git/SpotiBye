@@ -28,7 +28,23 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 
 from ...shared.logging_config import logger
-from ..state import current_export_job
+from . import main_screen_cache, main_screen_error_popup, main_screen_logout
+from .main_screen_export import MainScreenExportOrchestrator
+from .main_screen_scheduler import KivyScheduler
+from .main_screen_filenames import (
+    generate_default_filename,
+    get_file_extension,
+    increment_filename_suffix,
+    sanitize_export_filename_component,
+    selected_export_format,
+)
+from .main_screen_sort_filter import filter_playlists, sort_playlists
+from ..state import (
+    clear_current_export_job,
+    get_current_export_job,
+    mark_current_export_cancelled,
+    set_current_export_job,
+)
 from ..ui.layouts import ResponsiveGridLayout
 from ..ui.cache_explorer import CacheExplorerPopup
 from ..config.backend_config import EXPORT_DIR as SAVE_DIR
@@ -76,6 +92,11 @@ class MainScreen(Screen):
         }
         self._current_trace_id: str = ""
         self._backend_resume_popup: Optional[Popup] = None
+        
+        # Refactored orchestration components
+        self.scheduler = KivyScheduler()
+        self.export_orchestrator = MainScreenExportOrchestrator(self, self.scheduler)
+        
         self.build_ui()
 
     def _set_backend_error_context(self, phase: str, step: str = "") -> None:
@@ -631,44 +652,13 @@ class MainScreen(Screen):
 
     def _get_file_extension(self, format_type: str) -> str:
         """Get file extension for export format."""
-        extensions = {"xlsx": ".xlsx", "csv": ".csv", "json": ".json"}
-        return extensions.get(format_type, ".xlsx")
+        return get_file_extension(format_type)
 
     def _selected_export_format(self) -> str:
         """Return the user-selected export format ('xlsx', 'csv', or 'json')."""
         spinner = getattr(self, "format_spinner", None)
         text = (spinner.text if spinner else "") or "xlsx"
-        fmt = text.strip().lower()
-        return fmt if fmt in ("xlsx", "csv", "json") else "xlsx"
-
-    def _show_error_dialog(self, title: str, message: str) -> None:
-        """Show user-friendly error dialog."""
-
-        def show_dialog(dt):
-            popup = Popup(
-                title=title,
-                content=Label(text=message, text_size=dp(14)),
-                size_hint=(0.8, 0.4),
-                auto_dismiss=True,
-            )
-            popup.open()
-
-        Clock.schedule_once(show_dialog)
-
-    def _log_error(self, error_message: str, context: Dict = None) -> None:
-        """Log error with context information for debugging."""
-        if context:
-            logger.error(f"Export Error: {error_message}", extra=context)
-        else:
-            logger.error(f"Export Error: {error_message}")
-
-    def _update_export_status(self, message):
-        """Update the status label from a background thread."""
-
-        def update():
-            self.status_label.text = message
-
-        Clock.schedule_once(lambda dt: update())
+        return selected_export_format(text)
 
     def on_enter(self):
         app = App.get_running_app()
@@ -743,174 +733,10 @@ class MainScreen(Screen):
                 Clock.schedule_once(lambda _: app.switch_to_login(), 0.2)
 
     def _show_backend_error_popup(self, message: str) -> None:
-        """Show backend error details with one-click copy for diagnostics sharing."""
-        if not message:
-            return
-
-        phase = self._backend_error_phase or "unknown"
-        step = self._backend_error_step or "n/a"
-        trace_id = self._current_trace_id or "n/a"
-        details = (
-            f"Time: {datetime.now().isoformat()}\n"
-            f"Screen: MainScreen\n"
-            f"TraceId: {trace_id}\n"
-            f"Phase: {phase}\n"
-            f"Step: {step}\n"
-            f"Error: {message}"
-        )
-        resumable_export = self._get_recoverable_backend_export_context()
-
-        def _open_popup(_dt):
-            if self._backend_resume_popup:
-                self._backend_resume_popup.dismiss()
-
-            content = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
-
-            if resumable_export:
-                resume_summary = Label(
-                    text=resumable_export["summary"],
-                    size_hint_y=None,
-                    height=dp(72),
-                    halign="center",
-                    valign="middle",
-                    text_size=(dp(420), None),
-                )
-                content.add_widget(resume_summary)
-
-            details_input = TextInput(
-                text=details,
-                readonly=True,
-                multiline=True,
-                size_hint_y=1,
-                font_size=dp(13),
-                background_color=(0.15, 0.15, 0.15, 1),
-                foreground_color=(1, 1, 1, 1),
-            )
-            content.add_widget(details_input)
-
-            if resumable_export:
-                action_row = BoxLayout(
-                    orientation="horizontal",
-                    size_hint_y=None,
-                    height=dp(42),
-                    spacing=dp(8),
-                )
-                resume_btn = Button(
-                    text="Resume Export", background_color=[0.2, 0.6, 0.35, 1]
-                )
-                discard_btn = Button(
-                    text="Discard Resume", background_color=[0.55, 0.35, 0.2, 1]
-                )
-                action_row.add_widget(resume_btn)
-                action_row.add_widget(discard_btn)
-                content.add_widget(action_row)
-
-            button_row = BoxLayout(
-                orientation="horizontal", size_hint_y=None, height=dp(42), spacing=dp(8)
-            )
-            copy_btn = Button(
-                text="Copy Error Details", background_color=[0.2, 0.55, 0.85, 1]
-            )
-            close_btn = Button(text="Close", background_color=[0.45, 0.45, 0.45, 1])
-            button_row.add_widget(copy_btn)
-            button_row.add_widget(close_btn)
-            content.add_widget(button_row)
-
-            popup = Popup(
-                title="Backend Error Details",
-                content=content,
-                size_hint=(0.86, 0.58),
-                auto_dismiss=True,
-            )
-            self._backend_resume_popup = popup
-
-            def _copy_details(_instance):
-                Clipboard.copy(details)
-                self.status_label.text = "Backend error details copied to clipboard"
-
-            def _clear_resume_job(_instance):
-                if self.backend_adapter:
-                    self.backend_adapter.clear_active_export_job()
-                self.status_label.text = "Discarded resumable export state"
-                popup.dismiss()
-
-            def _resume_export(_instance):
-                popup.dismiss()
-                self.begin_backend_export(
-                    resumable_export["playlists"],
-                    resumable_export["output_path"],
-                    resume_saved_job=True,
-                )
-
-            copy_btn.bind(on_press=_copy_details)
-            close_btn.bind(on_press=popup.dismiss)
-            if resumable_export:
-                resume_btn.bind(on_press=_resume_export)
-                discard_btn.bind(on_press=_clear_resume_job)
-            popup.bind(
-                on_dismiss=lambda *_args: setattr(self, "_backend_resume_popup", None)
-            )
-            popup.open()
-
-        Clock.schedule_once(_open_popup, 0)
+        main_screen_error_popup.show_backend_error_popup(self, message)
 
     def _get_recoverable_backend_export_context(self) -> Optional[Dict[str, Any]]:
-        """Return cached resumable export details when the current failure can be resumed."""
-        if not self.backend_adapter:
-            return None
-
-        if self._backend_error_phase not in {
-            "chunked-combined",
-            "sequential-fallback",
-            "failed",
-        }:
-            return None
-
-        cached_job = self.backend_adapter.get_active_export_job()
-        if not isinstance(cached_job, dict):
-            return None
-
-        playlist_ids = cached_job.get("playlist_ids") or []
-        playlist_names = cached_job.get("playlist_names") or []
-        output_path = str(cached_job.get("output_path") or "")
-        job_id = str(cached_job.get("job_id") or "")
-        current_cursor = str(cached_job.get("current_cursor") or "")
-        current_resume_token = str(cached_job.get("current_resume_token") or "")
-        if (
-            not isinstance(playlist_ids, list)
-            or not playlist_ids
-            or not output_path
-            or not job_id
-        ):
-            return None
-
-        if not current_cursor or not current_resume_token:
-            return None
-
-        playlists = []
-        for index, playlist_id in enumerate(playlist_ids):
-            playlist_name = (
-                playlist_names[index]
-                if isinstance(playlist_names, list) and index < len(playlist_names)
-                else playlist_id
-            )
-            playlists.append({"id": playlist_id, "name": playlist_name})
-
-        processed = int(cached_job.get("processed_count", 0) or 0)
-        total = int(cached_job.get("playlist_count", len(playlists)) or len(playlists))
-        phase = str(cached_job.get("phase") or "collect")
-        summary = (
-            f"A resumable export is still available.\n"
-            f"Progress: {processed}/{total} playlists\n"
-            f"Phase: {phase}\n"
-            f"Output: {os.path.basename(output_path)}"
-        )
-
-        return {
-            "playlists": playlists,
-            "output_path": output_path,
-            "summary": summary,
-        }
+        return main_screen_error_popup.get_recoverable_backend_export_context(self)
 
     @mainthread
     def _on_backend_progress(self, status: str) -> None:
@@ -935,7 +761,7 @@ class MainScreen(Screen):
         )
 
     def display_playlists_with_cache(self) -> None:
-        """Display playlists with current search and sort applied.
+        """Display playlists in the UI. 
 
         Subclasses must override this to create the appropriate widget type.
         """
@@ -943,58 +769,21 @@ class MainScreen(Screen):
             "display_playlists_with_cache must be implemented by subclass"
         )
 
+    def _make_playlist_widget(self, playlist: dict):
+        """Create a playlist widget for a playlist row."""
+        raise NotImplementedError("_make_playlist_widget must be implemented by subclass")
+
     def _get_filtered_playlists(self) -> List[dict]:
-        """Get playlists filtered by the current search query.
-
-        Returns:
-            List of playlist dictionaries that match the search criteria
-        """
-        if not self.search_query:
-            return self.playlists.copy()
-
+        """Get playlists filtered by the current search query."""
         try:
-            # Compile search query once for better performance
-            search_terms = [
-                term.strip() for term in self.search_query.split() if term.strip()
-            ]
-
-            def matches_search(playlist):
-                playlist_name = playlist.get("name", "").lower()
-                owner_name = playlist.get("owner", {}).get("display_name", "").lower()
-
-                # Match all search terms (AND logic)
-                return all(
-                    term in playlist_name or term in owner_name for term in search_terms
-                )
-
-            return [p for p in self.playlists if matches_search(p)]
-
+            return filter_playlists(self.playlists, self.search_query)
         except Exception as exc:
             logger.warning("Error filtering playlists: %s", exc)
             return self.playlists.copy()
 
     def _sort_playlists(self, playlists: List[dict]) -> List[dict]:
-        """Sort playlists based on current sort key and direction.
-
-        Args:
-            playlists: List of playlist dictionaries to sort
-
-        Returns:
-            Sorted list of playlists
-        """
-        if not playlists or self.current_sort_key == "default":
-            return playlists
-
-        def key_fn(pl):
-            if self.current_sort_key == "name":
-                return pl.get("name", "").lower()
-            if self.current_sort_key == "tracks":
-                return pl.get("tracks", {}).get("total", 0)
-            if self.current_sort_key == "owner":
-                return pl.get("owner", {}).get("display_name", "").lower()
-            return ""
-
-        return sorted(playlists, key=key_fn, reverse=self.current_sort_reverse)
+        """Sort playlists based on current sort key and direction."""
+        return sort_playlists(playlists, self.current_sort_key, self.current_sort_reverse)
 
     def update_status_with_cache_info(self) -> None:
         """Update the status bar with current playlist information.
@@ -1158,740 +947,85 @@ class MainScreen(Screen):
 
     def _start_backend_export(self, playlists) -> None:
         """Start export flow using backend endpoints (no direct Spotify API calls)."""
-        if not self.backend_adapter:
-            self.status_label.text = "Backend export unavailable"
-            return
-
-        filename = (
-            (self.filename_input.text or "").strip()
-            if hasattr(self, "filename_input")
-            else ""
-        )
-        if not filename:
-            filename = os.path.splitext(self._generate_default_filename())[0]
-
-        extension = self._get_file_extension(self._selected_export_format())
-        if not filename.lower().endswith(extension):
-            filename = f"{os.path.splitext(filename)[0]}{extension}"
-
-        output_path = os.path.join(SAVE_DIR, filename)
-
-        if len(playlists) == 1 and os.path.exists(output_path):
-            self._show_backend_overwrite_confirmation(playlists, output_path, filename)
-        else:
-            self.begin_backend_export(playlists, output_path)
+        self.export_orchestrator._start_backend_export(playlists)
 
     def _show_backend_overwrite_confirmation(
         self, playlists, output_path, filename
     ) -> None:
-        popup_content = BoxLayout(
-            orientation="vertical", spacing=dp(10), padding=dp(20)
-        )
-        popup_content.add_widget(Widget(size_hint_y=0.3))
-        popup_content.add_widget(
-            Label(
-                text=f'The file "{filename}" already exists.\n\nDo you want to overwrite it?',
-                font_size=dp(16),
-                size_hint_y=None,
-                height=dp(80),
-                halign="center",
-                valign="center",
-                text_size=(dp(400), dp(80)),
-            )
-        )
-        popup_content.add_widget(Widget(size_hint_y=0.4))
-        buttons = BoxLayout(
-            orientation="horizontal", size_hint_y=None, height=dp(50), spacing=dp(15)
-        )
-        cancel_btn = Button(
-            text="Cancel",
-            size_hint_x=0.5,
-            font_size=dp(16),
-            background_color=[0.6, 0.6, 0.6, 1],
-        )
-        overwrite_btn = Button(
-            text="Overwrite",
-            size_hint_x=0.5,
-            font_size=dp(16),
-            background_color=[0.8, 0.3, 0.3, 1],
-        )
-        buttons.add_widget(cancel_btn)
-        buttons.add_widget(overwrite_btn)
-        popup_content.add_widget(buttons)
-        popup = Popup(
-            title="File Already Exists",
-            content=popup_content,
-            size_hint=(0.6, 0.4),
-            auto_dismiss=False,
-        )
-        cancel_btn.bind(on_press=lambda *_: popup.dismiss())
-        overwrite_btn.bind(
-            on_press=lambda *_: self._handle_backend_overwrite_confirmed(
-                popup, playlists, output_path
-            )
-        )
-        popup.open()
+        self.export_orchestrator._show_backend_overwrite_confirmation(playlists, output_path, filename)
 
     def _handle_backend_overwrite_confirmed(
         self, popup, playlists, output_path
     ) -> None:
-        popup.dismiss()
-        self.begin_backend_export(playlists, output_path)
+        self.export_orchestrator._handle_backend_overwrite_confirmed(popup, playlists, output_path)
 
     def begin_backend_export(
         self, playlists, output_path, resume_saved_job: bool = False
     ) -> None:
         """Begin backend export worker for one or more playlists."""
-        try:
-            if self.trace_mode_enabled:
-                self._current_trace_id = uuid.uuid4().hex[:12]
-            else:
-                self._current_trace_id = ""
-
-            if self.backend_adapter:
-                self.backend_adapter.set_trace_id(self._current_trace_id)
-
-            self.export_btn.disabled = True
-            self.cancel_btn.opacity = 1
-            self.cancel_btn.disabled = True
-            total = len(playlists) if isinstance(playlists, list) else 1
-            filename = os.path.basename(output_path)
-            self.status_label.text = (
-                f"Exporting {total} playlist(s) via backend to: {filename}"
-            )
-            self.progress_bar.value = 5
-            threading.Thread(
-                target=self.backend_export_worker,
-                args=(playlists, output_path, resume_saved_job),
-                daemon=True,
-            ).start()
-        except Exception as exc:
-            logger.error("Error beginning backend export: %s", exc)
-            self.export_btn.disabled = False
-            self.cancel_btn.opacity = 0
-            self.cancel_btn.disabled = True
-            self.status_label.text = f"Export error: {exc}"
-            Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+        self.export_orchestrator.begin_backend_export(playlists, output_path, resume_saved_job)
 
     def _sanitize_export_filename_component(self, value: str) -> str:
         """Sanitize playlist/file name component for cross-platform safe filenames."""
-        safe = re.sub(r"[^A-Za-z0-9._ -]+", "_", value or "").strip()
-        return safe[:80] if safe else "playlist"
+        return sanitize_export_filename_component(value)
 
     def _build_backend_output_path(
         self, playlist: dict, base_output_path: str, multiple: bool
     ) -> str:
         """Build output file path for backend export."""
-        if not multiple:
-            return base_output_path
-
-        base_dir = os.path.dirname(base_output_path)
-        base_name = os.path.splitext(os.path.basename(base_output_path))[0]
-        extension = self._get_file_extension(self._selected_export_format())
-        return os.path.join(base_dir, f"{base_name}{extension}")
+        return self.export_orchestrator._build_backend_output_path(playlist, base_output_path, multiple)
 
     def backend_export_worker(
         self, playlists, output_path, resume_saved_job: bool = False
     ) -> None:
         """Worker that generates and downloads export(s) from backend API."""
-        try:
-            if not self.backend_adapter:
-                Clock.schedule_once(
-                    lambda _: setattr(
-                        self.status_label, "text", "Backend export unavailable"
-                    ),
-                    0,
-                )
-                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-                return
-
-            selected_playlists = (
-                playlists if isinstance(playlists, list) else [playlists]
-            )
-            valid_playlists = [
-                p for p in selected_playlists if isinstance(p, dict) and p.get("id")
-            ]
-            if not valid_playlists:
-                Clock.schedule_once(
-                    lambda _: setattr(
-                        self.status_label,
-                        "text",
-                        "No valid playlists selected for export",
-                    ),
-                    0,
-                )
-                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-                Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
-                return
-
-            total = len(valid_playlists)
-            playlist_ids = [p.get("id") for p in valid_playlists if p.get("id")]
-            target_path = self._build_backend_output_path(
-                valid_playlists[0], output_path, total > 1
-            )
-            resume_context = {
-                "allow_resume": resume_saved_job,
-                "output_path": target_path,
-                "playlist_names": [p.get("name", "") for p in valid_playlists],
-            }
-            self._set_backend_error_context(
-                "chunked-combined", f"prepare ({total} playlists)"
-            )
-
-            Clock.schedule_once(
-                lambda _, t=total: setattr(
-                    self.status_label,
-                    "text",
-                    f"Generating combined backend export for {t} playlist(s) (chunked)...",
-                ),
-                0,
-            )
-            Clock.schedule_once(lambda _: setattr(self.progress_bar, "value", 35), 0)
-
-            # Use chunked processing to avoid per-invocation subrequest caps on Cloudflare free plans.
-            self._set_backend_error_context("chunked-combined", "generate")
-            export_info = self.backend_adapter.generate_batch_export_chunked(
-                playlist_ids,
-                self._selected_export_format(),
-                chunk_size=1,
-                report_errors=False,
-                resume_context=resume_context,
-            )
-            if not export_info:
-                # Fallback: combined export can exceed Worker subrequest limits for larger selections.
-                # Degrade gracefully to sequential per-playlist exports so the user still gets files.
-                self._set_backend_error_context("sequential-fallback", "start")
-                fallback_result = self._backend_export_fallback_sequential(
-                    valid_playlists, output_path
-                )
-                if (
-                    fallback_result.get("success_count", 0) > 0
-                    and fallback_result.get("failed_count", 0) == 0
-                ):
-                    self.backend_adapter.clear_active_export_job()
-                    Clock.schedule_once(
-                        lambda _, c=total: setattr(
-                            self.status_label,
-                            "text",
-                            f"Export complete ({c} playlist(s), sequential fallback)",
-                        ),
-                        0,
-                    )
-                    Clock.schedule_once(
-                        lambda _: setattr(self.progress_bar, "value", 100), 0
-                    )
-                elif fallback_result.get("success_count", 0) > 0:
-                    s = fallback_result.get("success_count", 0)
-                    f = fallback_result.get("failed_count", 0)
-                    Clock.schedule_once(
-                        lambda _, ss=s, ff=f: setattr(
-                            self.status_label,
-                            "text",
-                            f"Partial export complete ({ss} saved, {ff} failed)",
-                        ),
-                        0,
-                    )
-                    Clock.schedule_once(
-                        lambda _: setattr(self.progress_bar, "value", 100), 0
-                    )
-                    self._show_backend_error_popup(
-                        f"Sequential fallback partially succeeded. Saved {s}, failed {f}. Failed IDs: {', '.join(fallback_result.get('failed_playlist_ids', []))}"
-                    )
-                else:
-                    Clock.schedule_once(
-                        lambda _: setattr(
-                            self.status_label,
-                            "text",
-                            "Backend combined export generation failed",
-                        ),
-                        0,
-                    )
-                    self._show_backend_error_popup(
-                        "Combined export generation failed after retries and sequential fallback"
-                    )
-                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-                Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
-                return
-
-            export_id = (
-                export_info.get("job_id", "") if isinstance(export_info, dict) else ""
-            )
-            total_tracks = (
-                int(export_info.get("track_count", 0))
-                if isinstance(export_info, dict)
-                else 0
-            )
-            if total_tracks >= 2400:
-                Clock.schedule_once(
-                    lambda _, t=total_tracks: setattr(
-                        self.status_label,
-                        "text",
-                        f"Large export ({t} tracks): reliability mode active; combined file prioritized over heavy styling.",
-                    ),
-                    0,
-                )
-
-            self._set_backend_error_context(
-                "chunked-combined", f'download job={export_id or "unknown"}'
-            )
-
-            Clock.schedule_once(
-                lambda _: setattr(
-                    self.status_label, "text", "Downloading combined backend export..."
-                ),
-                0,
-            )
-            Clock.schedule_once(lambda _: setattr(self.progress_bar, "value", 80), 0)
-
-            success = self.backend_adapter.download_batch_export(
-                export_id, target_path, report_errors=False
-            )
-            if not success:
-                # Recovery pass: try to resume/reconcile combined job state and retry combined download once.
-                self._set_backend_error_context(
-                    "chunked-combined", "recover-and-redownload"
-                )
-                Clock.schedule_once(
-                    lambda _: setattr(
-                        self.status_label,
-                        "text",
-                        "Combined download failed; retrying combined export recovery...",
-                    ),
-                    0,
-                )
-                recovered_info = self.backend_adapter.generate_batch_export_chunked(
-                    playlist_ids,
-                    self._selected_export_format(),
-                    chunk_size=1,
-                    max_steps=240,
-                    report_errors=False,
-                    resume_context={
-                        "allow_resume": True,
-                        "output_path": target_path,
-                        "playlist_names": [p.get("name", "") for p in valid_playlists],
-                    },
-                )
-                recovered_export_id = (
-                    recovered_info.get("job_id", "")
-                    if isinstance(recovered_info, dict)
-                    else ""
-                ) or export_id
-
-                if recovered_export_id:
-                    success = self.backend_adapter.download_batch_export(
-                        recovered_export_id, target_path, report_errors=False
-                    )
-
-            if not success:
-                self._set_backend_error_context(
-                    "sequential-fallback", "start-after-combined-failure"
-                )
-                # Combined path failed after retries/recovery; now degrade to sequential.
-                time.sleep(6.0)
-                fallback_result = self._backend_export_fallback_sequential(
-                    valid_playlists, output_path
-                )
-                if (
-                    fallback_result.get("success_count", 0) > 0
-                    and fallback_result.get("failed_count", 0) == 0
-                ):
-                    self.backend_adapter.clear_active_export_job(export_id or None)
-                    Clock.schedule_once(
-                        lambda _, c=total: setattr(
-                            self.status_label,
-                            "text",
-                            f"Export complete ({c} playlist(s), sequential fallback)",
-                        ),
-                        0,
-                    )
-                    Clock.schedule_once(
-                        lambda _: setattr(self.progress_bar, "value", 100), 0
-                    )
-                elif fallback_result.get("success_count", 0) > 0:
-                    s = fallback_result.get("success_count", 0)
-                    f = fallback_result.get("failed_count", 0)
-                    Clock.schedule_once(
-                        lambda _, ss=s, ff=f: setattr(
-                            self.status_label,
-                            "text",
-                            f"Partial export complete ({ss} saved, {ff} failed)",
-                        ),
-                        0,
-                    )
-                    Clock.schedule_once(
-                        lambda _: setattr(self.progress_bar, "value", 100), 0
-                    )
-                    self._show_backend_error_popup(
-                        f"Combined download failed; sequential fallback partially succeeded. Saved {s}, failed {f}. Failed IDs: {', '.join(fallback_result.get('failed_playlist_ids', []))}"
-                    )
-                else:
-                    Clock.schedule_once(
-                        lambda _: setattr(
-                            self.status_label,
-                            "text",
-                            "Backend combined export download failed",
-                        ),
-                        0,
-                    )
-                    self._show_backend_error_popup(
-                        "Combined export download failed after retries and sequential fallback"
-                    )
-                Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-                Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
-                return
-
-            Clock.schedule_once(lambda _: setattr(self.progress_bar, "value", 100), 0)
-            Clock.schedule_once(
-                lambda _, c=total: setattr(
-                    self.status_label, "text", f"Export complete ({c} playlist(s))"
-                ),
-                0,
-            )
-            self._set_backend_error_context(
-                "completed", f"combined success ({total} playlists)"
-            )
-            Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-            Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
-
-        except Exception as exc:
-            logger.error("Backend export failed: %s", exc)
-            Clock.schedule_once(
-                lambda _, err=str(exc): setattr(
-                    self.status_label, "text", f"Backend export failed: {err}"
-                ),
-                0,
-            )
-            self._set_backend_error_context("failed", "backend-export-worker")
-            self._show_backend_error_popup(f"Backend export failed: {str(exc)}")
-            Clock.schedule_once(lambda _: self.cleanup_after_export(), 0)
-            Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+        self.export_orchestrator.backend_export_worker(playlists, output_path, resume_saved_job)
 
     def _backend_export_fallback_sequential(
         self, playlists: List[Dict[str, Any]], base_output_path: str
     ) -> Dict[str, Any]:
-        """Fallback export strategy: generate one backend export per playlist.
-
-        Returns summary with partial successes preserved.
-        """
-        if not self.backend_adapter:
-            return {
-                "success_count": 0,
-                "failed_count": len(playlists),
-                "failed_playlist_ids": [
-                    p.get("id", "") for p in playlists if p.get("id")
-                ],
-            }
-
-        total = len(playlists)
-        base_dir = os.path.dirname(base_output_path)
-        base_name = os.path.splitext(os.path.basename(base_output_path))[0]
-        export_format = self._selected_export_format()
-        success_count = 0
-        failed_playlist_ids: List[str] = []
-
-        for index, playlist in enumerate(playlists, start=1):
-            playlist_id = playlist.get("id")
-            if not playlist_id:
-                continue
-
-            playlist_name = self._sanitize_export_filename_component(
-                playlist.get("name", "playlist")
-            )
-            safe_id = self._sanitize_export_filename_component(playlist_id)
-            extension = self._get_file_extension(export_format)
-            target_file = f"{base_name} - {playlist_name} ({safe_id}){extension}"
-            target_path = os.path.join(base_dir, target_file)
-
-            Clock.schedule_once(
-                lambda _, i=index, t=total, name=playlist_name: setattr(
-                    self.status_label,
-                    "text",
-                    f"Fallback [{i}/{t}] Generating export for {name}...",
-                ),
-                0,
-            )
-            Clock.schedule_once(
-                lambda _, i=index, t=total: setattr(
-                    self.progress_bar, "value", int(((i - 1) / t) * 100) + 10
-                ),
-                0,
-            )
-            self._set_backend_error_context(
-                "sequential-fallback",
-                f"generate {index}/{total} playlist={playlist_id}",
-            )
-
-            export_info = self.backend_adapter.generate_export(
-                playlist_id, export_format, report_errors=False
-            )
-            if not export_info:
-                failed_playlist_ids.append(playlist_id)
-                continue
-
-            export_id = (
-                export_info.get("job_id", "") if isinstance(export_info, dict) else ""
-            )
-
-            Clock.schedule_once(
-                lambda _, i=index, t=total, name=playlist_name: setattr(
-                    self.status_label,
-                    "text",
-                    f"Fallback [{i}/{t}] Downloading export for {name}...",
-                ),
-                0,
-            )
-            Clock.schedule_once(
-                lambda _, i=index, t=total: setattr(
-                    self.progress_bar, "value", int(((i - 1) / t) * 100) + 60
-                ),
-                0,
-            )
-            self._set_backend_error_context(
-                "sequential-fallback",
-                f"download {index}/{total} playlist={playlist_id}",
-            )
-
-            success = self.backend_adapter.download_export(
-                playlist_id, export_id, target_path
-            )
-            if not success:
-                failed_playlist_ids.append(playlist_id)
-                continue
-
-            success_count += 1
-
-            # Pace long sequential runs slightly to reduce backend/upstream burst failures.
-            if index < total:
-                time.sleep(0.5)
-
-        if success_count > 0 and not failed_playlist_ids:
-            self._set_backend_error_context(
-                "completed", f"sequential fallback success ({total} playlists)"
-            )
-        elif success_count > 0:
-            self._set_backend_error_context(
-                "completed",
-                f"sequential fallback partial ({success_count}/{total} playlists)",
-            )
-        else:
-            self._set_backend_error_context(
-                "failed", f"sequential fallback failed ({total} playlists)"
-            )
-
-        return {
-            "success_count": success_count,
-            "failed_count": len(failed_playlist_ids),
-            "failed_playlist_ids": failed_playlist_ids,
-        }
+        """Fallback export strategy: generate one backend export per playlist."""
+        return self.export_orchestrator._backend_export_fallback_sequential(playlists, base_output_path)
 
     def cancel_export(self, *_args) -> None:
-        global current_export_job
-        if current_export_job:
-            current_export_job["cancelled"] = True
-            if self.backend_adapter:
-                self.backend_adapter.clear_active_export_job()
-            self.cancel_btn.disabled = True
-            self.cancel_btn.text = "Cancelling..."
-            self.status_label.text = "Cancelling export..."
-            Clock.schedule_once(lambda _: self.cleanup_after_export(), 3.0)
-            Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 3.0)
+        self.export_orchestrator.cancel_export(*_args)
 
     def cleanup_after_export(self) -> None:
-        self.export_btn.disabled = False
-        self.cancel_btn.opacity = 0
-        self.cancel_btn.disabled = True
-        self.cancel_btn.text = "Cancel Export"
-        self.progress_bar.value = 0
-        if self.backend_adapter:
-            self.backend_adapter.set_trace_id(None)
+        self.export_orchestrator.cleanup_after_export()
 
     def handle_export_cancelled(self) -> None:
         """Handle the UI updates when an export is cancelled."""
-        self.status_label.text = "Export cancelled"
-        self.cleanup_after_export()
-        Clock.schedule_once(lambda _: self._refresh_filename_after_export(), 0)
+        self.export_orchestrator.handle_export_cancelled()
 
     def logout(self, *_args) -> None:
-        selected_count = sum(1 for w in self.playlist_widgets if w.checkbox.active)
-        if selected_count > 0:
-            self._show_logout_confirmation(selected_count)
-        else:
-            self._perform_logout()
+        main_screen_logout.logout(self, *_args)
 
     def _show_logout_confirmation(self, selected_count: int) -> None:
-        content = BoxLayout(orientation="vertical", spacing=dp(15), padding=dp(20))
-        content.add_widget(Widget(size_hint_y=0.2))
-        plural = "playlist" if selected_count == 1 else "playlists"
-        content.add_widget(
-            Label(
-                text=f"You have {selected_count} {plural} selected.\n\nAre you sure you want to log out?",
-                font_size=dp(16),
-                size_hint_y=None,
-                height=dp(80),
-                halign="center",
-                valign="center",
-                text_size=(dp(400), dp(80)),
-            )
-        )
-        content.add_widget(Widget(size_hint_y=0.3))
-        buttons = BoxLayout(
-            orientation="horizontal", size_hint_y=None, height=dp(50), spacing=dp(15)
-        )
-        cancel_btn = Button(
-            text="Cancel",
-            size_hint_x=0.5,
-            font_size=dp(16),
-            background_color=[0.6, 0.6, 0.6, 1],
-        )
-        logout_btn = Button(
-            text="Log Out",
-            size_hint_x=0.5,
-            font_size=dp(16),
-            background_color=[0.8, 0.3, 0.3, 1],
-        )
-        buttons.add_widget(cancel_btn)
-        buttons.add_widget(logout_btn)
-        content.add_widget(buttons)
-        popup = Popup(
-            title="Confirm Logout",
-            content=content,
-            size_hint=(0.6, 0.4),
-            auto_dismiss=False,
-        )
-        cancel_btn.bind(on_press=lambda *_: popup.dismiss())
-        logout_btn.bind(on_press=lambda *_: self._handle_logout_confirmed(popup))
-        popup.open()
+        main_screen_logout.show_logout_confirmation(self, selected_count)
 
     def _handle_logout_confirmed(self, popup) -> None:
-        popup.dismiss()
-        self._perform_logout()
+        main_screen_logout.handle_logout_confirmed(self, popup)
 
     def _perform_logout(self) -> None:
-        try:
-            app = App.get_running_app()
-            # Use the comprehensive auth state clearing function from the app
-            app.logout()
-        except Exception as exc:
-            logger.error("Error performing logout: %s", exc)
+        main_screen_logout.perform_logout()
 
     # Cache management ----------------------------------------------------
     def show_clear_cache_confirmation(self, *_args) -> None:
-        """Show confirmation dialog for clearing cache."""
-        content = BoxLayout(orientation="vertical", spacing=dp(15), padding=dp(20))
-        content.add_widget(Widget(size_hint_y=0.2))
-
-        content.add_widget(
-            Label(
-                text="This will clear all downloaded data. Are you sure?",
-                font_size=dp(16),
-                size_hint_y=None,
-                height=dp(60),
-                halign="center",
-                valign="center",
-                text_size=(dp(400), dp(60)),
-            )
-        )
-        content.add_widget(Widget(size_hint_y=0.3))
-
-        buttons = BoxLayout(
-            orientation="horizontal", size_hint_y=None, height=dp(50), spacing=dp(15)
-        )
-        cancel_btn = Button(
-            text="No",
-            size_hint_x=0.5,
-            font_size=dp(16),
-            background_color=[0.6, 0.6, 0.6, 1],
-        )
-        confirm_btn = Button(
-            text="Yes",
-            size_hint_x=0.5,
-            font_size=dp(16),
-            background_color=[0.8, 0.3, 0.3, 1],
-        )
-
-        buttons.add_widget(cancel_btn)
-        buttons.add_widget(confirm_btn)
-        content.add_widget(buttons)
-
-        popup = Popup(
-            title="Confirm Cache Clear",
-            content=content,
-            size_hint=(0.7, 0.5),
-            auto_dismiss=False,
-        )
-
-        cancel_btn.bind(on_press=lambda *_: popup.dismiss())
-        confirm_btn.bind(on_press=lambda *_: self.clear_all_cache(popup))
-        popup.open()
+        main_screen_cache.show_clear_cache_confirmation(self, *_args)
 
     def clear_all_cache(self, popup) -> None:
-        """Clear all cache data and update UI."""
-        try:
-            popup.dismiss()
-            self.status_label.text = "Clearing cache..."
-            self.update_status_with_cache_info()
-
-            success_popup = Popup(
-                title="Cache Cleared",
-                content=Label(text="All cached data has been cleared successfully."),
-                size_hint=(0.6, 0.4),
-                auto_dismiss=True,
-            )
-            success_popup.open()
-
-            logger.info("Cache cleared by user")
-
-        except Exception as exc:
-            logger.error("Error clearing cache: %s", exc)
-            self.status_label.text = f"Error clearing cache: {exc}"
-
-            error_popup = Popup(
-                title="Error",
-                content=Label(text=f"Failed to clear cache: {exc}"),
-                size_hint=(0.6, 0.4),
-                auto_dismiss=True,
-            )
-            error_popup.open()
+        main_screen_cache.clear_all_cache(self, popup)
 
     def open_cache_explorer(self, *_args) -> None:
-        """Open the cache explorer popup with backend support."""
-        try:
-            if BACKEND_CACHE_EXPLORER_AVAILABLE:
-                # Use backend-aware cache explorer
-                explorer_popup = create_cache_explorer()
-                logger.info("Backend cache explorer opened by user")
-            else:
-                # Use standard cache explorer
-                explorer_popup = CacheExplorerPopup()
-                logger.info("Standard cache explorer opened by user")
-
-            explorer_popup.open()
-        except Exception as exc:
-            logger.error("Error opening cache explorer: %s", exc)
-            self.status_label.text = f"Error opening cache explorer: {exc}"
-
-            error_popup = Popup(
-                title="Cache Explorer Error",
-                content=Label(text=f"Failed to open cache explorer:\n{exc}"),
-                size_hint=(0.6, 0.4),
-                auto_dismiss=True,
-            )
-            error_popup.open()
+        main_screen_cache.open_cache_explorer(
+            self, BACKEND_CACHE_EXPLORER_AVAILABLE, create_cache_explorer, *_args
+        )
 
     # Filename helpers ----------------------------------------------------
     def _generate_default_filename(self, format_type: str = "xlsx") -> str:
-        # Get username from the app with better fallback
         app = App.get_running_app()
         username = getattr(app, "username", None)
-
-        # Handle None or empty username cases
-        if not username or username == "None":
-            username = "user"
-
-        # Format: YYYY-MM-DD_HH-MM-SSAM/PM
-        timestamp = datetime.now().strftime("%Y-%m-%d_%I-%M-%S%p")
-
-        return f"Spotify_Playlists_{username}_{timestamp}.{format_type}"
+        return generate_default_filename(username, format_type)
 
     def _refresh_filename_after_export(self):
         if hasattr(self, "filename_input"):
@@ -1900,8 +1034,8 @@ class MainScreen(Screen):
                 new_default = self._generate_default_filename()
 
                 # Check if current filename is the same as the new default (without extension)
-                current_base = current_filename.replace(".xlsx", "")
-                new_base = new_default.replace(".xlsx", "")
+                current_base = os.path.splitext(current_filename)[0]
+                new_base = os.path.splitext(new_default)[0]
 
                 if current_base == new_base:
                     # Apply incremental numbering
@@ -1915,26 +1049,5 @@ class MainScreen(Screen):
                 pass
 
     def _increment_filename_suffix(self, filename: str) -> str:
-        """Increment filename suffix from _2 to _5 as needed.
-
-        Args:
-            filename: Base filename (e.g., 'spotify_playlists_20231122_143022.xlsx')
-
-        Returns:
-            Filename with incremented suffix or original if no suffix pattern found
-        """
-        base = filename.replace(".xlsx", "")
-
-        # Check for existing suffix pattern
-        if base.endswith("_5"):
-            # Already at _5, keep as is (could cycle back to _2 or stay at _5)
-            return filename
-        elif base.endswith("_4"):
-            return base.replace("_4", "_5") + ".xlsx"
-        elif base.endswith("_3"):
-            return base.replace("_3", "_4") + ".xlsx"
-        elif base.endswith("_2"):
-            return base.replace("_2", "_3") + ".xlsx"
-        else:
-            # No suffix, add _2
-            return base + "_2.xlsx"
+        """Increment filename suffix from _2 to _5 as needed."""
+        return increment_filename_suffix(filename)

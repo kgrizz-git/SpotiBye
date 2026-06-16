@@ -338,10 +338,9 @@ class BackendSpotifyExporterApp(MDApp):
         """Handle app stop event."""
         try:
             # Cancel any ongoing export jobs
-            from ..state import current_export_job
+            from ..state import mark_current_export_cancelled
 
-            if current_export_job:
-                current_export_job["cancelled"] = True
+            mark_current_export_cancelled()
 
             # Save any pending cache data
             if self.cache_manager:

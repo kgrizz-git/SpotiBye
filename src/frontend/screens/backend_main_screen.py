@@ -46,7 +46,7 @@ class BackendMainScreen(MainScreen):
             for playlist in playlists_to_display:
                 try:
                     playlist_id = playlist.get("id", "")
-                    widget = BackendPlaylistCard(playlist)
+                    widget = self._make_playlist_widget(playlist)
                     widget.checkbox.active = playlist_id in self.selected_playlist_ids
                     widget.checkbox.bind(
                         active=lambda _cb,
@@ -97,7 +97,7 @@ class BackendMainScreen(MainScreen):
             for playlist in sorted_playlists:
                 try:
                     playlist_id = playlist.get("id", "")
-                    widget = BackendPlaylistCard(playlist)
+                    widget = self._make_playlist_widget(playlist)
                     widget.checkbox.active = playlist_id in self.selected_playlist_ids
                     widget.checkbox.bind(
                         active=lambda _cb,
