@@ -20,7 +20,10 @@ export class JWTService {
   private secret: string;
 
   constructor(secret?: string) {
-    this.secret = secret || 'default-secret';
+    if (!secret) {
+      throw new Error('JWT_SECRET is required — refusing to start with a predictable default');
+    }
+    this.secret = secret;
   }
 
   async generateToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promise<string> {

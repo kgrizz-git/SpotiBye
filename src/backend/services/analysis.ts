@@ -58,11 +58,20 @@ export class AnalysisService {
     try {
       const spotifyService = new SpotifyService(this.accessToken);
 
-      // Get playlist details and tracks
-      const tracksData = await spotifyService.getPlaylistTracks(playlistId, 100, 0);
+      // Get all playlist tracks, paginating by raw page size to correctly
+      // advance offsets past local/unavailable items.
+      const allItems: typeof tracksData.items = [];
+      let offset = 0;
+      const limit = 100;
+      let tracksData: Awaited<ReturnType<typeof spotifyService.getPlaylistTracks>>;
+      do {
+        tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
+        allItems.push(...tracksData.items);
+        offset += limit;
+      } while (tracksData.rawCount === limit && offset < tracksData.total);
 
       // Normalize items: handle both .track (old) and .item (Feb-2026 shape)
-      const tracks = tracksData.items
+      const tracks = allItems
         .map((item: SpotifyPlaylistTrackItem) => item.track ?? item.item)
         .filter((t): t is SpotifyTrack => t?.id !== undefined);
 

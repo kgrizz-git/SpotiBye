@@ -27,6 +27,9 @@ import { parseSpotifyResponse } from '../types/spotify-api';
 export interface NormalizedPlaylistItemsResponse {
   href?: string;
   total: number;
+  // Number of raw entries Spotify returned for this page, before filtering out
+  // local/unavailable items. Pagination must advance by this, not items.length.
+  rawCount: number;
   items: Array<SpotifyPlaylistTrackItem & { track: SpotifyTrack }>;
 }
 
@@ -88,6 +91,7 @@ export class SpotifyService {
     return {
       href: data?.href,
       total: typeof data?.total === 'number' ? data.total : items.length,
+      rawCount: rawItems.length,
       items,
     };
   }

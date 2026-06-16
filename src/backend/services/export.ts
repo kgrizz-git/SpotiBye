@@ -307,10 +307,17 @@ export class ExportService {
 
       const totalTracks = slice.totalTracks || mergedExportData.playlist.total_tracks || mergedExportData.tracks.length;
       const collectedTracks = mergedExportData.tracks.length;
-      const playlistDone = collectedTracks >= totalTracks || slice.fetchedCount === 0;
+      // Advance the Spotify cursor by the raw page size (Spotify's `total` and
+      // offsets count local/unavailable items that we filter out of `items`).
+      // Using the filtered count here would skip offsets (duplicating later
+      // pages) or stop early on a page whose valid tracks are all filtered out.
+      const rawOffsetAfter = playlistProgress.next_offset + slice.rawCount;
+      const playlistDone = slice.rawCount === 0
+        || slice.rawCount < job.track_page_size
+        || rawOffsetAfter >= totalTracks;
 
       job.playlist_progress[playlistId] = {
-        next_offset: playlistDone ? collectedTracks : playlistProgress.next_offset + slice.fetchedCount,
+        next_offset: rawOffsetAfter,
         total_tracks: totalTracks,
         collected_tracks: collectedTracks,
         done: playlistDone,
@@ -322,7 +329,8 @@ export class ExportService {
         if (job.file_format === 'csv') {
           assemblyState.csv_chunks.push(await this.buildCsvChunk(mergedExportData));
         } else {
-          assemblyState.worksheets.push(this.buildWorksheetAssembly(mergedExportData));
+          const usedNames = new Set(assemblyState.worksheets.map((w) => w.sheet_name.toLowerCase()));
+          assemblyState.worksheets.push(this.buildWorksheetAssembly(mergedExportData, usedNames));
         }
         assemblyState.summary_rows.push([
           mergedExportData.playlist.name,
@@ -422,7 +430,8 @@ export class ExportService {
       if (job.file_format === 'csv') {
         assemblyState.csv_chunks.push(await this.buildCsvChunk(exportData));
       } else {
-        assemblyState.worksheets.push(this.buildWorksheetAssembly(exportData));
+        const usedNames = new Set(assemblyState.worksheets.map((w) => w.sheet_name.toLowerCase()));
+        assemblyState.worksheets.push(this.buildWorksheetAssembly(exportData, usedNames));
       }
       assemblyState.summary_rows.push([
         exportData.playlist.name,
@@ -478,7 +487,10 @@ export class ExportService {
       const tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
       allTracks.push(...tracksData.items);
 
-      if (tracksData.items.length < limit) { hasMore = false; break; }
+      // Advance by the raw page size and stop on a short page. Using the filtered
+      // items.length here would stop early or skip offsets on playlists that
+      // contain local/unavailable items.
+      if (tracksData.rawCount < limit) { hasMore = false; break; }
       offset += limit;
     }
 
@@ -501,7 +513,7 @@ export class ExportService {
       limit?: number;
       existingExportData?: ExportData;
     },
-  ): Promise<{ exportData: ExportData; fetchedCount: number; totalTracks: number }> {
+  ): Promise<{ exportData: ExportData; fetchedCount: number; rawCount: number; totalTracks: number }> {
     const spotifyService = new SpotifyService(this.accessToken);
     const includeAudioFeatures = options.includeAudioFeatures === true;
     const offset = Math.max(0, options.offset || 0);
@@ -526,6 +538,7 @@ export class ExportService {
         generated_at: new Date().toISOString(),
       },
       fetchedCount: tracksData.items.length,
+      rawCount: tracksData.rawCount,
       totalTracks: tracksData.total,
     };
   }
@@ -583,10 +596,11 @@ export class ExportService {
     return new TextDecoder().decode(csvBytes);
   }
 
-  private buildWorksheetAssembly(exportData: ExportData): WorksheetAssemblyData {
+  private buildWorksheetAssembly(exportData: ExportData, usedSheetNames: Set<string>): WorksheetAssemblyData {
     const headers = this.getTrackHeaders();
+    const baseName = this.sanitizeSheetName(`${exportData.playlist.name} - ${exportData.playlist.owner}`);
     return {
-      sheet_name: this.sanitizeSheetName(`${exportData.playlist.name} - ${exportData.playlist.owner}`),
+      sheet_name: this.uniquifySheetName(baseName, usedSheetNames),
       playlist_name: exportData.playlist.name,
       playlist_owner: exportData.playlist.owner,
       playlist_followers: exportData.playlist.followers,
@@ -957,9 +971,11 @@ export class ExportService {
     }
 
     const headers = this.getTrackHeaders();
+    const usedSheetNames = new Set<string>();
 
     for (const exportData of exportDataList) {
-      const sheetName = this.sanitizeSheetName(`${exportData.playlist.name} - ${exportData.playlist.owner}`);
+      const baseName = this.sanitizeSheetName(`${exportData.playlist.name} - ${exportData.playlist.owner}`);
+      const sheetName = this.uniquifySheetName(baseName, usedSheetNames);
 
       const sheet = workbook.addWorksheet(sheetName);
       sheet.columns = [
@@ -1113,6 +1129,26 @@ export class ExportService {
   private sanitizeSheetName(name: string): string {
     const cleaned = name.replace(/[\\/*?:[\]]/g, ' ').trim();
     return (cleaned || 'Playlist').slice(0, 31);
+  }
+
+  // Make a sheet name unique within `usedNames` (case-insensitive, per Excel).
+  // Appends " (N)" with N starting at 2, shrinking the base to fit within 31 chars.
+  private uniquifySheetName(base: string, usedNames: Set<string>): string {
+    const key = base.toLowerCase();
+    if (!usedNames.has(key)) {
+      usedNames.add(key);
+      return base;
+    }
+    for (let n = 2; n <= 9999; n += 1) {
+      const suffix = ` (${n})`;
+      const candidate = base.slice(0, 31 - suffix.length) + suffix;
+      const candidateKey = candidate.toLowerCase();
+      if (!usedNames.has(candidateKey)) {
+        usedNames.add(candidateKey);
+        return candidate;
+      }
+    }
+    return base; // unreachable in practice
   }
 
   private getTrackHeaders(): string[] {

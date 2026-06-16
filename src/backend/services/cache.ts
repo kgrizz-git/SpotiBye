@@ -50,7 +50,7 @@ export class CacheService {
 
   async exists(key: string): Promise<boolean> {
     try {
-      const value = await (this.kv.get as (key: string, options?: { stream: boolean }) => Promise<string | null>)(key, { stream: true });
+      const value = await this.kv.get(key, { type: 'text' });
       return value !== null;
     } catch (error) {
       console.error('Cache exists error:', error);

@@ -31,7 +31,7 @@ development = [
 ]
 
 [project.scripts]
-spotify-playlist-exporter = "spotify_playlist_exporter_v2.__main__:main"
+spotibye = "frontend.app.backend_app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

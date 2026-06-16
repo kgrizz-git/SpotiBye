@@ -559,8 +559,14 @@ def SpotifyExporterApp(**kwargs) -> BackendSpotifyExporterApp:
     return create_backend_app(**kwargs)
 
 
+def main() -> None:
+    """Console-script entry point registered in pyproject.toml."""
+    create_backend_app().run()
+
+
 __all__ = [
     "BackendSpotifyExporterApp",
     "create_backend_app",
     "SpotifyExporterApp",
+    "main",
 ]

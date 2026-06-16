@@ -202,7 +202,7 @@ describe('Caching Tests', () => {
       const exists = await cacheService.exists(cacheKey);
 
       expect(exists).toBe(true);
-      expect(mockEnv.CACHE_KV.get).toHaveBeenCalledWith(cacheKey, { stream: true });
+      expect(mockEnv.CACHE_KV.get).toHaveBeenCalledWith(cacheKey, { type: 'text' });
     });
 
     it('should handle non-existent key', async () => {

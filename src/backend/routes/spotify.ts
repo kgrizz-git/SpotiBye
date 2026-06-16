@@ -105,11 +105,13 @@ app.get('/playlists/:id', async (c) => {
   try {
     const playlistId = c.req.param('id');
     const accessToken = c.get('access_token');
+    const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
 
-    // Check cache first
-    const cacheKey = `playlist:${playlistId}`;
+    // Scope to user: private/collaborative playlists must not be served from
+    // another user's warmed cache.
+    const cacheKey = `user:${userId}:playlist:${playlistId}`;
     const cached = await cacheService.get(cacheKey);
     if (cached) {
       return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
@@ -131,14 +133,16 @@ const getPlaylistItemsHandler = async (c: any) => {
   try {
     const playlistId = c.req.param('id');
     const accessToken = c.get('access_token');
+    const userId = c.get('user').id;
     const limit = parseInt(c.req.query('limit') || '50');
     const offset = parseInt(c.req.query('offset') || '0');
 
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
 
-    // Check cache first
-    const cacheKey = `playlist:${playlistId}:tracks:${limit}:${offset}`;
+    // Scope to user: private/collaborative playlist items must not be served
+    // from another user's warmed cache.
+    const cacheKey = `user:${userId}:playlist:${playlistId}:tracks:${limit}:${offset}`;
     const cached = await cacheService.get(cacheKey);
     if (cached) {
       return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
