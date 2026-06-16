@@ -1,6 +1,12 @@
 # Main Screen Refactor Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **⚠️ Pre-implementation review:** See [2026-06-16-main-screen-refactor-review.md](2026-06-16-main-screen-refactor-review.md) for 3 critical errors, 5 design gaps, and 7 research items that should be resolved before any Task 1+ code is written. Highlights:
+> - Task 4 `open_cache_explorer` calls `create_cache_explorer(cache_manager)` but the real function takes zero arguments.
+> - Task 2 `cancel_export` calls a non-existent `self.backend_adapter.clear_active_export_job()`.
+> - Task 2 adds cancellation polling to the worker that is not present in current code — needs explicit scoping and a CHANGELOG entry.
+> - Task 1 silently changes the filename format (`Spotify_Playlists_...` → `spotify_playlists_...`) without a CHANGELOG entry, violating the Goal's "no behavior change" promise.
 
 **Goal:** Refactor `src/frontend/screens/main_screen.py` into smaller, testable units without changing playlist loading, selection, export, resume, cache, or logout behavior.
 
