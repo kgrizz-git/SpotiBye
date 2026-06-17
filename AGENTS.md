@@ -9,7 +9,7 @@
 
 SpotiBye is a desktop application that lets users export their Spotify playlists to CSV, Excel, or JSON files. It consists of:
 
-- **Frontend** — Python desktop GUI built with CustomTkinter (`src/frontend/`)
+- **Frontend** — Python desktop GUI built with Kivy/KivyMD (`src/frontend/`)
 - **Backend** — Cloudflare Worker written in TypeScript using Hono (`src/backend/`)
 - **Auth flow** — Spotify OAuth 2.0 PKCE, tokens managed by the backend
 
@@ -36,18 +36,6 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 6. No bare `except:` in Python — always name the exception type
 
 Full list: [docs/golden-principles.md](docs/golden-principles.md)
-
----
-
-## Skills
-
-This repo uses skills for progressive disclosure. Skills load automatically based on context:
-- Spotify API: activates on "spotify", "playlist", "auth"
-- Cloudflare Worker: activates on "cloudflare", "worker", "deployment"
-- Testing: activates on "test", "pytest", "vitest"
-- Export formats: activates on "export", "csv", "excel", "json"
-- Dependency analysis: activates on "dependency", "impact", "graph"
-- Security: activates on "security", "vulnerability", "audit", "crypto", "certificate"
 
 ---
 
@@ -81,8 +69,8 @@ npm run lint            # eslint
 
 **Frontend (Python):**
 ```bash
-cd src/frontend
-pytest tests/
+# Always use the venv's pytest from the repo root — never the system pytest
+KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v
 ```
 
 ---
