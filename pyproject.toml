@@ -33,6 +33,9 @@ development = [
 [project.scripts]
 spotibye = "frontend.app.backend_app:main"
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
