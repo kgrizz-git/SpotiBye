@@ -8,7 +8,8 @@ This note explains the current TypeScript backend analysis route and how it rela
 - Completed results are written to KV at `analysis:{playlistId}:{userId}:results`.
 - Status is written to KV at `analysis:{playlistId}:{userId}:status`.
 - `GET /analysis/playlist/:id/results` returns cached results once analysis completes. It only returns 404 when no result is cached for that playlist/user.
-- `src/backend/services/analysis.ts` computes analysis locally from Spotify playlist track metadata and best-effort Spotify artist metadata.
+- `src/backend/services/analysis.ts` computes core analysis from Spotify playlist track metadata and best-effort Spotify artist metadata.
+- ReccoBeats audio features are fetched best-effort from `https://api.reccobeats.com/v1/audio-features` using Spotify track IDs and aggregated into `audio_features` when available.
 - `src/backend/services/spotify.ts` is the only backend module that calls `api.spotify.com`.
 - Artist metadata now uses individual `GET /artists/{id}` requests. The removed Spotify batch endpoint `GET /artists?ids=...` must not be reintroduced.
 - Spotify artist `genres` are best-effort because Spotify marks that field deprecated. If artist metadata fails, analysis still completes with an empty `genre_distribution`.
@@ -71,14 +72,13 @@ The frontend still accepts legacy nested responses with `analysis.get("results",
 
 ## ReccoBeats Status
 
-Backend-mode playlist analysis does not currently call ReccoBeats. `AnalysisService` still contains a dead `callReccoBeatsAPI()` helper pointing at the suspect `https://api.recocbeats.com/v1/analyze` path, but `analyzePlaylist()` does not call it.
+Backend-mode playlist analysis now uses ReccoBeats only for stored audio-feature lookup. The verified contract is documented in [reccobeats-api-contract.md](reccobeats-api-contract.md).
 
 The old `src/backend/services/reccobeats.ts` stub has been deleted. Do not reference it as an active integration point.
 
-Live ReccoBeats wiring is intentionally deferred to [plans/reccobeats-wiring.md](plans/reccobeats-wiring.md), starting with a contract spike. Do not wire `POST /v1/analyze` without verifying the current ReccoBeats API contract.
+Do not wire `POST /v1/analyze`; public ReccoBeats docs do not list that endpoint.
 
 ## Known Gaps
 
-1. **ReccoBeats contract unverified.** Confirm base URL, endpoint paths, identifier type, response shape, auth requirements, and rate-limit behavior before adding live backend calls.
-2. **Large playlist hardening deferred.** Current analysis can require many Spotify artist requests. Queue-based hardening remains tracked in the ReccoBeats wiring plan.
-3. **Dead helper remains.** `callReccoBeatsAPI()` should be replaced with a verified adapter or deleted after the ReccoBeats contract spike.
+1. **Large playlist hardening deferred.** Current analysis can require many Spotify artist requests and one ReccoBeats batch lookup. Queue-based hardening remains tracked in the ReccoBeats wiring plan.
+2. **UI display for audio features deferred.** The backend now returns an `audio_features` summary when ReccoBeats data is available, but the current popup still focuses on duration, genre, and artist sections.

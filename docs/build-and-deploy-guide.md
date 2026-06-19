@@ -146,7 +146,6 @@ cd src/backend
 wrangler secret put SPOTIFY_CLIENT_ID
 wrangler secret put SPOTIFY_CLIENT_SECRET
 wrangler secret put JWT_SECRET
-wrangler secret put RECOCOBEATS_API_KEY
 ```
 
 ## 5) Versioning and Changelog

@@ -45,7 +45,6 @@ jobs:
         JWT_SECRET: test-jwt-secret-for-testing-only
         SPOTIFY_CLIENT_ID: test-client-id
         SPOTIFY_CLIENT_SECRET: test-client-secret
-        RECOCOBEATS_API_KEY: test-reccobeats-key
 
     - name: Run linting
       working-directory: src/backend

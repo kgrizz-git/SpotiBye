@@ -23,7 +23,6 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
    SPOTIFY_CLIENT_ID=your_spotify_client_id
    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
    JWT_SECRET=your_jwt_secret
-   RECCOBEATS_API_KEY=your_reccobeats_api_key
    ```
 
 3. **Start local development**
@@ -74,7 +73,8 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
 - `SPOTIFY_CLIENT_ID` - Spotify app client ID
 - `SPOTIFY_CLIENT_SECRET` - Spotify app client secret
 - `JWT_SECRET` - Secret for JWT token signing
-- `RECCOBEATS_API_KEY` - API key for ReccoBeats analysis service
+
+ReccoBeats audio feature lookups use the public no-auth API and do not require a backend secret.
 
 ### Optional
 - `ENVIRONMENT` - Set to "development" or "production" (defaults to development)
@@ -94,7 +94,6 @@ For local development, these use preview IDs. For production, you'll need to cre
    wrangler secret put SPOTIFY_CLIENT_ID
    wrangler secret put SPOTIFY_CLIENT_SECRET
    wrangler secret put JWT_SECRET
-   wrangler secret put RECCOBEATS_API_KEY
    ```
 
 2. **Create KV namespaces** (if not already created)

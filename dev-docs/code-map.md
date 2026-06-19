@@ -279,13 +279,15 @@ None currently. `services/reccobeats.ts` (previously a test stub) has been remov
 
 ## Analysis: Local Computation (no external API)
 
-`services/analysis.ts` fetches all tracks for a playlist via `services/spotify.ts` and computes stats locally:
+`services/analysis.ts` fetches all tracks for a playlist via `services/spotify.ts` and computes stats locally, with best-effort ReccoBeats audio feature enrichment:
 - Overview: track count, total duration, average duration
 - Artists: unique artist count, top artists by frequency, diversity score
 - Genres: best-effort distribution across Spotify artist genre tags
+- Audio features: best-effort average ReccoBeats acousticness, danceability, energy, tempo, valence, and related fields
 - Insights: generated text summaries
 
 Artist metadata is fetched through individual Spotify `GET /artists/{id}` requests. Do not reintroduce the removed batch endpoint `GET /artists?ids=...`.
+ReccoBeats metadata is fetched through `GET https://api.reccobeats.com/v1/audio-features` with repeated Spotify track `ids` query parameters. Do not use the old typo host `api.recocbeats.com` or unverified `POST /v1/analyze`.
 
 Results are persisted to KV under `analysis:<playlistId>:<userId>:results` once complete. The previously-documented gap (results not written to KV) has been fixed.
 

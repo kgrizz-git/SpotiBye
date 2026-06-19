@@ -62,13 +62,11 @@ preview_id = "your-sessions-kv-preview-id"
 wrangler secret put SPOTIFY_CLIENT_ID --env production
 wrangler secret put SPOTIFY_CLIENT_SECRET --env production
 wrangler secret put JWT_SECRET --env production
-wrangler secret put RECOCOBEATS_API_KEY --env production
 
 # Set secrets for staging
 wrangler secret put SPOTIFY_CLIENT_ID --env staging
 wrangler secret put SPOTIFY_CLIENT_SECRET --env staging
 wrangler secret put JWT_SECRET --env staging
-wrangler secret put RECOCOBEATS_API_KEY --env staging
 ```
 
 ### Local Development
@@ -78,7 +76,6 @@ ENVIRONMENT=development
 SPOTIFY_CLIENT_ID=your-dev-client-id
 SPOTIFY_CLIENT_SECRET=your-dev-client-secret
 JWT_SECRET=your-dev-jwt-secret
-RECOCOBEATS_API_KEY=your-dev-api-key
 ```
 
 ## Deployment Commands

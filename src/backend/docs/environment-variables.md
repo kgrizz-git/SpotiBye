@@ -44,16 +44,6 @@ The SpotiBye backend uses environment variables for configuration, API keys, and
 - **Source**: Spotify Developer Console → Your App → Client Secret
 - **Security**: Must be kept confidential, never expose in client-side code
 
-### External Services
-
-#### `RECOCOBEATS_API_KEY`
-- **Type**: String (Secret)
-- **Required**: Optional
-- **Description**: API key for ReccoBeats music analysis service
-- **Example**: `RECOCOBEATS_API_KEY=rbc-1234567890abcdef`
-- **Purpose**: Enhanced playlist analysis and recommendations
-- **Notes**: Optional - if not provided, basic analysis features will still work
-
 ### KV Namespace Bindings
 
 #### `CACHE_KV`
@@ -106,7 +96,6 @@ preview_id = "your-sessions-kv-preview-id"
 SPOTIFY_CLIENT_ID = ""
 SPOTIFY_CLIENT_SECRET = ""
 JWT_SECRET = ""
-RECOCOBEATS_API_KEY = ""
 ```
 
 ## Environment Setup
@@ -120,7 +109,6 @@ RECOCOBEATS_API_KEY = ""
    SPOTIFY_CLIENT_ID=your-spotify-client-id
    SPOTIFY_CLIENT_SECRET=your-spotify-client-secret
    JWT_SECRET=your-jwt-secret
-   RECOCOBEATS_API_KEY=your-reccobeats-api-key
    ```
 
 2. **Set up KV namespaces**:
@@ -143,7 +131,6 @@ RECOCOBEATS_API_KEY = ""
    wrangler secret put SPOTIFY_CLIENT_ID
    wrangler secret put SPOTIFY_CLIENT_SECRET
    wrangler secret put JWT_SECRET
-   wrangler secret put RECOCOBEATS_API_KEY
    ```
 
 2. **Set environment variables**:

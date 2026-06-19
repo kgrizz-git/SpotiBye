@@ -79,14 +79,15 @@ The genre distribution and artist analysis shown in the original screenshots cam
 - Playlist tracks are paginated with Spotify's raw page count, so local/unavailable filtered items do not stop pagination early.
 - Artist metadata is fetched individually with `GET /artists/{id}` because Spotify removed the `GET /artists?ids=...` batch endpoint for affected apps.
 - Genre distribution is best-effort. Spotify artist `genres` are deprecated, and analysis now completes with an empty `genre_distribution` if artist metadata fails.
+- ReccoBeats audio features are fetched best-effort from `GET https://api.reccobeats.com/v1/audio-features?ids=<spotify_track_id>` and aggregated into a compact `audio_features` summary when available.
 
-### ReccoBeats remains unwired
+### ReccoBeats scope
 
-`AnalysisService.analyzePlaylist()` does not currently call ReccoBeats. The file still contains a dead `callReccoBeatsAPI()` helper pointing at a suspect `https://api.recocbeats.com/v1/analyze` endpoint, but that helper is not part of the active analysis path.
+`AnalysisService.analyzePlaylist()` uses ReccoBeats only for stored audio-feature lookup. It does not call uploaded-audio extraction and does not call the unverified `POST /v1/analyze` path.
 
 The old `src/backend/services/reccobeats.ts` stub has been deleted. Do not reference it as the live integration path.
 
-ReccoBeats restoration is tracked in [plans/reccobeats-wiring.md](plans/reccobeats-wiring.md). That work starts with verifying the current ReccoBeats API contract; do not wire the unverified `POST /v1/analyze` path.
+The verified API contract is tracked in [reccobeats-api-contract.md](reccobeats-api-contract.md).
 
 ### Summary table
 
@@ -98,11 +99,11 @@ ReccoBeats restoration is tracked in [plans/reccobeats-wiring.md](plans/reccobea
 | `/results` endpoint returns real data | ✅ after completion |
 | Spotify artist batch endpoint used | ❌ replaced with individual `GET /artists/{id}` |
 | Genre distribution | Best-effort via deprecated Spotify artist `genres` |
-| ReccoBeats live backend integration | ❌ deferred to contract spike |
+| ReccoBeats live backend integration | ✅ best-effort stored audio features |
 | `reccobeats.ts` used in production | ❌ deleted |
 
 ---
 
 ## `RECOCOBEATS` env var typo
 
-Across tests and `.env` files the environment variable is consistently spelled `RECOCOBEATS_API_KEY` (extra `O`), while `README.md` uses `RECCOBEATS_API_KEY`. Neither name is read by `AnalysisService` anyway (it has a hardcoded URL), but this should be normalised when the analysis pipeline is properly wired.
+Older docs and tests used `RECOCOBEATS_API_KEY` / `RECCOBEATS_API_KEY`, but ReccoBeats public API access does not require a key. Active backend config no longer requires either variable.

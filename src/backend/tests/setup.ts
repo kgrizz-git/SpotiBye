@@ -8,4 +8,3 @@ process.env.ENVIRONMENT = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-for-testing-only';
 process.env.SPOTIFY_CLIENT_ID = 'test-client-id';
 process.env.SPOTIFY_CLIENT_SECRET = 'test-client-secret';
-process.env.RECOCOBEATS_API_KEY = 'test-reccobeats-key';

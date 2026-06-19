@@ -7,6 +7,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
+- Restored backend ReccoBeats audio-feature enrichment using the verified public no-auth API and removed stale ReccoBeats secret requirements from active backend config/docs.
 - Fixed backend playlist analysis failures caused by Spotify rejecting the removed batch artist endpoint by fetching artist metadata individually and continuing without genre data when artist enrichment fails.
 - Fixed export cancellation state so the frontend records active backend exports and can mark them cancelled during user cancellation or app shutdown.
 - Fixed filename extension handling in the export screen so incremental suffixes (e.g., _2) work correctly for all formats (CSV, JSON), not just Excel (.xlsx).

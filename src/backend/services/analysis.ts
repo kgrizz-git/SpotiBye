@@ -20,6 +20,7 @@ interface AnalysisResult {
     diversity: number;
   };
   genre_distribution?: Record<string, { count: number; percentage: number }>;
+  audio_features?: AudioFeatureSummary;
   insights?: string[];
 }
 
@@ -43,12 +44,42 @@ interface PlaylistInsights {
     diversity: number;
   };
   genre_distribution: Record<string, { count: number; percentage: number }>;
+  audio_features?: AudioFeatureSummary;
   insights: string[];
+}
+
+interface AudioFeatureAverages {
+  acousticness: number;
+  danceability: number;
+  energy: number;
+  instrumentalness: number;
+  liveness: number;
+  loudness: number;
+  speechiness: number;
+  tempo: number;
+  valence: number;
+}
+
+interface AudioFeatureSummary {
+  track_count: number;
+  averages: AudioFeatureAverages;
+}
+
+interface ReccoBeatsAudioFeature extends AudioFeatureAverages {
+  id: string;
+  href: string;
+  isrc?: string | null;
+  key?: number;
+  mode?: number;
+}
+
+interface ReccoBeatsAudioFeaturesResponse {
+  content: ReccoBeatsAudioFeature[];
 }
 
 export class AnalysisService {
   private accessToken: string;
-  private reccoBeatsUrl = 'https://api.recocbeats.com/v1';
+  private reccoBeatsUrl = 'https://api.reccobeats.com/v1';
 
   constructor(accessToken: string) {
     this.accessToken = accessToken;
@@ -93,9 +124,27 @@ export class AnalysisService {
         });
       }
 
-      // NOTE: Spotify /audio-features was removed in the Feb 2026 API migration and
-      // returns HTTP 403. Insights are built from track metadata + artist genres only.
-      const spotifyInsights = await this.generatePlaylistInsights(tracks, artistData);
+      let reccoBeatsAudioFeatures: ReccoBeatsAudioFeature[] = [];
+      try {
+        reccoBeatsAudioFeatures = await this.fetchReccoBeatsAudioFeatures(
+          tracks.map((track) => track.id)
+        );
+      } catch (error) {
+        console.warn('Failed to fetch ReccoBeats audio features; continuing with Spotify-only analysis', {
+          playlistId,
+          trackCount: tracks.length,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // NOTE: Spotify /audio-features was removed in the Feb 2026 API migration.
+      // ReccoBeats audio features are best-effort enrichment; core insights use
+      // Spotify track metadata and artist genres.
+      const spotifyInsights = await this.generatePlaylistInsights(
+        tracks,
+        artistData,
+        reccoBeatsAudioFeatures
+      );
 
       return {
         job_id: jobId,
@@ -112,21 +161,29 @@ export class AnalysisService {
     }
   }
 
-  private async callReccoBeatsAPI(data: unknown): Promise<unknown> {
-    const response = await fetch(`${this.reccoBeatsUrl}/analyze`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`ReccoBeats API error: ${error}`);
+  private async fetchReccoBeatsAudioFeatures(trackIds: string[]): Promise<ReccoBeatsAudioFeature[]> {
+    const uniqueIds = [...new Set(trackIds.filter(Boolean))];
+    if (uniqueIds.length === 0) {
+      return [];
     }
 
-    return await response.json();
+    const url = new URL(`${this.reccoBeatsUrl}/audio-features`);
+    for (const trackId of uniqueIds) {
+      url.searchParams.append('ids', trackId);
+    }
+
+    const response = await fetch(url.toString());
+
+    if (!response.ok) {
+      throw new Error(`ReccoBeats API error: HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const rawData = await response.json();
+    if (!this.isReccoBeatsAudioFeaturesResponse(rawData)) {
+      throw new Error('Invalid ReccoBeats audio features response shape');
+    }
+
+    return rawData.content;
   }
 
   async getAnalysisJobStatus(jobId: string): Promise<JobStatus> {
@@ -140,7 +197,11 @@ export class AnalysisService {
     };
   }
 
-  async generatePlaylistInsights(tracks: SpotifyTrack[], artistData: SpotifyArtistFull[] = []): Promise<PlaylistInsights> {
+  async generatePlaylistInsights(
+    tracks: SpotifyTrack[],
+    artistData: SpotifyArtistFull[] = [],
+    reccoBeatsAudioFeatures: ReccoBeatsAudioFeature[] = []
+  ): Promise<PlaylistInsights> {
     const totalTracks = tracks.length;
     if (totalTracks === 0) {
       return {
@@ -162,6 +223,7 @@ export class AnalysisService {
 
     const genreDistribution = this.aggregateGenres(artistData);
     const insights = this.generateInsightsFromMetadata(tracks, genreDistribution);
+    const audioFeatureSummary = this.aggregateReccoBeatsAudioFeatures(reccoBeatsAudioFeatures);
 
     return {
       overview: {
@@ -176,6 +238,7 @@ export class AnalysisService {
         diversity: Object.keys(artistCounts).length / totalTracks,
       },
       genre_distribution: genreDistribution,
+      ...(audioFeatureSummary ? { audio_features: audioFeatureSummary } : {}),
       insights
     };
   }
@@ -196,6 +259,62 @@ export class AnalysisService {
         .slice(0, 15)
         .map(([genre, count]) => [genre, { count, percentage: Math.round((count / total) * 1000) / 10 }])
     );
+  }
+
+  private aggregateReccoBeatsAudioFeatures(features: ReccoBeatsAudioFeature[]): AudioFeatureSummary | undefined {
+    if (features.length === 0) {
+      return undefined;
+    }
+
+    const fields: Array<keyof AudioFeatureAverages> = [
+      'acousticness',
+      'danceability',
+      'energy',
+      'instrumentalness',
+      'liveness',
+      'loudness',
+      'speechiness',
+      'tempo',
+      'valence',
+    ];
+    const averages = fields.reduce((acc, field) => {
+      const total = features.reduce((sum, feature) => sum + feature[field], 0);
+      acc[field] = Math.round((total / features.length) * 10000) / 10000;
+      return acc;
+    }, {} as AudioFeatureAverages);
+
+    return {
+      track_count: features.length,
+      averages,
+    };
+  }
+
+  private isReccoBeatsAudioFeaturesResponse(data: unknown): data is ReccoBeatsAudioFeaturesResponse {
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
+
+    const content = (data as { content?: unknown }).content;
+    return Array.isArray(content) && content.every((item) => this.isReccoBeatsAudioFeature(item));
+  }
+
+  private isReccoBeatsAudioFeature(data: unknown): data is ReccoBeatsAudioFeature {
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
+
+    const record = data as Record<string, unknown>;
+    return typeof record.id === 'string'
+      && typeof record.href === 'string'
+      && typeof record.acousticness === 'number'
+      && typeof record.danceability === 'number'
+      && typeof record.energy === 'number'
+      && typeof record.instrumentalness === 'number'
+      && typeof record.liveness === 'number'
+      && typeof record.loudness === 'number'
+      && typeof record.speechiness === 'number'
+      && typeof record.tempo === 'number'
+      && typeof record.valence === 'number';
   }
 
   private calculateAverageAudioFeatures(features: Record<string, number>[]): Record<string, number> {

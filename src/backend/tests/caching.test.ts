@@ -12,7 +12,6 @@ describe('Caching Tests', () => {
       SPOTIFY_CLIENT_ID: 'test-client-id',
       SPOTIFY_CLIENT_SECRET: 'test-client-secret',
       JWT_SECRET: 'test-jwt-secret',
-      RECOCOBEATS_API_KEY: 'test-reccobeats-key',
       CACHE_KV: {
         get: vi.fn().mockResolvedValue(null),
         put: vi.fn().mockResolvedValue(undefined),

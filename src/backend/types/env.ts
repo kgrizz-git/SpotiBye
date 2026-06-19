@@ -14,5 +14,4 @@ export interface Env {
   SESSIONS_KV: KVNamespace;
 
   // Test/mock keys
-  RECOCOBEATS_API_KEY?: string;
 }

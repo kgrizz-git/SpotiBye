@@ -4,7 +4,7 @@
 
 **Goal:** Restore backend-mode playlist analysis so the Kivy popup receives useful duration, artist, and genre data, while preserving the path to ReccoBeats integration from the old monolithic app.
 
-**Architecture:** First make the existing Cloudflare Worker analysis path reliable using Spotify playlist metadata and best-effort artist metadata. Then run a focused ReccoBeats contract spike before wiring any live ReccoBeats endpoint, because the current `/v1/analyze` assumption is unverified. Production queueing remains tracked as a separate hardening follow-up.
+**Architecture:** The existing Cloudflare Worker analysis path is reliable using Spotify playlist metadata and best-effort artist metadata. ReccoBeats is wired only through the verified public `/v1/audio-features` lookup using Spotify track IDs. Production queueing remains tracked as a separate hardening follow-up.
 
 **Tech Stack:** Cloudflare Worker, TypeScript, Hono, Spotify Web API, ReccoBeats API, Kivy/KivyMD frontend, Python backend adapter.
 
@@ -19,27 +19,27 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 ## Current State
 
 - `src/backend/routes/analysis.ts` now persists completed results to KV via `executionCtx.waitUntil(...)`; older notes saying `/results` always returns 404 are stale.
-- `src/backend/services/analysis.ts` computes local analysis from playlist tracks and artist metadata. It no longer calls ReccoBeats from `analyzePlaylist()`.
-- `src/backend/services/analysis.ts` still contains a dead `callReccoBeatsAPI()` helper pointing at `https://api.recocbeats.com/v1/analyze`; both the hostname and the `/analyze` endpoint are suspect.
-- `src/backend/services/spotify.ts#getArtists()` now fetches individual `GET /artists/{id}` requests with bounded concurrency; `fix-analysis-403-spotify-api-migration.md` completed that dependency.
+- `src/backend/services/analysis.ts` computes local analysis from playlist tracks and artist metadata, then adds best-effort ReccoBeats audio-feature averages from `GET https://api.reccobeats.com/v1/audio-features`.
+- The old dead `callReccoBeatsAPI()` helper and typo host have been replaced with `fetchReccoBeatsAudioFeatures(...)`.
+- `src/backend/services/spotify.ts#getArtists()` now fetches individual `GET /artists/{id}` requests with bounded concurrency; `done/fix-analysis-403-spotify-api-migration.md` completed that dependency.
 - Current pagination in `AnalysisService.analyzePlaylist()` already uses `rawCount`; do not replace it with logic based on normalized `page.items.length`.
 - `src/frontend/ui/backend_playlist_card.py#_update_analysis_ui()` already handles the planned result shape: `overview.formatted_duration`, `genre_distribution`, `artists.unique_artists`, `artists.diversity`, and `artists.top_artists`.
-- `RECOCOBEATS_API_KEY` / `RECCOBEATS_API_KEY` references remain in docs, tests, workflow env, and `Env`, but ReccoBeats public docs currently say no API key is required.
+- Active backend code, tests, workflows, and setup docs no longer require `RECOCOBEATS_API_KEY` or `RECCOBEATS_API_KEY`. Remaining mentions are historical notes or this plan's verification text.
 
 ## Scope Split
 
 | Track | Scope | Status |
 |---|---|---|
-| A | Restore reliable Spotify-backed backend analysis | Unblocked; Spotify 403 dependency complete |
-| B | ReccoBeats API contract spike and backend adapter design | Required before live ReccoBeats wiring |
-| C | Remove stale ReccoBeats key/config references | Safe cleanup after Track B confirms no auth key |
+| A | Restore reliable Spotify-backed backend analysis | Complete |
+| B | ReccoBeats API contract spike and backend adapter design | Complete for `/v1/audio-features` |
+| C | Remove stale ReccoBeats key/config references | Complete for active backend config/docs |
 | D | Queue-based production hardening for large playlists | Deferred follow-up plan |
 
 ---
 
 ## Track A - Restore Reliable Spotify-Backed Backend Analysis
 
-This track depended on `dev-docs/plans/fix-analysis-403-spotify-api-migration.md`; that dependency is complete. Continue with the remaining Track A schema/route coverage before Track B.
+This track depended on `dev-docs/plans/done/fix-analysis-403-spotify-api-migration.md`; that dependency is complete. Continue with the remaining Track A schema/route coverage before Track B.
 
 ### A1. Keep Current Pagination and Add Regression Coverage
 
@@ -47,11 +47,11 @@ This track depended on `dev-docs/plans/fix-analysis-403-spotify-api-migration.md
 - Modify: `src/backend/tests/analysis.test.ts`
 - Reference: `src/backend/services/analysis.ts`
 
-- [ ] Add a service-level test that calls `AnalysisService.analyzePlaylist()` with mocked Spotify pages where:
+- [x] Add a service-level test that calls `AnalysisService.analyzePlaylist()` with mocked Spotify pages where:
   - page 1 returns `rawCount: 100`, `total: 150`, and fewer than 100 normalized `items`
   - page 2 is still fetched at `offset=100`
   - unavailable/local items are ignored in analysis totals
-- [ ] Do not apply the older plan's `if (page.items.length < limit) break` logic; that can stop early after filtering.
+- [x] Do not apply the older plan's `if (page.items.length < limit) break` logic; that can stop early after filtering.
 
 ### A2. Persist the Existing KV Result Shape
 
@@ -59,11 +59,11 @@ This track depended on `dev-docs/plans/fix-analysis-403-spotify-api-migration.md
 - Modify: `src/backend/tests/analysis.test.ts`
 - Reference: `src/backend/routes/analysis.ts`
 
-- [ ] Add a route-level test for `POST /analysis/playlist/:id` using a fake `executionCtx.waitUntil`.
-- [ ] Assert the background promise writes:
+- [x] Add a route-level test for `POST /analysis/playlist/:id` using a fake `executionCtx.waitUntil`.
+- [x] Assert the background promise writes:
   - `analysis:{playlistId}:{userId}:results`
   - `analysis:{playlistId}:{userId}:status` with `status: "completed"`
-- [ ] Keep the route response fast and asynchronous: initial response should remain `status: "processing"`.
+- [x] Keep the route response fast and asynchronous: initial response should remain `status: "processing"`.
 
 ### A3. Stabilize the Canonical Result Schema
 
@@ -72,7 +72,7 @@ This track depended on `dev-docs/plans/fix-analysis-403-spotify-api-migration.md
 - Modify: `src/backend/tests/analysis.test.ts`
 - Verify: `src/frontend/ui/backend_playlist_card.py`
 
-- [ ] Keep the KV result as a flat object, not nested under `results`:
+- [x] Keep the KV result as a flat object, not nested under `results`:
 
 ```json
 {
@@ -102,8 +102,8 @@ This track depended on `dev-docs/plans/fix-analysis-403-spotify-api-migration.md
 }
 ```
 
-- [ ] Treat `genre_distribution` as best-effort. Spotify `GET /artists/{id}` currently still exposes `genres`, but Spotify marks that field deprecated.
-- [ ] Confirm the frontend parser still accepts this object when returned as `GET /analysis/.../results` response data.
+- [x] Treat `genre_distribution` as best-effort. Spotify `GET /artists/{id}` currently still exposes `genres`, but Spotify marks that field deprecated.
+- [x] Confirm the frontend parser still accepts this object when returned as `GET /analysis/.../results` response data.
 
 ### A4. Defer Synchronous Partial Results
 
@@ -119,7 +119,7 @@ Reason: full playlist pagination plus individual artist fetches conflicts with t
 
 ## Track B - ReccoBeats Contract Spike Before Wiring
 
-Do this before changing `callReccoBeatsAPI()` or adding a new backend ReccoBeats service.
+Completed before changing the backend adapter.
 
 ### B1. Verify the Current ReccoBeats API Contract
 
@@ -128,12 +128,12 @@ Do this before changing `callReccoBeatsAPI()` or adding a new backend ReccoBeats
 - Reference: `src/frontend/services/reccobeats_backend.py`
 - Reference: `docs/project-summary-cloud-migration.md`
 
-- [ ] Confirm the current base URL. Public docs list `https://api.reccobeats.com`.
-- [ ] Confirm whether ReccoBeats accepts Spotify track IDs directly, ReccoBeats track IDs, ISRCs, uploaded audio files, or query search.
-- [ ] Confirm the endpoint for multiple track audio features. Public docs list `GET /v1/audio-features`, but the required query parameter shape must be verified.
-- [ ] Confirm whether any endpoint returns genre distribution. If not, do not claim ReccoBeats is the genre source.
-- [ ] Confirm rate-limit behavior and whether `Retry-After` is returned on 429.
-- [ ] Record one minimal request/response example for each endpoint SpotiBye would need.
+- [x] Confirm the current base URL. Public docs list `https://api.reccobeats.com`.
+- [x] Confirm whether ReccoBeats accepts Spotify track IDs directly, ReccoBeats track IDs, ISRCs, uploaded audio files, or query search.
+- [x] Confirm the endpoint for multiple track audio features. Public docs list `GET /v1/audio-features`, but the required query parameter shape must be verified.
+- [x] Confirm whether any endpoint returns genre distribution. If not, do not claim ReccoBeats is the genre source.
+- [x] Confirm rate-limit behavior and whether `Retry-After` is returned on 429.
+- [x] Record one minimal request/response example for each endpoint SpotiBye would need.
 
 ### B2. Decide the ReccoBeats Backend Shape
 
@@ -146,15 +146,17 @@ After B1, choose one implementation path and document it before coding:
 | Uploaded audio extraction | ReccoBeats only analyzes audio files | Likely not viable: Spotify content cannot be downloaded for this purpose |
 | No ReccoBeats backend path | No supported endpoint matches the product need | Keep Spotify-only analysis and update UI/docs language |
 
+Selected path: **Audio features lookup**. `dev-docs/reccobeats-api-contract.md` verifies that ReccoBeats accepts Spotify track IDs in `GET /v1/audio-features`.
+
 ### B3. Replace or Remove `callReccoBeatsAPI()`
 
 **Files:**
 - Modify: `src/backend/services/analysis.ts`
 - Test: `src/backend/tests/analysis.test.ts`
 
-- [ ] If B1 finds a valid endpoint, replace `callReccoBeatsAPI()` with a typed method named for the actual operation, e.g. `fetchReccoBeatsAudioFeatures(...)`.
-- [ ] If B1 does not find a valid endpoint, delete `callReccoBeatsAPI()` and keep this plan item closed with the documented reason.
-- [ ] Never call unverified `POST /v1/analyze`; public docs checked on 2026-06-19 did not show that endpoint.
+- [x] If B1 finds a valid endpoint, replace `callReccoBeatsAPI()` with a typed method named for the actual operation, e.g. `fetchReccoBeatsAudioFeatures(...)`.
+- [x] Not applicable: B1 found a valid endpoint, so `callReccoBeatsAPI()` was replaced rather than simply deleted.
+- [x] Never call unverified `POST /v1/analyze`; public docs checked on 2026-06-19 did not show that endpoint.
 
 ### B4. Merge ReccoBeats Data Without Breaking Spotify-Only Results
 
@@ -162,9 +164,9 @@ After B1, choose one implementation path and document it before coding:
 - Modify: `src/backend/services/analysis.ts`
 - Test: `src/backend/tests/analysis.test.ts`
 
-- [ ] Keep Spotify overview and artist stats available even when ReccoBeats fails or returns partial data.
-- [ ] Put raw ReccoBeats data under `reccobeats_raw` only after the response shape is known.
-- [ ] Add a derived section only for fields the popup actually renders or will render soon; avoid storing unbounded raw payloads in KV unless needed for debugging.
+- [x] Keep Spotify overview and artist stats available even when ReccoBeats fails or returns partial data.
+- [x] Do not store raw ReccoBeats data; the verified response is aggregated into a compact `audio_features` section instead.
+- [x] Add a derived section only for fields the popup actually renders or will render soon; avoid storing unbounded raw payloads in KV unless needed for debugging.
 
 ---
 
@@ -183,10 +185,10 @@ Preserve this older plan item, but perform it after Track B confirms no auth key
 - `docs/**/*.md`
 - `dev-docs/**/*.md`
 
-- [ ] Remove `RECOCOBEATS_API_KEY` from active backend types/tests/workflows if no longer used.
-- [ ] Remove or rewrite `RECCOBEATS_API_KEY` docs that claim ReccoBeats requires a secret.
-- [ ] Keep a changelog/docs note explaining that the old misspelled `RECOCOBEATS` config was unused.
-- [ ] Verify with `rg -n "RECOCOBEATS|RECCOBEATS_API_KEY"` and intentionally classify any remaining historical references.
+- [x] Remove `RECOCOBEATS_API_KEY` from active backend types/tests/workflows if no longer used.
+- [x] Remove or rewrite `RECCOBEATS_API_KEY` docs that claim ReccoBeats requires a secret.
+- [x] Keep a changelog/docs note explaining that the old misspelled `RECOCOBEATS` config was unused.
+- [x] Verify with `rg -n "RECOCOBEATS|RECCOBEATS_API_KEY"` and intentionally classify any remaining historical references.
 
 ---
 
@@ -210,22 +212,22 @@ Create a separate plan before implementing queues, covering:
 
 After Track A:
 
-- [ ] `cd src/backend && npm run test:run`
-- [ ] `cd src/backend && npm run lint`
-- [ ] `cd src/backend && npm run build`
-- [ ] `POST /analysis/playlist/{id}` returns `status: "processing"` without waiting for full analysis.
-- [ ] `GET /analysis/playlist/{id}/status` eventually returns `completed` for a small playlist.
-- [ ] `GET /analysis/playlist/{id}/results` returns the canonical schema, not 404.
+- [x] `cd src/backend && npm run test:run`
+- [x] `cd src/backend && npm run lint`
+- [x] `cd src/backend && npm run build`
+- [x] `POST /analysis/playlist/{id}` returns `status: "processing"` without waiting for full analysis.
+- [x] `GET /analysis/playlist/{id}/status` eventually returns `completed` for a small playlist.
+- [x] `GET /analysis/playlist/{id}/results` returns the canonical schema, not 404.
 - [ ] Double-clicking a playlist card opens the Playlist Analysis popup.
 - [ ] Duration and artist sections populate.
 - [ ] Genre distribution either populates or shows "No genre data available" without failing the job.
 
 After Track B/C:
 
-- [ ] `dev-docs/reccobeats-api-contract.md` records the verified endpoint contract.
-- [ ] No code calls `https://api.recocbeats.com`.
-- [ ] No code calls unverified `/v1/analyze`.
-- [ ] No active code/test env requires `RECOCOBEATS_API_KEY` or `RECCOBEATS_API_KEY` unless B1 proves auth is required.
+- [x] `dev-docs/reccobeats-api-contract.md` records the verified endpoint contract.
+- [x] No code calls `https://api.recocbeats.com`.
+- [x] No code calls unverified `/v1/analyze`.
+- [x] No active code/test env requires `RECOCOBEATS_API_KEY` or `RECCOBEATS_API_KEY` unless B1 proves auth is required.
 
 After Track D:
 
