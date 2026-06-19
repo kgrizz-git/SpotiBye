@@ -59,7 +59,7 @@
     * Test reauthorization flow — users must be able to sign in again smoothly
     * Consider storing authorization timestamp to track expiration proactively
 
-- Clean up repo docs and plans, improve agent guidance for organization — [completion plan](../plans/docs-cleanup-2026-06-19.md)
+- Clean up repo docs and plans, improve agent guidance for organization — [active execution plan](../docs/exec-plans/active/2026-06-19-docs-cleanup.md)
     * Audit `docs/`, `dev-docs/`, and `plans/` for stale/outdated content (superseded plans, old phase docs in `docs/old-docs-backup/`, completed plans in `dev-docs/plans/done/`)
     * Consolidate or archive old phase plans that are no longer actionable
     * Improve `AGENTS.md` and `.github/copilot-instructions.md` with guidance on where to place new plans/docs and how to keep them organized
