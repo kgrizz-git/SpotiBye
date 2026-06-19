@@ -19,6 +19,17 @@ binding = "SESSIONS_KV"
 id = "656074c3b2dd4400ba74f888b3337d40"
 preview_id = "df6d2b4394de4335a385f97003fa986d"
 
+[[queues.producers]]
+binding = "ANALYSIS_QUEUE"
+queue = "spotibye-analysis"
+
+[[queues.consumers]]
+queue = "spotibye-analysis"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "spotibye-analysis-dlq"
+
 # Environment-specific configuration
 [env.development]
 vars = { ENVIRONMENT = "development" }
@@ -33,6 +44,17 @@ binding = "SESSIONS_KV"
 id = "656074c3b2dd4400ba74f888b3337d40"
 preview_id = "df6d2b4394de4335a385f97003fa986d"
 
+[[env.development.queues.producers]]
+binding = "ANALYSIS_QUEUE"
+queue = "spotibye-analysis-dev"
+
+[[env.development.queues.consumers]]
+queue = "spotibye-analysis-dev"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "spotibye-analysis-dev-dlq"
+
 [env.production]
 vars = { ENVIRONMENT = "production" }
 
@@ -45,6 +67,17 @@ preview_id = "93fe695dd3b4494dbb566e316031d431"
 binding = "SESSIONS_KV"
 id = "656074c3b2dd4400ba74f888b3337d40"
 preview_id = "df6d2b4394de4335a385f97003fa986d"
+
+[[env.production.queues.producers]]
+binding = "ANALYSIS_QUEUE"
+queue = "spotibye-analysis"
+
+[[env.production.queues.consumers]]
+queue = "spotibye-analysis"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "spotibye-analysis-dlq"
 
 # Secrets (to be set via wrangler secret put)
 # SPOTIFY_CLIENT_ID

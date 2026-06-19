@@ -137,11 +137,12 @@ Full flow doc: [docs/authentication-flow.md](docs/authentication-flow.md)
 ## Analysis Flow
 
 1. Frontend calls `POST /analysis/playlist/:id`
-2. Backend checks KV for an existing completed or actively-processing job; returns it if found
-3. Otherwise, starts a new job (writes `processing` status to KV) and fires `analysisService.analyzePlaylist()` via `executionCtx.waitUntil`
-4. Analysis fetches all tracks from Spotify, computes stats (track count, duration, artist diversity, genre distribution, text insights) using only Spotify metadata — no external analysis API
-5. Results written to KV under `analysis:<playlistId>:<userId>:results`; status updated to `completed`
-6. Frontend polls `GET /analysis/playlist/:id/status` then fetches `GET /analysis/playlist/:id/results`
+2. Backend checks KV for an existing completed, queued, or actively-processing job; returns it if found
+3. Otherwise, writes `queued` status to KV and sends a small message to `ANALYSIS_QUEUE`
+4. The Worker queue consumer loads the session from `SESSIONS_KV`, refreshes the Spotify token if needed, writes `processing`, and runs `AnalysisService`
+5. Analysis fetches all tracks from Spotify, computes stats (track count, duration, artist diversity, genre distribution, text insights), and adds best-effort ReccoBeats audio-feature summary data when available
+6. Results are written to KV under `analysis:<playlistId>:<userId>:results`; status updates to `completed`, `retrying`, or `failed`
+7. Frontend polls `GET /analysis/playlist/:id/status` then fetches `GET /analysis/playlist/:id/results`
 
 ---
 

@@ -1,7 +1,7 @@
 import { SpotifyService } from './spotify';
 import type { SpotifyArtistFull, SpotifyTrack, SpotifyPlaylistTrackItem } from '../types/spotify';
 
-interface AnalysisResult {
+export interface AnalysisResult {
   job_id: string;
   playlist_id: string;
   user_id: string;

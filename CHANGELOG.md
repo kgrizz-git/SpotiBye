@@ -13,6 +13,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed filename extension handling in the export screen so incremental suffixes (e.g., _2) work correctly for all formats (CSV, JSON), not just Excel (.xlsx).
 
 ### Changed
+- Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.
 - Refactored `MainScreen` to extract pure logic (filenames, sort/filter) and stabilize job state, reducing technical debt and improving testability.
 - Hardened backend npm dependencies by upgrading Wrangler, Workers types, and TypeScript ESLint, replacing SheetJS `xlsx` usage with ExcelJS, and overriding vulnerable transitive `esbuild` and `uuid` releases until upstream packages publish patched dependency ranges.
 - Optimized GitHub Actions workflows to reduce redundant CI runs by 40-60% while maintaining full test coverage on protected branches

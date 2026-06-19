@@ -117,6 +117,7 @@ sequenceDiagram
     participant UI as Python UI (Kivy)
     participant BC as BackendClient
     participant W as Cloudflare Worker (index.ts)
+    participant Q as ANALYSIS_QUEUE
     participant MW as middleware/auth.ts
     participant SVC as services/*
     participant KV as Cloudflare KV
@@ -127,6 +128,7 @@ sequenceDiagram
     W->>MW: verify JWT
     MW->>SVC: delegate to route handler
     SVC->>KV: read/write cache or job state
+    SVC->>Q: enqueue analysis jobs
     SVC->>SP: fetch (only via services/spotify.ts)
     SP-->>SVC: response
     SVC-->>W: result
@@ -140,7 +142,7 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    IDX["index.ts\nHono app · CORS · /health"]
+    IDX["index.ts\nHono app · CORS · /health · queue consumer"]
 
     subgraph Routes
         R_AUTH["routes/auth.ts\nPOST /auth/spotify/login\nGET  /auth/spotify/callback"]
@@ -160,6 +162,7 @@ graph TD
         SV_JWT["services/jwt.ts\nHMAC-SHA256 sign/verify"]
         SV_CACHE["services/cache.ts\nKV wrapper"]
         SV_AN["services/analysis.ts\nSpotify-backed playlist analysis"]
+        SV_AN_JOB["services/analysis-job.ts\nQueue job runner · status/result persistence"]
         SV_EX["services/export.ts\nCSV/XLSX/JSON assembly · cursors"]
     end
 
@@ -168,6 +171,7 @@ graph TD
         T_SP["types/spotify.ts"]
         T_SPAPI["types/spotify-api.ts"]
         T_ENV["types/env.ts"]
+        T_AN_Q["types/analysis-queue.ts"]
         T_VARS["types/variables.ts"]
         T_API["types/api.ts"]
     end
@@ -175,9 +179,11 @@ graph TD
     IDX --> R_AUTH & R_SP & R_AN & R_EX & MW_ERR
     R_AUTH --> SV_SPAUTH & SV_JWT & SV_CACHE
     R_SP --> MW_AUTH & SV_SP & SV_CACHE
-    R_AN --> MW_AUTH & SV_AN & SV_CACHE
+    R_AN --> MW_AUTH & SV_CACHE
     R_EX --> MW_AUTH & SV_EX & SV_CACHE
+    IDX --> SV_AN_JOB
     MW_AUTH --> SV_JWT & SV_SPAUTH
+    SV_AN_JOB --> SV_AN & SV_CACHE & SV_SPAUTH & T_AN_Q
     SV_AN --> SV_SP
     SV_EX --> SV_SP
     SV_SPAUTH --> T_AUTH & T_SP
@@ -249,23 +255,25 @@ graph TD
 
 | File | Class / Role |
 |------|-------------|
-| [index.ts](../src/backend/index.ts) | Hono app entry — mounts routes, CORS, `/health` |
+| [index.ts](../src/backend/index.ts) | Hono app entry — mounts routes, CORS, `/health`, and queue consumer |
 | [middleware/auth.ts](../src/backend/middleware/auth.ts) | JWT verification, Spotify token refresh on every authenticated request |
 | [middleware/error.ts](../src/backend/middleware/error.ts) | Global error → structured `ErrorResponse` |
 | [routes/auth.ts](../src/backend/routes/auth.ts) | `POST /auth/spotify/login`, `GET /auth/spotify/callback` |
 | [routes/spotify.ts](../src/backend/routes/spotify.ts) | `GET /spotify/playlists` (KV-cached) |
-| [routes/analysis.ts](../src/backend/routes/analysis.ts) | Analysis job lifecycle — see known gap below |
+| [routes/analysis.ts](../src/backend/routes/analysis.ts) | Analysis job lifecycle — writes queued status and sends `ANALYSIS_QUEUE` messages |
 | [routes/export.ts](../src/backend/routes/export.ts) | Two-phase resumable export |
 | [services/spotify.ts](../src/backend/services/spotify.ts) | **Only** caller of `api.spotify.com` — playlists, tracks, audio features |
 | [services/spotify-auth.ts](../src/backend/services/spotify-auth.ts) | OAuth code exchange, token refresh |
 | [services/jwt.ts](../src/backend/services/jwt.ts) | HMAC-SHA256 JWT sign/verify (no external library) |
 | [services/cache.ts](../src/backend/services/cache.ts) | KV wrapper with namespaced keys |
-| [services/analysis.ts](../src/backend/services/analysis.ts) | Computes playlist analysis from Spotify track metadata and best-effort artist metadata; results are persisted by `routes/analysis.ts` |
+| [services/analysis.ts](../src/backend/services/analysis.ts) | Computes playlist analysis from Spotify track metadata and best-effort artist metadata |
+| [services/analysis-job.ts](../src/backend/services/analysis-job.ts) | Queue job runner — loads/refreshes session token, enforces idempotency, persists status/results |
 | [services/export.ts](../src/backend/services/export.ts) | CSV/XLSX/JSON generation, cursor persistence in KV |
 | [types/auth.ts](../src/backend/types/auth.ts) | `JWTPayload`, `AuthTokens`, TTL constants |
 | [types/spotify.ts](../src/backend/types/spotify.ts) | Spotify response shapes |
 | [types/spotify-api.ts](../src/backend/types/spotify-api.ts) | API response schemas, `parseSpotifyResponse()` |
-| [types/env.ts](../src/backend/types/env.ts) | Cloudflare `Env` — KV bindings, secrets |
+| [types/env.ts](../src/backend/types/env.ts) | Cloudflare `Env` — KV bindings, queue binding, secrets |
+| [types/analysis-queue.ts](../src/backend/types/analysis-queue.ts) | Queue message and analysis status record types |
 | [types/variables.ts](../src/backend/types/variables.ts) | Hono context variable types |
 | [types/api.ts](../src/backend/types/api.ts) | `ErrorResponse` envelope |
 
@@ -289,7 +297,7 @@ None currently. `services/reccobeats.ts` (previously a test stub) has been remov
 Artist metadata is fetched through individual Spotify `GET /artists/{id}` requests. Do not reintroduce the removed batch endpoint `GET /artists?ids=...`.
 ReccoBeats metadata is fetched through `GET https://api.reccobeats.com/v1/audio-features` with repeated Spotify track `ids` query parameters. Do not use the old typo host `api.recocbeats.com` or unverified `POST /v1/analyze`.
 
-Results are persisted to KV under `analysis:<playlistId>:<userId>:results` once complete. The previously-documented gap (results not written to KV) has been fixed.
+`POST /analysis/playlist/:id` writes a queued status and sends a message to `ANALYSIS_QUEUE`. The Worker queue consumer uses `services/analysis-job.ts` to load or refresh the session token, run analysis, and persist results to KV under `analysis:<playlistId>:<userId>:results` once complete. The previously-documented gap (results not written to KV) has been fixed.
 
 The frontend uses `services/reccobeats_backend.py` → `BackendClient` → `POST /analysis/playlist/:id` for the backend-connected analysis path.
 

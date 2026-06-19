@@ -207,7 +207,10 @@ describe('Export Routes', () => {
         })),
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined)
-      } as any
+      } as any,
+      ANALYSIS_QUEUE: {
+        send: vi.fn().mockResolvedValue(undefined),
+      } as unknown as Queue,
     };
   });
 

@@ -22,7 +22,10 @@ describe('KV Namespace Setup Tests', () => {
           put: vi.fn().mockResolvedValue(undefined),
           delete: vi.fn().mockResolvedValue(undefined),
           list: vi.fn().mockResolvedValue({ keys: [] })
-        } as any
+        } as any,
+        ANALYSIS_QUEUE: {
+          send: vi.fn().mockResolvedValue(undefined),
+        } as unknown as Queue,
       };
 
       // Test that KV namespaces are properly bound
@@ -59,7 +62,10 @@ describe('KV Namespace Setup Tests', () => {
         SPOTIFY_CLIENT_SECRET: 'test-client-secret',
         JWT_SECRET: 'test-jwt-secret',
         CACHE_KV: errorKV,
-        SESSIONS_KV: errorKV
+        SESSIONS_KV: errorKV,
+        ANALYSIS_QUEUE: {
+          send: vi.fn().mockResolvedValue(undefined),
+        } as unknown as Queue,
       };
 
       // Test that the app can handle KV errors
@@ -131,7 +137,10 @@ describe('KV Namespace Setup Tests', () => {
           put: vi.fn().mockResolvedValue(undefined),
           delete: vi.fn().mockResolvedValue(undefined),
           list: vi.fn().mockResolvedValue({ keys: [] })
-        } as any
+        } as any,
+        ANALYSIS_QUEUE: {
+          send: vi.fn().mockResolvedValue(undefined),
+        } as unknown as Queue,
       };
 
       // Verify test environment

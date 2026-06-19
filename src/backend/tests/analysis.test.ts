@@ -12,8 +12,10 @@ vi.mock('../middleware/auth', () => ({
     c.set('user', {
       id: 'test-user-id',
       email: 'test@example.com',
-      name: 'Test User'
+      name: 'Test User',
+      session_id: 'test-session-id'
     });
+    c.set('session_id', 'test-session-id');
     c.set('access_token', 'test-access-token');
     return next();
   })
@@ -279,7 +281,10 @@ describe('Analysis Routes', () => {
         })),
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined)
-      } as any
+      } as any,
+      ANALYSIS_QUEUE: {
+        send: vi.fn().mockResolvedValue(undefined),
+      } as unknown as Queue,
     };
   });
 
@@ -295,8 +300,10 @@ describe('Analysis Routes', () => {
 
       (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
         job_id: 'test-job-id',
-        status: 'processing',
-        progress: 100
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        status: 'queued',
+        progress: 0
       }));
 
       const response = await app.request(request, undefined, mockEnv);
@@ -304,42 +311,11 @@ describe('Analysis Routes', () => {
 
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('job_id');
-      expect(data.data).toHaveProperty('status', 'processing');
+      expect(data.data).toHaveProperty('status', 'queued');
     });
 
-    it('writes completed flat analysis results from the waitUntil background task', async () => {
-      const completedResult = {
-        job_id: 'job-from-analysis',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        computed_at: '2026-06-19T00:00:00.000Z',
-        completed_at: '2026-06-19T00:00:01.000Z',
-        overview: {
-          total_tracks: 2,
-          total_duration_ms: 360000,
-          average_duration_ms: 180000,
-          formatted_duration: '6m 0s',
-        },
-        artists: {
-          unique_artists: 2,
-          diversity: 1,
-          top_artists: [{ artist: 'Artist 1', count: 1 }],
-        },
-        genre_distribution: {},
-        insights: [],
-      };
-      const analyzeSpy = vi
-        .spyOn(AnalysisService.prototype, 'analyzePlaylist')
-        .mockResolvedValue(completedResult);
-      const waitUntilPromises: Promise<unknown>[] = [];
-      const executionCtx = {
-        waitUntil: vi.fn((promise: Promise<unknown>) => {
-          waitUntilPromises.push(promise);
-        }),
-        passThroughOnException: vi.fn(),
-        props: {},
-      } as any;
+    it('writes queued status and enqueues the analysis job without running analysis inline', async () => {
+      const analyzeSpy = vi.spyOn(AnalysisService.prototype, 'analyzePlaylist');
       const request = new Request('http://localhost/analysis/playlist/playlist1', {
         method: 'POST',
         headers: {
@@ -348,34 +324,56 @@ describe('Analysis Routes', () => {
         },
       });
 
-      const response = await app.fetch(request, mockEnv, executionCtx);
+      const response = await app.request(request, undefined, mockEnv);
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data).toMatchObject({
         playlist_id: 'playlist1',
         user_id: 'test-user-id',
-        status: 'processing',
+        status: 'queued',
+        progress: 0,
       });
-      expect(analyzeSpy).toHaveBeenCalledWith(
-        'playlist1',
-        'test-user-id',
-        expect.any(String)
-      );
-      expect(executionCtx.waitUntil).toHaveBeenCalledTimes(1);
-
-      await Promise.all(waitUntilPromises);
-
-      expect(mockEnv.CACHE_KV.put).toHaveBeenCalledWith(
-        'analysis:playlist1:test-user-id:results',
-        JSON.stringify(completedResult),
-        { expirationTtl: 86400 }
-      );
       expect(mockEnv.CACHE_KV.put).toHaveBeenCalledWith(
         'analysis:playlist1:test-user-id:status',
-        expect.stringContaining('"status":"completed"'),
+        expect.stringContaining('"status":"queued"'),
         { expirationTtl: 3600 }
       );
+      expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalledWith(expect.objectContaining({
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        session_id: 'test-session-id',
+        attempt: 0,
+      }));
+      expect(analyzeSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns existing queued status without enqueuing a duplicate job', async () => {
+      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
+        job_id: 'job-existing',
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        status: 'queued',
+        queued_at: '2026-06-19T00:00:00.000Z',
+        progress: 0,
+      }));
+      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data).toMatchObject({
+        job_id: 'job-existing',
+        status: 'queued',
+      });
+      expect(mockEnv.ANALYSIS_QUEUE.send).not.toHaveBeenCalled();
     });
 
     it('should return 400 for invalid playlist ID', async () => {

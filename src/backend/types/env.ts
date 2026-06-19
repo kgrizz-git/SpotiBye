@@ -1,3 +1,5 @@
+import type { AnalysisQueueMessage } from './analysis-queue';
+
 export interface Env {
   // Environment variables
   ENVIRONMENT: string;
@@ -13,5 +15,6 @@ export interface Env {
   CACHE_KV: KVNamespace;
   SESSIONS_KV: KVNamespace;
 
-  // Test/mock keys
+  // Queue bindings
+  ANALYSIS_QUEUE: Queue<AnalysisQueueMessage>;
 }

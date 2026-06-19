@@ -72,8 +72,8 @@ The genre distribution and artist analysis shown in the original screenshots cam
 
 ### What works now
 
-- `POST /analysis/playlist/:id` starts analysis and stores processing status in KV.
-- `executionCtx.waitUntil(...)` keeps the background analysis promise attached to the Worker invocation.
+- `POST /analysis/playlist/:id` queues analysis and stores queued status in KV.
+- The Cloudflare Queues consumer runs analysis outside the initial HTTP request and can retry failed deliveries.
 - Completed results are written to `analysis:{playlistId}:{userId}:results`.
 - `GET /analysis/playlist/:id/results` returns cached results after completion; it only returns 404 when no result exists.
 - Playlist tracks are paginated with Spotify's raw page count, so local/unavailable filtered items do not stop pagination early.
@@ -94,7 +94,7 @@ The verified API contract is tracked in [reccobeats-api-contract.md](reccobeats-
 | Concern | Status |
 |---|---|
 | Backend route exists for analysis | ✅ |
-| Analysis executes in Workers | ✅ via `executionCtx.waitUntil(...)` |
+| Analysis executes in Workers | ✅ via Cloudflare Queues consumer |
 | Results written to KV | ✅ |
 | `/results` endpoint returns real data | ✅ after completion |
 | Spotify artist batch endpoint used | ❌ replaced with individual `GET /artists/{id}` |

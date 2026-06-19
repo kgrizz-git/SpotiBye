@@ -127,6 +127,22 @@ wrangler kv:namespace create "SESSIONS_KV" --preview
 ### Update wrangler.toml
 Replace placeholder IDs with actual namespace IDs from the commands above.
 
+## Analysis Queue
+
+Playlist analysis uses Cloudflare Queues in production so large playlists can retry outside the initial HTTP request. The Worker module exports both `fetch` and `queue`; no separate Worker entry point is required.
+
+Required queues:
+
+```bash
+cd src/backend
+npx wrangler queues create spotibye-analysis-dev
+npx wrangler queues create spotibye-analysis-dev-dlq
+npx wrangler queues create spotibye-analysis
+npx wrangler queues create spotibye-analysis-dlq
+```
+
+The producer and consumer binding name is `ANALYSIS_QUEUE`. Queue messages contain `job_id`, `playlist_id`, `user_id`, `session_id`, `enqueued_at`, and `attempt`; they never contain Spotify access tokens. The consumer loads the session from `SESSIONS_KV` and refreshes the Spotify token when needed.
+
 ## Domain Configuration
 
 ### Custom Domains

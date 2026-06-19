@@ -6,6 +6,8 @@ import { spotifyRoutes } from './routes/spotify';
 import { analysisRoutes } from './routes/analysis';
 import { exportRoutes } from './routes/export';
 import { errorHandler } from './middleware/error';
+import { AnalysisJobService } from './services/analysis-job';
+import type { AnalysisQueueMessage } from './types/analysis-queue';
 import type { Env } from './types/env';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -60,4 +62,27 @@ app.notFound((c) => {
 
 export default {
   fetch: app.fetch,
+  async queue(batch: MessageBatch<AnalysisQueueMessage>, env: Env, _ctx: ExecutionContext): Promise<void> {
+    const jobService = new AnalysisJobService(env);
+
+    for (const message of batch.messages) {
+      const body = {
+        ...message.body,
+        attempt: message.attempts,
+      };
+
+      try {
+        await jobService.process(body);
+        message.ack();
+      } catch (error) {
+        if (message.attempts >= 3) {
+          await jobService.markFailed(body, error);
+          message.ack();
+          continue;
+        }
+
+        message.retry();
+      }
+    }
+  },
 };

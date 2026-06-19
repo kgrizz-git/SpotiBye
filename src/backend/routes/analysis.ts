@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { authMiddleware } from '../middleware/auth';
-import { AnalysisService } from '../services/analysis';
 import { CacheService } from '../services/cache';
+import type { AnalysisStatusRecord } from '../types/analysis-queue';
 import type { Env } from '../types/env';
 import type { Variables } from '../types/variables';
 
@@ -16,27 +16,25 @@ app.post('/playlist/:id', async (c) => {
   try {
     const playlistId = c.req.param('id');
     const userId = c.get('user').id;
-    const accessToken = c.get('access_token');
-
-    const analysisService = new AnalysisService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
 
     // Check if analysis is already in progress or completed
     const statusKey = `analysis:${playlistId}:${userId}:status`;
-    const existingStatus = await cacheService.get<Record<string, unknown>>(statusKey);
+    const existingStatus = await cacheService.get<AnalysisStatusRecord>(statusKey);
 
     if (existingStatus) {
-      const s = existingStatus as Record<string, unknown>;
       // completed: always return cached result
-      // processing: return if started within last 5 minutes (still running)
-      // pending/failed/anything else: restart
-      const isCompleted = s.status === 'completed';
+      // queued: return while waiting for the queue consumer
+      // processing/retrying: return if started within last 5 minutes (still running)
+      // failed/anything else: restart
+      const isQueued = existingStatus.status === 'queued';
+      const isCompleted = existingStatus.status === 'completed';
       const isActivelyProcessing =
-        s.status === 'processing' &&
-        (typeof s.started_at !== 'string' ||
-          Date.now() - new Date(s.started_at).getTime() < 300_000);
+        (existingStatus.status === 'processing' || existingStatus.status === 'retrying') &&
+        (!existingStatus.started_at ||
+          Date.now() - new Date(existingStatus.started_at).getTime() < 300_000);
 
-      if (isCompleted || isActivelyProcessing) {
+      if (isCompleted || isQueued || isActivelyProcessing) {
         return c.json({
           data: existingStatus,
           meta: { timestamp: new Date().toISOString() }
@@ -44,48 +42,30 @@ app.post('/playlist/:id', async (c) => {
       }
     }
 
-    // Start analysis
     const jobId = crypto.randomUUID();
-    const status = {
+    const now = new Date().toISOString();
+    const status: AnalysisStatusRecord = {
       job_id: jobId,
       playlist_id: playlistId,
       user_id: userId,
-      status: 'processing',
-      started_at: new Date().toISOString(),
-      progress: 0
+      status: 'queued',
+      queued_at: now,
+      progress: 0,
     };
 
     await cacheService.set(statusKey, status, 3600);
 
-    const resultsKey = `analysis:${playlistId}:${userId}:results`;
-
-    const analysisPromise = analysisService.analyzePlaylist(playlistId, userId, jobId)
-      .then(async (result) => {
-        await cacheService.set(resultsKey, result, 86400);
-        await cacheService.set(statusKey, {
-          ...status,
-          status: 'completed',
-          completed_at: new Date().toISOString()
-        }, 3600);
-      })
-      .catch(async (error) => {
-        console.error('Analysis failed:', error);
-        await cacheService.set(statusKey, {
-          ...status,
-          status: 'failed',
-          error: error.message,
-          completed_at: new Date().toISOString()
-        }, 3600);
-      });
-
-    try {
-      c.executionCtx.waitUntil(analysisPromise);
-    } catch {
-      // executionCtx unavailable outside Cloudflare Workers runtime — promise runs detached
-    }
+    await c.env.ANALYSIS_QUEUE.send({
+      job_id: jobId,
+      playlist_id: playlistId,
+      user_id: userId,
+      session_id: c.get('session_id'),
+      enqueued_at: now,
+      attempt: 0,
+    });
 
     return c.json({
-      data: { ...status, status: 'processing' },
+      data: status,
       meta: { timestamp: new Date().toISOString() }
     });
   } catch (error) {

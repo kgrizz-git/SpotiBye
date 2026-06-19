@@ -23,7 +23,10 @@ describe('Caching Tests', () => {
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined),
         list: vi.fn().mockResolvedValue({ keys: [] })
-      } as any
+      } as any,
+      ANALYSIS_QUEUE: {
+        send: vi.fn().mockResolvedValue(undefined),
+      } as unknown as Queue,
     };
 
     cacheService = new CacheService(mockEnv.CACHE_KV);

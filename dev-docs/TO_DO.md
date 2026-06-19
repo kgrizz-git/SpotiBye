@@ -42,10 +42,9 @@
 * [Spotify API enrichment — available data for playlist details](spotify-api-enrichment.md)
 * restore reccobeats analysis functionality — see [ReccoBeats wiring plan](plans/reccobeats-wiring.md) and [Spotify 403 analysis fix](plans/done/fix-analysis-403-spotify-api-migration.md)
 
-- Queue-harden backend playlist analysis for large playlists — see [ReccoBeats wiring plan Track D](plans/reccobeats-wiring.md#track-d---deferred-queue-hardening-plan)
-    * Create a separate implementation plan before coding.
-    * Decide Worker/queue topology, `ANALYSIS_QUEUE` binding, message type, token refresh strategy, status transitions, idempotency, and retry behavior.
-    * Acceptance target: 300-track analysis completes without Worker timeout, restarts retry safely, duplicate queue delivery is idempotent, and status transitions `queued -> processing -> completed`.
+- [x] Queue-harden backend playlist analysis for large playlists — implemented in the queue hardening commit; see [completed analysis queue hardening plan](plans/done/analysis-queue-hardening.md)
+    * Worker/queue topology, `ANALYSIS_QUEUE` binding, message type, token refresh strategy, status transitions, idempotency, and retry behavior are implemented.
+    * Verified with backend tests/build, Wrangler dry-run, and full `./scripts/verify-all.sh`.
 
 * see agent-first-retrofit, quality review/assessment md
 
@@ -60,7 +59,7 @@
     * Test reauthorization flow — users must be able to sign in again smoothly
     * Consider storing authorization timestamp to track expiration proactively
 
-- Clean up repo docs and plans, improve agent guidance for organization
+- Clean up repo docs and plans, improve agent guidance for organization — [completion plan](../plans/docs-cleanup-2026-06-19.md)
     * Audit `docs/`, `dev-docs/`, and `plans/` for stale/outdated content (superseded plans, old phase docs in `docs/old-docs-backup/`, completed plans in `dev-docs/plans/done/`)
     * Consolidate or archive old phase plans that are no longer actionable
     * Improve `AGENTS.md` and `.github/copilot-instructions.md` with guidance on where to place new plans/docs and how to keep them organized

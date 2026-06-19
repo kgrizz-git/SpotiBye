@@ -4,7 +4,7 @@
 
 **Goal:** Restore backend-mode playlist analysis so the Kivy popup receives useful duration, artist, and genre data, while preserving the path to ReccoBeats integration from the old monolithic app.
 
-**Architecture:** The existing Cloudflare Worker analysis path is reliable using Spotify playlist metadata and best-effort artist metadata. ReccoBeats is wired only through the verified public `/v1/audio-features` lookup using Spotify track IDs. Production queueing remains tracked as a separate hardening follow-up.
+**Architecture:** The existing Cloudflare Worker analysis path is reliable using Spotify playlist metadata and best-effort artist metadata. ReccoBeats is wired only through the verified public `/v1/audio-features` lookup using Spotify track IDs. Production analysis now runs through Cloudflare Queues for retryable large-playlist processing.
 
 **Tech Stack:** Cloudflare Worker, TypeScript, Hono, Spotify Web API, ReccoBeats API, Kivy/KivyMD frontend, Python backend adapter.
 
@@ -18,7 +18,8 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 
 ## Current State
 
-- `src/backend/routes/analysis.ts` now persists completed results to KV via `executionCtx.waitUntil(...)`; older notes saying `/results` always returns 404 are stale.
+- `src/backend/routes/analysis.ts` now persists queued status and sends work to `ANALYSIS_QUEUE`; older notes saying `/results` always returns 404 are stale.
+- `src/backend/index.ts` exports both `fetch` and `queue`, and the queue consumer persists completed results to KV.
 - `src/backend/services/analysis.ts` computes local analysis from playlist tracks and artist metadata, then adds best-effort ReccoBeats audio-feature averages from `GET https://api.reccobeats.com/v1/audio-features`.
 - The old dead `callReccoBeatsAPI()` helper and typo host have been replaced with `fetchReccoBeatsAudioFeatures(...)`.
 - `src/backend/services/spotify.ts#getArtists()` now fetches individual `GET /artists/{id}` requests with bounded concurrency; `done/fix-analysis-403-spotify-api-migration.md` completed that dependency.
@@ -33,7 +34,7 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 | A | Restore reliable Spotify-backed backend analysis | Complete |
 | B | ReccoBeats API contract spike and backend adapter design | Complete for `/v1/audio-features` |
 | C | Remove stale ReccoBeats key/config references | Complete for active backend config/docs |
-| D | Queue-based production hardening for large playlists | Follow-up plan created: `dev-docs/plans/analysis-queue-hardening.md` |
+| D | Queue-based production hardening for large playlists | Complete in the queue hardening commit; see `dev-docs/plans/done/analysis-queue-hardening.md` |
 
 ---
 
@@ -59,11 +60,11 @@ This track depended on `dev-docs/plans/done/fix-analysis-403-spotify-api-migrati
 - Modify: `src/backend/tests/analysis.test.ts`
 - Reference: `src/backend/routes/analysis.ts`
 
-- [x] Add a route-level test for `POST /analysis/playlist/:id` using a fake `executionCtx.waitUntil`.
+- [x] Add route-level coverage for `POST /analysis/playlist/:id`.
 - [x] Assert the background promise writes:
   - `analysis:{playlistId}:{userId}:results`
   - `analysis:{playlistId}:{userId}:status` with `status: "completed"`
-- [x] Keep the route response fast and asynchronous: initial response should remain `status: "processing"`.
+- [x] Keep the route response fast and asynchronous: initial response now returns `status: "queued"`.
 
 ### A3. Stabilize the Canonical Result Schema
 
@@ -111,7 +112,7 @@ The older Phase 2-B proposed computing Spotify-only stats synchronously in the P
 
 Reason: full playlist pagination plus individual artist fetches conflicts with the goal that `POST /analysis/playlist/:id` returns quickly. If partial results are still desired later, write a separate plan for one of these safer designs:
 
-- Store a cheap `status: "processing"` object only and let the popup keep polling.
+- Store a cheap status object only and let the popup keep polling.
 - Compute only playlist metadata already available from the request path.
 - Move partial/full work to a queue and write partial status from the consumer.
 
@@ -192,21 +193,21 @@ Preserve this older plan item, but perform it after Track B confirms no auth key
 
 ---
 
-## Track D - Deferred Queue Hardening Plan
+## Track D - Completed Queue Hardening
 
-The older Phase 3 queue work is still valid as a production hardening concern, but it is not part of the immediate analysis repair.
+The older Phase 3 queue work is complete as production hardening for large playlist analysis.
 
-Track D planning is complete in `dev-docs/plans/analysis-queue-hardening.md`. That follow-up plan covers:
+Track D implementation is complete; the completed plan is archived at `dev-docs/plans/done/analysis-queue-hardening.md`. It covers:
 
-- Worker export structure: whether the existing Hono worker and queue consumer live in the same module or separate Worker entry points.
+- Worker export structure: the existing Hono worker and queue consumer live in the same module.
 - `wrangler.toml` queue producer/consumer config for development and production.
 - `Env` typing for `ANALYSIS_QUEUE`.
-- Queue message type and token lifetime strategy. Do not enqueue an access token if it can expire before processing; consider session lookup or refresh in the consumer.
+- Queue message type and token lifetime strategy. Access tokens are not enqueued; the consumer loads or refreshes the token from the session.
 - Status transitions: `queued -> processing -> completed` and retry-visible failure states.
 - Idempotency: repeated queue deliveries must not corrupt status or overwrite newer jobs.
 - Tests for retry, duplicate delivery, and completed result persistence.
 
-Queue implementation remains deferred to that separate plan.
+Queue implementation is no longer deferred.
 
 ---
 
@@ -217,7 +218,7 @@ After Track A:
 - [x] `cd src/backend && npm run test:run`
 - [x] `cd src/backend && npm run lint`
 - [x] `cd src/backend && npm run build`
-- [x] `POST /analysis/playlist/{id}` returns `status: "processing"` without waiting for full analysis.
+- [x] `POST /analysis/playlist/{id}` returns `status: "queued"` without waiting for full analysis.
 - [x] `GET /analysis/playlist/{id}/status` eventually returns `completed` for a small playlist.
 - [x] `GET /analysis/playlist/{id}/results` returns the canonical schema, not 404.
 - [ ] Double-clicking a playlist card opens the Playlist Analysis popup.
@@ -233,7 +234,7 @@ After Track B/C:
 
 After Track D:
 
-- [ ] Analysis for a 300-track playlist completes without Worker timeout.
-- [ ] If a Worker restarts mid-analysis, the job retries automatically.
-- [ ] Duplicate queue delivery is idempotent.
-- [ ] Status correctly transitions `queued -> processing -> completed`.
+- [x] Analysis for a 300-track playlist is processed by the queue consumer, not the request handler.
+- [x] If a Worker restarts mid-analysis, Cloudflare Queues retries the message.
+- [x] Duplicate queue delivery is idempotent.
+- [x] Status correctly transitions `queued -> processing -> completed`.

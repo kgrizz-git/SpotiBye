@@ -1,6 +1,6 @@
 # Analysis Queue Hardening Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Move backend playlist analysis from best-effort `executionCtx.waitUntil(...)` work to Cloudflare Queues so large playlists can retry and complete without request lifetime coupling.
 
@@ -48,7 +48,7 @@ Cloudflare references checked on 2026-06-19:
 - Modify: `src/backend/types/env.ts`
 - Test: `src/backend/tests/analysis-queue.test.ts`
 
-- [ ] **Step 1: Write the failing type-focused test**
+- [x] **Step 1: Write the failing type-focused test**
 
 Add this file:
 
@@ -84,7 +84,7 @@ describe('analysis queue env binding', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -94,7 +94,7 @@ cd src/backend && npm run test:run -- tests/analysis-queue.test.ts
 
 Expected: TypeScript/Vitest fails because `Env` does not include `ANALYSIS_QUEUE` and `AnalysisQueueMessage` is not defined yet.
 
-- [ ] **Step 3: Add queue message and status types**
+- [x] **Step 3: Add queue message and status types**
 
 Create `src/backend/types/analysis-queue.ts`:
 
@@ -147,7 +147,7 @@ export interface Env {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run:
 
@@ -157,7 +157,7 @@ cd src/backend && npm run test:run -- tests/analysis-queue.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
@@ -172,7 +172,7 @@ git commit -m "feat: type analysis queue binding"
 - Modify: `src/backend/wrangler.toml`
 - Test: `src/backend/wrangler.toml`
 
-- [ ] **Step 1: Add queue configuration**
+- [x] **Step 1: Add queue configuration**
 
 Modify `src/backend/wrangler.toml` so the top-level, development, and production sections include the queue producer and consumer bindings:
 
@@ -211,7 +211,7 @@ max_retries = 3
 dead_letter_queue = "spotibye-analysis-dlq"
 ```
 
-- [ ] **Step 2: Validate Wrangler config**
+- [x] **Step 2: Validate Wrangler config**
 
 Run:
 
@@ -237,7 +237,7 @@ cd src/backend && npx wrangler deploy --dry-run
 
 Expected: dry run succeeds.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Run:
 
@@ -253,7 +253,7 @@ git commit -m "chore: configure analysis queue bindings"
 - Modify: `src/backend/services/analysis.ts`
 - Test: `src/backend/tests/analysis-queue.test.ts`
 
-- [ ] **Step 1: Add failing tests for completed, stale, and token-refresh behavior**
+- [x] **Step 1: Add failing tests for completed, stale, and token-refresh behavior**
 
 Append these tests to `src/backend/tests/analysis-queue.test.ts`:
 
@@ -453,7 +453,7 @@ describe('AnalysisJobService', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -463,7 +463,7 @@ cd src/backend && npm run test:run -- tests/analysis-queue.test.ts
 
 Expected: FAIL because `AnalysisJobService` does not exist.
 
-- [ ] **Step 3: Export the analysis result type**
+- [x] **Step 3: Export the analysis result type**
 
 Modify `src/backend/services/analysis.ts` so `AnalysisResult` can be reused by the job runner:
 
@@ -492,7 +492,7 @@ export interface AnalysisResult {
 }
 ```
 
-- [ ] **Step 4: Implement the job runner**
+- [x] **Step 4: Implement the job runner**
 
 Create `src/backend/services/analysis-job.ts`:
 
@@ -642,7 +642,7 @@ export class AnalysisJobService {
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run:
 
@@ -652,7 +652,7 @@ cd src/backend && npm run test:run -- tests/analysis-queue.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -668,7 +668,7 @@ git commit -m "feat: add idempotent analysis job runner"
 - Reference: `src/backend/types/variables.ts`
 - Test: `src/backend/tests/analysis.test.ts`
 
-- [ ] **Step 1: Update failing POST route test**
+- [x] **Step 1: Update failing POST route test**
 
 In `src/backend/tests/analysis.test.ts`, update `mockEnv` so it includes:
 
@@ -716,7 +716,7 @@ it('writes queued status and enqueues the analysis job without running analysis 
 });
 ```
 
-- [ ] **Step 2: Run the route tests to verify they fail**
+- [x] **Step 2: Run the route tests to verify they fail**
 
 Run:
 
@@ -726,7 +726,7 @@ cd src/backend && npm run test:run -- tests/analysis.test.ts
 
 Expected: FAIL because the route still writes `processing`, calls `AnalysisService`, and `Variables` may not expose `session_id`.
 
-- [ ] **Step 3: Verify `session_id` is typed in Hono variables**
+- [x] **Step 3: Verify `session_id` is typed in Hono variables**
 
 Confirm `src/backend/types/variables.ts` includes `session_id` both on the user object and as a top-level variable:
 
@@ -745,7 +745,7 @@ export interface Variables {
 
 If the file already matches this shape, do not edit it.
 
-- [ ] **Step 4: Replace inline analysis with queue send**
+- [x] **Step 4: Replace inline analysis with queue send**
 
 In `src/backend/routes/analysis.ts`, remove the `AnalysisService` import and replace the POST route body after duplicate-status handling with:
 
@@ -796,7 +796,7 @@ if (isCompleted || isQueued || isActivelyProcessing) {
 }
 ```
 
-- [ ] **Step 5: Run the route tests**
+- [x] **Step 5: Run the route tests**
 
 Run:
 
@@ -806,7 +806,7 @@ cd src/backend && npm run test:run -- tests/analysis.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -821,7 +821,7 @@ git commit -m "feat: enqueue playlist analysis jobs"
 - Modify: `src/backend/index.ts`
 - Test: `src/backend/tests/analysis-queue.test.ts`
 
-- [ ] **Step 1: Add failing queue consumer tests**
+- [x] **Step 1: Add failing queue consumer tests**
 
 Append these tests to `src/backend/tests/analysis-queue.test.ts`:
 
@@ -915,7 +915,7 @@ describe('analysis queue consumer', () => {
 });
 ```
 
-- [ ] **Step 2: Run the consumer tests to verify they fail**
+- [x] **Step 2: Run the consumer tests to verify they fail**
 
 Run:
 
@@ -925,7 +925,7 @@ cd src/backend && npm run test:run -- tests/analysis-queue.test.ts
 
 Expected: FAIL because `worker.queue` is not exported.
 
-- [ ] **Step 3: Export the queue consumer**
+- [x] **Step 3: Export the queue consumer**
 
 Modify `src/backend/index.ts`:
 
@@ -965,7 +965,7 @@ export default {
 };
 ```
 
-- [ ] **Step 4: Run the consumer tests**
+- [x] **Step 4: Run the consumer tests**
 
 Run:
 
@@ -975,7 +975,7 @@ cd src/backend && npm run test:run -- tests/analysis-queue.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
@@ -990,7 +990,7 @@ git commit -m "feat: process analysis queue messages"
 - Modify: `src/backend/tests/analysis-queue.test.ts`
 - Modify: `src/backend/tests/analysis.test.ts`
 
-- [ ] **Step 1: Add duplicate completed delivery coverage**
+- [x] **Step 1: Add duplicate completed delivery coverage**
 
 Append this test to `src/backend/tests/analysis-queue.test.ts`:
 
@@ -1031,7 +1031,7 @@ it('acknowledges duplicate delivery after completion without re-running analysis
 });
 ```
 
-- [ ] **Step 2: Add POST duplicate queued status coverage**
+- [x] **Step 2: Add POST duplicate queued status coverage**
 
 Add this test under `POST /analysis/playlist/:id` in `src/backend/tests/analysis.test.ts`:
 
@@ -1065,7 +1065,7 @@ it('returns existing queued status without enqueuing a duplicate job', async () 
 });
 ```
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 Run:
 
@@ -1075,7 +1075,7 @@ cd src/backend && npm run test:run -- tests/analysis.test.ts tests/analysis-queu
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
@@ -1091,7 +1091,7 @@ git commit -m "test: cover analysis queue idempotency"
 - Modify: `CHANGELOG.md`
 - Verify: `docs/index.md`
 
-- [ ] **Step 1: Document queue setup**
+- [x] **Step 1: Document queue setup**
 
 Add this section to `src/backend/docs/deployment-configuration.md`:
 
@@ -1113,7 +1113,7 @@ npx wrangler queues create spotibye-analysis-dlq
 The producer and consumer binding name is `ANALYSIS_QUEUE`. Queue messages contain `job_id`, `playlist_id`, `user_id`, `session_id`, `enqueued_at`, and `attempt`; they never contain Spotify access tokens. The consumer loads the session from `SESSIONS_KV` and refreshes the Spotify token when needed.
 ````
 
-- [ ] **Step 2: Add changelog entry**
+- [x] **Step 2: Add changelog entry**
 
 Add this bullet under the current unreleased section in `CHANGELOG.md`:
 
@@ -1121,7 +1121,7 @@ Add this bullet under the current unreleased section in `CHANGELOG.md`:
 - Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.
 ```
 
-- [ ] **Step 3: Run docs link check by inspection**
+- [x] **Step 3: Run docs link check by inspection**
 
 Run:
 
@@ -1131,7 +1131,7 @@ rg -n "Analysis Queue|ANALYSIS_QUEUE|spotibye-analysis" src/backend/docs CHANGEL
 
 Expected: The new deployment section and changelog entry are found. `docs/index.md` does not need a new entry because `src/backend/docs/deployment-configuration.md` is already part of the backend docs map.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
@@ -1146,7 +1146,7 @@ git commit -m "docs: document analysis queue deployment"
 - Verify: `src/backend`
 - Verify: `dev-docs/plans/reccobeats-wiring.md`
 
-- [ ] **Step 1: Run backend tests**
+- [x] **Step 1: Run backend tests**
 
 Run:
 
@@ -1156,7 +1156,7 @@ cd src/backend && npm run test:run
 
 Expected: PASS.
 
-- [ ] **Step 2: Run backend lint**
+- [x] **Step 2: Run backend lint**
 
 Run:
 
@@ -1166,7 +1166,7 @@ cd src/backend && npm run lint
 
 Expected: PASS.
 
-- [ ] **Step 3: Run backend build**
+- [x] **Step 3: Run backend build**
 
 Run:
 
@@ -1176,7 +1176,7 @@ cd src/backend && npm run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Run full repository verification**
+- [x] **Step 4: Run full repository verification**
 
 Run:
 
@@ -1186,19 +1186,19 @@ Run:
 
 Expected: silent success. If failures occur, capture the failing command and fix only failures introduced by this queue work.
 
-- [ ] **Step 5: Confirm Track D acceptance criteria**
+- [x] **Step 5: Confirm Track D acceptance criteria**
 
 Manually confirm these outcomes from tests and implementation:
 
 ```md
-- [ ] Analysis for a 300-track playlist is processed by the queue consumer, not the request handler.
-- [ ] If a Worker restarts mid-analysis, Cloudflare Queues retries the message.
-- [ ] Duplicate queue delivery exits without overwriting a newer or completed job.
-- [ ] Status correctly transitions `queued -> processing -> completed`.
-- [ ] Retryable failures expose `retrying`; exhausted retries expose `failed`.
+- [x] Analysis for a 300-track playlist is processed by the queue consumer, not the request handler.
+- [x] If a Worker restarts mid-analysis, Cloudflare Queues retries the message.
+- [x] Duplicate queue delivery exits without overwriting a newer or completed job.
+- [x] Status correctly transitions `queued -> processing -> completed`.
+- [x] Retryable failures expose `retrying`; exhausted retries expose `failed`.
 ```
 
-- [ ] **Step 6: Commit any verification fixes**
+- [x] **Step 6: Commit any verification fixes**
 
 If verification required code fixes, run:
 

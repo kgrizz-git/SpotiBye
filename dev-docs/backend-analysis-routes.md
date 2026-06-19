@@ -4,9 +4,11 @@ This note explains the current TypeScript backend analysis route and how it rela
 
 ## Current State
 
-- `POST /analysis/playlist/:id` creates a processing status, starts analysis in `executionCtx.waitUntil(...)`, and returns immediately.
+- `POST /analysis/playlist/:id` creates a queued status, sends a message to `ANALYSIS_QUEUE`, and returns immediately.
+- The same Worker module exports a queue consumer that loads the session from `SESSIONS_KV`, refreshes the Spotify access token when needed, writes `processing`, and runs `AnalysisService`.
 - Completed results are written to KV at `analysis:{playlistId}:{userId}:results`.
 - Status is written to KV at `analysis:{playlistId}:{userId}:status`.
+- Retryable queue failures write `retrying` before rethrowing for Cloudflare Queues retry; exhausted retries write `failed`.
 - `GET /analysis/playlist/:id/results` returns cached results once analysis completes. It only returns 404 when no result is cached for that playlist/user.
 - `src/backend/services/analysis.ts` computes core analysis from Spotify playlist track metadata and best-effort Spotify artist metadata.
 - ReccoBeats audio features are fetched best-effort from `https://api.reccobeats.com/v1/audio-features` using Spotify track IDs and aggregated into `audio_features` when available.
@@ -21,20 +23,25 @@ sequenceDiagram
     participant UI as Kivy UI
     participant BC as BackendClient
     participant Route as routes/analysis.ts
+    participant Queue as ANALYSIS_QUEUE
+    participant Consumer as index.ts queue()
     participant Cache as CacheService/KV
     participant Analysis as services/analysis.ts
     participant Spotify as services/spotify.ts
 
     UI->>BC: analyze_playlist(playlistId)
     BC->>Route: POST /analysis/playlist/:id
-    Route->>Cache: set processing status
-    Route-->>BC: status=processing, job_id
-    Route->>Analysis: waitUntil(analyzePlaylist)
+    Route->>Cache: set queued status
+    Route->>Queue: send job identifiers
+    Route-->>BC: status=queued, job_id
+    Queue->>Consumer: deliver message
+    Consumer->>Cache: read current status
+    Consumer->>Analysis: analyzePlaylist
     Analysis->>Spotify: getPlaylistTracks(...pages)
     Analysis->>Spotify: getArtists(...individual IDs)
     Spotify-->>Analysis: artist metadata or failure
-    Analysis-->>Route: flat analysis result
-    Route->>Cache: set results + completed status
+    Analysis-->>Consumer: flat analysis result
+    Consumer->>Cache: set results + completed status
     UI->>BC: poll status/results
 ```
 
@@ -80,5 +87,4 @@ Do not wire `POST /v1/analyze`; public ReccoBeats docs do not list that endpoint
 
 ## Known Gaps
 
-1. **Large playlist hardening deferred.** Current analysis can require many Spotify artist requests and one ReccoBeats batch lookup. Queue-based hardening remains tracked in the ReccoBeats wiring plan.
-2. **UI display for audio features deferred.** The backend now returns an `audio_features` summary when ReccoBeats data is available, but the current popup still focuses on duration, genre, and artist sections.
+1. **UI display for audio features deferred.** The backend now returns an `audio_features` summary when ReccoBeats data is available, but the current popup still focuses on duration, genre, and artist sections.
