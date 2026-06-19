@@ -18,6 +18,16 @@ Source item: [dev-docs/TO_DO.md](../dev-docs/TO_DO.md)
 
 This plan expands that TODO into executable documentation maintenance tasks.
 
+## Execution Status Rules
+
+Agents executing this or any future implementation plan must keep tracking files current as part of the work, not as an afterthought:
+
+- Mark each completed plan step by changing `- [ ]` to `- [x]` in the plan file before moving to the next task or checkpoint commit.
+- Include plan checkbox updates in the same commit as the work they describe whenever practical.
+- Keep the originating `dev-docs/TO_DO.md` item linked to the active plan while work is in progress.
+- When all acceptance criteria are satisfied, mark the originating `dev-docs/TO_DO.md` item complete, move the plan from `docs/exec-plans/active/` to `docs/exec-plans/completed/`, and update both active/completed README indexes.
+- Do not report a plan as complete while its plan checklist, TODO item, or exec-plan indexes still say it is active.
+
 ## Current Audit Snapshot
 
 Run this before implementation to confirm the inventory has not drifted:
@@ -139,7 +149,7 @@ rg -n "2026-06-19-docs-cleanup" dev-docs/TO_DO.md docs/exec-plans/active/README.
 
 Expected: no old root `plans/docs-cleanup-2026-06-19` path appears; the active plan path appears in TO_DO and active README.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A docs/exec-plans/active dev-docs/TO_DO.md
@@ -368,6 +378,8 @@ Add this section after `Navigation` in `AGENTS.md`:
 ## Plans and Documentation Conventions
 
 - New implementation plans go in `docs/exec-plans/active/YYYY-MM-DD-topic.md`.
+- Plans must use checkbox steps (`- [ ]`) and executors must mark steps complete (`- [x]`) as work is completed.
+- If a plan comes from `dev-docs/TO_DO.md`, keep that TODO linked while active and mark it complete when the plan is finished.
 - Completed or superseded plans move to `docs/exec-plans/completed/` and must be indexed in `docs/exec-plans/completed/README.md`.
 - Design decisions that should remain durable go in `docs/design-docs/`.
 - Third-party API/platform reference notes go in `docs/references/`.
@@ -384,6 +396,8 @@ Add this section before `PR Conventions` in `.github/copilot-instructions.md`:
 ## Documentation Conventions
 
 - Use `docs/exec-plans/active/YYYY-MM-DD-topic.md` for new executable plans.
+- Executable plans must use checkbox steps (`- [ ]`), and completed steps must be checked off in the plan as implementation proceeds.
+- If a plan is tied to `dev-docs/TO_DO.md`, keep the TODO linked while active and mark it complete when the plan moves to completed.
 - Move finished plans to `docs/exec-plans/completed/` and update that directory's README index.
 - Use `docs/design-docs/` for durable architecture/design decisions and `docs/references/` for third-party API notes.
 - Use `dev-docs/` for temporary audits, analysis notes, and implementation context that may later be consolidated.
@@ -604,6 +618,7 @@ Expected: branch has only intentional commits from this plan and no untracked ro
 - [ ] `dev-docs/README.md` exists and explains what belongs in `dev-docs/`.
 - [ ] `docs/tech-debt-tracker.md` item #10 is resolved.
 - [ ] `dev-docs/TO_DO.md` marks the docs cleanup item complete after implementation.
+- [ ] Completed steps in this plan are checked off before final handoff.
 - [ ] `./scripts/verify-all.sh` passes.
 
 ## Explicit Non-Goals
