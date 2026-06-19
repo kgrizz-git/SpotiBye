@@ -4,4 +4,4 @@
 
 | Plan | Description | Started |
 |------|-------------|---------|
-| [`2026-06-19-docs-cleanup.md`](2026-06-19-docs-cleanup.md) | Consolidate stale plans/docs and add documentation placement guidance | 2026-06-19 |
+| — | — | — |

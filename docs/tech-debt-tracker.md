@@ -14,7 +14,6 @@
 | 7 | `src/frontend/` | No structural test enforcing Python layer boundaries | Low | 2026-05 | Open |
 | 8 | General | No CI workflow — tests only run locally | High | 2026-05 | Open |
 | 9 | `src/backend/services/reccobeats.ts` | Marked as "mock" — unclear if this is a real integration or stub; needs clarification and a design doc | Medium | 2026-05 | Open |
-| 10 | `docs/plans/` | Legacy plan files not migrated to `docs/exec-plans/` structure; no index | Low | 2026-05 | Open |
 
 ---
 
@@ -22,7 +21,7 @@
 
 | # | Area | Issue | Resolved |
 |---|------|-------|---------|
-| — | — | — | — |
+| 10 | `docs/plans/` migrated | Legacy plan files consolidated under `docs/exec-plans/completed/legacy/`; active/completed indexes updated | Low | 2026-06-19 | Done |
 
 ---
 

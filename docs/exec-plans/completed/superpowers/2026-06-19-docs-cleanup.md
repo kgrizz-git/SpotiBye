@@ -464,7 +464,7 @@ git commit -m "docs: add documentation placement guidance"
 - Modify: `docs/exec-plans/active/README.md`
 - Modify: `docs/exec-plans/completed/README.md`
 
-- [ ] **Step 1: Update tech debt item #10**
+- [x] **Step 1: Update tech debt item #10**
 
 In `docs/tech-debt-tracker.md`, move this row from the active/open section:
 
@@ -480,7 +480,7 @@ to the done/resolved section with:
 
 If the file uses a different done-section heading, preserve its existing structure and add the row there.
 
-- [ ] **Step 2: Mark the TODO item complete**
+- [x] **Step 2: Mark the TODO item complete**
 
 In `dev-docs/TO_DO.md`, change:
 
@@ -494,7 +494,7 @@ to:
 - [x] Clean up repo docs and plans, improve agent guidance for organization — completed by [execution plan](../docs/exec-plans/completed/superpowers/2026-06-19-docs-cleanup.md)
 ```
 
-- [ ] **Step 3: Move this plan to completed**
+- [x] **Step 3: Move this plan to completed**
 
 Run:
 
@@ -502,7 +502,7 @@ Run:
 git mv docs/exec-plans/active/2026-06-19-docs-cleanup.md docs/exec-plans/completed/superpowers/2026-06-19-docs-cleanup.md
 ```
 
-- [ ] **Step 4: Update active/completed indexes**
+- [x] **Step 4: Update active/completed indexes**
 
 Replace `docs/exec-plans/active/README.md` with:
 
@@ -522,7 +522,7 @@ Add this row under the `Superpowers Plans` table in `docs/exec-plans/completed/R
 | [`superpowers/2026-06-19-docs-cleanup.md`](superpowers/2026-06-19-docs-cleanup.md) | Documentation cleanup and agent guidance | 2026-06-19 |
 ```
 
-- [ ] **Step 5: Verify final indexes**
+- [x] **Step 5: Verify final indexes**
 
 Run:
 
@@ -535,7 +535,7 @@ Expected:
 - docs cleanup plan appears only in completed index and TO_DO completion link.
 - `docs/plans`, `dev-docs/plans/done`, and `docs/superpowers/plans` do not appear as active paths.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A docs dev-docs

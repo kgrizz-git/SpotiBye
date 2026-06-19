@@ -7,6 +7,7 @@
 | Plan | Description | Completed |
 |------|-------------|-----------|
 | [`superpowers/2026-06-19-main-screen-refactor-completion-plan.md`](superpowers/2026-06-19-main-screen-refactor-completion-plan.md) | Main screen refactor completion and verification | 2026-06-19 |
+| [`superpowers/2026-06-19-docs-cleanup.md`](superpowers/2026-06-19-docs-cleanup.md) | Documentation cleanup and agent guidance | 2026-06-19 |
 
 ## Superseded Plans
 
