@@ -4,6 +4,8 @@
 **File:** `src/frontend/screens/main_screen.py`
 **Lines:** 1,940 | **Methods:** ~45 | **Public methods:** ~25
 
+> **2026-06-19 status:** This refactor was partially implemented after the original assessment. `main_screen.py` is now 1,053 lines and the planned helper modules exist. Remaining cleanup and verification are tracked in [Main Screen Refactor Completion Implementation Plan](../../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md).
+
 ---
 
 ## Current State
