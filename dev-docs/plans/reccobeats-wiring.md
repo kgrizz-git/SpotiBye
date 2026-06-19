@@ -22,7 +22,7 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 - `src/backend/index.ts` exports both `fetch` and `queue`, and the queue consumer persists completed results to KV.
 - `src/backend/services/analysis.ts` computes local analysis from playlist tracks and artist metadata, then adds best-effort ReccoBeats audio-feature averages from `GET https://api.reccobeats.com/v1/audio-features`.
 - The old dead `callReccoBeatsAPI()` helper and typo host have been replaced with `fetchReccoBeatsAudioFeatures(...)`.
-- `src/backend/services/spotify.ts#getArtists()` now fetches individual `GET /artists/{id}` requests with bounded concurrency; `done/fix-analysis-403-spotify-api-migration.md` completed that dependency.
+- `src/backend/services/spotify.ts#getArtists()` now fetches individual `GET /artists/{id}` requests with bounded concurrency; the [Spotify 403 analysis fix completion plan](../docs/exec-plans/completed/dev-docs/fix-analysis-403-spotify-api-migration.md) completed that dependency.
 - Current pagination in `AnalysisService.analyzePlaylist()` already uses `rawCount`; do not replace it with logic based on normalized `page.items.length`.
 - `src/frontend/ui/backend_playlist_card.py#_update_analysis_ui()` already handles the planned result shape: `overview.formatted_duration`, `genre_distribution`, `artists.unique_artists`, `artists.diversity`, and `artists.top_artists`.
 - Active backend code, tests, workflows, and setup docs no longer require `RECOCOBEATS_API_KEY` or `RECCOBEATS_API_KEY`. Remaining mentions are historical notes or this plan's verification text.
@@ -34,13 +34,13 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 | A | Restore reliable Spotify-backed backend analysis | Complete |
 | B | ReccoBeats API contract spike and backend adapter design | Complete for `/v1/audio-features` |
 | C | Remove stale ReccoBeats key/config references | Complete for active backend config/docs |
-| D | Queue-based production hardening for large playlists | Complete in the queue hardening commit; see `dev-docs/plans/done/analysis-queue-hardening.md` |
+| D | Queue-based production hardening for large playlists | Complete in the queue hardening commit; see [analysis queue hardening plan](../docs/exec-plans/completed/dev-docs/analysis-queue-hardening.md) |
 
 ---
 
 ## Track A - Restore Reliable Spotify-Backed Backend Analysis
 
-This track depended on `dev-docs/plans/done/fix-analysis-403-spotify-api-migration.md`; that dependency is complete. Continue with the remaining Track A schema/route coverage before Track B.
+This track depended on the [Spotify 403 analysis fix completion plan](../docs/exec-plans/completed/dev-docs/fix-analysis-403-spotify-api-migration.md); that dependency is complete. Continue with the remaining Track A schema/route coverage before Track B.
 
 ### A1. Keep Current Pagination and Add Regression Coverage
 
@@ -197,7 +197,7 @@ Preserve this older plan item, but perform it after Track B confirms no auth key
 
 The older Phase 3 queue work is complete as production hardening for large playlist analysis.
 
-Track D implementation is complete; the completed plan is archived at `dev-docs/plans/done/analysis-queue-hardening.md`. It covers:
+Track D implementation is complete; the completed plan is archived at [analysis queue hardening plan](../docs/exec-plans/completed/dev-docs/analysis-queue-hardening.md). It covers:
 
 - Worker export structure: the existing Hono worker and queue consumer live in the same module.
 - `wrangler.toml` queue producer/consumer config for development and production.

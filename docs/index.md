@@ -91,8 +91,8 @@ Third-party API summaries and platform constraints for agent consumption.
 | Path | Content |
 |------|---------|
 | [`exec-plans/active/`](exec-plans/active/) | Currently active execution plans |
-| [`exec-plans/completed/`](exec-plans/completed/) | Completed execution plans |
-| [`plans/`](plans/) | Legacy plan files (pre-exec-plans structure) |
+| [`exec-plans/completed/`](exec-plans/completed/) | Completed and superseded execution plans |
+| [`old-docs-backup/`](old-docs-backup/) | Historical phase docs kept for reference only |
 
 ---
 

@@ -3,6 +3,8 @@
 > Based on principles from OpenAI's [Harness Engineering](https://openai.com/index/harness-engineering/) post (February 2026).
 > Goal: reshape this repo so AI coding agents (Copilot, Codex, etc.) can reason about, navigate, and modify it reliably — maximizing throughput while preserving coherence.
 
+> **Status (2026-06-19):** Historical guide. The recommended migration is complete — plans now live under [`docs/exec-plans/active/`](../docs/exec-plans/active/) and [`docs/exec-plans/completed/`](../docs/exec-plans/completed/). AGENTS.md, ARCHITECTURE.md, docs/index.md, docs/tech-debt-tracker.md, and the Copilot instructions are all in place. Path references in the body of this guide intentionally describe the original audit findings; consult the current indexes for canonical locations.
+
 ---
 
 ## Core Philosophy

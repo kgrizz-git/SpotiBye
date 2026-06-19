@@ -303,7 +303,7 @@ git commit -m "docs: consolidate completed execution plans"
 - Modify: `docs/index.md`
 - Modify: any additional files found by `rg`
 
-- [ ] **Step 1: Find stale references**
+- [x] **Step 1: Find stale references**
 
 Run:
 
@@ -313,7 +313,7 @@ rg -n "docs/plans|dev-docs/plans/done|docs/superpowers/plans|plans/done|../plans
 
 Expected: shows references that need path rewrites or historical context labels.
 
-- [ ] **Step 2: Apply these known path replacements**
+- [x] **Step 2: Apply these known path replacements**
 
 Use exact replacements:
 
@@ -330,7 +330,7 @@ Use exact replacements:
 
 Do not rewrite references that intentionally describe old paths as historical audit findings inside completed plans unless the sentence would confuse future agents.
 
-- [ ] **Step 3: Update `docs/index.md` plan section**
+- [x] **Step 3: Update `docs/index.md` plan section**
 
 Replace the `Plans & Execution` table with:
 
@@ -344,7 +344,7 @@ Replace the `Plans & Execution` table with:
 | [`old-docs-backup/`](old-docs-backup/) | Historical phase docs kept for reference only |
 ```
 
-- [ ] **Step 4: Re-scan stale references**
+- [x] **Step 4: Re-scan stale references**
 
 Run:
 
@@ -354,7 +354,7 @@ rg -n "docs/plans|dev-docs/plans/done|docs/superpowers/plans|plans/done|../plans
 
 Expected: no stale active references. Remaining hits are acceptable only when they appear inside historical completed plans and clearly describe past state.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add AGENTS.md ARCHITECTURE.md docs dev-docs .github
