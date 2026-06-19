@@ -26,6 +26,20 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 
 ---
 
+## Plans and Documentation Conventions
+
+- New implementation plans go in `docs/exec-plans/active/YYYY-MM-DD-topic.md`.
+- Plans must use checkbox steps (`- [ ]`) and executors must mark steps complete (`- [x]`) as work is completed.
+- If a plan comes from `dev-docs/TO_DO.md`, keep that TODO linked while active and mark it complete when the plan is finished.
+- Completed or superseded plans move to `docs/exec-plans/completed/` and must be indexed in `docs/exec-plans/completed/README.md`.
+- Design decisions that should remain durable go in `docs/design-docs/`.
+- Third-party API/platform reference notes go in `docs/references/`.
+- Short-lived investigations, audits, and working notes go in `dev-docs/`.
+- Before creating a new doc, check `docs/index.md`, `dev-docs/README.md`, and `rg` for an existing page to update.
+- Do not leave completed plans in `active/`, and do not create new root-level `plans/` files.
+
+---
+
 ## Key Principles
 
 1. Parse data shapes at boundaries — never pass raw, unvalidated API responses between layers

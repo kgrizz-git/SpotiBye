@@ -35,6 +35,19 @@ Full list: [docs/golden-principles.md](../docs/golden-principles.md)
 
 ---
 
+## Documentation Conventions
+
+- Use `docs/exec-plans/active/YYYY-MM-DD-topic.md` for new executable plans.
+- Executable plans must use checkbox steps (`- [ ]`), and completed steps must be checked off in the plan as implementation proceeds.
+- If a plan is tied to `dev-docs/TO_DO.md`, keep the TODO linked while active and mark it complete when the plan moves to completed.
+- Move finished plans to `docs/exec-plans/completed/` and update that directory's README index.
+- Use `docs/design-docs/` for durable architecture/design decisions and `docs/references/` for third-party API notes.
+- Use `dev-docs/` for temporary audits, analysis notes, and implementation context that may later be consolidated.
+- Read `docs/index.md` and `dev-docs/README.md` before adding new docs so existing pages are updated instead of duplicated.
+- Do not create new root-level `plans/` files.
+
+---
+
 ## PR Conventions
 
 - PRs should change one logical thing. Split changes > ~400 lines.

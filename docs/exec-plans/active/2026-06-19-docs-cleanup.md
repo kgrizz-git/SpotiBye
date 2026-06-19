@@ -370,7 +370,7 @@ git commit -m "docs: update references after plan consolidation"
 - Modify: `.github/copilot-instructions.md`
 - Create: `dev-docs/README.md`
 
-- [ ] **Step 1: Add AGENTS.md section**
+- [x] **Step 1: Add AGENTS.md section**
 
 Add this section after `Navigation` in `AGENTS.md`:
 
@@ -388,7 +388,7 @@ Add this section after `Navigation` in `AGENTS.md`:
 - Do not leave completed plans in `active/`, and do not create new root-level `plans/` files.
 ```
 
-- [ ] **Step 2: Add Copilot instructions section**
+- [x] **Step 2: Add Copilot instructions section**
 
 Add this section before `PR Conventions` in `.github/copilot-instructions.md`:
 
@@ -405,7 +405,7 @@ Add this section before `PR Conventions` in `.github/copilot-instructions.md`:
 - Do not create new root-level `plans/` files.
 ```
 
-- [ ] **Step 3: Create `dev-docs/README.md`**
+- [x] **Step 3: Create `dev-docs/README.md`**
 
 Create `dev-docs/README.md`:
 
@@ -437,7 +437,7 @@ rg -n "<topic keyword>" dev-docs docs
 Update an existing note when it already covers the same topic. If a note becomes durable guidance, move or summarize it under `docs/` and update `docs/index.md`.
 ```
 
-- [ ] **Step 4: Verify guidance references**
+- [x] **Step 4: Verify guidance references**
 
 Run:
 
@@ -447,7 +447,7 @@ rg -n "Plans and Documentation Conventions|Documentation Conventions|Do not crea
 
 Expected: new guidance appears in all three files.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add AGENTS.md .github/copilot-instructions.md dev-docs/README.md
