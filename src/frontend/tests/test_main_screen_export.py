@@ -1,6 +1,7 @@
 from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock, patch
+from src.frontend import state
 from src.frontend.screens.main_screen_export import MainScreenExportOrchestrator
 
 class FakeScheduler:
@@ -8,6 +9,24 @@ class FakeScheduler:
         callback()
     def call_later(self, delay, callback):
         callback()
+
+class CancelDuringGenerateAdapter:
+    def __init__(self):
+        self.trace_id = None
+        self.cleared = False
+
+    def set_trace_id(self, trace_id):
+        self.trace_id = trace_id
+
+    def clear_active_export_job(self, *_args):
+        self.cleared = True
+
+    def generate_batch_export_chunked(self, *_args, **_kwargs):
+        state.mark_current_export_cancelled()
+        return {"job_id": "job-1", "track_count": 1}
+
+    def download_batch_export(self, *_args, **_kwargs):
+        raise AssertionError("download_batch_export should not run after cancellation")
 
 @pytest.fixture
 def mock_screen():
@@ -52,3 +71,24 @@ def test_cleanup_after_export(orchestrator, mock_screen):
 def test_handle_export_cancelled(orchestrator, mock_screen):
     orchestrator.handle_export_cancelled()
     assert mock_screen.status_label.text == "Export cancelled"
+
+def test_worker_stops_when_cancelled_after_generation(orchestrator, mock_screen):
+    state.clear_current_export_job()
+    mock_screen.backend_adapter = CancelDuringGenerateAdapter()
+    mock_screen._get_file_extension.return_value = ".xlsx"
+    mock_screen._selected_export_format.return_value = "xlsx"
+    mock_screen._sanitize_export_filename_component.side_effect = lambda value: value
+    state.set_current_export_job(
+        job_id="job-1",
+        playlist_ids=["playlist-1"],
+        export_format="xlsx",
+        output_path="/tmp/export.xlsx",
+    )
+
+    orchestrator.backend_export_worker(
+        [{"id": "playlist-1", "name": "Playlist 1"}],
+        "/tmp/export.xlsx",
+    )
+
+    assert mock_screen.status_label.text == "Export cancelled"
+    assert state.get_current_export_job() is None

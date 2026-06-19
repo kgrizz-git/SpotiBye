@@ -28,9 +28,9 @@ KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest \
   src/frontend/tests/test_main_screen_export.py -q
 ```
 
-Expected: `22 passed`.
+Expected before adding cancellation coverage: `22 passed`. Current focused verification after this plan: `23 passed`.
 
-The refactor is not fully complete because `main_screen.py` still has stale imports and thin compatibility wrappers, export orchestration tests do not cover cancellation inside the worker branches, and the old V3 plan file contains corrupted characters near Task 6.
+The refactor is complete as of June 19, 2026. `main_screen.py` stale imports were removed, export orchestration cancellation coverage was added, extracted-flow boundaries were verified, and `./scripts/verify-all.sh` passed outside the sandbox.
 
 ## File Structure
 
@@ -48,7 +48,7 @@ The refactor is not fully complete because `main_screen.py` still has stale impo
 **Files:**
 - Modify: `src/frontend/screens/main_screen.py`
 
-- [ ] **Step 1: Confirm stale imports**
+- [x] **Step 1: Confirm stale imports**
 
 Run:
 
@@ -58,7 +58,7 @@ rg -n "\bthreading\b|\btime\b|\buuid\b|\bdatetime\b|\bClipboard\b|clear_current_
 
 Expected before edit: hits only in the import section.
 
-- [ ] **Step 2: Edit imports**
+- [x] **Step 2: Edit imports**
 
 Remove these lines from `src/frontend/screens/main_screen.py`:
 
@@ -86,7 +86,7 @@ from kivy.graphics import Color, Rectangle
 from ..config.backend_config import EXPORT_DIR as SAVE_DIR
 ```
 
-- [ ] **Step 3: Verify no stale references remain**
+- [x] **Step 3: Verify no stale references remain**
 
 Run:
 
@@ -96,7 +96,7 @@ rg -n "\bthreading\b|\btime\b|\buuid\b|\bdatetime\b|\bClipboard\b|clear_current_
 
 Expected: no output.
 
-- [ ] **Step 4: Run focused import-sensitive tests**
+- [x] **Step 4: Run focused import-sensitive tests**
 
 Run:
 
@@ -114,7 +114,7 @@ Expected: all tests pass.
 - Modify: `src/frontend/tests/test_main_screen_export.py`
 - Modify if needed: `src/frontend/screens/main_screen_export.py`
 
-- [ ] **Step 1: Add fake adapter helpers to `test_main_screen_export.py`**
+- [x] **Step 1: Add fake adapter helpers to `test_main_screen_export.py`**
 
 Append these helpers below `FakeScheduler`:
 
@@ -141,7 +141,7 @@ class CancelDuringGenerateAdapter:
         raise AssertionError("download_batch_export should not run after cancellation")
 ```
 
-- [ ] **Step 2: Add worker cancellation test**
+- [x] **Step 2: Add worker cancellation test**
 
 Append this test:
 
@@ -168,7 +168,7 @@ def test_worker_stops_when_cancelled_after_generation(orchestrator, mock_screen)
     assert state.get_current_export_job() is None
 ```
 
-- [ ] **Step 3: Run the new test**
+- [x] **Step 3: Run the new test**
 
 Run:
 
@@ -178,7 +178,7 @@ KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/te
 
 Expected: pass. If it fails because the worker continues to download after cancellation, add an `_check_cancelled()` call immediately after `generate_batch_export_chunked(...)` in `src/frontend/screens/main_screen_export.py`.
 
-- [ ] **Step 4: Run all export tests**
+- [x] **Step 4: Run all export tests**
 
 Run:
 
@@ -199,7 +199,7 @@ Expected: all tests pass.
 - Modify if needed: `src/frontend/screens/main_screen_logout.py`
 - Modify if needed: `src/frontend/screens/main_screen_error_popup.py`
 
-- [ ] **Step 1: Confirm old god-method bodies are gone from `main_screen.py`**
+- [x] **Step 1: Confirm old god-method bodies are gone from `main_screen.py`**
 
 Run:
 
@@ -209,7 +209,7 @@ rg -n "generate_batch_export_chunked|download_batch_export|generate_export|downl
 
 Expected: no output. Any hit means a moved flow leaked back into `main_screen.py`.
 
-- [ ] **Step 2: Confirm wrappers remain for compatibility**
+- [x] **Step 2: Confirm wrappers remain for compatibility**
 
 Run:
 
@@ -219,7 +219,7 @@ rg -n "def _start_backend_export|def backend_export_worker|def cancel_export|def
 
 Expected: one wrapper per listed method.
 
-- [ ] **Step 3: Confirm extracted modules own the moved behavior**
+- [x] **Step 3: Confirm extracted modules own the moved behavior**
 
 Run:
 
@@ -237,12 +237,12 @@ Expected: hits in the extracted modules only.
 - Modify: `dev-docs/TO_DO.md`
 - Modify: `dev-docs/refactor-assessments/main_screen-refactor-assessment-2026-06-15.md`
 
-- [ ] **Step 1: Update `dev-docs/TO_DO.md`**
+- [x] **Step 1: Update `dev-docs/TO_DO.md`**
 
-Keep the main item open until full verification passes, but mark the originally planned extraction tasks complete and point at this plan:
+The main item should be checked after final verification:
 
 ```markdown
-- [ ] **High Priority: Complete main screen refactor** — [completion plan](../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md). Most extraction work is complete; remaining work is cleanup, cancellation branch coverage, and full verification.
+- [x] **High Priority: Complete main screen refactor** — [completion plan](../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md). Completed after cleanup, cancellation branch coverage, and full verification.
   - [x] Task 0: Cleanup dead code (_show_error_dialog, _log_error, _update_export_status)
   - [x] Task 1: Extract filename and format helpers -> `main_screen_filenames.py` + tests
   - [x] Task 1.5: Extract sort and filter helpers -> `main_screen_sort_filter.py` + tests
@@ -251,20 +251,20 @@ Keep the main item open until full verification passes, but mark the originally 
   - [x] Task 4: Extract cache and logout flows -> `main_screen_cache.py`, `main_screen_logout.py`
   - [x] Task 5: Extract backend error popup -> `main_screen_error_popup.py`
   - [x] Task 6: Extract export orchestration -> `main_screen_export.py`, `main_screen_scheduler.py`
-  - [ ] Completion Task A: Remove stale imports from `main_screen.py`
-  - [ ] Completion Task B: Add export cancellation branch coverage
-  - [ ] Completion Task C: Run full verification and update this item
+  - [x] Completion Task A: Remove stale imports from `main_screen.py`
+  - [x] Completion Task B: Add export cancellation branch coverage
+  - [x] Completion Task C: Run full verification and update this item
 ```
 
-- [ ] **Step 2: Update the original assessment**
+- [x] **Step 2: Update the original assessment**
 
 Add this block below the assessment title metadata:
 
 ```markdown
-> **2026-06-19 status:** This refactor was partially implemented after the original assessment. `main_screen.py` is now 1,053 lines and the planned helper modules exist. Remaining cleanup and verification are tracked in [Main Screen Refactor Completion Implementation Plan](../../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md).
+> **2026-06-19 status:** This refactor has been completed and verified. `main_screen.py` is now 1,053 lines, the planned helper modules exist, cancellation branch coverage was added, and completion details are tracked in [Main Screen Refactor Completion Implementation Plan](../../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md).
 ```
 
-- [ ] **Step 3: Verify links resolve from their source files**
+- [x] **Step 3: Verify links resolve from their source files**
 
 Run:
 
@@ -283,7 +283,7 @@ Expected: all commands exit 0.
 **Files:**
 - Modify if needed: any file changed by failures found in this task.
 
-- [ ] **Step 1: Run focused main-screen tests**
+- [x] **Step 1: Run focused main-screen tests**
 
 Run:
 
@@ -297,7 +297,7 @@ KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest \
 
 Expected: all tests pass.
 
-- [ ] **Step 2: Run frontend tests**
+- [x] **Step 2: Run frontend tests**
 
 Run:
 
@@ -307,7 +307,7 @@ KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -
 
 Expected: all tests pass.
 
-- [ ] **Step 3: Run repository verification**
+- [x] **Step 3: Run repository verification**
 
 Run:
 
@@ -317,7 +317,7 @@ Run:
 
 Expected: silent success or a zero exit status.
 
-- [ ] **Step 4: Update tracker when complete**
+- [x] **Step 4: Update tracker when complete**
 
 After Steps 1-3 pass, change the main item in `dev-docs/TO_DO.md` to checked:
 

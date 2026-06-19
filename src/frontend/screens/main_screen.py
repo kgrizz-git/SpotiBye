@@ -4,14 +4,9 @@ from __future__ import annotations
 
 import os
 import re
-import threading
-import time
-import uuid
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
 from kivy.app import App
-from kivy.core.clipboard import Clipboard
 from kivy.clock import Clock, mainthread
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp
@@ -39,14 +34,7 @@ from .main_screen_filenames import (
     selected_export_format,
 )
 from .main_screen_sort_filter import filter_playlists, sort_playlists
-from ..state import (
-    clear_current_export_job,
-    get_current_export_job,
-    mark_current_export_cancelled,
-    set_current_export_job,
-)
 from ..ui.layouts import ResponsiveGridLayout
-from ..ui.cache_explorer import CacheExplorerPopup
 from ..config.backend_config import EXPORT_DIR as SAVE_DIR
 
 # Import backend cache explorer adapter if available.
@@ -79,9 +67,9 @@ class MainScreen(Screen):
         self.current_sort_reverse = False
         self.search_query = ""
         self._search_trigger = None  # For debouncing search
-        self._search_debounce_seconds = 0.3  # 300ms debounce time
+        self._search_debounce_seconds = 0.3  # 300ms debounce interval
         self._sort_trigger = None  # For debouncing sort
-        self._sort_debounce_seconds = 0.5  # 500ms debounce time for sorting
+        self._sort_debounce_seconds = 0.5  # 500ms debounce interval for sorting
         self._backend_error_phase = "idle"
         self._backend_error_step = ""
         self.trace_mode_enabled = os.getenv("SPOTIBYE_TRACE_MODE", "0").lower() in {
