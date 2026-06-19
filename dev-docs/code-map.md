@@ -159,7 +159,7 @@ graph TD
         SV_SPAUTH["services/spotify-auth.ts\nOAuth exchange · token refresh"]
         SV_JWT["services/jwt.ts\nHMAC-SHA256 sign/verify"]
         SV_CACHE["services/cache.ts\nKV wrapper"]
-        SV_AN["services/analysis.ts\nfetch tracks → call ReccoBeats"]
+        SV_AN["services/analysis.ts\nSpotify-backed playlist analysis"]
         SV_EX["services/export.ts\nCSV/XLSX/JSON assembly · cursors"]
     end
 
@@ -260,9 +260,8 @@ graph TD
 | [services/spotify-auth.ts](../src/backend/services/spotify-auth.ts) | OAuth code exchange, token refresh |
 | [services/jwt.ts](../src/backend/services/jwt.ts) | HMAC-SHA256 JWT sign/verify (no external library) |
 | [services/cache.ts](../src/backend/services/cache.ts) | KV wrapper with namespaced keys |
-| [services/analysis.ts](../src/backend/services/analysis.ts) | Fetches tracks + audio features, POSTs to ReccoBeats — results NOT persisted (known gap) |
+| [services/analysis.ts](../src/backend/services/analysis.ts) | Computes playlist analysis from Spotify track metadata and best-effort artist metadata; results are persisted by `routes/analysis.ts` |
 | [services/export.ts](../src/backend/services/export.ts) | CSV/XLSX/JSON generation, cursor persistence in KV |
-| [services/reccobeats.ts](../src/backend/services/reccobeats.ts) | ⚠ Test stub only — throws in non-test environments, never imported by router |
 | [types/auth.ts](../src/backend/types/auth.ts) | `JWTPayload`, `AuthTokens`, TTL constants |
 | [types/spotify.ts](../src/backend/types/spotify.ts) | Spotify response shapes |
 | [types/spotify-api.ts](../src/backend/types/spotify-api.ts) | API response schemas, `parseSpotifyResponse()` |
@@ -283,8 +282,10 @@ None currently. `services/reccobeats.ts` (previously a test stub) has been remov
 `services/analysis.ts` fetches all tracks for a playlist via `services/spotify.ts` and computes stats locally:
 - Overview: track count, total duration, average duration
 - Artists: unique artist count, top artists by frequency, diversity score
-- Genres: distribution across Spotify genre tags
+- Genres: best-effort distribution across Spotify artist genre tags
 - Insights: generated text summaries
+
+Artist metadata is fetched through individual Spotify `GET /artists/{id}` requests. Do not reintroduce the removed batch endpoint `GET /artists?ids=...`.
 
 Results are persisted to KV under `analysis:<playlistId>:<userId>:results` once complete. The previously-documented gap (results not written to KV) has been fixed.
 

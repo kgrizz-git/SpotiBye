@@ -82,7 +82,16 @@ export class AnalysisService {
           if (artist.id) artistIdSet.add(artist.id);
         }
       }
-      const artistData = await spotifyService.getArtists([...artistIdSet]);
+      let artistData: SpotifyArtistFull[] = [];
+      try {
+        artistData = await spotifyService.getArtists([...artistIdSet]);
+      } catch (error) {
+        console.warn('Failed to fetch Spotify artist metadata; continuing without genre insights', {
+          playlistId,
+          artistCount: artistIdSet.size,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
 
       // NOTE: Spotify /audio-features was removed in the Feb 2026 API migration and
       // returns HTTP 403. Insights are built from track metadata + artist genres only.

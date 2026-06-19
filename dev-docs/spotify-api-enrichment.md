@@ -42,11 +42,11 @@ Every item from `GET /playlists/{id}/items` includes:
 | `track.popularity` | 0–100 per track; average shows playlist "mainstream-ness" |
 | `track.explicit` | Explicit count / percentage |
 | `track.album.release_date` | Release era distribution by decade |
-| `track.artists[].id` | IDs needed to batch-fetch full artist objects |
+| `track.artists[].id` | IDs needed to fetch full artist objects |
 
-### From full artist objects (batch call — standard tier)
+### From full artist objects (individual calls — standard tier)
 
-`GET /artists?ids={comma-separated}` (max 50 per request) returns full artist objects.
+`GET /artists/{id}` returns a full artist object. De-duplicate artist IDs and use bounded concurrency; do not use the removed batch endpoint `GET /artists?ids=...`.
 The inline `SpotifyArtist` type in track objects only has `id`, `name`, `external_urls`, `uri`.
 The full artist object adds:
 
@@ -65,7 +65,7 @@ Priority order:
 
 | Feature | Data source | Effort |
 |---|---|---|
-| **Genre distribution** | Artist `genres[]` via batch fetch | Medium |
+| **Genre distribution** | Artist `genres[]` via individual fetches | Medium |
 | **Total duration** | `track.duration_ms` sum | Trivial — already computed in `generatePlaylistInsights()` |
 | **Release era** | `track.album.release_date` decade grouping | Trivial |
 | **Avg popularity** | `track.popularity` mean | Trivial |
@@ -96,31 +96,21 @@ export interface SpotifyArtistFull {
 }
 ```
 
-Also add a response envelope to `spotify-api.ts`:
-
-```ts
-export interface SpotifyArtistsResponse {
-  artists: SpotifyArtistFull[];
-}
-```
-
-### Step 2 — Add `getArtists()` to `SpotifyService`
+### Step 2 — Add `getArtist()` / `getArtists()` to `SpotifyService`
 
 **File:** [src/backend/services/spotify.ts](../src/backend/services/spotify.ts)
 
 ```ts
+async getArtist(artistId: string): Promise<SpotifyArtistFull> {
+  const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${artistId}`);
+  const rawData = await response.json();
+  parseSpotifyResponse<Record<string, unknown>>(rawData, ['id', 'name']);
+  return rawData as SpotifyArtistFull;
+}
+
 async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
-  const results: SpotifyArtistFull[] = [];
-  for (let i = 0; i < artistIds.length; i += 50) {
-    const batch = artistIds.slice(i, i + 50);
-    const url = new URL(`${this.baseUrl}/artists`);
-    url.searchParams.set('ids', batch.join(','));
-    const response = await this.fetchWithRetry(url.toString());
-    const rawData = await response.json();
-    parseSpotifyResponse<SpotifyArtistsResponse>(rawData, ['artists']);
-    results.push(...(rawData.artists as SpotifyArtistFull[]));
-  }
-  return results;
+  const uniqueIds = [...new Set(artistIds.filter(Boolean))];
+  return this.fetchWithConcurrency(uniqueIds, (id) => this.getArtist(id), 5);
 }
 ```
 
@@ -155,20 +145,18 @@ Then in `generatePlaylistInsights()`, add an `artists` parameter and call it:
 ```ts
 async generatePlaylistInsights(
   tracks: any[],
-  audioFeatures: any[],
   artistData: SpotifyArtistFull[] = []
 ): Promise<any> {
   // ... existing code ...
   return {
     overview: { ... },
-    audio_features: { ... },
     artists: {
       unique_artists: Object.keys(artistCounts).length,
       top_artists: topArtists,
       diversity: totalTracks > 0 ? Object.keys(artistCounts).length / totalTracks : 0,
     },
     genre_distribution: this.aggregateGenres(artistData),
-    insights: this.generateInsights(avgFeatures, energyDist, danceabilityDist)
+    insights: this.generateInsightsFromMetadata(tracks, genreDistribution)
   };
 }
 ```
@@ -187,16 +175,21 @@ for (const item of allItems) {
     if (artist.id) artistIdSet.add(artist.id);
   }
 }
-const artistData = await spotifyService.getArtists([...artistIdSet]);
+let artistData: SpotifyArtistFull[] = [];
+try {
+  artistData = await spotifyService.getArtists([...artistIdSet]);
+} catch {
+  // Genre distribution is best-effort because Spotify artist genres are deprecated.
+  artistData = [];
+}
 
 const spotifyInsights = await this.generatePlaylistInsights(
   allItems.map(item => item.track),
-  audioFeatures,
   artistData
 );
 ```
 
-This goes alongside the pagination and batching fixes in Phase 1-D and 1-E of the ReccoBeats wiring plan.
+This goes alongside the pagination fixes in the ReccoBeats wiring plan.
 
 ### Step 5 — Python popup already handles it
 

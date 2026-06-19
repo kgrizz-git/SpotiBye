@@ -20,7 +20,6 @@ import type {
   SpotifyPlaylistResponse,
   SpotifyTrackResponse,
   SpotifyAudioFeaturesResponse,
-  SpotifyArtistsResponse,
 } from '../types/spotify-api';
 import { parseSpotifyResponse } from '../types/spotify-api';
 
@@ -110,18 +109,16 @@ export class SpotifyService {
     return rawData as unknown as SpotifyAudioFeatures;
   }
 
+  async getArtist(artistId: string): Promise<SpotifyArtistFull> {
+    const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${artistId}`);
+    const rawData = await response.json();
+    parseSpotifyResponse<Record<string, unknown>>(rawData, ['id', 'name']);
+    return rawData as unknown as SpotifyArtistFull;
+  }
+
   async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
-    const results: SpotifyArtistFull[] = [];
-    for (let i = 0; i < artistIds.length; i += 50) {
-      const batch = artistIds.slice(i, i + 50);
-      const url = new URL(`${this.baseUrl}/artists`);
-      url.searchParams.set('ids', batch.join(','));
-      const response = await this.fetchWithRetry(url.toString());
-      const rawData = await response.json() as SpotifyArtistsResponse;
-      parseSpotifyResponse<SpotifyArtistsResponse>(rawData, ['artists']);
-      results.push(...(rawData.artists as SpotifyArtistFull[]));
-    }
-    return results;
+    const uniqueIds = [...new Set(artistIds.filter(Boolean))];
+    return this.fetchWithConcurrency(uniqueIds, (id) => this.getArtist(id), 5);
   }
 
   async getMultipleAudioFeatures(trackIds: string[]): Promise<SpotifyAudioFeatures[]> {
@@ -170,5 +167,28 @@ export class SpotifyService {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async fetchWithConcurrency<T>(
+    items: string[],
+    fetchFn: (item: string) => Promise<T>,
+    concurrency: number = 5
+  ): Promise<T[]> {
+    const results: T[] = [];
+    let nextIndex = 0;
+
+    const workers = Array.from(
+      { length: Math.min(concurrency, items.length) },
+      async () => {
+        while (nextIndex < items.length) {
+          const currentIndex = nextIndex;
+          nextIndex += 1;
+          results[currentIndex] = await fetchFn(items[currentIndex]);
+        }
+      }
+    );
+
+    await Promise.all(workers);
+    return results;
   }
 }

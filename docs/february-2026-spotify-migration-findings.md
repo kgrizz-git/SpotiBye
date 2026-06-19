@@ -103,6 +103,8 @@ Required action:
 
 ## Findings Not Currently Blocking
 - Removed batch endpoints like `GET /tracks?ids=...` are not currently used in active code paths.
+- Backend playlist analysis no longer uses the removed artist batch endpoint `GET /artists?ids=...`; `SpotifyService#getArtists()` deduplicates IDs and fetches each artist with `GET /artists/{id}` under bounded concurrency.
+- Playlist analysis treats full artist metadata as best-effort. If Spotify rejects artist metadata, analysis still returns overview and artist counts with an empty `genre_distribution`.
 - Removed browse/user-data endpoints (`/browse/*`, `/users/{id}`) are not used in active runtime paths.
 - Search limit reduction (max 10) does not appear in active queried paths.
 
@@ -134,3 +136,9 @@ Yes, code updates are needed for this repository because the app is in Spotify D
 - Backend docs were aligned to migrated naming:
 	- `src/backend/docs/openapi.yaml` now documents `GET /spotify/playlists/{id}/items`.
 	- `src/backend/docs/README.md` and `src/backend/README.md` now list `/items` as primary and `/tracks` as backward-compatible alias.
+
+## Status Update (2026-06-19)
+- Backend playlist analysis was updated for the removed Spotify artist batch endpoint.
+- `src/backend/services/spotify.ts` now fetches full artist metadata through individual `GET /artists/{id}` requests and keeps existing 429 `Retry-After` behavior for those requests.
+- `src/backend/services/analysis.ts` continues analysis when artist metadata fails, so duration and artist-count analysis are still available without genre data.
+- Spotify artist `genres` remain a best-effort source because Spotify marks that field deprecated.

@@ -41,7 +41,7 @@ Spotify's February 2026 Development Mode migration removed batch/bulk fetch endp
 - Modify: `src/backend/services/spotify.ts`
 - Test: add or update service-level tests for `SpotifyService` in `src/backend/tests/spotify-service.test.ts` or the existing closest service test file.
 
-- [ ] Add a public single-artist method:
+- [x] Add a public single-artist method:
 
 ```ts
 async getArtist(artistId: string): Promise<SpotifyArtistFull> {
@@ -52,7 +52,7 @@ async getArtist(artistId: string): Promise<SpotifyArtistFull> {
 }
 ```
 
-- [ ] Replace `getArtists()` so it no longer calls `/artists?ids=...`.
+- [x] Replace `getArtists()` so it no longer calls `/artists?ids=...`.
 
 ```ts
 async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
@@ -61,7 +61,7 @@ async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
 }
 ```
 
-- [ ] Add a private bounded-concurrency helper that preserves input order:
+- [x] Add a private bounded-concurrency helper that preserves input order:
 
 ```ts
 private async fetchWithConcurrency<T>(
@@ -88,13 +88,13 @@ private async fetchWithConcurrency<T>(
 }
 ```
 
-- [ ] Add a test that fails before the change:
+- [x] Add a test that fails before the change:
   - mock `globalThis.fetch`
   - call `getArtists(['artist1', 'artist2'])`
   - assert requests are made to `/artists/artist1` and `/artists/artist2`
   - assert no request is made to `/artists?ids=...`
 
-- [ ] Add a test for de-duplication:
+- [x] Add a test for de-duplication:
   - `getArtists(['artist1', 'artist1'])`
   - assert only one HTTP request is sent.
 
@@ -104,9 +104,9 @@ private async fetchWithConcurrency<T>(
 - Modify: `src/backend/services/spotify.ts`
 - Test: `src/backend/tests/spotify-service.test.ts` or closest service test file.
 
-- [ ] Keep the existing `fetchWithRetry()` 429 handling.
-- [ ] Add a test where the first artist request returns `429` with `Retry-After: 1`, then returns `200`.
-- [ ] Use fake timers or a small injected wait helper if the existing test framework supports it; do not make tests sleep for real seconds.
+- [x] Keep the existing `fetchWithRetry()` 429 handling.
+- [x] Add a test where the first artist request returns `429` with `Retry-After: 1`, then returns `200`.
+- [x] Use fake timers or a small injected wait helper if the existing test framework supports it; do not make tests sleep for real seconds.
 
 If adding fake timers requires too much refactor, preserve this item by writing a narrower test that asserts `fetchWithRetry()` reads `Retry-After` through a mocked sleep helper.
 
@@ -116,7 +116,7 @@ If adding fake timers requires too much refactor, preserve this item by writing 
 - Modify: `src/backend/services/analysis.ts`
 - Test: `src/backend/tests/analysis.test.ts`
 
-- [ ] Wrap only the artist fetch in a `try/catch`.
+- [x] Wrap only the artist fetch in a `try/catch`.
 
 ```ts
 let artistData: SpotifyArtistFull[] = [];
@@ -131,9 +131,9 @@ try {
 }
 ```
 
-- [ ] Keep track and overview analysis outside this `try/catch`; failures to fetch playlist tracks should still fail the analysis job.
-- [ ] Add a test that simulates `getArtists()` throwing `HTTP 403: Forbidden`.
-- [ ] Assert `analyzePlaylist()` still returns:
+- [x] Keep track and overview analysis outside this `try/catch`; failures to fetch playlist tracks should still fail the analysis job.
+- [x] Add a test that simulates `getArtists()` throwing `HTTP 403: Forbidden`.
+- [x] Assert `analyzePlaylist()` still returns:
   - `status: "completed"`
   - populated `overview`
   - populated `artists.unique_artists`
@@ -145,7 +145,7 @@ try {
 - Modify: `src/backend/tests/analysis.test.ts`
 - Reference: `src/backend/services/analysis.ts`
 
-- [ ] Add a regression test for the current `rawCount` pagination behavior:
+- [x] Add a regression test for the current `rawCount` pagination behavior:
   - page 1 raw count is full page size
   - normalized item count is lower because some entries are local/unavailable
   - page 2 is still fetched
@@ -161,24 +161,24 @@ This keeps the older "fix pagination" TODO tracked without applying its stale im
 - Modify if needed: `dev-docs/code-map.md`
 - Modify if needed: `dev-docs/plans/reccobeats-wiring.md`
 
-- [ ] Document that backend playlist analysis now fetches artist metadata individually.
-- [ ] Document that genre data is best-effort because Spotify marks artist `genres` deprecated.
-- [ ] Remove or correct stale claims that `/results` always returns 404.
-- [ ] Remove or correct stale references to deleted `src/backend/services/reccobeats.ts`.
-- [ ] Keep the ReccoBeats restoration work tracked in `reccobeats-wiring.md`; do not fold that contract spike into this Spotify-only fix.
+- [x] Document that backend playlist analysis now fetches artist metadata individually.
+- [x] Document that genre data is best-effort because Spotify marks artist `genres` deprecated.
+- [x] Remove or correct stale claims that `/results` always returns 404.
+- [x] Remove or correct stale references to deleted `src/backend/services/reccobeats.ts`.
+- [x] Keep the ReccoBeats restoration work tracked in `reccobeats-wiring.md`; do not fold that contract spike into this Spotify-only fix.
 
 ---
 
 ## Verification Checklist
 
-- [ ] `cd src/backend && npm run test:run`
-- [ ] `cd src/backend && npm run lint`
-- [ ] `cd src/backend && npm run build`
-- [ ] `cd src/backend && npx wrangler deploy --dry-run`
-- [ ] Analysis completes when `GET /artists/{id}` succeeds.
-- [ ] Analysis completes without genre data when artist fetch returns 403.
-- [ ] No backend analysis code calls Spotify `GET /artists?ids=...`.
-- [ ] No backend analysis code calls Spotify `/audio-features`.
+- [x] `cd src/backend && npm run test:run`
+- [x] `cd src/backend && npm run lint`
+- [x] `cd src/backend && npm run build`
+- [x] `cd src/backend && npx wrangler deploy --dry-run`
+- [x] Analysis completes when `GET /artists/{id}` succeeds.
+- [x] Analysis completes without genre data when artist fetch returns 403.
+- [x] No backend analysis code calls Spotify `GET /artists?ids=...`.
+- [x] No backend analysis code calls Spotify `/audio-features`.
 
 ## Follow-Up Items Preserved From Earlier Plan
 

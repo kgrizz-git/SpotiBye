@@ -20,13 +20,13 @@ Restored flow:
 - Left panel: playlist cover, image dimensions, technical details (Owner ID, Playlist ID, Version/snapshot_id)
 - Right panel: name, creator, URLs, type, track count + duration, genre distribution, artist analysis
 - "Show Tracks" button (top-right of popup) opens a separate tracks window with title, subtitle, and track table
-- Analysis data loads in the background via `adapter.analyze_playlist()`; shows "Retrieving analysis from ReccoBeats API..." until it arrives or fails
+- Analysis data loads in the background via `adapter.analyze_playlist()`. The current loading copy still says "Retrieving analysis from ReccoBeats API...", but backend-mode analysis is presently Spotify-backed.
 
 ---
 
-## Spotify audio features — available but unused
+## Spotify audio features — restricted / unused
 
-The backend exposes a per-track audio features endpoint that is fully wired but never called from the analysis popup.
+The backend still exposes a per-track audio features endpoint, but the analysis popup does not use it and backend playlist analysis must not depend on it.
 
 **Backend route:** `GET /spotify/tracks/:id/audio-features`
 → [src/backend/routes/spotify.ts:193](src/backend/routes/spotify.ts#L193)
@@ -60,55 +60,46 @@ Averaging `danceability`, `energy`, `valence`, and `tempo` across all tracks in 
 - **Energy / Danceability / Mood** — mean values as percentage bars or numbers
 - **Key distribution** — most common key across the playlist
 
-### Deprecation caveat
+### Access caveat
 
-Spotify deprecated the `/audio-features` endpoint for new app registrations in late 2024. Apps that already have access retain it. Worth checking whether the deployed credentials still have access before building UI around it.
+Spotify restricted the `/audio-features` endpoint for many apps. Do not build playlist analysis UI that depends on this endpoint unless access is explicitly verified for the deployed credentials.
 
 ---
 
-## ReccoBeats status — not actually fetching
+## Current backend analysis status
 
-The genre distribution and artist analysis shown in the original screenshots came from v2's **standalone mode**, which called ReccoBeats directly from Python. The backend-mode analysis pipeline has multiple blockers.
+The genre distribution and artist analysis shown in the original screenshots came from v2's **standalone mode**, which called ReccoBeats directly from Python. Backend-mode analysis currently uses Spotify playlist item metadata plus best-effort Spotify artist metadata.
 
-### Blocker 1 — URL typo
+### What works now
 
-[src/backend/services/analysis.ts:5](src/backend/services/analysis.ts#L5):
-```ts
-private reccoBeatsUrl = 'https://api.recocbeats.com/v1';
-//                                     ^^^^^ missing an 'o'
-```
-The correct hostname is `reccobeats.com`. All `POST /analyze` calls go to the wrong domain and fail.
+- `POST /analysis/playlist/:id` starts analysis and stores processing status in KV.
+- `executionCtx.waitUntil(...)` keeps the background analysis promise attached to the Worker invocation.
+- Completed results are written to `analysis:{playlistId}:{userId}:results`.
+- `GET /analysis/playlist/:id/results` returns cached results after completion; it only returns 404 when no result exists.
+- Playlist tracks are paginated with Spotify's raw page count, so local/unavailable filtered items do not stop pagination early.
+- Artist metadata is fetched individually with `GET /artists/{id}` because Spotify removed the `GET /artists?ids=...` batch endpoint for affected apps.
+- Genre distribution is best-effort. Spotify artist `genres` are deprecated, and analysis now completes with an empty `genre_distribution` if artist metadata fails.
 
-### Blocker 2 — Cloudflare Workers fire-and-forget
+### ReccoBeats remains unwired
 
-[src/backend/routes/analysis.ts:50](src/backend/routes/analysis.ts#L50) launches analysis without `await`:
-```ts
-analysisService.analyzePlaylist(...).catch(error => { ... });
-return c.json({ status: 'processing' });
-```
-Cloudflare Workers terminate the moment the response is sent. The background promise is killed immediately — the analysis never runs regardless of the URL.
+`AnalysisService.analyzePlaylist()` does not currently call ReccoBeats. The file still contains a dead `callReccoBeatsAPI()` helper pointing at a suspect `https://api.recocbeats.com/v1/analyze` endpoint, but that helper is not part of the active analysis path.
 
-### Blocker 3 — Results never written to KV
+The old `src/backend/services/reccobeats.ts` stub has been deleted. Do not reference it as the live integration path.
 
-Even if the above two were fixed, `AnalysisService.analyzePlaylist()` returns results but the route handler discards the return value — it is never written to the `analysis:{id}:{userId}:results` KV key, so `GET /results` always returns 404.
-
-### Blocker 4 — `reccobeats.ts` stub is dead code
-
-[src/backend/services/reccobeats.ts](src/backend/services/reccobeats.ts) is a test-only stub (`throw new Error('not implemented')` in non-test environments) and is never imported by any route. It is not the live integration path.
-
-**Full detail and suggested fixes for all four:** see [backend-analysis-routes.md](backend-analysis-routes.md).
+ReccoBeats restoration is tracked in [plans/reccobeats-wiring.md](plans/reccobeats-wiring.md). That work starts with verifying the current ReccoBeats API contract; do not wire the unverified `POST /v1/analyze` path.
 
 ### Summary table
 
 | Concern | Status |
 |---|---|
 | Backend route exists for analysis | ✅ |
-| ReccoBeats URL correct | ❌ typo (`recocbeats` vs `reccobeats`) |
-| Analysis actually executes in Workers | ❌ fire-and-forget killed at response time |
-| Results written to KV | ❌ return value discarded |
-| `/results` endpoint returns real data | ❌ always 404 |
-| `reccobeats.ts` used in production | ❌ test stub only |
-| Standalone (v2) ReccoBeats path | ✅ works, direct Python → ReccoBeats |
+| Analysis executes in Workers | ✅ via `executionCtx.waitUntil(...)` |
+| Results written to KV | ✅ |
+| `/results` endpoint returns real data | ✅ after completion |
+| Spotify artist batch endpoint used | ❌ replaced with individual `GET /artists/{id}` |
+| Genre distribution | Best-effort via deprecated Spotify artist `genres` |
+| ReccoBeats live backend integration | ❌ deferred to contract spike |
+| `reccobeats.ts` used in production | ❌ deleted |
 
 ---
 

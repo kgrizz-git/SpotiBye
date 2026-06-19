@@ -21,7 +21,7 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 - `src/backend/routes/analysis.ts` now persists completed results to KV via `executionCtx.waitUntil(...)`; older notes saying `/results` always returns 404 are stale.
 - `src/backend/services/analysis.ts` computes local analysis from playlist tracks and artist metadata. It no longer calls ReccoBeats from `analyzePlaylist()`.
 - `src/backend/services/analysis.ts` still contains a dead `callReccoBeatsAPI()` helper pointing at `https://api.recocbeats.com/v1/analyze`; both the hostname and the `/analyze` endpoint are suspect.
-- `src/backend/services/spotify.ts#getArtists()` still uses removed Spotify batch endpoint `GET /artists?ids=...`; this is covered in `fix-analysis-403-spotify-api-migration.md`.
+- `src/backend/services/spotify.ts#getArtists()` now fetches individual `GET /artists/{id}` requests with bounded concurrency; `fix-analysis-403-spotify-api-migration.md` completed that dependency.
 - Current pagination in `AnalysisService.analyzePlaylist()` already uses `rawCount`; do not replace it with logic based on normalized `page.items.length`.
 - `src/frontend/ui/backend_playlist_card.py#_update_analysis_ui()` already handles the planned result shape: `overview.formatted_duration`, `genre_distribution`, `artists.unique_artists`, `artists.diversity`, and `artists.top_artists`.
 - `RECOCOBEATS_API_KEY` / `RECCOBEATS_API_KEY` references remain in docs, tests, workflow env, and `Env`, but ReccoBeats public docs currently say no API key is required.
@@ -30,7 +30,7 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 
 | Track | Scope | Status |
 |---|---|---|
-| A | Restore reliable Spotify-backed backend analysis | Ready to implement after Spotify 403 plan |
+| A | Restore reliable Spotify-backed backend analysis | Unblocked; Spotify 403 dependency complete |
 | B | ReccoBeats API contract spike and backend adapter design | Required before live ReccoBeats wiring |
 | C | Remove stale ReccoBeats key/config references | Safe cleanup after Track B confirms no auth key |
 | D | Queue-based production hardening for large playlists | Deferred follow-up plan |
@@ -39,7 +39,7 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 
 ## Track A - Restore Reliable Spotify-Backed Backend Analysis
 
-This track depends on completing `dev-docs/plans/fix-analysis-403-spotify-api-migration.md`.
+This track depended on `dev-docs/plans/fix-analysis-403-spotify-api-migration.md`; that dependency is complete. Continue with the remaining Track A schema/route coverage before Track B.
 
 ### A1. Keep Current Pagination and Add Regression Coverage
 
