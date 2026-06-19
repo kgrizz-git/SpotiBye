@@ -167,7 +167,7 @@ git commit -m "docs: relocate docs cleanup plan"
 - Move: selected completed files from `docs/superpowers/plans/`
 - Modify: `docs/exec-plans/completed/README.md`
 
-- [ ] **Step 1: Create completed-plan archive directories**
+- [x] **Step 1: Create completed-plan archive directories**
 
 Run:
 
@@ -178,7 +178,7 @@ mkdir -p docs/exec-plans/completed/superseded
 mkdir -p docs/exec-plans/completed/superpowers
 ```
 
-- [ ] **Step 2: Move legacy `docs/plans/` files**
+- [x] **Step 2: Move legacy `docs/plans/` files**
 
 Run:
 
@@ -187,7 +187,7 @@ git mv docs/plans/*.md docs/exec-plans/completed/legacy/
 rmdir docs/plans
 ```
 
-- [ ] **Step 3: Move completed `dev-docs/plans/done/` files**
+- [x] **Step 3: Move completed `dev-docs/plans/done/` files**
 
 Run:
 
@@ -196,7 +196,7 @@ git mv dev-docs/plans/done/*.md docs/exec-plans/completed/dev-docs/
 rmdir dev-docs/plans/done
 ```
 
-- [ ] **Step 4: Move superseded Superpowers plans**
+- [x] **Step 4: Move superseded Superpowers plans**
 
 Run:
 
@@ -207,7 +207,7 @@ git mv docs/superpowers/plans/2026-06-16-main-screen-refactor-V3.md docs/exec-pl
 git mv docs/superpowers/plans/2026-06-16-main-screen-refactor-review.md docs/exec-plans/completed/superseded/
 ```
 
-- [ ] **Step 5: Move completed Superpowers execution plan**
+- [x] **Step 5: Move completed Superpowers execution plan**
 
 Run:
 
@@ -219,7 +219,7 @@ rmdir docs/superpowers
 
 If `rmdir docs/superpowers` fails because new files exist there, leave it in place and update its README/index instead.
 
-- [ ] **Step 6: Populate completed-plan README**
+- [x] **Step 6: Populate completed-plan README**
 
 Replace `docs/exec-plans/completed/README.md` with:
 
@@ -271,7 +271,7 @@ Replace `docs/exec-plans/completed/README.md` with:
 | [`legacy/search_filter_plan.md`](legacy/search_filter_plan.md) | Search/filter plan | Historical |
 ```
 
-- [ ] **Step 7: Verify moves**
+- [x] **Step 7: Verify moves**
 
 Run:
 
@@ -284,7 +284,7 @@ find docs/exec-plans/completed -maxdepth 2 -type f -name "*.md" | sort
 
 Expected: moved files are present under `docs/exec-plans/completed/`; old plan directories are gone.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A docs dev-docs
