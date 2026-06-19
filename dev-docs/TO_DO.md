@@ -36,14 +36,14 @@
 
 - decide on default size, see if can better place it
 
-* see [backend analysis routes](backend-analysis-routes.md) and [playlist analysis popup notes](playlist-analysis-popup.md)
+* see [backend analysis routes](backend-analysis-routes.md) and [playlist analysis popup notes](playlist-analysis-popup.md); related implementation plans: [ReccoBeats wiring](plans/reccobeats-wiring.md), [Spotify 403 analysis fix](plans/fix-analysis-403-spotify-api-migration.md)
 * [fix ReccoBeats pipeline and wire to backend route](plans/reccobeats-wiring.md)
 * [Spotify API enrichment — available data for playlist details](spotify-api-enrichment.md)
-* restore reccobeats analysis functionality
+* restore reccobeats analysis functionality — see [ReccoBeats wiring plan](plans/reccobeats-wiring.md) and [Spotify 403 analysis fix](plans/fix-analysis-403-spotify-api-migration.md)
 
 * see agent-first-retrofit, quality review/assessment md
 
-- fix issues with RECOCOBEATS vs RECCOBEATS
+- fix issues with RECOCOBEATS vs RECCOBEATS — see [ReccoBeats wiring plan](plans/reccobeats-wiring.md)
 
 - Fix playlist analysis 403 error — Spotify API February 2026 migration removed `GET /artists` batch endpoint
     * [Fix plan](plans/fix-analysis-403-spotify-api-migration.md)
