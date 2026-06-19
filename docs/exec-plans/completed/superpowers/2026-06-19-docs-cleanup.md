@@ -549,7 +549,7 @@ git commit -m "docs: resolve docs cleanup tracking"
 **Files:**
 - Verify: documentation tree and repository status
 
-- [ ] **Step 1: Check for stale directories**
+- [x] **Step 1: Check for stale directories**
 
 Run:
 
@@ -562,7 +562,7 @@ test ! -e docs/superpowers/plans/superseded
 
 Expected: all commands exit 0.
 
-- [ ] **Step 2: Check for stale active references**
+- [x] **Step 2: Check for stale active references**
 
 Run:
 
@@ -572,7 +572,7 @@ rg -n "docs/plans|dev-docs/plans/done|docs/superpowers/plans|plans/done|../plans
 
 Expected: no active references. Historical references inside completed plans are acceptable only if they clearly describe past state.
 
-- [ ] **Step 3: Check doc placement guidance**
+- [x] **Step 3: Check doc placement guidance**
 
 Run:
 
@@ -582,7 +582,7 @@ rg -n "docs/exec-plans/active|docs/exec-plans/completed|dev-docs/README|root-lev
 
 Expected: placement guidance is discoverable from agent entry points.
 
-- [ ] **Step 4: Run repository verification**
+- [x] **Step 4: Run repository verification**
 
 Run:
 
@@ -594,7 +594,7 @@ Expected: `All verifications passed.`
 
 If sandbox blocks local frontend networking, rerun the same command with the normal project-approved escalation path and record that in the final summary.
 
-- [ ] **Step 5: Inspect final status**
+- [x] **Step 5: Inspect final status**
 
 Run:
 
@@ -609,17 +609,17 @@ Expected: branch has only intentional commits from this plan and no untracked ro
 
 ## Acceptance Criteria
 
-- [ ] No root-level `plans/` directory remains.
-- [ ] No active docs reference `docs/plans/`, `dev-docs/plans/done/`, or `docs/superpowers/plans/superseded/`.
-- [ ] `docs/exec-plans/active/README.md` accurately lists active plans.
-- [ ] `docs/exec-plans/completed/README.md` indexes moved completed/superseded plans.
-- [ ] `docs/index.md` describes the current plan/documentation structure.
-- [ ] `AGENTS.md` and `.github/copilot-instructions.md` tell agents where to place plans, design docs, references, and dev notes.
-- [ ] `dev-docs/README.md` exists and explains what belongs in `dev-docs/`.
-- [ ] `docs/tech-debt-tracker.md` item #10 is resolved.
-- [ ] `dev-docs/TO_DO.md` marks the docs cleanup item complete after implementation.
-- [ ] Completed steps in this plan are checked off before final handoff.
-- [ ] `./scripts/verify-all.sh` passes.
+- [x] No root-level `plans/` directory remains.
+- [x] No active docs reference `docs/plans/`, `dev-docs/plans/done/`, or `docs/superpowers/plans/superseded/`.
+- [x] `docs/exec-plans/active/README.md` accurately lists active plans.
+- [x] `docs/exec-plans/completed/README.md` indexes moved completed/superseded plans.
+- [x] `docs/index.md` describes the current plan/documentation structure.
+- [x] `AGENTS.md` and `.github/copilot-instructions.md` tell agents where to place plans, design docs, references, and dev notes.
+- [x] `dev-docs/README.md` exists and explains what belongs in `dev-docs/`.
+- [x] `docs/tech-debt-tracker.md` item #10 is resolved.
+- [x] `dev-docs/TO_DO.md` marks the docs cleanup item complete after implementation.
+- [x] Completed steps in this plan are checked off before final handoff.
+- [x] `./scripts/verify-all.sh` passes.
 
 ## Explicit Non-Goals
 
