@@ -42,6 +42,11 @@
 * [Spotify API enrichment — available data for playlist details](spotify-api-enrichment.md)
 * restore reccobeats analysis functionality — see [ReccoBeats wiring plan](plans/reccobeats-wiring.md) and [Spotify 403 analysis fix](plans/done/fix-analysis-403-spotify-api-migration.md)
 
+- Queue-harden backend playlist analysis for large playlists — see [ReccoBeats wiring plan Track D](plans/reccobeats-wiring.md#track-d---deferred-queue-hardening-plan)
+    * Create a separate implementation plan before coding.
+    * Decide Worker/queue topology, `ANALYSIS_QUEUE` binding, message type, token refresh strategy, status transitions, idempotency, and retry behavior.
+    * Acceptance target: 300-track analysis completes without Worker timeout, restarts retry safely, duplicate queue delivery is idempotent, and status transitions `queued -> processing -> completed`.
+
 * see agent-first-retrofit, quality review/assessment md
 
 - [x] Fix issues with RECOCOBEATS vs RECCOBEATS — active backend config/docs no longer require either key; see [ReccoBeats wiring plan](plans/reccobeats-wiring.md)

@@ -33,7 +33,7 @@ Do not treat ReccoBeats as a new feature invented for the backend rewrite. Treat
 | A | Restore reliable Spotify-backed backend analysis | Complete |
 | B | ReccoBeats API contract spike and backend adapter design | Complete for `/v1/audio-features` |
 | C | Remove stale ReccoBeats key/config references | Complete for active backend config/docs |
-| D | Queue-based production hardening for large playlists | Deferred follow-up plan |
+| D | Queue-based production hardening for large playlists | Follow-up plan created: `dev-docs/plans/analysis-queue-hardening.md` |
 
 ---
 
@@ -196,7 +196,7 @@ Preserve this older plan item, but perform it after Track B confirms no auth key
 
 The older Phase 3 queue work is still valid as a production hardening concern, but it is not part of the immediate analysis repair.
 
-Create a separate plan before implementing queues, covering:
+Track D planning is complete in `dev-docs/plans/analysis-queue-hardening.md`. That follow-up plan covers:
 
 - Worker export structure: whether the existing Hono worker and queue consumer live in the same module or separate Worker entry points.
 - `wrangler.toml` queue producer/consumer config for development and production.
@@ -205,6 +205,8 @@ Create a separate plan before implementing queues, covering:
 - Status transitions: `queued -> processing -> completed` and retry-visible failure states.
 - Idempotency: repeated queue deliveries must not corrupt status or overwrite newer jobs.
 - Tests for retry, duplicate delivery, and completed result persistence.
+
+Queue implementation remains deferred to that separate plan.
 
 ---
 
