@@ -1,128 +1,187 @@
-# Fix Playlist Analysis 403 Error — Spotify API February 2026 Migration
+# Fix Playlist Analysis 403 - Spotify February 2026 Migration Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Stop backend playlist analysis from failing when Spotify rejects removed batch artist endpoints.
+
+**Architecture:** Keep all Spotify API calls inside `src/backend/services/spotify.ts`. Replace the removed batch artist lookup with individual artist requests and make artist metadata best-effort so playlist analysis still returns duration and artist counts when genre lookup fails.
+
+**Tech Stack:** TypeScript, Cloudflare Worker, Hono, Vitest, Spotify Web API.
+
+---
 
 ## Problem
 
-Playlist analysis fails with HTTP 403 Forbidden error when analyzing playlists. The error occurs in the backend analysis service when fetching artist data.
+Playlist analysis can fail with HTTP 403 when fetching artist data:
 
-**Error logs:**
-```
-[ERROR  ] [Playlist analysis failed] Analysis failed: HTTP 403: Forbidden
-[ERROR  ] [Backend API error] Analysis failed: HTTP 403: Forbidden
+```text
+[ERROR] Playlist analysis failed: Analysis failed: HTTP 403: Forbidden
 ```
 
-## Root Cause
+The current risk is here:
 
-The Spotify Web API February 2026 migration removed the batch endpoint `GET /artists` (for fetching multiple artists at once) for Development Mode applications. This endpoint now returns 403 Forbidden.
+- `src/backend/services/spotify.ts#getArtists()` calls `GET /artists?ids=...`
+- `src/backend/services/analysis.ts#analyzePlaylist()` calls `spotifyService.getArtists([...artistIdSet])`
 
-**Affected code:**
-- `src/backend/services/spotify.ts:109-121` — `getArtists()` method uses removed endpoint
-- `src/backend/services/analysis.ts:76` — calls `spotifyService.getArtists([...artistIdSet])`
+Spotify's February 2026 Development Mode migration removed batch/bulk fetch endpoints for affected apps. The migration guide says batch endpoints such as `GET /artists` should be replaced with individual item fetches such as `GET /artists/{id}`.
 
-**Spotify changelog reference:**
-- [REMOVED] Get Several Artists (GET /artists) – Get Spotify catalog information for several artists based on their Spotify IDs.
+## Important Constraints
 
-## Investigation Findings
+- All Spotify API calls must stay in `src/backend/services/spotify.ts`.
+- Do not restore Spotify `/audio-features` into analysis. That is a separate removed/restricted endpoint family and is not needed for this fix.
+- `genres` on Spotify Artist is currently available but deprecated in Spotify docs. Treat genre distribution as best-effort.
+- Increased request count can make large playlists slow. Use conservative concurrency and keep graceful degradation.
+- Coordinate with `dev-docs/plans/reccobeats-wiring.md`; this plan is Track A's dependency.
 
-### Available Endpoints (Still Working)
-According to the Spotify API changelog, the following endpoint is still available:
-- `GET /artists/{id}` – Retrieves detailed metadata for a single artist
+---
 
-### Current Implementation
-The current `getArtists()` method:
-1. Batches artist IDs in groups of 50
-2. Calls `GET /artists?ids=id1,id2,...` (REMOVED endpoint)
-3. Returns array of artist data
+## Task 1 - Add `getArtist()` and Replace Batch Artist Fetching
 
-### Impact
-- Playlist analysis cannot fetch artist genre data
-- Genre distribution and artist insights are unavailable
-- Analysis job fails completely instead of degrading gracefully
+**Files:**
+- Modify: `src/backend/services/spotify.ts`
+- Test: add or update service-level tests for `SpotifyService` in `src/backend/tests/spotify-service.test.ts` or the existing closest service test file.
 
-## Solution Approach
+- [ ] Add a public single-artist method:
 
-Replace the batch `GET /artists` endpoint with individual calls to `GET /artists/{id}` for each artist ID.
+```ts
+async getArtist(artistId: string): Promise<SpotifyArtistFull> {
+  const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${artistId}`);
+  const rawData = await response.json();
+  parseSpotifyResponse<Record<string, unknown>>(rawData, ['id', 'name']);
+  return rawData as SpotifyArtistFull;
+}
+```
 
-### Trade-offs
-- **Pros**: Restores artist genre data functionality
-- **Cons**: More API calls (1 per artist instead of 1 per 50 artists), increased latency
-- **Mitigation**: Implement rate limiting and parallel requests with concurrency control
+- [ ] Replace `getArtists()` so it no longer calls `/artists?ids=...`.
 
-## Implementation Plan
+```ts
+async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
+  const uniqueIds = [...new Set(artistIds.filter(Boolean))];
+  return this.fetchWithConcurrency(uniqueIds, (id) => this.getArtist(id), 5);
+}
+```
 
-### Phase 1: Update SpotifyService
+- [ ] Add a private bounded-concurrency helper that preserves input order:
 
-**File: `src/backend/services/spotify.ts`**
+```ts
+private async fetchWithConcurrency<T>(
+  items: string[],
+  fetchFn: (item: string) => Promise<T>,
+  concurrency = 5
+): Promise<T[]> {
+  const results: T[] = [];
+  let nextIndex = 0;
 
-1. Replace `getArtists()` implementation:
-   ```typescript
-   async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
-     // Replace batch endpoint with individual calls
-     // Use Promise.all with concurrency limit (e.g., 10 concurrent requests)
-     // Implement rate limiting to avoid 429 errors
-   }
-   ```
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await fetchFn(items[currentIndex]);
+      }
+    }
+  );
 
-2. Add concurrency control helper:
-   ```typescript
-   private async fetchWithConcurrency<T>(
-     items: string[],
-     fetchFn: (id: string) => Promise<T>,
-     concurrency: number = 10
-   ): Promise<T[]>
-   ```
+  await Promise.all(workers);
+  return results;
+}
+```
 
-### Phase 2: Add Graceful Degradation
+- [ ] Add a test that fails before the change:
+  - mock `globalThis.fetch`
+  - call `getArtists(['artist1', 'artist2'])`
+  - assert requests are made to `/artists/artist1` and `/artists/artist2`
+  - assert no request is made to `/artists?ids=...`
 
-**File: `src/backend/services/analysis.ts`**
+- [ ] Add a test for de-duplication:
+  - `getArtists(['artist1', 'artist1'])`
+  - assert only one HTTP request is sent.
 
-1. Wrap artist fetching in try-catch:
-   ```typescript
-   let artistData: SpotifyArtistFull[] = [];
-   try {
-     artistData = await spotifyService.getArtists([...artistIdSet]);
-   } catch (error) {
-     console.warn('Failed to fetch artist data, continuing without genre insights:', error);
-     artistData = [];
-   }
-   ```
+## Task 2 - Preserve Rate-Limit Behavior
 
-2. Ensure analysis continues even if artist fetch fails:
-   - Genre distribution will be empty
-   - Other insights (duration, artist counts) still work
+**Files:**
+- Modify: `src/backend/services/spotify.ts`
+- Test: `src/backend/tests/spotify-service.test.ts` or closest service test file.
 
-### Phase 3: Update Tests
+- [ ] Keep the existing `fetchWithRetry()` 429 handling.
+- [ ] Add a test where the first artist request returns `429` with `Retry-After: 1`, then returns `200`.
+- [ ] Use fake timers or a small injected wait helper if the existing test framework supports it; do not make tests sleep for real seconds.
 
-**File: `src/backend/tests/spotify.test.ts`**
+If adding fake timers requires too much refactor, preserve this item by writing a narrower test that asserts `fetchWithRetry()` reads `Retry-After` through a mocked sleep helper.
 
-1. Update mocks for individual artist endpoint calls
-2. Add test for graceful degradation when artist fetch fails
-3. Test rate limiting behavior
+## Task 3 - Make Artist Fetch Best-Effort in Analysis
 
-### Phase 4: Documentation Updates
+**Files:**
+- Modify: `src/backend/services/analysis.ts`
+- Test: `src/backend/tests/analysis.test.ts`
 
-1. Update `docs/february-2026-spotify-migration-findings.md` with this fix
-2. Add note about rate limiting considerations in backend docs
+- [ ] Wrap only the artist fetch in a `try/catch`.
 
-## Implementation Steps
+```ts
+let artistData: SpotifyArtistFull[] = [];
+try {
+  artistData = await spotifyService.getArtists([...artistIdSet]);
+} catch (error) {
+  console.warn('Failed to fetch Spotify artist metadata; continuing without genre insights', {
+    playlistId,
+    artistCount: artistIdSet.size,
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+```
 
-1. Update `SpotifyService.getArtists()` to use individual `GET /artists/{id}` calls
-2. Add concurrency control to prevent overwhelming Spotify API
-3. Add error handling in `AnalysisService.analyzePlaylist()` for graceful degradation
-4. Update unit tests to match new implementation
-5. Test with real playlist analysis
-6. Update documentation
+- [ ] Keep track and overview analysis outside this `try/catch`; failures to fetch playlist tracks should still fail the analysis job.
+- [ ] Add a test that simulates `getArtists()` throwing `HTTP 403: Forbidden`.
+- [ ] Assert `analyzePlaylist()` still returns:
+  - `status: "completed"`
+  - populated `overview`
+  - populated `artists.unique_artists`
+  - empty `genre_distribution`
 
-## Testing Checklist
+## Task 4 - Verify Pagination Is Not Regressed
 
-- [ ] Unit tests pass for updated `getArtists()` method
-- [ ] Analysis completes successfully with artist data
-- [ ] Analysis completes successfully even if artist fetch fails (graceful degradation)
-- [ ] No 429 rate limit errors under normal load
-- [ ] Performance acceptable (analysis completes in reasonable time)
-- [ ] Genre distribution populates correctly when artist data available
+**Files:**
+- Modify: `src/backend/tests/analysis.test.ts`
+- Reference: `src/backend/services/analysis.ts`
 
-## References
+- [ ] Add a regression test for the current `rawCount` pagination behavior:
+  - page 1 raw count is full page size
+  - normalized item count is lower because some entries are local/unavailable
+  - page 2 is still fetched
 
-- [Spotify Web API Changelog - February 2026](https://developer.spotify.com/documentation/web-api/references/changes/february-2026)
-- [February 2026 Migration Guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)
-- Existing migration findings: `docs/february-2026-spotify-migration-findings.md`
+This keeps the older "fix pagination" TODO tracked without applying its stale implementation.
+
+## Task 5 - Update Documentation
+
+**Files:**
+- Modify: `docs/february-2026-spotify-migration-findings.md`
+- Modify if needed: `dev-docs/backend-analysis-routes.md`
+- Modify if needed: `dev-docs/playlist-analysis-popup.md`
+- Modify if needed: `dev-docs/code-map.md`
+- Modify if needed: `dev-docs/plans/reccobeats-wiring.md`
+
+- [ ] Document that backend playlist analysis now fetches artist metadata individually.
+- [ ] Document that genre data is best-effort because Spotify marks artist `genres` deprecated.
+- [ ] Remove or correct stale claims that `/results` always returns 404.
+- [ ] Remove or correct stale references to deleted `src/backend/services/reccobeats.ts`.
+- [ ] Keep the ReccoBeats restoration work tracked in `reccobeats-wiring.md`; do not fold that contract spike into this Spotify-only fix.
+
+---
+
+## Verification Checklist
+
+- [ ] `cd src/backend && npm run test:run`
+- [ ] `cd src/backend && npm run lint`
+- [ ] `cd src/backend && npm run build`
+- [ ] `cd src/backend && npx wrangler deploy --dry-run`
+- [ ] Analysis completes when `GET /artists/{id}` succeeds.
+- [ ] Analysis completes without genre data when artist fetch returns 403.
+- [ ] No backend analysis code calls Spotify `GET /artists?ids=...`.
+- [ ] No backend analysis code calls Spotify `/audio-features`.
+
+## Follow-Up Items Preserved From Earlier Plan
+
+- Performance tuning for large playlists remains tracked in `reccobeats-wiring.md` Track D.
+- ReccoBeats restoration remains tracked in `reccobeats-wiring.md` Track B.
+- API-key cleanup remains tracked in `reccobeats-wiring.md` Track C.
