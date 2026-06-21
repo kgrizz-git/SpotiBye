@@ -2,6 +2,12 @@
 
 ## Major Tasks
 
+- [ ] Fix medium and low findings from 2026-06-21 bug review — see [fix plan](../docs/exec-plans/active/2026-06-21-bug-fix-medium-low.md) and [bug assessment](bug-review-2026-06-21-183947.md). Covers backend auth/middleware hardening, service edge cases, and frontend client/screen cleanup for all medium and low findings.
+
+- Fix critical/high bugs from 2026-06-21 audit — see [fix plan](../docs/exec-plans/active/2026-06-21-bug-fix-critical-high.md) and [bug assessment](bug-review-2026-06-21-183947.md). 14 findings: 4 critical (JWT bypass, rate-limit busy spin, hardcoded test data, exposed dev URL), 10 high.
+
+- Fix medium/low bugs from 2026-06-21 audit — see [fix plan](../docs/exec-plans/active/2026-06-21-bug-fix-medium-low.md) and [bug assessment](bug-review-2026-06-21-183947.md). 30 findings: 11 backend medium (refresh-token rotation, stale-snapshot progress writes, pervasive `any` in export code, token-refresh race), 10 backend low (dead code, buffer detection, KV replication race), 6 frontend medium (`@mainthread` thread-safety, tkinter leak, `health_check` exception handling), 9 frontend low (cache clear no-op, URL validation, custom `TimeoutError` shadowing builtin). Coordinates with the export.ts refactor.
+
 - [x] **High Priority: Complete main screen refactor** — [completion plan](../docs/exec-plans/completed/superpowers/2026-06-19-main-screen-refactor-completion-plan.md). Completed after cleanup, cancellation branch coverage, and full verification.
   - [x] Task 0: Cleanup dead code (_show_error_dialog, _log_error, _update_export_status)
   - [x] Task 1: Extract filename and format helpers -> `main_screen_filenames.py` + tests
