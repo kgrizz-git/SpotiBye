@@ -50,7 +50,7 @@
 
 - [x] Fix issues with RECOCOBEATS vs RECCOBEATS — active backend config/docs no longer require either key; see [ReccoBeats wiring plan](../docs/exec-plans/active/2026-06-21-reccobeats-wiring.md)
 
-- Fix playlist analysis 403 error — Spotify API February 2026 migration removed `GET /artists` batch endpoint
+- [x] Fix playlist analysis 403 error — Spotify API February 2026 migration removed `GET /artists` batch endpoint
     * [Fix plan](../docs/exec-plans/completed/dev-docs/fix-analysis-403-spotify-api-migration.md)
 
 - Refactor the 4 files over 1,000 lines — `src/backend/services/export.ts` (1,220), `src/frontend/screens/backend_main_screen_adapter.py` (1,116), `src/backend/routes/export.ts` (1,045), `src/frontend/screens/main_screen.py` (1,041). Extract focused modules, reduce cohesion, improve testability.
@@ -76,5 +76,9 @@
 - Fix deprecated AsyncImage properties
     * Remove or replace usage of deprecated `allow_stretch` and `keep_ratio` properties on `kivy.uix.image.AsyncImage` objects in frontend UI code to resolve deprecation warnings.
 
-- Fix 403 Forbidden error on backend playlist analysis
-    * Playlist analysis returns a 403 Forbidden error during polling of the status route (status transitions to "failed" with HTTP 403). Investigate backend logs and ReccoBeats integration wiring to ensure the analysis queue and external API calls are authenticating correctly.
+- [x] Fix 403 Forbidden error on backend playlist analysis
+    * Playlist analysis returns a 403 Forbidden error during polling of the status route (status transitions to "failed" with HTTP 403). Fixed by deploying updated backend code.
+
+- Fix UI handling of queued analysis jobs and missing ReccoBeats data
+    * Frontend logs `[WARNING] [Unknown analysis status] queued` and skips incremental progress tracking. Update frontend analysis polling to recognize `queued` and `processing` states.
+    * ReccoBeats audio feature data is not displaying in the UI (only top artists). Investigate if backend is returning ReccoBeats data successfully and verify frontend UI data binding for audio features. Add clarity in backend terminal logs about when requests via Spotify vs. ReccoBeats are being made.
