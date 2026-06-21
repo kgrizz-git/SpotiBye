@@ -35,7 +35,16 @@ export class AnalysisJobService {
     const resultsKey = this.resultsKey(message);
     const current = await this.cache.get<AnalysisStatusRecord>(statusKey);
 
-    if (!current || current.job_id !== message.job_id) {
+    if (!current) {
+      // KV is eventually consistent. The status write from the route might not have propagated to this edge node yet.
+      const ageMs = Date.now() - new Date(message.enqueued_at).getTime();
+      if (ageMs < 15000) {
+        throw new Error(`Status record not found for job ${message.job_id} - waiting for KV replication (age: ${ageMs}ms)`);
+      }
+      return { acknowledged: true, reason: 'stale' };
+    }
+
+    if (current.job_id !== message.job_id) {
       return { acknowledged: true, reason: 'stale' };
     }
 
@@ -57,7 +66,15 @@ export class AnalysisJobService {
       const result = await analysis.analyzePlaylist(
         message.playlist_id,
         message.user_id,
-        message.job_id
+        message.job_id,
+        async (progressPercentage) => {
+          await this.writeStatus(statusKey, {
+            ...current,
+            status: 'processing',
+            progress: progressPercentage,
+            attempt: message.attempt,
+          });
+        }
       );
 
       await this.cache.set(resultsKey, result satisfies AnalysisResult, 86400);

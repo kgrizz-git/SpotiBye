@@ -85,9 +85,17 @@ export class AnalysisService {
     this.accessToken = accessToken;
   }
 
-  async analyzePlaylist(playlistId: string, userId: string, jobId: string): Promise<AnalysisResult> {
+  async analyzePlaylist(
+    playlistId: string, 
+    userId: string, 
+    jobId: string,
+    onProgress?: (progress: number) => Promise<void>
+  ): Promise<AnalysisResult> {
     try {
       const spotifyService = new SpotifyService(this.accessToken);
+
+      console.log(`[Spotify API] Fetching playlist tracks for ${playlistId}...`);
+      await onProgress?.(20);
 
       // Get all playlist tracks, paginating by raw page size to correctly
       // advance offsets past local/unavailable items.
@@ -115,6 +123,8 @@ export class AnalysisService {
       }
       let artistData: SpotifyArtistFull[] = [];
       try {
+        console.log(`[Spotify API] Fetching full metadata for ${artistIdSet.size} unique artists...`);
+        await onProgress?.(50);
         artistData = await spotifyService.getArtists([...artistIdSet]);
       } catch (error) {
         console.warn('Failed to fetch Spotify artist metadata; continuing without genre insights', {
@@ -126,6 +136,8 @@ export class AnalysisService {
 
       let reccoBeatsAudioFeatures: ReccoBeatsAudioFeature[] = [];
       try {
+        console.log(`[ReccoBeats API] Fetching audio features for ${tracks.length} tracks...`);
+        await onProgress?.(75);
         reccoBeatsAudioFeatures = await this.fetchReccoBeatsAudioFeatures(
           tracks.map((track) => track.id)
         );
@@ -140,6 +152,8 @@ export class AnalysisService {
       // NOTE: Spotify /audio-features was removed in the Feb 2026 API migration.
       // ReccoBeats audio features are best-effort enrichment; core insights use
       // Spotify track metadata and artist genres.
+      console.log(`[Analysis] Generating insights from metadata...`);
+      await onProgress?.(90);
       const spotifyInsights = await this.generatePlaylistInsights(
         tracks,
         artistData,

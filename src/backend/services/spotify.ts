@@ -117,7 +117,10 @@ export class SpotifyService {
   }
 
   async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
-    const uniqueIds = [...new Set(artistIds.filter(Boolean))];
+    // Cloudflare Workers have a hard limit of 50 subrequests (fetches) per invocation.
+    // Since the Spotify batch artists endpoint was removed, we must fetch individually.
+    // To stay safely under the limit, we only fetch metadata for the top 40 unique artists.
+    const uniqueIds = [...new Set(artistIds.filter(Boolean))].slice(0, 40);
     return this.fetchWithConcurrency(uniqueIds, (id) => this.getArtist(id), 5);
   }
 

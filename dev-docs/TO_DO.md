@@ -82,3 +82,9 @@
 - Fix UI handling of queued analysis jobs and missing ReccoBeats data
     * Frontend logs `[WARNING] [Unknown analysis status] queued` and skips incremental progress tracking. Update frontend analysis polling to recognize `queued` and `processing` states.
     * ReccoBeats audio feature data is not displaying in the UI (only top artists). Investigate if backend is returning ReccoBeats data successfully and verify frontend UI data binding for audio features. Add clarity in backend terminal logs about when requests via Spotify vs. ReccoBeats are being made.
+
+- Add visual progress indicator for playlist analysis
+    * The frontend adapter currently doesn't pass an `analysis_task` object into the backend service, so the 0-100% progress updates from the backend are ignored. Wire up a progress bar or text indicator in the UI to display these updates.
+
+- Refactor playlist analysis to use a fan-out queue architecture
+    * Currently, we cap the Spotify artist metadata fetches at 40 artists to avoid hitting the hard limit of 50 subrequests per Cloudflare Worker invocation. To analyze all artists in massive playlists, we need to transition from a single synchronous job to a distributed fan-out model (e.g., spawning smaller worker jobs for batches of artists and aggregating the results).

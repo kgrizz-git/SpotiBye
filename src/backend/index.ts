@@ -73,8 +73,10 @@ export default {
 
       try {
         await jobService.process(body);
+        console.log(`[Queue] Successfully processed job ${body.job_id}`);
         message.ack();
       } catch (error) {
+        console.error(`[Queue] Failed to process job ${body.job_id} on attempt ${message.attempts}:`, error);
         if (message.attempts >= 3) {
           await jobService.markFailed(body, error);
           message.ack();
