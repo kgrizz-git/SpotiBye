@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Launcher for backend-integrated SpotiBye frontend."""
 
 from __future__ import annotations

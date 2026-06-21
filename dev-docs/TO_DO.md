@@ -72,3 +72,9 @@
     * Check that no sensitive or build artifacts are tracked (e.g., `.venv/` contents, `node_modules/`, `__pycache__/`, `.DS_Store`)
     * Review `.github/` directory — security instruction files are tracked but tooling dirs like `.claude/`, `.windsurf/`, `.kilo/` are gitignored — confirm this is intentional
     * Ensure `.skills/` directory is appropriately tracked (it is — these are project skills, not IDE-local config)
+
+- Fix deprecated AsyncImage properties
+    * Remove or replace usage of deprecated `allow_stretch` and `keep_ratio` properties on `kivy.uix.image.AsyncImage` objects in frontend UI code to resolve deprecation warnings.
+
+- Fix 403 Forbidden error on backend playlist analysis
+    * Playlist analysis returns a 403 Forbidden error during polling of the status route (status transitions to "failed" with HTTP 403). Investigate backend logs and ReccoBeats integration wiring to ensure the analysis queue and external API calls are authenticating correctly.
