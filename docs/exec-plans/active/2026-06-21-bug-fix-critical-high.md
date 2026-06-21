@@ -13,7 +13,7 @@
 - [ ] **File:** `src/backend/services/jwt.ts` ~line 65
   - Replace `if (decodedPayload.exp && decodedPayload.exp < now)` with explicit undefined check: `if (decodedPayload.exp === undefined || decodedPayload.exp < now)`
   - Ensures a forged JWT with `exp: 0` is rejected instead of accepted.
-- [ ] **Test:** `src/backend/tests/spotify-auth.test.ts` — add a test case where `exp` is `0` and verify rejection.
+- [ ] **Test:** `src/backend/tests/jwt.test.ts` (create if needed) — add a test case where `exp` is `0` and verify rejection.
 
 ### BT-2: Fix Retry-After NaN busy spin (BE-LOG-1)
 
@@ -29,11 +29,16 @@
 ### BT-3: Close OAuth open redirect (BE-SEC-3)
 
 - [ ] **File:** `src/backend/routes/auth.ts` ~line 14-16
-  - Validate `redirect_uri` against a configured allowlist. Add `ALLOWED_REDIRECT_URIS` to `Env` bindings (comma-separated in `wrangler.toml`). Reject any URI not in the allowlist with 400.
-- [ ] **File:** `src/backend/types/env.ts` — add `ALLOWED_REDIRECT_URIS: string`.
-- [ ] **File:** `src/backend/wrangler.toml` — add `ALLOWED_REDIRECT_URIS` var (dev: `http://localhost:8080`, prod: actual domain).
-- [ ] **File:** `src/backend/.env.test` — add test value.
-- [ ] **Test:** `src/backend/tests/auth.test.ts` — verify disallowed URI is rejected, allowed URI proceeds.
+  - Validate `redirect_uri` against a configured allowlist. Add `ALLOWED_REDIRECT_URIS` to `Env` bindings as a **comma-separated string** (e.g., `"http://localhost:8080,https://app.spotibye.com"`), split on `,` and trim whitespace at use site.
+  - Reject any URI not in the allowlist with HTTP 400 + `{ error: { code: 'DISALLOWED_REDIRECT_URI', message: '...' } }`.
+  - Exact-match comparison is sufficient (no subdomain wildcards) — keeps the allowlist auditable.
+- [ ] **File:** `src/backend/types/env.ts` — add `ALLOWED_REDIRECT_URIS: string;` to the `Env` interface.
+- [ ] **File:** `src/backend/wrangler.toml` — add `ALLOWED_REDIRECT_URIS` to the top-level `[vars]` and to each `[env.*.vars]` block. Dev: `http://localhost:8080`. Production: actual frontend domain (e.g., `https://app.spotibye.com`).
+- [ ] **File:** `src/backend/.env.test` — add a test value like `ALLOWED_REDIRECT_URIS=http://localhost:8080`.
+- [ ] **Test:** `src/backend/tests/auth.test.ts` — verify:
+  - Disallowed URI is rejected with 400 `DISALLOWED_REDIRECT_URI`
+  - Allowed URI proceeds
+  - Empty/missing `ALLOWED_REDIRECT_URIS` env var rejects all (fail-closed default)
 
 ### BT-4: Add structured error logging to silent catch blocks (BE-ERR-1)
 
@@ -61,7 +66,7 @@
 
 - [ ] **File:** `src/backend/routes/auth.ts` ~line 97 — remove the `spotify_data: userProfile` line from the `SESSIONS_KV.put` payload.
 - [ ] **File:** `src/backend/types/auth.ts` ~line 26 — remove the `spotify_data: any;` field from `SessionData` (or keep as optional empty for backward compat with in-flight sessions).
-- [ ] **File:** `src/backend/tests/` — remove `spotify_data` from session mock objects in `api-coverage.test.ts:41`, `export-performance.test.ts:36`, and any other test that populates it.
+- [ ] **File:** `src/backend/tests/` — remove `spotify_data` from session mock objects in `api-coverage.test.ts:41`, `export-performance.test.ts:36`, `analysis.test.ts:280`, `export.test.ts:206`, `spotify.test.ts:99` (verified: 5 occurrences total).
 
 ### BT-8: Fix `c: any` in shared playlist items handler (BE-TYPE-1)
 
@@ -77,8 +82,9 @@
 
 - [ ] **File:** `src/frontend/services/reccobeats_backend.py` ~lines 207-209
   - Remove the hardcoded `if spotify_id in ["cached_track_1", "cached_track_2"]` block and its fake return values.
-  - Either: implement actual backend cache lookup via `self.backend_client.get_track_audio_features(track_id)` in a loop, OR raise `NotImplementedError` and update callers to handle the absence gracefully.
-- [ ] **Verify:** search for all callers of `get_multiple_track_audio_features` and `get_multiple_track_audio_features_safe` to confirm they handle empty/error results.
+  - Recommended fix: raise `NotImplementedError` (or have the method return an empty dict with a clear log message). The method has **zero external callers** in the codebase (verified: only self-references in `reccobeats_backend.py`), so removing the stub is safe.
+  - If implementing real cache lookup instead, loop over `self.backend_client.get_track_audio_features(track_id)` with a concurrency limit, catching per-track errors so one failure doesn't drop the whole batch. Note: this is N HTTP requests — slow for large playlists.
+- [ ] **Test:** `src/frontend/tests/test_cache.py` (or new `test_reccobeats_backend.py`) — add a test asserting the hardcoded `cached_track_1`/`cached_track_2` branch is gone, and that the method returns no fabricated `danceability: 0.8, energy: 0.9` data for any real track ID.
 
 ### FT-2: Replace hardcoded dev backend URL with localhost default (FE-CRIT-2)
 
@@ -101,6 +107,12 @@
         return response.get("items", response.get("tracks", []))
     return []
     ```
+  - Note: `_make_request` (line 143) unwraps `{"data": ...}` to bare values, so response can legitimately be a list (e.g., raw items), a dict (`NormalizedPlaylistItemsResponse` with `items`/`total`/`rawCount`/`href`), or neither (unexpected shape).
+- [ ] **Test:** `src/frontend/tests/test_cache.py` or a new test file — cover three response shapes:
+  - `_make_request` returns a list → method returns the list unchanged
+  - `_make_request` returns a dict with `items` key → method returns the `items` list
+  - `_make_request` returns a dict without `items`/`tracks` keys → method returns `[]` (defensive)
+  - `_make_request` returns `None` or other unexpected type → method returns `[]` without raising `AttributeError`
 
 ### FT-4: Fix filename suffix increment for digit-ending names (FE-HIGH-2)
 

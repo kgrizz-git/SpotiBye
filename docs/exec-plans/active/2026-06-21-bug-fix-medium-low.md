@@ -4,6 +4,7 @@
 > **Scope:** 36 remaining findings: 21 in backend TypeScript (11 medium, 10 low); 15 in frontend Python (6 medium, 9 low).
 > **Sister plan:** [Critical & High bugs](./2026-06-21-bug-fix-critical-high.md) — finish that first.
 > **Coordination:** Several `export.ts` items (BE-TYPE-2, BE-LOG-6, BE-LOG-7, BE-API-3) overlap with the active [2026-06-21 Refactor export.ts](./2026-06-21-refactor-export-ts.md) plan. Apply the type-safety fixes inside the new modules during the split rather than re-touching the monolithic file.
+> **Dependency Note:** Line numbers for items in `src/backend/routes/auth.ts`, `src/backend/services/spotify.ts`, and `src/frontend/services/backend_client.py` will have shifted slightly due to insertions from the Critical & High plan (BT-3, BT-4, BT-7, FT-3). FL-1 and FL-9 explicitly rely on the `_cache_file_path` helper introduced by FT-5.
 > **Verification:** `./scripts/verify-all.sh` after each step group.
 
 ---
@@ -26,8 +27,8 @@
 ### BM-3: Eliminate stale-snapshot progress writes (BE-LOG-4)
 
 - [ ] **File:** `src/backend/services/analysis-job.ts` ~lines 70-78
-  - Switch the progress callback signature to receive only the `delta` (e.g., `{ tracks_analyzed: number, tracks_total: number, percent: number }`) instead of re-reading the full KV snapshot.
-  - Compute new cumulative values from the delta before writing, so concurrent writers don't clobber each other's fields.
+  - Inside the progress callback, fetch the latest KV status (e.g. `await this.cache.get(statusKey)`) to merge the new progress instead of closing over the initial `current` snapshot from the start of the job.
+  - While KV replication is still eventual, this significantly reduces the race window compared to holding a 5-minute old snapshot.
 - [ ] **Test:** `src/backend/tests/analysis-job.test.ts` — concurrent progress updates do not lose fields.
 
 ### BM-4: Remove pervasive `any` from `export.ts` (BE-TYPE-2)
@@ -148,11 +149,12 @@
 
 ## Frontend — Medium
 
-### FM-1: Use `export_id` in `download_export` URL (FE-MED-1)
+### FM-1: Remove unused `export_id` from `download_export` (FE-MED-1)
 
 - [ ] **File:** `src/frontend/services/backend_client.py` ~line 392
-  - Build the download URL as `f"{self.base_url}/api/exports/{export_id}/download"` (or the actual endpoint shape) and append the file format/options as query params.
-  - Add a unit test that asserts the URL contains the export id.
+  - The `download_export` method accepts an `export_id` parameter that is never used. The backend endpoint `/export/playlist/:id/download` only requires the `playlist_id`.
+  - Remove `export_id` from the `download_export` signature and update all frontend callers to stop passing it.
+  - Ensure the unit test reflects the updated signature.
 
 ### FM-2: Decorate `_update_analysis_ui` with `@mainthread` (FE-MED-2)
 
@@ -251,6 +253,7 @@
 - [ ] Run backend tests: `cd src/backend && npm run test:run && npm run lint`
 - [ ] Run frontend tests: `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v`
 - [ ] Update `CHANGELOG.md` with a "Code quality & hardening" entry covering all 36 findings.
+- [ ] Re-run any frontend consumers touched by backend response-shape changes in the same pass (`FM-1`, `FM-5`, `BL-8`, `BL-9`) so the API contract stays consistent.
 
 ---
 
