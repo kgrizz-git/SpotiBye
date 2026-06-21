@@ -110,7 +110,7 @@ class ReccoBeatsBackendService:
                 # Terminal failure — stop polling immediately and propagate.
                 error_msg = status_response.get("error", "Analysis failed")
                 raise BackendAPIError(f"Analysis failed: {error_msg}")
-            elif status in ["pending", "processing", "running"]:
+            elif status in ["pending", "processing", "running", "queued"]:
                 if analysis_task:
                     analysis_task.update_progress(
                         progress, f"Analyzing playlist... {progress}%"
