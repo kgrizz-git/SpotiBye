@@ -80,6 +80,15 @@ repos:
           - "@typescript-eslint/eslint-plugin@6.0.0"
           - "@typescript-eslint/parser@6.0.0"
 
+  # Repo structure guardrails (pre-commit)
+  - repo: local
+    hooks:
+      - id: check-repo-structure
+        name: Check repo structure conventions
+        entry: scripts/check-repo-structure.sh
+        language: script
+        pass_filenames: false
+
   # Pre-push hooks - longer running checks
   # These run before git push, not on every commit
 

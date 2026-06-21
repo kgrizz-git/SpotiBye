@@ -23,3 +23,10 @@ rg -n "<topic keyword>" dev-docs docs
 ```
 
 Update an existing note when it already covers the same topic. If a note becomes durable guidance, move or summarize it under `docs/` and update `docs/index.md`.
+
+**Lifecycle rules:**
+
+- Date-prefix tactical notes: `YYYY-MM-DD-topic.md` (e.g., `2026-06-15-bug-review.md`)
+- Investigation notes older than 60 days without updates should be reviewed for archival or deletion
+- If a note graduates to durable guidance, move it to `docs/` and update `docs/index.md`
+- Plans never go here — use `docs/exec-plans/active/`

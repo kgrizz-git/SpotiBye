@@ -35,3 +35,5 @@ docs/api_key_security.md
 .claude/
 .kilo/
 .windsurf/
+.qwen/
+memory/

@@ -2,6 +2,8 @@
 
 > This is the entry point for AI coding agents (Copilot, Codex, etc.) working in this repository.
 > Keep this file short. Follow the pointers to find deeper context.
+>
+> **Claude Code users:** see [`CLAUDE.md`](CLAUDE.md) for a focused entry point.
 
 ---
 
@@ -36,7 +38,8 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 - Third-party API/platform reference notes go in `docs/references/`.
 - Short-lived investigations, audits, and working notes go in `dev-docs/`.
 - Before creating a new doc, check `docs/index.md`, `dev-docs/README.md`, and `rg` for an existing page to update.
-- Do not leave completed plans in `active/`, and do not create new root-level `plans/` files.
+- Do not leave completed plans in `active/`, and do not create new root-level `plans/` files. (Enforced by pre-commit hook.)
+- IDE security rules live in `.cursor/rules/` only. `.windsurf/rules/` and `.qwen/` have been removed and are gitignored.
 
 ---
 
