@@ -195,9 +195,9 @@ app.post('/spotify/refresh', authMiddleware, async (c) => {
 
     return c.json({
       data: {
-        token: jwtToken,
         access_token: jwtToken,
         expires_in: SPOTIFY_SESSION_TTL_SECONDS,
+        token_type: 'Bearer',
         spotify_access_expires_in: newTokens.expires_in,
       }
     });

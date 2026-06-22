@@ -3,6 +3,23 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { HTTPException } from 'hono/http-exception';
 import type { ErrorResponse } from '../types/api';
 
+/**
+ * Discriminator check for 3rd-party errors whose `err.name` string might
+ * collide with our HTTP status code classes. SpotiBye does not throw any
+ * of the names below directly; the discriminator field (`code` or
+ * `statusCode`) must be present to avoid silently mapping 3rd-party
+ * errors (e.g. pg/mongoose ValidationError, jsonwebtoken errors) to
+ * the wrong HTTP status.
+ */
+function matchesStatus(err: Error, expected: string): boolean {
+  const ext = err as { code?: unknown; statusCode?: unknown };
+  return ext.code === expected || ext.statusCode === expected;
+}
+
+function isValidationCode(value: unknown): boolean {
+  return typeof value === 'string' && /^[A-Z_]+_VALIDATION/i.test(value);
+}
+
 export const errorHandler: ErrorHandler = (err, c) => {
   console.error('Error occurred:', err);
   const requestId = crypto.randomUUID();
@@ -23,19 +40,22 @@ export const errorHandler: ErrorHandler = (err, c) => {
         : status === 404
           ? 'NOT_FOUND'
           : 'HTTP_ERROR';
-  } else if (err.name === 'ValidationError') {
+  } else if (
+    err.name === 'ValidationError' &&
+    isValidationCode((err as { code?: unknown }).code)
+  ) {
     status = 400;
     message = err.message;
     code = 'VALIDATION_ERROR';
-  } else if (err.name === 'UnauthorizedError') {
+  } else if (err.name === 'UnauthorizedError' && matchesStatus(err, 'UNAUTHORIZED')) {
     status = 401;
     message = 'Unauthorized';
     code = 'UNAUTHORIZED';
-  } else if (err.name === 'ForbiddenError') {
+  } else if (err.name === 'ForbiddenError' && matchesStatus(err, 'FORBIDDEN')) {
     status = 403;
     message = 'Forbidden';
     code = 'FORBIDDEN';
-  } else if (err.name === 'NotFoundError') {
+  } else if (err.name === 'NotFoundError' && matchesStatus(err, 'NOT_FOUND')) {
     status = 404;
     message = 'Not Found';
     code = 'NOT_FOUND';

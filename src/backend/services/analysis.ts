@@ -331,28 +331,6 @@ export class AnalysisService {
       && typeof record.valence === 'number';
   }
 
-  private calculateAverageAudioFeatures(features: Record<string, number>[]): Record<string, number> {
-    if (features.length === 0) return {};
-
-    const sums = features.reduce((acc, feature) => {
-      Object.keys(feature).forEach(key => {
-        if (typeof feature[key] === 'number') {
-          acc[key] = (acc[key] || 0) + feature[key];
-        }
-      });
-      return acc;
-    }, {});
-
-    const count = features.length;
-    const averages: Record<string, number> = {};
-
-    Object.keys(sums).forEach(key => {
-      averages[key] = sums[key] / count;
-    });
-
-    return averages;
-  }
-
   private countArtists(tracks: SpotifyTrack[]): Record<string, number> {
     return tracks.reduce((acc: Record<string, number>, track) => {
       track.artists.forEach((artist) => {
