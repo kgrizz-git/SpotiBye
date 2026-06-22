@@ -16,9 +16,9 @@ describe('API Integration Tests', () => {
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
-      expect(data).toHaveProperty('status', 'healthy');
-      expect(data).toHaveProperty('service', 'spotibye-backend');
-      expect(data).toHaveProperty('timestamp');
+      expect(data.data).toHaveProperty('status', 'healthy');
+      expect(data.data).toHaveProperty('service', 'spotibye-backend');
+      expect(data.data).toHaveProperty('timestamp');
     });
   });
 

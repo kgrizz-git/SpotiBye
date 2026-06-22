@@ -211,8 +211,9 @@ describe('API Coverage Tests', () => {
 
           // Success responses should have consistent structure
           if (req.path === '/health') {
-            expect(data).toHaveProperty('status', 'healthy');
-            expect(data).toHaveProperty('service', 'spotibye-backend');
+            expect(data).toHaveProperty('data');
+            expect(data.data).toHaveProperty('status', 'healthy');
+            expect(data.data).toHaveProperty('service', 'spotibye-backend');
           } else {
             // API endpoints should wrap data in 'data' property
             expect(data).toHaveProperty('data');

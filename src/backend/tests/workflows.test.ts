@@ -194,7 +194,8 @@ describe('Complete Workflow Integration Tests', () => {
 
           // Check for expected response patterns
           if (endpoint.path === '/health') {
-            expect(data).toHaveProperty('status');
+            expect(data).toHaveProperty('data');
+            expect(data.data).toHaveProperty('status');
           } else {
             expect(data).toHaveProperty('data');
           }
@@ -213,12 +214,12 @@ describe('Complete Workflow Integration Tests', () => {
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
-      expect(data).toHaveProperty('status', 'healthy');
-      expect(data).toHaveProperty('service', 'spotibye-backend');
-      expect(data).toHaveProperty('timestamp');
+      expect(data.data).toHaveProperty('status', 'healthy');
+      expect(data.data).toHaveProperty('service', 'spotibye-backend');
+      expect(data.data).toHaveProperty('timestamp');
 
       // Timestamp should be a valid ISO string
-      const timestamp = new Date(data.timestamp);
+      const timestamp = new Date(data.data.timestamp);
       expect(timestamp.getTime()).not.toBeNaN();
     });
   });

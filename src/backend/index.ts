@@ -27,9 +27,11 @@ app.onError(errorHandler);
 // Health check endpoint
 app.get('/health', (c) => {
   return c.json({
-    status: 'healthy',
-    service: 'spotibye-backend',
-    timestamp: new Date().toISOString()
+    data: {
+      status: 'healthy',
+      service: 'spotibye-backend',
+      timestamp: new Date().toISOString()
+    }
   });
 });
 
