@@ -2,11 +2,42 @@
 
 ## Major Tasks
 
-- [ ] Fix medium and low findings from 2026-06-21 bug review — see [fix plan](../docs/exec-plans/active/2026-06-21-bug-fix-medium-low.md) and [bug assessment](bug-review-2026-06-21-183947.md). Covers backend auth/middleware hardening, service edge cases, and frontend client/screen cleanup for all medium and low findings.
+- [x] Fix medium and low findings from 2026-06-21 bug review — see [fix plan](../docs/exec-plans/completed/2026-06-21-bug-fix-medium-low.md) and [bug assessment](bug-review-2026-06-21-183947.md). 26 of 36 findings implemented across 7 atomic commits (4d0b985, 09212d3, f7a2e84, 2a31bac, 8d11128, 4ea7b50, 003f758) plus the CHANGELOG (dfabf4c). 10 items deferred — see "Deferred from 2026-06-21 medium/low plan" below.
 
 - Fix critical/high bugs from 2026-06-21 audit — see [fix plan](../docs/exec-plans/active/2026-06-21-bug-fix-critical-high.md) and [bug assessment](bug-review-2026-06-21-183947.md). 14 findings: 4 critical (JWT bypass, rate-limit busy spin, hardcoded test data, exposed dev URL), 10 high.
 
-- Fix medium/low bugs from 2026-06-21 audit — see [fix plan](../docs/exec-plans/active/2026-06-21-bug-fix-medium-low.md) and [bug assessment](bug-review-2026-06-21-183947.md). 30 findings: 11 backend medium (refresh-token rotation, stale-snapshot progress writes, pervasive `any` in export code, token-refresh race), 10 backend low (dead code, buffer detection, KV replication race), 6 frontend medium (`@mainthread` thread-safety, tkinter leak, `health_check` exception handling), 9 frontend low (cache clear no-op, URL validation, custom `TimeoutError` shadowing builtin). Coordinates with the export.ts refactor.
+- [x] Fix medium/low bugs from 2026-06-21 audit — see [fix plan](../docs/exec-plans/completed/2026-06-21-bug-fix-medium-low.md) and [bug assessment](bug-review-2026-06-21-183947.md). 26 of 36 findings implemented. 10 deferred (see follow-up section). Coordinates with the export.ts refactor.
+
+## Deferred from 2026-06-21 medium/low plan
+
+Ten items from the [medium/low fix plan](../docs/exec-plans/completed/2026-06-21-bug-fix-medium-low.md) were intentionally deferred during the 2026-06-22 implementation pass. The plan itself documents the original 36 findings and lists these as no-ops or as "apply during the refactor." Group by reason below.
+
+### Blocked on the export.ts refactor plan (awaiting refactor)
+
+The following five items require the [active refactor-export-ts plan](../docs/exec-plans/active/2026-06-21-refactor-export-ts.md) to land first. **Reason for deferral:** applying them in-place on the monolithic `export.ts` would create immediate merge conflicts when the refactor splits the file, and the per-finding plan body explicitly says "apply during the refactor" for each. Do them in the new module structure.
+
+- [ ] **BM-4** — Remove pervasive `any` from `services/export.ts` (buildPlaylistMetadata, buildExportTracks, calculateTotalDurationMs, and 4+ other locations). Apply type tightening in `export-*.ts` after the refactor splits the file.
+- [ ] **BM-5** — Remove pervasive `any` from `routes/export.ts` (resolveStepSize, resolveRequestedFormat, resolveIncludeAudioFeatures, 5+ other locations). Use hand-rolled type guards; no Zod in this PR. Apply at new module boundaries after the refactor.
+- [ ] **BL-2** — Guard `undefined` playlist in `buildPlaylistMetadata` (`services/export.ts` ~lines 522-528). Change signature to `playlist: Playlist` (non-nullable) and add a call-site test. Apply during the refactor split.
+- [ ] **BL-3** — Reconcile `Buffer` detection in `arrayBufferToBase64` (`services/export.ts` ~line 1105-1116). Either leave the inline `typeof Buffer !== 'undefined'` check or extract `isNodeBuffer` to `utils/buffer.ts` for testability. Apply to `export-xlsx-lite.ts` if the refactor moves the function.
+- [ ] **BL-10** — Remove misleading playlist-fetch guard in `services/export.ts` (~lines 522-524). The current guard `existingExportData ? undefined : await spotifyService.getPlaylist(playlistId)` is unreachable because `existingExportData` is always set on the retry path. **This is a pre-requirement for the refactor-export-ts plan** — the call must be simplified BEFORE the refactor moves `generatePlaylistExportSlice` to `export-collect.ts`. Add it to the refactor plan's "Pre-requirements" section before opening that PR.
+
+### Lint hardening (deferred to its own PR — out of scope for bug fixes)
+
+- [ ] **BM-11** — Promote `@typescript-eslint/no-explicit-any` from `warn` to `error` in `.eslintrc.json`. **Reason for deferral:** this is linter-config hardening, not a bug fix. Today there are 157 warnings; bulk are in route boundary `body: any` parameters that BM-4/BM-5 are removing. After BM-4/5/BM-6 and the refactor-export-ts plan land, run `rg "@typescript-eslint/no-explicit-any" src/backend/` to get the new count, file a follow-up PR, and add targeted `// eslint-disable-next-line` comments with justification for any remaining `any` usages.
+
+### Cosmetic / non-bug (deferred — no follow-up needed unless revisited)
+
+**Reason for deferral:** these are pure cleanups with no behavioral change. They were skipped to keep the 7 atomic commits focused on the high-impact bug fixes. Revisit if any of them cause future confusion or hit a regression.
+
+- [ ] **FM-2** — Decorate `_update_analysis_ui` with `@mainthread` and drop the three `Clock.schedule_once` wrappers in `_load_analysis_worker` (`src/frontend/ui/backend_playlist_card.py:530-555, 557`). Thread-safety fix; not blocking.
+- [ ] **FL-3** — Simplify redundant checks in `_format_backend_api_error` (`src/frontend/services/backend_client.py`). Pure cleanup; no behavioral change.
+- [ ] **FL-4** — Avoid re-importing `LabelBase` inside the inner loop in `src/frontend/ui/backend_cache_explorer.py`. Hoist the import to module scope. Cosmetic.
+- [ ] **FL-8** — Log diagnostics on `ImportError` in `src/frontend/ui/backend_cache_explorer.py:21-29` and update `backend_status_label.text` in `initialize_backend_client` (line 122) to include the error message. Surface what's missing so dev environments can debug.
+
+### No-op (already covered, nothing to do)
+
+- [x] **BL-1** — local-only-track pagination edge case. **Reason for deferral:** no-op. Existing test `continues paginating by raw Spotify page count when normalized items are filtered out` at `tests/analysis.test.ts:117-151` already covers the case. Marked no-op in the plan.
 
 - [x] **High Priority: Complete main screen refactor** — [completion plan](../docs/exec-plans/completed/superpowers/2026-06-19-main-screen-refactor-completion-plan.md). Completed after cleanup, cancellation branch coverage, and full verification.
   - [x] Task 0: Cleanup dead code (_show_error_dialog, _log_error, _update_export_status)
