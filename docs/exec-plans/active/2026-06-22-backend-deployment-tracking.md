@@ -337,7 +337,7 @@ rg -n "environment: (development|production)" .github/workflows/deploy-backend.y
 
 Expected: matches for `deploy-dev` development and both production deploy jobs.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add .github/workflows/deploy-backend.yml .github/workflows/deploy-production.yml
@@ -352,7 +352,7 @@ git commit -m "fix: track backend deployment metadata in actions"
 - Create: `scripts/backend-deploy-status.sh`
 - Create: `scripts/test-backend-deploy-status.sh`
 
-- [ ] **Step 1: Create the status script**
+- [x] **Step 1: Create the status script**
 
 Create `scripts/backend-deploy-status.sh`:
 
@@ -429,7 +429,7 @@ This script depends on `curl`, `git`, and Node.js. Node.js is already required b
 
 The comparison uses `${release_sha}..HEAD`, so run it from a fresh local checkout of the branch you want to compare, normally `main` after pulling. Detached HEADs, stale local branches, or feature branches can produce misleading "changed since deploy" lists.
 
-- [ ] **Step 2: Create a functional test for the status script**
+- [x] **Step 2: Create a functional test for the status script**
 
 Create `scripts/test-backend-deploy-status.sh`:
 
@@ -510,7 +510,7 @@ rg -q "Needs Deployment: NO" "${output_file}"
 echo "backend-deploy-status functional test passed"
 ```
 
-- [ ] **Step 3: Make the scripts executable**
+- [x] **Step 3: Make the scripts executable**
 
 Run:
 
@@ -521,7 +521,7 @@ chmod +x scripts/test-backend-deploy-status.sh
 
 Expected: command exits with status 0.
 
-- [ ] **Step 4: Validate script syntax**
+- [x] **Step 4: Validate script syntax**
 
 Run:
 
@@ -532,7 +532,7 @@ bash -n scripts/test-backend-deploy-status.sh
 
 Expected: command exits with status 0.
 
-- [ ] **Step 5: Validate missing URL behavior**
+- [x] **Step 5: Validate missing URL behavior**
 
 Run:
 
@@ -542,7 +542,7 @@ env -u SPOTIBYE_BACKEND_URL ./scripts/backend-deploy-status.sh
 
 Expected: command exits with status 2 and prints usage instructions.
 
-- [ ] **Step 6: Run the functional status-script test**
+- [x] **Step 6: Run the functional status-script test**
 
 Run:
 
