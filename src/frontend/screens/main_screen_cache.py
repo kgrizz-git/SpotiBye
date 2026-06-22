@@ -64,10 +64,27 @@ def show_clear_cache_confirmation(screen, *_args) -> None:
 
 
 def clear_all_cache(screen, popup) -> None:
-    """Clear all cache data and update UI."""
+    """Clear all cache data and update UI.
+
+    Delegates the actual cache deletion to screen.backend_adapter.cache_manager.
+    Only env-hash-prefixed data files are cleared (default in clear_cache);
+    auth tokens and backend selection are preserved.
+    """
     try:
         popup.dismiss()
+
+        if not getattr(screen, "backend_adapter", None):
+            error_popup = Popup(
+                title="Error",
+                content=Label(text="Backend not initialized — nothing to clear"),
+                size_hint=(0.6, 0.4),
+                auto_dismiss=True,
+            )
+            error_popup.open()
+            return
+
         screen.status_label.text = "Clearing cache..."
+        screen.backend_adapter.cache_manager.clear_cache(None)
         screen.update_status_with_cache_info()
 
         success_popup = Popup(

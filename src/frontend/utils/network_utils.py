@@ -26,7 +26,7 @@ class ConnectionError(NetworkError):
     pass
 
 
-class TimeoutError(NetworkError):
+class NetworkTimeoutError(NetworkError):
     """Raised when network request times out."""
 
     pass
@@ -61,7 +61,7 @@ def retry_on_network_error(
         Decorated function
     """
     if retryable_errors is None:
-        retryable_errors = [ConnectionError, TimeoutError, ServerError]
+        retryable_errors = [ConnectionError, NetworkTimeoutError, ServerError]
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
@@ -127,7 +127,7 @@ def handle_network_errors(func: Callable) -> Callable:
             )
         except requests.exceptions.Timeout as e:
             logger.error(f"Timeout error: {e}")
-            raise TimeoutError("Request timed out. Please try again.")
+            raise NetworkTimeoutError("Request timed out. Please try again.")
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error: {e}")
             raise NetworkError(f"Network error: {str(e)}")
@@ -291,7 +291,7 @@ def format_error_message(error: Exception) -> str:
     """
     if isinstance(error, ConnectionError):
         return "Unable to connect to the backend. Please check your internet connection and try again."
-    elif isinstance(error, TimeoutError):
+    elif isinstance(error, NetworkTimeoutError):
         return "The request timed out. Please try again."
     elif isinstance(error, RateLimitError):
         return "Too many requests. Please wait a moment and try again."
@@ -313,7 +313,7 @@ def is_retryable_error(error: Exception) -> bool:
     Returns:
         True if error is retryable, False otherwise
     """
-    retryable_errors = (ConnectionError, TimeoutError, ServerError, RateLimitError)
+    retryable_errors = (ConnectionError, NetworkTimeoutError, ServerError, RateLimitError)
     return isinstance(error, retryable_errors)
 
 

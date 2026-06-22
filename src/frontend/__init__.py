@@ -2,7 +2,7 @@
 
 from .services.backend_client import BackendClient, get_backend_client
 from .auth.backend_auth import BackendAuthenticator, get_authenticator
-from .utils.network_utils import NetworkError, ConnectionError, TimeoutError
+from .utils.network_utils import NetworkError, ConnectionError, NetworkTimeoutError
 from .config.backend_config import CURRENT_BACKEND_URL, UIConstants, FeatureFlags
 
 __all__ = [
@@ -14,7 +14,7 @@ __all__ = [
     "create_backend_login_screen",
     "NetworkError",
     "ConnectionError",
-    "TimeoutError",
+    "NetworkTimeoutError",
     "CURRENT_BACKEND_URL",
     "UIConstants",
     "FeatureFlags",

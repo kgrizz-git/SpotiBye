@@ -3,7 +3,7 @@
 from .network_utils import (
     NetworkError,
     ConnectionError,
-    TimeoutError,
+    NetworkTimeoutError,
     RateLimitError,
     ServerError,
     retry_on_network_error,
@@ -18,7 +18,7 @@ from .network_utils import (
 __all__ = [
     "NetworkError",
     "ConnectionError",
-    "TimeoutError",
+    "NetworkTimeoutError",
     "RateLimitError",
     "ServerError",
     "retry_on_network_error",

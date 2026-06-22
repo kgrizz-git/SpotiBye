@@ -52,8 +52,39 @@ def test_orchestrator_initialization(orchestrator, mock_screen):
     assert isinstance(orchestrator.scheduler, FakeScheduler)
 
 def test_build_backend_output_path_single(orchestrator):
-    path = orchestrator._build_backend_output_path({"id": "1"}, "/tmp/file.xlsx", False)
+    path = orchestrator._build_backend_output_path("/tmp/file.xlsx", False)
     assert path == "/tmp/file.xlsx"
+
+
+def test_build_backend_output_path_multiple(orchestrator):
+    # multiple=True should rewrite the extension to the current export format.
+    # Use xlsx so the result is predictable.
+    orchestrator._selected_export_format = lambda: "xlsx"
+    orchestrator._get_file_extension = lambda fmt: ".xlsx"
+    path = orchestrator._build_backend_output_path("/tmp/foo.txt", True)
+    assert path == "/tmp/foo.xlsx"
+
+
+def test_build_backend_output_path_multiple_no_ext(orchestrator):
+    # No extension on the input path is also fine.
+    orchestrator._selected_export_format = lambda: "xlsx"
+    orchestrator._get_file_extension = lambda fmt: ".xlsx"
+    path = orchestrator._build_backend_output_path("/tmp/foo", True)
+    assert path == "/tmp/foo.xlsx"
+
+
+def test_main_screen_delegation(mock_screen):
+    # MainScreen._build_backend_output_path should forward to the
+    # orchestrator with the new 2-arg signature.
+    from src.frontend.screens.main_screen import MainScreen
+
+    # Verify the method exists with the new signature
+    import inspect
+    sig = inspect.signature(MainScreen._build_backend_output_path)
+    params = list(sig.parameters.keys())
+    assert "playlist" not in params
+    assert "base_output_path" in params
+    assert "multiple" in params
 
 def test_cancel_export(orchestrator, mock_screen):
     with patch("src.frontend.screens.main_screen_export.mark_current_export_cancelled", return_value=True):

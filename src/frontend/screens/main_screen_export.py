@@ -54,7 +54,7 @@ class MainScreenExportOrchestrator:
         self.scheduler.call_soon(lambda: self.screen._show_backend_error_popup(message))
 
     def _build_backend_output_path(
-        self, playlist: dict, base_output_path: str, multiple: bool
+        self, base_output_path: str, multiple: bool
     ) -> str:
         """Build output file path for backend export."""
         if not multiple:
@@ -234,7 +234,7 @@ class MainScreenExportOrchestrator:
             total = len(valid_playlists)
             playlist_ids = [p.get("id") for p in valid_playlists if p.get("id")]
             target_path = self._build_backend_output_path(
-                valid_playlists[0], output_path, total > 1
+                output_path, total > 1
             )
             resume_context = {
                 "allow_resume": resume_saved_job,

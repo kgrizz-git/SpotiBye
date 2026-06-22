@@ -958,10 +958,10 @@ class MainScreen(Screen):
         return sanitize_export_filename_component(value)
 
     def _build_backend_output_path(
-        self, playlist: dict, base_output_path: str, multiple: bool
+        self, base_output_path: str, multiple: bool
     ) -> str:
         """Build output file path for backend export."""
-        return self.export_orchestrator._build_backend_output_path(playlist, base_output_path, multiple)
+        return self.export_orchestrator._build_backend_output_path(base_output_path, multiple)
 
     def backend_export_worker(
         self, playlists, output_path, resume_saved_job: bool = False

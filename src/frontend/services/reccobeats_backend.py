@@ -122,7 +122,7 @@ class ReccoBeatsBackendService:
                 logger.warning(f"Unknown analysis status: {status}")
                 time.sleep(poll_interval)
 
-        raise TimeoutError(f"Analysis timed out after {max_wait_time} seconds")
+        raise NetworkTimeoutError(f"Analysis timed out after {max_wait_time} seconds")
 
     @handle_network_errors
     def get_playlist_for_analysis(

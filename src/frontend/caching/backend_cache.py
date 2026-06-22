@@ -421,7 +421,11 @@ class BackendCacheManager:
             if pattern:
                 cache_files = list(self.cache_dir.glob(pattern))
             else:
-                cache_files = list(self.cache_dir.glob("*.json"))
+                # Only env-hash-prefixed data files by default; preserves
+                # backend_token_*.json and backend_selection.json (auth +
+                # selection). Pass a glob explicitly to target those.
+                env_hash = self._hash_backend_url(self._get_backend_url_safe())
+                cache_files = list(self.cache_dir.glob(f"{env_hash}_*.json"))
 
             for cache_file in cache_files:
                 cache_file.unlink()
@@ -431,6 +435,39 @@ class BackendCacheManager:
 
         except Exception as e:
             logger.error(f"Failed to clear cache: {e}")
+
+    def clear_file(self, filename: str) -> None:
+        """
+        Clear a single cache file by its logical name (without env-hash prefix).
+
+        Routes through _cache_file_path so the same env-scoped hashing rule
+        used by _load_cache_file / _save_cache_file applies here. Missing
+        files are ignored.
+        """
+        try:
+            cache_path = self._cache_file_path(filename)
+            if cache_path.exists():
+                cache_path.unlink()
+                logger.debug(f"Removed cache file: {cache_path}")
+        except Exception as e:
+            logger.error(f"Failed to clear cache file {filename}: {e}")
+
+    def clear_cache_glob(self, pattern: str) -> None:
+        """
+        Clear cache files matching a glob pattern, with the env-hash prefix
+        automatically applied. The pattern is a logical name (no env_hash
+        prefix); e.g. 'tracks_*.json' matches '{env_hash}_tracks_*.json'.
+
+        Missing files are ignored.
+        """
+        try:
+            env_hash = self._hash_backend_url(self._get_backend_url_safe())
+            full_pattern = f"{env_hash}_{pattern}"
+            for cache_file in self.cache_dir.glob(full_pattern):
+                cache_file.unlink()
+                logger.debug(f"Removed cache file: {cache_file}")
+        except Exception as e:
+            logger.error(f"Failed to clear cache glob {pattern}: {e}")
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """
