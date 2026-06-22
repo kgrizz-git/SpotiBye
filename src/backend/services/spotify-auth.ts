@@ -1,5 +1,6 @@
 import type { AuthTokens } from '../types/auth';
 import type { SpotifyUser } from '../types/spotify';
+import type { AuthTokenResponse } from '../types/spotify-api';
 
 export class SpotifyAuthService {
   private clientId: string;
@@ -7,8 +8,14 @@ export class SpotifyAuthService {
   private redirectUri: string = '';
 
   constructor(clientId?: string, clientSecret?: string) {
-    this.clientId = clientId || '';
-    this.clientSecret = clientSecret || '';
+    if (!clientId) {
+      throw new Error('Spotify clientId and clientSecret are required');
+    }
+    if (!clientSecret) {
+      throw new Error('Spotify clientId and clientSecret are required');
+    }
+    this.clientId = clientId;
+    this.clientSecret = clientSecret;
   }
 
   getAuthUrl(redirectUri: string, state?: string, codeChallenge?: string): string {
@@ -99,7 +106,7 @@ export class SpotifyAuthService {
     return await response.json();
   }
 
-  async refreshAccessToken(refreshToken: string): Promise<Omit<AuthTokens, 'refresh_token'>> {
+  async refreshAccessToken(refreshToken: string): Promise<AuthTokenResponse> {
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {

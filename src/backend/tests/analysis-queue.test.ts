@@ -2,34 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from '../index';
 import { AnalysisJobService } from '../services/analysis-job';
 import { AnalysisService } from '../services/analysis';
-import type { Env } from '../types/env';
-import { createTestEnv } from './helpers/env';
-
-const kvNamespace = (initial: Record<string, unknown> = {}) => {
-  const store = new Map(
-    Object.entries(initial).map(([key, value]) => [key, JSON.stringify(value)])
-  );
-
-  return {
-    get: vi.fn(async (key: string) => store.get(key) ?? null),
-    put: vi.fn(async (key: string, value: string) => {
-      store.set(key, value);
-    }),
-    delete: vi.fn(async (key: string) => {
-      store.delete(key);
-    }),
-    list: vi.fn(async () => ({ keys: [] })),
-  } as unknown as KVNamespace;
-};
-
-const envWithKv = (cacheKv = kvNamespace(), sessionsKv = kvNamespace()): Env =>
-  createTestEnv({
-    SPOTIFY_CLIENT_ID: 'client-id',
-    SPOTIFY_CLIENT_SECRET: 'client-secret',
-    JWT_SECRET: 'jwt-secret',
-    CACHE_KV: cacheKv,
-    SESSIONS_KV: sessionsKv,
-  });
+import { kvNamespace, envWithKv } from './helpers/kv';
 
 const analysisResult = {
   job_id: 'job-1',

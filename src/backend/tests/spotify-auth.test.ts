@@ -76,3 +76,21 @@ describe('SpotifyAuthService PKCE', () => {
     expect(body.has('code_verifier')).toBe(false);
   });
 });
+
+describe('SpotifyAuthService construction', () => {
+  it('throws when both credentials are empty', () => {
+    expect(() => new SpotifyAuthService()).toThrow('Spotify clientId and clientSecret are required');
+  });
+
+  it('throws when clientId is empty', () => {
+    expect(() => new SpotifyAuthService('', 'secret')).toThrow('Spotify clientId and clientSecret are required');
+  });
+
+  it('throws when clientSecret is empty', () => {
+    expect(() => new SpotifyAuthService('id', '')).toThrow('Spotify clientId and clientSecret are required');
+  });
+
+  it('does not throw when both credentials are provided', () => {
+    expect(() => new SpotifyAuthService('id', 'secret')).not.toThrow();
+  });
+});

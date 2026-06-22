@@ -4,9 +4,38 @@ import { JWTService } from '../services/jwt';
 import { SpotifyAuthService } from '../services/spotify-auth';
 import type { Env } from '../types/env';
 import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
-import type { JWTPayload } from '../types/auth';
 import type { Variables } from '../types/variables';
 import type { AuthTokenResponse } from '../types/spotify-api';
+
+export interface SessionData {
+  user_id: string;
+  access_token: string;
+  refresh_token?: string;
+  expires_at: number;
+}
+
+export function safeParseSession(raw: string | null, logContext = 'unknown'): SessionData | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof parsed.user_id === 'string' &&
+      typeof parsed.access_token === 'string' &&
+      typeof parsed.expires_at === 'number'
+    ) {
+      return parsed as SessionData;
+    }
+    console.error(`Session schema validation failed for session ${logContext.substring(0, 8)}`);
+    return null;
+  } catch (err) {
+    console.error(`Session JSON parse failed for session ${logContext.substring(0, 8)}:`, err);
+    return null;
+  }
+}
+
+const refreshPromises = new Map<string, Promise<AuthTokenResponse>>();
 
 export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) => {
   const authHeader = c.req.header('Authorization');
@@ -19,15 +48,14 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
   const jwtService = new JWTService(c.env.JWT_SECRET);
 
   try {
-    const payload = await jwtService.verifyToken(token) as JWTPayload;
+    const payload = await jwtService.verifyToken(token);
 
     // Get session data
     const sessionData = await c.env.SESSIONS_KV.get(payload.session_id);
-    if (!sessionData) {
+    let session = safeParseSession(sessionData, payload.session_id);
+    if (!session) {
       throw new HTTPException(401, { message: 'Session expired or invalid' });
     }
-
-    let session = JSON.parse(sessionData);
 
     // Refresh the Spotify access token transparently when it expires.
     if (Date.now() > session.expires_at) {
@@ -36,8 +64,14 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
       }
 
       try {
-        const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
-        const refreshed = await spotifyAuth.refreshAccessToken(session.refresh_token) as AuthTokenResponse;
+        let refreshPromise = refreshPromises.get(payload.session_id);
+        if (!refreshPromise) {
+          const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
+          refreshPromise = spotifyAuth.refreshAccessToken(session.refresh_token);
+          refreshPromises.set(payload.session_id, refreshPromise);
+        }
+
+        const refreshed = await refreshPromise;
         session = {
           ...session,
           access_token: refreshed.access_token,
@@ -51,6 +85,8 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
       } catch (refreshError) {
         console.error('Failed to refresh Spotify access token:', refreshError);
         throw new HTTPException(401, { message: 'Token expired' });
+      } finally {
+        refreshPromises.delete(payload.session_id);
       }
     }
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, safeParseSession } from '../middleware/auth';
 import { SpotifyAuthService } from '../services/spotify-auth';
 import { JWTService } from '../services/jwt';
 import type { Env } from '../types/env';
@@ -138,7 +138,22 @@ app.get('/spotify/callback', async (c) => {
     });
   } catch (error) {
     console.error('OAuth callback error:', error);
-    return c.json({ error: { code: 'OAUTH_CALLBACK_FAILED', message: 'Failed to complete OAuth flow' } }, 500);
+    const errMessage = error instanceof Error ? error.message : String(error);
+    
+    let code = 'OAUTH_CALLBACK_FAILED';
+    if (errMessage.includes('Token expired')) {
+      code = 'OAUTH_TOKEN_EXPIRED';
+    } else if (errMessage.includes('HTTP 4') || errMessage.includes('status code 4')) {
+      code = 'OAUTH_BAD_REQUEST';
+    }
+
+    return c.json({
+      error: {
+        code,
+        message: 'Failed to complete OAuth flow',
+        details: { reason: errMessage }
+      }
+    }, 500);
   }
 });
 
@@ -148,21 +163,20 @@ app.post('/spotify/refresh', authMiddleware, async (c) => {
     const sessionId = c.get('session_id');
     const sessionData = await c.env.SESSIONS_KV.get(sessionId);
 
-    if (!sessionData) {
+    const session = safeParseSession(sessionData, sessionId);
+    if (!session) {
       return c.json({ error: { code: 'SESSION_NOT_FOUND', message: 'Session not found' } }, 404);
     }
 
-    const session = JSON.parse(sessionData);
-
     // Refresh the access token
     const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
-    const newTokens = await spotifyAuth.refreshAccessToken(session.refresh_token);
+    const newTokens = await spotifyAuth.refreshAccessToken(session.refresh_token || '');
 
     // Update session
     const updatedSession = {
       ...session,
       access_token: newTokens.access_token,
-      refresh_token: (newTokens as any).refresh_token || session.refresh_token,
+      refresh_token: newTokens.refresh_token || session.refresh_token,
       expires_at: Date.now() + (newTokens.expires_in * 1000)
     };
 

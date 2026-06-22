@@ -147,6 +147,7 @@ describe('Auth Routes', () => {
   describe('POST /auth/spotify/refresh', () => {
     it('refreshes access token successfully', async () => {
       const sessionJson = JSON.stringify({
+        user_id: 'test-user-id',
         refresh_token: 'test-refresh-token',
         access_token: 'test-access-token',
         expires_at: Date.now() + 3600000,
@@ -174,6 +175,7 @@ describe('Auth Routes', () => {
 
     it('returns 404 when session is missing', async () => {
       const sessionJson = JSON.stringify({
+        user_id: 'test-user-id',
         refresh_token: 'test-refresh-token',
         access_token: 'test-access-token',
         expires_at: Date.now() + 3600000,

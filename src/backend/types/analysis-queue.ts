@@ -27,4 +27,5 @@ export interface AnalysisStatusRecord {
   retry_after?: string;
   attempt?: number;
   error?: string;
+  updated_at?: string;
 }

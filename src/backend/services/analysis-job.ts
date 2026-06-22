@@ -36,9 +36,12 @@ export class AnalysisJobService {
     const current = await this.cache.get<AnalysisStatusRecord>(statusKey);
 
     if (!current) {
-      // KV is eventually consistent. The status write from the route might not have propagated to this edge node yet.
+      // KV is eventually consistent. Cloudflare's KV has eventual consistency with typical
+      // propagation under 60 seconds. We increase the replication wait to 30 seconds to trade
+      // queue throughput for fewer spurious retries.
       const ageMs = Date.now() - new Date(message.enqueued_at).getTime();
-      if (ageMs < 15000) {
+      if (ageMs < 30000) {
+        console.warn(`Status record not found for job ${message.job_id} - waiting for KV replication (age: ${ageMs}ms)`);
         throw new Error(`Status record not found for job ${message.job_id} - waiting for KV replication (age: ${ageMs}ms)`);
       }
       return { acknowledged: true, reason: 'stale' };
@@ -57,6 +60,7 @@ export class AnalysisJobService {
       status: 'processing',
       progress: 10,
       started_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       attempt: message.attempt,
     });
 
@@ -68,8 +72,7 @@ export class AnalysisJobService {
         message.user_id,
         message.job_id,
         async (progressPercentage) => {
-          await this.writeStatus(statusKey, {
-            ...current,
+          await this.writeStatusMerged(statusKey, {
             status: 'processing',
             progress: progressPercentage,
             attempt: message.attempt,
@@ -78,8 +81,7 @@ export class AnalysisJobService {
       );
 
       await this.cache.set(resultsKey, result satisfies AnalysisResult, 86400);
-      await this.writeStatus(statusKey, {
-        ...current,
+      await this.writeStatusMerged(statusKey, {
         status: 'completed',
         progress: 100,
         completed_at: new Date().toISOString(),
@@ -88,10 +90,8 @@ export class AnalysisJobService {
 
       return { acknowledged: true, reason: 'completed' };
     } catch (error) {
-      await this.writeStatus(statusKey, {
-        ...current,
+      await this.writeStatusMerged(statusKey, {
         status: 'retrying',
-        progress: current.progress,
         retry_after: new Date(Date.now() + 60_000).toISOString(),
         attempt: message.attempt + 1,
         error: error instanceof Error ? error.message : String(error),
@@ -112,6 +112,7 @@ export class AnalysisJobService {
       status: 'failed',
       progress: current.progress,
       failed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       attempt: message.attempt,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -153,6 +154,19 @@ export class AnalysisJobService {
 
   private async writeStatus(key: string, status: AnalysisStatusRecord): Promise<void> {
     await this.cache.set(key, status, 3600);
+  }
+
+  private async writeStatusMerged(
+    key: string,
+    partial: Partial<AnalysisStatusRecord>,
+  ): Promise<void> {
+    const latest = await this.cache.get<AnalysisStatusRecord>(key);
+    if (!latest) return; // Defensive, status record should always exist
+    await this.writeStatus(key, {
+      ...latest,
+      ...partial,
+      updated_at: new Date().toISOString()
+    });
   }
 
   private statusKey(message: AnalysisQueueMessage): string {
