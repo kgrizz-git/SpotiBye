@@ -21,7 +21,7 @@ import type {
   SpotifyTrackResponse,
   SpotifyAudioFeaturesResponse,
 } from '../types/spotify-api';
-import { parseSpotifyResponse } from '../types/spotify-api';
+import { parsePlaylistItems, parseSpotifyResponse } from '../types/spotify-api';
 
 export interface NormalizedPlaylistItemsResponse {
   href?: string;
@@ -49,7 +49,7 @@ export class SpotifyService {
     const rawData = await response.json();
     parseSpotifyResponse<SpotifyPlaylistsResponse>(rawData, ['items', 'total']);
 
-    return rawData.items as SpotifyPlaylist[];
+    return parsePlaylistItems(rawData.items, 'user-playlists');
   }
 
   async getPlaylist(playlistId: string): Promise<SpotifyPlaylist> {
@@ -106,14 +106,14 @@ export class SpotifyService {
     const response = await this.fetchWithRetry(`${this.baseUrl}/audio-features/${trackId}`);
     const rawData = await response.json();
     parseSpotifyResponse<Record<string, unknown>>(rawData, ['id']);
-    return rawData as unknown as SpotifyAudioFeatures;
+    return asAudioFeatures(rawData);
   }
 
   async getArtist(artistId: string): Promise<SpotifyArtistFull> {
     const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${artistId}`);
     const rawData = await response.json();
     parseSpotifyResponse<Record<string, unknown>>(rawData, ['id', 'name']);
-    return rawData as unknown as SpotifyArtistFull;
+    return asArtistFull(rawData);
   }
 
   async getArtists(artistIds: string[]): Promise<SpotifyArtistFull[]> {
@@ -132,7 +132,7 @@ export class SpotifyService {
     const rawData = await response.json();
     parseSpotifyResponse<SpotifyAudioFeaturesResponse>(rawData, ['audio_features']);
 
-    return rawData.audio_features as unknown as SpotifyAudioFeatures[];
+    return asAudioFeaturesList(rawData.audio_features);
   }
 
   private async fetchWithRetry(url: string, retries: number = 3): Promise<Response> {
@@ -241,4 +241,40 @@ export function parseRetryAfter(header: string | null | undefined): number {
   }
 
   return 1;
+}
+
+/**
+ * Typed wrappers that replace `as unknown as T` casts at the boundary.
+ * Each one does a minimal shape check; if the shape is wrong, the wrapper
+ * throws instead of silently returning a malformed value.
+ */
+function asAudioFeatures(raw: unknown): SpotifyAudioFeatures {
+  if (!raw || typeof raw !== 'object' || typeof (raw as { id?: unknown }).id !== 'string') {
+    throw new Error('Invalid audio features shape: missing string id');
+  }
+  return raw as SpotifyAudioFeatures;
+}
+
+function asArtistFull(raw: unknown): SpotifyArtistFull {
+  if (
+    !raw ||
+    typeof raw !== 'object' ||
+    typeof (raw as { id?: unknown }).id !== 'string' ||
+    typeof (raw as { name?: unknown }).name !== 'string'
+  ) {
+    throw new Error('Invalid artist shape: missing string id or name');
+  }
+  return raw as SpotifyArtistFull;
+}
+
+function asAudioFeaturesList(raw: unknown): SpotifyAudioFeatures[] {
+  if (!Array.isArray(raw)) {
+    throw new Error('Invalid audio_features list: expected array');
+  }
+  return raw.map((entry) => {
+    if (entry === null || entry === undefined) {
+      return null as unknown as SpotifyAudioFeatures;
+    }
+    return asAudioFeatures(entry);
+  });
 }

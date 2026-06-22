@@ -4,6 +4,7 @@
  * All raw Spotify API responses must be validated at boundaries before
  * internal use. Aligns with Golden Principle #1.
  */
+import type { SpotifyPlaylist } from './spotify';
 export interface SpotifyUserResponse {
   id: string;
   display_name: string | null;
@@ -137,4 +138,36 @@ export function parseSpotifyResponse<T>(
       throw new Error(`Missing required field: ${key}`);
     }
   }
+}
+
+/**
+ * Validate individual playlist items at the boundary. Spotify occasionally
+ * returns a partial item (missing `id` or `name`) which would crash downstream
+ * callers; rather than 500 the whole response we drop the bad item and log a
+ * warning. Best-effort: never throws.
+ */
+export function parsePlaylistItems(
+  items: unknown,
+  context = 'playlists',
+): SpotifyPlaylist[] {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  const valid: SpotifyPlaylist[] = [];
+  items.forEach((item, index) => {
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof (item as Record<string, unknown>).id === 'string' &&
+      typeof (item as Record<string, unknown>).name === 'string'
+    ) {
+      valid.push(item as SpotifyPlaylist);
+    } else {
+      console.warn(
+        `parsePlaylistItems: dropping malformed item at ${context}[${index}]`,
+      );
+    }
+  });
+  return valid;
 }
