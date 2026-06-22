@@ -26,12 +26,18 @@ app.onError(errorHandler);
 
 // Health check endpoint
 app.get('/health', (c) => {
+  const env = c.env;
+
   return c.json({
     data: {
       status: 'healthy',
       service: 'spotibye-backend',
-      timestamp: new Date().toISOString()
-    }
+      environment: env.ENVIRONMENT,
+      release_sha: env.RELEASE_SHA ?? 'unknown',
+      release_version: env.RELEASE_VERSION ?? 'unknown',
+      deployed_at: env.DEPLOYED_AT ?? 'unknown',
+      timestamp: new Date().toISOString(),
+    },
   });
 });
 

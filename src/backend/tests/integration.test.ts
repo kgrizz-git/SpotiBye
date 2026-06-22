@@ -18,6 +18,10 @@ describe('API Integration Tests', () => {
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('status', 'healthy');
       expect(data.data).toHaveProperty('service', 'spotibye-backend');
+      expect(data.data).toHaveProperty('environment', 'test');
+      expect(data.data).toHaveProperty('release_sha', 'test-release-sha');
+      expect(data.data).toHaveProperty('release_version', 'test-release-version');
+      expect(data.data).toHaveProperty('deployed_at', '2026-06-22T00:00:00.000Z');
       expect(data.data).toHaveProperty('timestamp');
     });
   });

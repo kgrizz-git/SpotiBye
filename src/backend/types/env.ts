@@ -3,6 +3,10 @@ import type { AnalysisQueueMessage } from './analysis-queue';
 export interface Env {
   // Environment variables
   ENVIRONMENT: string;
+  // Deployment metadata injected by deploy scripts and GitHub Actions.
+  RELEASE_SHA?: string;
+  RELEASE_VERSION?: string;
+  DEPLOYED_AT?: string;
 
   // Spotify credentials
   SPOTIFY_CLIENT_ID: string;

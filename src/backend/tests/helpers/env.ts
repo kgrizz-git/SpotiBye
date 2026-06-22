@@ -20,6 +20,9 @@ export const TEST_ALLOWED_REDIRECT_URIS =
 export const createTestEnv = (overrides: Partial<Env> = {}): Env => {
   const baseEnv = {
     ENVIRONMENT: 'test',
+    RELEASE_SHA: 'test-release-sha',
+    RELEASE_VERSION: 'test-release-version',
+    DEPLOYED_AT: '2026-06-22T00:00:00.000Z',
     SPOTIFY_CLIENT_ID: 'test-client-id',
     SPOTIFY_CLIENT_SECRET: 'test-client-secret',
     JWT_SECRET: 'test-jwt-secret',
