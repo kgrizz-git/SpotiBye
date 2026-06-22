@@ -24,6 +24,58 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Changed default `BACKEND_URL` from the developer's exposed Cloudflare Worker to `http://localhost:8787`; the worker URL remains available via the `SPOTIBYE_BACKEND_URL` env var override.
 - Deduplicated cache file path hashing in `BackendCacheManager` by extracting a private `_cache_file_path` helper used by all read/write/clear methods.
 - Removed dead `_get_basic_cache_stats` method that always reported zero items because of an incorrect format check.
+- Fixed backend token rotation drop: `SpotifyAuthService.refreshAccessToken` now returns the rotated `refresh_token` from Spotify and the route persists it back to KV; previously the rotated token was silently lost.
+- Fixed analysis-job stale-snapshot progress writes: progress, completion, and retry writes now re-read the latest KV status before merging, so intermediate progress callbacks are no longer clobbered. Added `updated_at` to every status write.
+- Fixed JSON.parse on KV session data being unprotected — both the auth middleware and refresh route now use a `safeParseSession` helper that validates the schema (user_id, access_token, expires_at) and treats malformed data as a 401.
+- Fixed concurrent token refresh issuing multiple `refreshAccessToken` calls for the same session by deduplicating in-flight refreshes in the auth middleware.
+- Fixed analysis-job KV replication race by raising the post-write settle window to 30s and emitting a `console.warn` with the job id and age when the wait triggers.
+- Fixed `OAuth callback` catch block losing diagnostic context by classifying the error and returning a structured error code (`OAUTH_TOKEN_EXPIRED`, `OAUTH_BAD_REQUEST`, or fallback `OAUTH_CALLBACK_FAILED` with the reason in `details`).
+- Fixed `SpotifyAuthService` accepting empty `clientId`/`clientSecret` and silently producing broken requests — the constructor now throws if either credential is empty.
+- Fixed health-check response being inconsistent with the rest of the API by wrapping it in a `data` envelope (`{ data: { status, service, timestamp } }`).
+- Fixed duplicate `token` field in the refresh-token response; only the canonical `access_token` and `token_type` are now returned.
+- Fixed `errorHandler` silently mapping 3rd-party errors (e.g., `pg`/`mongoose` `ValidationError`) to the wrong HTTP status by adding a required discriminator (`code` or `statusCode`) to each named-error branch.
+- Fixed playlist items with a missing `id` or `name` crashing the entire `/me/playlists` response — malformed items are now dropped with a `console.warn` instead of throwing.
+- Fixed `is_valid_backend_url` accepting obviously-invalid URLs like `https://x` or `http:///path`; it now parses the URL and requires a non-empty hostname containing a dot or equal to `localhost`.
+- Fixed `download_export` accepting an unused `export_id` parameter in both `BackendClient` and `BackendMainScreenAdapter`; the parameter was dropped from the signatures and call sites.
+- Fixed tkinter screen-size detection leaking a hidden root window on exception by using try/finally to always call `root.destroy()`.
+- Fixed `clear_all_cache` showing a "Cache Cleared" popup without actually clearing the cache — the function now delegates to `screen.backend_adapter.cache_manager.clear_cache(None)`.
+- Fixed default `clear_cache()` glob (`*.json`) deleting the user's auth token and backend-selection config; the default pattern is now `{env_hash}_*.json` (env-hash-prefixed data files only). Auth tokens and selection are preserved.
+
+### Added
+- `BackendCacheManager.clear_file(filename)` and `clear_cache_glob(pattern)` helpers that automatically apply the env-hash prefix; these replace the previous pattern of passing raw globs to `clear_cache`.
+- Backend tests: `tests/analysis-job.test.ts` (3 cases for stale-snapshot prevention), `tests/auth-middleware.test.ts` (concurrent refresh deduplication), `tests/error-middleware.test.ts` (9 cases for error discriminator strengthening), `tests/spotify-validation.test.ts` (10 cases for `parsePlaylistItems` and typed wrappers).
+- Frontend tests: `tests/test_main_screen_logout.py` (7 cases for download signature and missing-logout logging), `tests/test_main_screen_cache.py` (7 cases for env-hash-scoped cache clearing), 11 new `TestIsValidBackendUrl` cases in `test_configuration.py`.
+- Test helper: `src/backend/tests/helpers/kv.ts` (`kvNamespace` + `envWithKv` factories) shared by `analysis-queue.test.ts`, `auth-middleware.test.ts`, and `analysis-job.test.ts`.
+
+### Changed
+- Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.
+- Refactored `MainScreen` to extract pure logic (filenames, sort/filter) and stabilize job state, reducing technical debt and improving testability.
+- Hardened backend npm dependencies by upgrading Wrangler, Workers types, and TypeScript ESLint, replacing SheetJS `xlsx` usage with ExcelJS, and overriding vulnerable transitive `esbuild` and `uuid` releases until upstream packages publish patched dependency ranges.
+- Optimized GitHub Actions workflows to reduce redundant CI runs by 40-60% while maintaining full test coverage on protected branches
+  - CI now runs only on main/develop/WIP branches instead of all branches
+  - Security scans run only on PRs (not duplicate push events) with weekly baseline scans
+  - Language-specific security jobs (Bandit, npm audit) skip when irrelevant files change
+  - Deployment workflows skip redundant test runs when CI already validated the code
+  - Streamlined dependency review to single job, removing duplicates
+- `BackendClient.health_check` now catches `Exception` (in addition to `BackendAPIError`) and returns a documented three-state `status` value: `healthy` | `unhealthy` | `error`. Callers should branch on `result.get("status") == "healthy"`.
+- Renamed the custom `TimeoutError` to `NetworkTimeoutError` to avoid shadowing the Python builtin.
+- `BackendClient.download_export`, `download_batch_export`, and `download_export_job` now share a single `_download_file(endpoint, timeout, failure_prefix)` helper for auth/trace/error-parse logic.
+- `perform_logout` now logs an error and returns gracefully when the running App lacks a `logout` method (instead of silently no-oping). Dev/test app mocks are no longer broken.
+- `Optional[callable]` annotations in `BackendMainScreenAdapter` upgraded to `Optional[Callable[..., Any]]` with the `Callable` import added.
+- Replaced `'as unknown as T'` casts in `spotify.ts` (`getAudioFeatures`, `getArtist`, `getMultipleAudioFeatures`) with typed wrappers that perform runtime shape checks and throw on invalid input.
+
+### Fixed
+- Fixed frontend verification so the script recognizes the repo-level `.venv` and no longer emits a misleading missing-virtualenv warning.
+- Fixed backend authentication integration tests to match the current OAuth redirect/state flow used by the frontend client and authenticator.
+- Fixed backend cache explorer startup to use the current backend URL configuration API instead of the removed `BackendConfig` class.
+- Fixed backend cache statistics in frontend mode so playlist and file counts reflect environment-scoped cache files instead of incorrectly reporting zero items.
+- Fixed cache explorer playlist inspection so expired cache entries no longer crash detailed cache loading with `dictionary changed size during iteration`.
+- Fixed the visible cache explorer Close button in backend mode so it dismisses the popup that is actually open.
+
+### Removed
+- Dead `calculateAverageAudioFeatures` from `services/analysis.ts` (no callers).
+- Unused `export_id` parameter from `BackendClient.download_export`, `BackendMainScreenAdapter.download_export`, and the call site at `main_screen_export.py:496`.
+- Unused `playlist` parameter from `_build_backend_output_path` (orchestrator + `MainScreen` delegation).
 
 ### Changed
 - Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.

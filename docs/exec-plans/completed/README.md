@@ -17,7 +17,13 @@
 | [`superseded/2026-06-16-main-screen-refactor-V2.md`](superseded/2026-06-16-main-screen-refactor-V2.md) | Superseded main screen refactor V2 plan | Superseded |
 | [`superseded/2026-06-16-main-screen-refactor-V3.md`](superseded/2026-06-16-main-screen-refactor-V3.md) | Superseded by 2026-06-19 completion plan | Superseded |
 | [`superseded/2026-06-16-main-screen-refactor-review.md`](superseded/2026-06-16-main-screen-refactor-review.md) | Main screen refactor review artifact | Superseded |
-| [`superseded/2026-06-21-bug-review-medium-low-fixes.md`](superseded/2026-06-21-bug-review-medium-low-fixes.md) | Superseded by [`2026-06-21-bug-fix-medium-low.md`](../active/2026-06-21-bug-fix-medium-low.md) (used non-existent test paths and unsupported `logger` syntax) | Superseded |
+| [`superseded/2026-06-21-bug-review-medium-low-fixes.md`](superseded/2026-06-21-bug-review-medium-low-fixes.md) | Superseded by [`2026-06-21-bug-fix-medium-low.md`](2026-06-21-bug-fix-medium-low.md) (used non-existent test paths and unsupported `logger` syntax) | Superseded |
+
+## Bug Fix Plans
+
+| Plan | Description | Completed |
+|------|-------------|-----------|
+| [`2026-06-21-bug-fix-medium-low.md`](2026-06-21-bug-fix-medium-low.md) | Medium and low severity bug fixes across backend and frontend (BM-1,2,3,6,7,8,9,10; BL-6,7,8,9; FM-1,3,4,5,6; FL-1,2,5,6,7,9) | 2026-06-21 |
 
 ## Dev Docs Plans
 
