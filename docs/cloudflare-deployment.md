@@ -28,7 +28,7 @@ The SpotiBye backend uses a single Cloudflare worker that is automatically deplo
 
 1. **Test Phase**: Runs unit tests and linting
 2. **Deploy Phase**: Deploys to appropriate Cloudflare environment
-3. **Verification**: Creates deployment info artifact
+3. **Verification**: Exposes deployment metadata through the live `/health` endpoint
 
 ## Required GitHub Secrets
 
@@ -66,6 +66,8 @@ To enable automatic deployment, add these secrets to your GitHub repository:
 - Environment variable: `ENVIRONMENT = "production"`
 - Deploys only on version tags
 
+GitHub deployment jobs declare environments named `development` and `production`. These names are case-sensitive and must exist in **Settings** -> **Environments** before workflow runs.
+
 ## Manual Deployment
 
 If you need to deploy manually:
@@ -73,11 +75,11 @@ If you need to deploy manually:
 ```bash
 cd src/backend
 
-# Development deployment
-npm run deploy --env development
+# Development deployment with release metadata
+npm run deploy:dev
 
-# Production deployment
-npm run deploy --env production
+# Production deployment with release metadata
+npm run deploy:prod
 ```
 
 ## Monitoring Deployment
@@ -85,12 +87,40 @@ npm run deploy --env production
 ### GitHub Actions
 - Check the **Actions** tab in your GitHub repository
 - View workflow runs and their status
-- Download deployment info artifacts
+- Check the deployment environment attached to the deploy job
 
 ### Cloudflare Dashboard
 - Monitor worker logs and metrics
 - Check KV namespace usage
 - Verify deployment status
+
+## Deployment Status Metadata
+
+The Worker `/health` endpoint returns deployment metadata:
+
+```json
+{
+  "data": {
+    "status": "healthy",
+    "service": "spotibye-backend",
+    "environment": "production",
+    "release_sha": "git commit SHA deployed to Cloudflare",
+    "release_version": "package.json version at deploy time",
+    "deployed_at": "UTC timestamp set before Wrangler deploy",
+    "timestamp": "current health response timestamp"
+  }
+}
+```
+
+To compare the live Worker against local code, run:
+
+```bash
+./scripts/backend-deploy-status.sh https://<worker-url>
+```
+
+The script reports the live release SHA, local `HEAD`, backend/workflow files changed since deployment, uncommitted backend/workflow changes, and `Needs Deployment: YES/NO/UNKNOWN`.
+
+The status script requires Node.js for JSON parsing. Run it from a fresh local checkout of the target branch, normally `main` after pulling, because it compares the live `release_sha` to local `HEAD`.
 
 ## Troubleshooting
 
@@ -118,8 +148,8 @@ npm run deploy --env production
 
 The worker version is tracked through:
 - Git tags for production releases
-- Package.json version updates
-- Deployment info artifacts
+- `release_version` from `src/backend/package.json` at deploy time
+- `release_sha` and `deployed_at` metadata exposed by `/health`
 
 ## Security Notes
 

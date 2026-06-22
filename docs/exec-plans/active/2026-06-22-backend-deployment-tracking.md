@@ -552,7 +552,7 @@ Run:
 
 Expected: prints `backend-deploy-status functional test passed`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add scripts/backend-deploy-status.sh scripts/test-backend-deploy-status.sh
@@ -568,7 +568,7 @@ git commit -m "chore: add backend deployment status script"
 - Modify: `docs/cloudflare-deployment.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] **Step 1: Add `AGENTS.md` backend deployment rule**
+- [x] **Step 1: Add `AGENTS.md` backend deployment rule**
 
 Add this section near "Running Tests & Verification" in `AGENTS.md`:
 
@@ -586,7 +586,7 @@ Use the production or development Worker URL that matches the question. If `Need
 Run the script from a fresh local checkout of the target branch, normally `main` after pulling. Detached HEADs, stale branches, and feature branches can make the `release_sha..HEAD` comparison look different from the deployment branch.
 ````
 
-- [ ] **Step 2: Document health metadata in `docs/cloudflare-deployment.md`**
+- [x] **Step 2: Document health metadata in `docs/cloudflare-deployment.md`**
 
 Add this section after "Monitoring Deployment":
 
@@ -620,7 +620,7 @@ The script reports the live release SHA, local `HEAD`, backend/workflow files ch
 The status script requires Node.js for JSON parsing. Run it from a fresh local checkout of the target branch, normally `main` after pulling, because it compares the live `release_sha` to local `HEAD`.
 ````
 
-- [ ] **Step 3: Fix manual deployment commands in `docs/cloudflare-deployment.md`**
+- [x] **Step 3: Fix manual deployment commands in `docs/cloudflare-deployment.md`**
 
 Replace the current manual deployment commands with:
 
@@ -634,7 +634,7 @@ npm run deploy:dev
 npm run deploy:prod
 ```
 
-- [ ] **Step 4: Check for additional health endpoint reference docs**
+- [x] **Step 4: Check for additional health endpoint reference docs**
 
 Run:
 
@@ -644,7 +644,7 @@ rg -n "/health|health endpoint|Health" docs dev-docs README.md ARCHITECTURE.md
 
 Expected: `docs/cloudflare-deployment.md` is updated in this task. Existing completed plans and short-lived review notes can remain unchanged. If a durable API reference outside completed/superseded plans describes the `/health` response shape, update that same document to include `environment`, `release_sha`, `release_version`, and `deployed_at`.
 
-- [ ] **Step 5: Add changelog entry**
+- [x] **Step 5: Add changelog entry**
 
 Add this bullet under the existing first `### Added` heading in the `[Unreleased]` section of `CHANGELOG.md`. Do not create another `### Added` heading. The current file already has duplicate `### Changed` and `### Fixed` headings in `[Unreleased]`; leave that pre-existing duplication alone unless the task owner separately asks for changelog cleanup.
 

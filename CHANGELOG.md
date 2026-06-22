@@ -42,6 +42,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed default `clear_cache()` glob (`*.json`) deleting the user's auth token and backend-selection config; the default pattern is now `{env_hash}_*.json` (env-hash-prefixed data files only). Auth tokens and selection are preserved.
 
 ### Added
+- Added live backend deployment metadata to `/health`, metadata-aware Wrangler deploy wrappers, and a `scripts/backend-deploy-status.sh` helper so agents and developers can tell whether backend changes need deployment.
 - `BackendCacheManager.clear_file(filename)` and `clear_cache_glob(pattern)` helpers that automatically apply the env-hash prefix; these replace the previous pattern of passing raw globs to `clear_cache`.
 - Backend tests: `tests/analysis-job.test.ts` (3 cases for stale-snapshot prevention), `tests/auth-middleware.test.ts` (concurrent refresh deduplication), `tests/error-middleware.test.ts` (9 cases for error discriminator strengthening), `tests/spotify-validation.test.ts` (10 cases for `parsePlaylistItems` and typed wrappers).
 - Frontend tests: `tests/test_main_screen_logout.py` (7 cases for download signature and missing-logout logging), `tests/test_main_screen_cache.py` (7 cases for env-hash-scoped cache clearing), 11 new `TestIsValidBackendUrl` cases in `test_configuration.py`.

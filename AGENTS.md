@@ -92,6 +92,20 @@ KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -
 
 ---
 
+## Backend Deployments
+
+Before saying backend changes are deployed, or when asked whether backend deployment is needed, run:
+
+```bash
+./scripts/backend-deploy-status.sh <backend-url>
+```
+
+Use the production or development Worker URL that matches the question. If `Needs Deployment: YES`, tell the user which committed or uncommitted backend/workflow files differ from the live `release_sha` and ask before deploying. Treat `src/backend/.deployed-commit.json` as a local cache only; the live `/health` metadata is the source of truth.
+
+Run the script from a fresh local checkout of the target branch, normally `main` after pulling. Detached HEADs, stale branches, and feature branches can make the `release_sha..HEAD` comparison look different from the deployment branch.
+
+---
+
 ## Changelog Rule
 
 Any user-visible change must update `CHANGELOG.md` in the same PR.
