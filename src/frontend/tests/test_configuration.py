@@ -220,3 +220,48 @@ class TestConfiguration:
             assert (
                 not backend_config.USE_PRODUCTION
             ), "Should default to False for invalid boolean"
+
+
+class TestIsValidBackendUrl:
+    """Regression tests for FL-2: is_valid_backend_url should validate
+    the URL shape (not just the scheme) so we don't accept obvious
+    garbage like 'https://x' or 'http:///path'."""
+
+    def _is_valid(self, url):
+        from ..config.backend_config import is_valid_backend_url
+        return is_valid_backend_url(url)
+
+    def test_accepts_https_with_dot(self):
+        assert self._is_valid("https://example.com")
+
+    def test_accepts_https_with_port(self):
+        assert self._is_valid("https://example.com:8787")
+
+    def test_accepts_http_with_dot(self):
+        assert self._is_valid("http://api.example.com")
+
+    def test_accepts_http_localhost(self):
+        assert self._is_valid("http://localhost:8787")
+
+    def test_accepts_http_localhost_no_port(self):
+        assert self._is_valid("http://localhost")
+
+    def test_rejects_empty_string(self):
+        assert not self._is_valid("")
+
+    def test_rejects_none(self):
+        assert not self._is_valid(None)  # type: ignore[arg-type]
+
+    def test_rejects_https_bare_hostname(self):
+        # 'https://x' has no dot and isn't localhost
+        assert not self._is_valid("https://x")
+
+    def test_rejects_missing_scheme(self):
+        assert not self._is_valid("example.com")
+
+    def test_rejects_ftp_scheme(self):
+        assert not self._is_valid("ftp://example.com")
+
+    def test_rejects_garbage(self):
+        assert not self._is_valid("not-a-url")
+

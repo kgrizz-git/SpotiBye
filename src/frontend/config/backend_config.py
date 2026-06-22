@@ -7,6 +7,7 @@ import os
 import time
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlparse
 
 # Backend API configuration. Default to localhost so the shipped binary does
 # not hardcode the developer's Cloudflare Worker URL. Set
@@ -151,8 +152,25 @@ def ensure_directories() -> None:
 
 
 def is_valid_backend_url(url: str) -> bool:
-    """Return True if URL appears valid for backend usage."""
-    return bool(url) and url.startswith(("http://", "https://"))
+    """Return True if URL appears valid for backend usage.
+
+    Validates the URL shape (not just the scheme) so we don't accept
+    obvious garbage like 'https://x' or 'http:///path' that would
+    fail in interesting ways at request time.
+    """
+    if not url or not isinstance(url, str):
+        return False
+    if not url.startswith(("http://", "https://")):
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.hostname is None or parsed.hostname == "":
+        return False
+    # A real hostname either contains a dot (e.g. 'example.com') or
+    # is the loopback 'localhost' (development). Bare 'https://x' fails.
+    return "." in parsed.hostname or parsed.hostname == "localhost"
 
 
 def get_default_backend_url() -> str:

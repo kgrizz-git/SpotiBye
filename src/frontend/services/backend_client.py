@@ -511,12 +511,22 @@ class BackendClient:
 
     # Utility methods
     def health_check(self) -> Dict[str, Any]:
-        """Check backend health."""
+        """Check backend health.
+
+        Returns a dict with at least a `status` key, one of:
+          - "healthy"   : backend responded with healthy status
+          - "unhealthy" : backend responded but was not healthy
+          - "error"     : request could not complete (network failure, malformed response)
+
+        Callers should branch on `result.get("status") == "healthy"`.
+        """
         try:
             response = self._make_request("GET", "/health")
             return response
-        except BackendAPIError:
-            return {"status": "unhealthy", "error": "Backend not reachable"}
+        except BackendAPIError as e:
+            return {"status": "unhealthy", "error": str(e) or "Backend not reachable"}
+        except Exception as e:
+            return {"status": "error", "error": str(e) or e.__class__.__name__}
 
     def set_auth_token(self, token: str) -> None:
         """Set authentication token for subsequent requests."""
