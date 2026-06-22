@@ -652,7 +652,7 @@ Add this bullet under the existing first `### Added` heading in the `[Unreleased
 - Added live backend deployment metadata to `/health`, metadata-aware Wrangler deploy wrappers, and a `scripts/backend-deploy-status.sh` helper so agents and developers can tell whether backend changes need deployment.
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add AGENTS.md docs/cloudflare-deployment.md CHANGELOG.md
@@ -666,7 +666,7 @@ git commit -m "docs: document backend deployment tracking"
 **Files:**
 - Verify all files touched by Tasks 1-5.
 
-- [ ] **Step 1: Run backend tests**
+- [x] **Step 1: Run backend tests**
 
 Run:
 
@@ -677,7 +677,7 @@ npm run test:run
 
 Expected: Vitest exits successfully.
 
-- [ ] **Step 2: Run TypeScript build**
+- [x] **Step 2: Run TypeScript build**
 
 Run:
 
@@ -688,7 +688,7 @@ npm run build
 
 Expected: TypeScript exits successfully.
 
-- [ ] **Step 3: Run deploy dry-run**
+- [x] **Step 3: Run deploy dry-run**
 
 Run:
 
@@ -699,7 +699,7 @@ cd src/backend
 
 Expected: Wrangler validates the Worker bundle without deploying.
 
-- [ ] **Step 4: Run status-script functional test**
+- [x] **Step 4: Run status-script functional test**
 
 Run from repo root:
 
@@ -709,7 +709,7 @@ Run from repo root:
 
 Expected: prints `backend-deploy-status functional test passed`.
 
-- [ ] **Step 5: Run repo verification**
+- [x] **Step 5: Run repo verification**
 
 Run from repo root:
 
@@ -719,7 +719,7 @@ Run from repo root:
 
 Expected: command is silent on success.
 
-- [ ] **Step 6: Check plan/documentation placement**
+- [x] **Step 6: Check plan/documentation placement**
 
 Run:
 
@@ -729,7 +729,7 @@ Run:
 
 Expected: command exits successfully and does not report an active completed plan or root-level plan file.
 
-- [ ] **Step 7: Commit final verification fixes if needed**
+- [x] **Step 7: Commit final verification fixes if needed**
 
 If verification required fixes, commit only those touched files:
 
@@ -745,14 +745,14 @@ If no fixes were needed, skip this step.
 
 ## Acceptance Criteria
 
-- [ ] `/health` returns `environment`, `release_sha`, `release_version`, and `deployed_at`.
-- [ ] Local and GitHub Actions production deployments inject metadata before `wrangler deploy`.
-- [ ] `.github/workflows/deploy-backend.yml` can actually run its version-tag production deployment path.
-- [ ] `scripts/backend-deploy-status.sh` reports `Needs Deployment: YES/NO/UNKNOWN`.
-- [ ] `scripts/test-backend-deploy-status.sh` verifies the status script against a mock `/health` endpoint.
-- [ ] `AGENTS.md` tells agents to use the status script and treat live `/health` as source of truth.
-- [ ] Local `.deployed-commit.json` is ignored and documented as a cache only.
-- [ ] Backend tests, TypeScript build, Wrangler dry-run, and repo verification pass.
+- [x] `/health` returns `environment`, `release_sha`, `release_version`, and `deployed_at`.
+- [x] Local and GitHub Actions production deployments inject metadata before `wrangler deploy`.
+- [x] `.github/workflows/deploy-backend.yml` can actually run its version-tag production deployment path.
+- [x] `scripts/backend-deploy-status.sh` reports `Needs Deployment: YES/NO/UNKNOWN`.
+- [x] `scripts/test-backend-deploy-status.sh` verifies the status script against a mock `/health` endpoint.
+- [x] `AGENTS.md` tells agents to use the status script and treat live `/health` as source of truth.
+- [x] Local `.deployed-commit.json` is ignored and documented as a cache only.
+- [x] Backend tests, TypeScript build, Wrangler dry-run, and repo verification pass.
 
 ## Self-Review
 

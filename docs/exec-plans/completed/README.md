@@ -25,6 +25,13 @@
 |------|-------------|-----------|
 | [`2026-06-21-bug-fix-medium-low.md`](2026-06-21-bug-fix-medium-low.md) | Medium and low severity bug fixes across backend and frontend (BM-1,2,3,6,7,8,9,10; BL-6,7,8,9; FM-1,3,4,5,6; FL-1,2,5,6,7,9) | 2026-06-21 |
 
+## Infrastructure Plans
+
+| Plan | Description | Completed |
+|------|-------------|-----------|
+| [`2026-06-21-repo-organization-guardrails.md`](2026-06-21-repo-organization-guardrails.md) | Consolidated plan/docs placement, removed duplicate agent config, added CLAUDE.md and structural guardrails. | 2026-06-21 |
+| [`2026-06-22-backend-deployment-tracking.md`](2026-06-22-backend-deployment-tracking.md) | Added live backend deployment metadata, metadata-aware deploy wrappers, status checks, and deployment docs. | 2026-06-22 |
+
 ## Dev Docs Plans
 
 | Plan | Description | Completed |
