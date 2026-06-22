@@ -207,7 +207,7 @@ describe('API Coverage Tests', () => {
         const response = await app.fetch(request, mockEnv);
 
         if (response.status === 200) {
-          const data = await response.json();
+          const data = (await response.json()) as Record<string, any>;
 
           // Success responses should have consistent structure
           if (req.path === '/health') {

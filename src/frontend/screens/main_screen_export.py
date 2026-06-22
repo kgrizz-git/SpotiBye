@@ -494,7 +494,7 @@ class MainScreenExportOrchestrator:
                 return {"success_count": success_count, "failed_count": total - success_count, "cancelled": True}
 
             success = adapter.download_export(
-                playlist_id, export_id, target_path
+                playlist_id, target_path
             )
             if not success:
                 failed_playlist_ids.append(playlist_id)

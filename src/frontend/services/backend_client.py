@@ -403,87 +403,47 @@ class BackendClient:
         )
         return response
 
-    def download_export(self, playlist_id: str, export_id: str) -> bytes:
+    def download_export(self, playlist_id: str) -> bytes:
         """Download generated export file."""
-        url = f"{self.base_url}/export/playlist/{playlist_id}/download"
-        headers = (
-            {"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}
+        return self._download_file(
+            f"/export/playlist/{playlist_id}/download",
+            timeout=60,
+            failure_prefix="Export download failed",
         )
-        if self.trace_id:
-            headers["X-SpotiBye-Trace-Id"] = self.trace_id
-
-        response = self.session.get(url, headers=headers, timeout=60)
-        if response.status_code >= 400:
-            response_data: Dict[str, Any] = {}
-            try:
-                if response.headers.get("content-type", "").startswith(
-                    "application/json"
-                ):
-                    response_data = response.json()
-            except Exception:
-                response_data = {}
-
-            error_payload = (
-                response_data.get("error", {})
-                if isinstance(response_data, dict)
-                else {}
-            )
-            message = f"Export download failed: HTTP {response.status_code}"
-            if isinstance(error_payload, dict):
-                message = error_payload.get(
-                    "message", error_payload.get("code", message)
-                )
-
-            raise BackendAPIError(message, response.status_code, response_data)
-
-        return response.content
 
     def download_batch_export(self, job_id: str) -> bytes:
         """Download generated combined export file."""
-        url = f"{self.base_url}/export/playlists/{job_id}/download"
-        headers = (
-            {"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}
+        return self._download_file(
+            f"/export/playlists/{job_id}/download",
+            timeout=300,
+            failure_prefix="Batch export download failed",
         )
-        if self.trace_id:
-            headers["X-SpotiBye-Trace-Id"] = self.trace_id
-
-        response = self.session.get(url, headers=headers, timeout=300)
-        if response.status_code >= 400:
-            response_data: Dict[str, Any] = {}
-            try:
-                if response.headers.get("content-type", "").startswith(
-                    "application/json"
-                ):
-                    response_data = response.json()
-            except Exception:
-                response_data = {}
-
-            error_payload = (
-                response_data.get("error", {})
-                if isinstance(response_data, dict)
-                else {}
-            )
-            message = f"Batch export download failed: HTTP {response.status_code}"
-            if isinstance(error_payload, dict):
-                message = error_payload.get(
-                    "message", error_payload.get("code", message)
-                )
-
-            raise BackendAPIError(message, response.status_code, response_data)
-
-        return response.content
 
     def download_export_job(self, job_id: str, mode: str = "auto") -> bytes:
         """Download generated resumable export file."""
         normalized_mode = mode if mode in {"auto", "rich", "lite"} else "auto"
-        url = f"{self.base_url}/export/jobs/{job_id}/download?mode={normalized_mode}"
+        return self._download_file(
+            f"/export/jobs/{job_id}/download?mode={normalized_mode}",
+            timeout=300,
+            failure_prefix="Export job download failed",
+        )
+
+    def _download_file(
+        self, endpoint: str, timeout: int, failure_prefix: str
+    ) -> bytes:
+        """Download a binary file from the given endpoint.
+
+        Shares the auth/trace header setup and the error-parsing logic
+        across all download_* methods. Returns the raw response bytes.
+        """
+        url = f"{self.base_url}{endpoint}"
         headers = (
             {"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}
         )
         if self.trace_id:
             headers["X-SpotiBye-Trace-Id"] = self.trace_id
 
-        response = self.session.get(url, headers=headers, timeout=300)
+        response = self.session.get(url, headers=headers, timeout=timeout)
         if response.status_code >= 400:
             response_data: Dict[str, Any] = {}
             try:
@@ -499,7 +459,7 @@ class BackendClient:
                 if isinstance(response_data, dict)
                 else {}
             )
-            message = f"Export job download failed: HTTP {response.status_code}"
+            message = f"{failure_prefix}: HTTP {response.status_code}"
             if isinstance(error_payload, dict):
                 message = error_payload.get(
                     "message", error_payload.get("code", message)

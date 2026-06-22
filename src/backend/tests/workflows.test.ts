@@ -186,7 +186,7 @@ describe('Complete Workflow Integration Tests', () => {
         const response = await app.fetch(request, mockEnv);
 
         if (response.status === 200) {
-          const data = await response.json();
+          const data = (await response.json()) as Record<string, any>;
 
           // Should have consistent JSON structure
           expect(typeof data).toBe('object');

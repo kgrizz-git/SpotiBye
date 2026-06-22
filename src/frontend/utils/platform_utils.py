@@ -118,13 +118,17 @@ def get_screen_resolution() -> Tuple[int, int]:
             try:
                 import tkinter as tk
 
-                root = tk.Tk()
-                root.withdraw()
-                width = root.winfo_screenwidth()
-                height = root.winfo_screenheight()
-                root.destroy()
-                if width > 0 and height > 0:
-                    return width, height
+                root = None
+                try:
+                    root = tk.Tk()
+                    root.withdraw()
+                    width = root.winfo_screenwidth()
+                    height = root.winfo_screenheight()
+                    if width > 0 and height > 0:
+                        return width, height
+                finally:
+                    if root is not None:
+                        root.destroy()
             except Exception as exc:
                 logger.info("tkinter method failed: %s", exc)
 

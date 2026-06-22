@@ -78,8 +78,15 @@ def perform_logout() -> None:
     """Perform logout operation."""
     try:
         app = App.get_running_app()
-        if app and hasattr(app, "logout"):
-            # Use the comprehensive auth state clearing function from the app
-            app.logout()
+        if app is None:
+            return
+        if not hasattr(app, "logout"):
+            logger.error(
+                "App is missing logout method — credentials remain in memory. "
+                "Check that the app is fully initialized before calling perform_logout."
+            )
+            return
+        # Use the comprehensive auth state clearing function from the app
+        app.logout()
     except Exception as exc:
         logger.error("Error performing logout: %s", exc)

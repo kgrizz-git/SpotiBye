@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from kivy.clock import Clock, mainthread
 
@@ -31,17 +31,17 @@ class BackendMainScreenAdapter:
         self.network_monitor = NetworkStatusMonitor(self.backend_client)
 
         # Callbacks for UI updates
-        self.playlists_loaded_callback: Optional[callable] = None
-        self.error_callback: Optional[callable] = None
-        self.progress_callback: Optional[callable] = None
+        self.playlists_loaded_callback: Optional[Callable[..., Any]] = None
+        self.error_callback: Optional[Callable[..., Any]] = None
+        self.progress_callback: Optional[Callable[..., Any]] = None
         self._export_circuit_open_until: float = 0.0
         self._export_circuit_reason: str = ""
 
     def set_callbacks(
         self,
-        playlists_loaded: Optional[callable] = None,
-        error: Optional[callable] = None,
-        progress: Optional[callable] = None,
+        playlists_loaded: Optional[Callable[..., Any]] = None,
+        error: Optional[Callable[..., Any]] = None,
+        progress: Optional[Callable[..., Any]] = None,
     ) -> None:
         """
         Set UI update callbacks.
@@ -347,7 +347,7 @@ class BackendMainScreenAdapter:
 
     # Analysis management
     def analyze_playlist(
-        self, playlist_id: str, progress_callback: Optional[callable] = None
+        self, playlist_id: str, progress_callback: Optional[Callable[..., Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Analyze a playlist using backend.
@@ -450,13 +450,12 @@ class BackendMainScreenAdapter:
                 self.error_callback(f"Export failed: {str(e)}")
             return None
 
-    def download_export(self, playlist_id: str, export_id: str, save_path: str) -> bool:
+    def download_export(self, playlist_id: str, save_path: str) -> bool:
         """
         Download export file.
 
         Args:
             playlist_id: Spotify playlist ID
-            export_id: Export ID
             save_path: Path to save the file
 
         Returns:
@@ -468,7 +467,7 @@ class BackendMainScreenAdapter:
 
             export_data = self._run_with_transient_retry(
                 "Downloading export",
-                lambda: self.backend_client.download_export(playlist_id, export_id),
+                lambda: self.backend_client.download_export(playlist_id),
             )
 
             # Save to file
