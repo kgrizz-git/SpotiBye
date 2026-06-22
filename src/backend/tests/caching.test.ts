@@ -1,33 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
+import { createTestEnv } from './helpers/env';
 
 describe('Caching Tests', () => {
   let cacheService: CacheService;
   let mockEnv: Env;
 
   beforeEach(() => {
-    mockEnv = {
-      ENVIRONMENT: 'test',
-      SPOTIFY_CLIENT_ID: 'test-client-id',
-      SPOTIFY_CLIENT_SECRET: 'test-client-secret',
-      JWT_SECRET: 'test-jwt-secret',
-      CACHE_KV: {
-        get: vi.fn().mockResolvedValue(null),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined),
-        list: vi.fn().mockResolvedValue({ keys: [] })
-      } as any,
-      SESSIONS_KV: {
-        get: vi.fn().mockResolvedValue(null),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined),
-        list: vi.fn().mockResolvedValue({ keys: [] })
-      } as any,
-      ANALYSIS_QUEUE: {
-        send: vi.fn().mockResolvedValue(undefined),
-      } as unknown as Queue,
-    };
+    mockEnv = createTestEnv();
 
     cacheService = new CacheService(mockEnv.CACHE_KV);
   });

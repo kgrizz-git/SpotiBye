@@ -257,10 +257,7 @@ class BackendCacheManager:
 
     def clear_active_export_job(self) -> None:
         """Remove cached active resumable export job metadata."""
-        # Add environment hash to filename for environment-specific caching
-        env_hash = self._hash_backend_url(self._get_backend_url_safe())
-        env_filename = f"{env_hash}_active_export_job.json"
-        cache_path = self.cache_dir / env_filename
+        cache_path = self._cache_file_path("active_export_job.json")
         file_lock = self._get_file_lock(cache_path)
 
         with file_lock:
@@ -311,6 +308,17 @@ class BackendCacheManager:
                         pass
                 raise
 
+    def _cache_file_path(self, filename: str) -> Path:
+        """
+        Compute the on-disk path for a given cache filename, prefixing the
+        env-scoped hash so cache files are isolated per backend URL.
+
+        All read/write/clear helpers should funnel through this so the
+        hashing rule lives in exactly one place (FE-HIGH-3).
+        """
+        env_hash = self._hash_backend_url(self._get_backend_url_safe())
+        return self.cache_dir / f"{env_hash}_{filename}"
+
     def _load_cache_file(self, filename: str) -> Optional[Any]:
         """
         Load data from cache file with thread-safe access.
@@ -321,10 +329,7 @@ class BackendCacheManager:
         Returns:
             Cached data or None if not found/invalid
         """
-        # Add environment hash to filename for environment-specific caching
-        env_hash = self._hash_backend_url(self._get_backend_url_safe())
-        env_filename = f"{env_hash}_{filename}"
-        cache_path = self.cache_dir / env_filename
+        cache_path = self._cache_file_path(filename)
 
         file_lock = self._get_file_lock(cache_path)
 
@@ -355,10 +360,7 @@ class BackendCacheManager:
             filename: Cache filename
             data: Data to cache
         """
-        # Add environment hash to filename for environment-specific caching
-        env_hash = self._hash_backend_url(self._get_backend_url_safe())
-        env_filename = f"{env_hash}_{filename}"
-        cache_path = self.cache_dir / env_filename
+        cache_path = self._cache_file_path(filename)
         self._atomic_write_cache_file(cache_path, data)
 
     def _is_cache_valid(self, filename: str) -> bool:
@@ -372,10 +374,7 @@ class BackendCacheManager:
             True if cache is valid, False otherwise
         """
         try:
-            # Add environment hash to filename for environment-specific caching
-            env_hash = self._hash_backend_url(self._get_backend_url_safe())
-            env_filename = f"{env_hash}_{filename}"
-            cache_path = self.cache_dir / env_filename
+            cache_path = self._cache_file_path(filename)
             if not cache_path.exists():
                 return False
 
@@ -410,49 +409,6 @@ class BackendCacheManager:
 
         except Exception:
             return False
-
-    def _get_basic_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        try:
-            env_hash = self._hash_backend_url(self._get_backend_url_safe())
-            env_prefix = f"{env_hash}_"
-            stats = {
-                "total_cached_items": 0,
-                "cache_size_bytes": 0,
-                "last_updated": None,
-            }
-
-            # Check playlists cache
-            playlists_cache = self.cache_dir / f"{env_prefix}playlists.json"
-            if playlists_cache.exists():
-                try:
-                    with open(playlists_cache, "r") as f:
-                        cached_data = json.load(f)
-                        if isinstance(cached_data, list):
-                            stats["total_cached_items"] += len(cached_data)
-                        stats["cache_size_bytes"] += playlists_cache.stat().st_size
-                        stats["last_updated"] = playlists_cache.stat().st_mtime
-                except (json.JSONDecodeError, IOError):
-                    pass
-
-            # Check token cache
-            if self.token_cache_path.exists():
-                stats["cache_size_bytes"] += self.token_cache_path.stat().st_size
-                if (
-                    not stats["last_updated"]
-                    or self.token_cache_path.stat().st_mtime > stats["last_updated"]
-                ):
-                    stats["last_updated"] = self.token_cache_path.stat().st_mtime
-
-            return stats
-
-        except Exception as e:
-            logger.error(f"Error getting cache stats: {e}")
-            return {
-                "total_cached_items": 0,
-                "cache_size_bytes": 0,
-                "last_updated": None,
-            }
 
     def clear_cache(self, pattern: Optional[str] = None) -> None:
         """

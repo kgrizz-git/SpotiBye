@@ -40,13 +40,21 @@ def test_increment_filename_suffix():
     assert increment_filename_suffix("file_3.xlsx") == "file_4.xlsx"
     assert increment_filename_suffix("file_4.xlsx") == "file_5.xlsx"
     assert increment_filename_suffix("file_5.xlsx") == "file_5.xlsx"
-    
+
     # Test .csv (bug fix: extension agnostic)
     assert increment_filename_suffix("data.csv") == "data_2.csv"
     assert increment_filename_suffix("data_2.csv") == "data_3.csv"
-    
+
     # Test .json
     assert increment_filename_suffix("export.json") == "export_2.json"
+
+    # FE-HIGH-2: digit-ending basenames must not be silently corrupted
+    # (`song_14.xlsx` previously became `song_1_5.xlsx`).
+    assert increment_filename_suffix("song_14.xlsx") == "song_14_2.xlsx"
+    assert increment_filename_suffix("song_35.xlsx") == "song_35_2.xlsx"
+    assert increment_filename_suffix("My_Playlist_2026.xlsx") == "My_Playlist_2026_2.xlsx"
+    # After appending _2, a subsequent call increments _2 -> _3.
+    assert increment_filename_suffix("song_14_2.xlsx") == "song_14_3.xlsx"
 
 def test_sanitize_export_filename_component():
     assert sanitize_export_filename_component("My Playlist/Name") == "My Playlist_Name"

@@ -60,9 +60,11 @@ export class JWTService {
     // Decode payload
     const decodedPayload = JSON.parse(this.base64UrlDecode(payload));
 
-    // Check expiration
+    // Check expiration. Use an explicit undefined check rather than a truthy
+    // check: a forged token with `exp: 0` would otherwise be accepted because
+    // 0 is falsy.
     const now = Math.floor(Date.now() / 1000);
-    if (decodedPayload.exp && decodedPayload.exp < now) {
+    if (decodedPayload.exp === undefined || decodedPayload.exp < now) {
       throw new Error('Token expired');
     }
 

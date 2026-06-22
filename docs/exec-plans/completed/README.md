@@ -17,6 +17,7 @@
 | [`superseded/2026-06-16-main-screen-refactor-V2.md`](superseded/2026-06-16-main-screen-refactor-V2.md) | Superseded main screen refactor V2 plan | Superseded |
 | [`superseded/2026-06-16-main-screen-refactor-V3.md`](superseded/2026-06-16-main-screen-refactor-V3.md) | Superseded by 2026-06-19 completion plan | Superseded |
 | [`superseded/2026-06-16-main-screen-refactor-review.md`](superseded/2026-06-16-main-screen-refactor-review.md) | Main screen refactor review artifact | Superseded |
+| [`superseded/2026-06-21-bug-review-medium-low-fixes.md`](superseded/2026-06-21-bug-review-medium-low-fixes.md) | Superseded by [`2026-06-21-bug-fix-medium-low.md`](../active/2026-06-21-bug-fix-medium-low.md) (used non-existent test paths and unsupported `logger` syntax) | Superseded |
 
 ## Dev Docs Plans
 

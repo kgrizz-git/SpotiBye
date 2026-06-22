@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import app from '../index';
-import type { Env } from '../types/env';
+import { createTestEnv } from './helpers/env';
 
 vi.mock('../services/spotify-auth', () => ({
   SpotifyAuthService: vi.fn().mockImplementation(function () {
@@ -34,25 +34,7 @@ vi.mock('../services/spotify-auth', () => ({
 }));
 
 // Mock environment variables
-const mockEnv: Env = {
-  ENVIRONMENT: 'test',
-  SPOTIFY_CLIENT_ID: 'test-client-id',
-  SPOTIFY_CLIENT_SECRET: 'test-client-secret',
-  JWT_SECRET: 'test-jwt-secret',
-  CACHE_KV: {
-    get: vi.fn().mockResolvedValue(null),
-    put: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue(undefined)
-  } as any,
-  SESSIONS_KV: {
-    get: vi.fn().mockResolvedValue(null),
-    put: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn().mockResolvedValue(undefined)
-  } as any,
-  ANALYSIS_QUEUE: {
-    send: vi.fn().mockResolvedValue(undefined),
-  } as unknown as Queue,
-};
+const mockEnv = createTestEnv();
 
 describe('Authentication Flow Tests', () => {
   describe('OAuth Flow', () => {

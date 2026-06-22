@@ -8,10 +8,12 @@ import time
 from pathlib import Path
 from typing import Final
 
-# Backend API configuration
+# Backend API configuration. Default to localhost so the shipped binary does
+# not hardcode the developer's Cloudflare Worker URL. Set
+# `SPOTIBYE_BACKEND_URL` to point at a deployed worker.
 BACKEND_URL: Final[str] = os.environ.get(
     "SPOTIBYE_BACKEND_URL",
-    "https://spotibye-backend-development.kevin-grizzard.workers.dev",
+    "http://localhost:8787",
 )
 PRODUCTION_BACKEND_URL: Final[str] = os.environ.get(
     "SPOTIBYE_PRODUCTION_BACKEND_URL", "https://spotibye-api.your-domain.com"

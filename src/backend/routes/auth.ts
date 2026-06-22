@@ -17,6 +17,23 @@ app.post('/spotify/login', async (c) => {
       return c.json({ error: { code: 'MISSING_REDIRECT_URI', message: 'redirect_uri is required' } }, 400);
     }
 
+    // Allowlist validation. Exact-match against a comma-separated list of
+    // permitted `redirect_uri` values from env. Fail-closed when unset: an
+    // empty allowlist rejects every request.
+    const allowed = (c.env.ALLOWED_REDIRECT_URIS || '')
+      .split(',')
+      .map((uri) => uri.trim())
+      .filter((uri) => uri.length > 0);
+
+    if (!allowed.includes(redirect_uri)) {
+      return c.json({
+        error: {
+          code: 'DISALLOWED_REDIRECT_URI',
+          message: 'The provided redirect_uri is not in the configured allowlist.',
+        },
+      }, 400);
+    }
+
     const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
     const state = spotifyAuth.generateState();
     const codeVerifier = spotifyAuth.generateCodeVerifier();
@@ -36,7 +53,8 @@ app.post('/spotify/login', async (c) => {
         state
       }
     });
-  } catch {
+  } catch (err) {
+    console.error('OAuth init error:', err);
     return c.json({ error: { code: 'OAUTH_INIT_FAILED', message: 'Failed to initiate OAuth flow' } }, 500);
   }
 });
@@ -69,7 +87,8 @@ app.get('/spotify/callback', async (c) => {
       const parsed = JSON.parse(storedState) as { redirect_uri?: string; code_verifier?: string };
       redirectUri = parsed.redirect_uri || '';
       codeVerifier = parsed.code_verifier;
-    } catch {
+    } catch (err) {
+      console.error('OAuth callback state parse error, falling back to bare string:', err);
       redirectUri = storedState;
     }
 
@@ -87,14 +106,17 @@ app.get('/spotify/callback', async (c) => {
     // Get user profile
     const userProfile = await spotifyAuth.getUserProfile(tokens.access_token);
 
-    // Store session in KV
+    // Store session in KV. Note: `spotify_data` (raw PII) is intentionally
+    // NOT written here — it was never read by any consumer (auth middleware
+    // and `/auth/me` derive user context from the JWT alone). Keeping the
+    // KV record minimal reduces the PII blast radius if KV is ever
+    // compromised.
     const sessionId = crypto.randomUUID();
     await c.env.SESSIONS_KV.put(sessionId, JSON.stringify({
       user_id: userProfile.id,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: Date.now() + (tokens.expires_in * 1000),
-      spotify_data: userProfile
     }), { expirationTtl: SPOTIFY_SESSION_TTL_SECONDS });
 
     // Generate JWT
@@ -178,7 +200,8 @@ app.post('/logout', authMiddleware, async (c) => {
     await c.env.SESSIONS_KV.delete(sessionId);
 
     return c.json({ data: { message: 'Logged out successfully' } });
-  } catch {
+  } catch (err) {
+    console.error('Logout error:', err);
     return c.json({ error: { code: 'LOGOUT_FAILED', message: 'Failed to logout' } }, 500);
   }
 });
@@ -188,7 +211,8 @@ app.get('/me', authMiddleware, async (c) => {
   try {
     const user = c.get('user');
     return c.json({ data: user });
-  } catch {
+  } catch (err) {
+    console.error('User info error:', err);
     return c.json({ error: { code: 'USER_INFO_FAILED', message: 'Failed to get user info' } }, 500);
   }
 });

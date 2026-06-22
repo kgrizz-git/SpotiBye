@@ -194,43 +194,18 @@ class ReccoBeatsBackendService:
         """
         results: Dict[str, Dict[str, Any]] = {}
 
-        try:
-            if analysis_task and analysis_task.is_cancelled():
-                return results
-
-            # Check cache first
-            cached_count = 0
-            uncached_tracks = []
-
-            for spotify_id in spotify_track_ids:
-                # Simplified cache check for testing
-                if spotify_id in ["cached_track_1", "cached_track_2"]:
-                    cached_count += 1
-                    results[spotify_id] = {"danceability": 0.8, "energy": 0.9}
-                else:
-                    uncached_tracks.append(spotify_id)
-
-            logger.info(
-                f"Found {cached_count} cached tracks, fetching {len(uncached_tracks)} uncached tracks"
-            )
-
-            if not uncached_tracks:
-                logger.info("All tracks already cached")
-                return results
-
-            # For uncached tracks, we need to get them from a playlist analysis
-            # This is a limitation of the backend approach - we analyze playlists, not individual tracks
-            logger.warning(
-                "Individual track analysis not supported in backend mode - requires playlist analysis"
-            )
-
-            # Return cached results only
-            logger.info(f"Returning {len(results)} cached track features")
+        if analysis_task and analysis_task.is_cancelled():
             return results
 
-        except Exception as e:
-            logger.error(f"Error getting multiple track audio features: {e}")
-            return results
+        # Per-track cache lookup is not implemented. The previous version of
+        # this method silently returned fabricated `danceability: 0.8,
+        # energy: 0.9` data for two hardcoded "cached" track IDs, which
+        # made the audio-feature UI look functional in development but
+        # corrupted all production analysis output.
+        raise NotImplementedError(
+            "ReccoBeats per-track cache lookup not implemented; "
+            "see docs/exec-plans/active/2026-06-21-reccobeats-wiring.md"
+        )
 
     def get_reccobeats_id_from_spotify_id(
         self,

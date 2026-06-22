@@ -11,6 +11,11 @@ export interface Env {
   // JWT secret
   JWT_SECRET: string;
 
+  // Comma-separated allowlist of OAuth `redirect_uri` values that the
+  // `/auth/spotify/login` endpoint will accept. Empty/missing rejects all
+  // (fail-closed). Format: "https://app.example.com,http://localhost:3000".
+  ALLOWED_REDIRECT_URIS: string;
+
   // KV namespaces
   CACHE_KV: KVNamespace;
   SESSIONS_KV: KVNamespace;

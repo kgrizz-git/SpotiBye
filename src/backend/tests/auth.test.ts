@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { authRoutes } from '../routes/auth';
 import type { Env } from '../types/env';
+import { createTestEnv } from './helpers/env';
 
 vi.mock('../services/spotify-auth', () => ({
   SpotifyAuthService: vi.fn().mockImplementation(function () {
@@ -56,25 +57,7 @@ describe('Auth Routes', () => {
     app = new Hono<{ Bindings: Env }>();
     app.route('/auth', authRoutes);
 
-    mockEnv = {
-      ENVIRONMENT: 'test',
-      SPOTIFY_CLIENT_ID: 'test-client-id',
-      SPOTIFY_CLIENT_SECRET: 'test-client-secret',
-      JWT_SECRET: 'test-jwt-secret',
-      CACHE_KV: {
-        get: vi.fn().mockResolvedValue(null),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined),
-      } as unknown as KVNamespace,
-      SESSIONS_KV: {
-        get: vi.fn().mockResolvedValue(null),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined),
-      } as unknown as KVNamespace,
-      ANALYSIS_QUEUE: {
-        send: vi.fn().mockResolvedValue(undefined),
-      } as unknown as Queue,
-    };
+    mockEnv = createTestEnv();
   });
 
   describe('POST /auth/spotify/login', () => {
@@ -212,6 +195,74 @@ describe('Auth Routes', () => {
 
       expect(response.status).toBe(404);
       expect(data.error).toHaveProperty('code', 'SESSION_NOT_FOUND');
+    });
+  });
+
+  describe('POST /auth/spotify/login redirect_uri allowlist (BE-SEC-3)', () => {
+    it('rejects a redirect_uri that is not in the allowlist', async () => {
+      const env = createTestEnv({
+        ALLOWED_REDIRECT_URIS: 'http://localhost:3000',
+      });
+      const request = new Request('http://localhost/auth/spotify/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ redirect_uri: 'https://evil.example.com/callback' }),
+      });
+
+      const response = await app.request(request, undefined, env);
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(400);
+      expect(data.error).toHaveProperty('code', 'DISALLOWED_REDIRECT_URI');
+    });
+
+    it('accepts a redirect_uri that is in the allowlist', async () => {
+      const env = createTestEnv({
+        ALLOWED_REDIRECT_URIS: 'http://localhost:3000,http://localhost:8080',
+      });
+      const request = new Request('http://localhost/auth/spotify/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ redirect_uri: 'http://localhost:8080' }),
+      });
+
+      const response = await app.request(request, undefined, env);
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data).toHaveProperty('auth_url');
+    });
+
+    it('rejects all redirect_uri values when ALLOWED_REDIRECT_URIS is empty (fail-closed)', async () => {
+      const env = createTestEnv({ ALLOWED_REDIRECT_URIS: '' });
+      const request = new Request('http://localhost/auth/spotify/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ redirect_uri: 'http://localhost:3000/callback' }),
+      });
+
+      const response = await app.request(request, undefined, env);
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(400);
+      expect(data.error).toHaveProperty('code', 'DISALLOWED_REDIRECT_URI');
+    });
+
+    it('trims whitespace around allowlist entries', async () => {
+      const env = createTestEnv({
+        ALLOWED_REDIRECT_URIS: ' http://localhost:3000 , http://localhost:8080 ',
+      });
+      const request = new Request('http://localhost/auth/spotify/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ redirect_uri: 'http://localhost:8080' }),
+      });
+
+      const response = await app.request(request, undefined, env);
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data).toHaveProperty('auth_url');
     });
   });
 });

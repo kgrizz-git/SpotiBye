@@ -1,5 +1,7 @@
 # Bug Review Medium and Low Fixes Implementation Plan
 
+> **SUPERSEDED 2026-06-21:** This plan is superseded by [`2026-06-21-bug-fix-medium-low.md`](../../active/2026-06-21-bug-fix-medium-low.md). The newer plan has correct line numbers (post critical-high insertions), references existing test files, and avoids the unsupported `logger.error({ error }, ...)` structured-logger syntax that this draft used. Preserved here for historical reference.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix the medium and low severity issues from the 2026-06-21 bug review without broad refactors.

@@ -3,6 +3,7 @@ import worker from '../index';
 import { AnalysisJobService } from '../services/analysis-job';
 import { AnalysisService } from '../services/analysis';
 import type { Env } from '../types/env';
+import { createTestEnv } from './helpers/env';
 
 const kvNamespace = (initial: Record<string, unknown> = {}) => {
   const store = new Map(
@@ -21,15 +22,14 @@ const kvNamespace = (initial: Record<string, unknown> = {}) => {
   } as unknown as KVNamespace;
 };
 
-const envWithKv = (cacheKv = kvNamespace(), sessionsKv = kvNamespace()): Env => ({
-  ENVIRONMENT: 'test',
-  SPOTIFY_CLIENT_ID: 'client-id',
-  SPOTIFY_CLIENT_SECRET: 'client-secret',
-  JWT_SECRET: 'jwt-secret',
-  CACHE_KV: cacheKv,
-  SESSIONS_KV: sessionsKv,
-  ANALYSIS_QUEUE: { send: vi.fn(async () => undefined) } as unknown as Queue,
-});
+const envWithKv = (cacheKv = kvNamespace(), sessionsKv = kvNamespace()): Env =>
+  createTestEnv({
+    SPOTIFY_CLIENT_ID: 'client-id',
+    SPOTIFY_CLIENT_SECRET: 'client-secret',
+    JWT_SECRET: 'jwt-secret',
+    CACHE_KV: cacheKv,
+    SESSIONS_KV: sessionsKv,
+  });
 
 const analysisResult = {
   job_id: 'job-1',
@@ -247,5 +247,31 @@ describe('analysis queue consumer', () => {
     }), expect.any(Error));
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it('still acks the message when markFailed throws (BE-LOG-5)', async () => {
+    // BE-LOG-5 / BE-ERR-4: a KV write failure inside markFailed must not
+    // prevent the message from being acked, otherwise it would loop past
+    // max_retries indefinitely.
+    vi.spyOn(AnalysisJobService.prototype, 'process').mockRejectedValue(new Error('process failed'));
+    vi.spyOn(AnalysisJobService.prototype, 'markFailed').mockRejectedValue(new Error('KV write failed'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const message = queueMessage(analysisMessage, 3);
+    const batch = {
+      queue: 'spotibye-analysis-dev',
+      messages: [message],
+      retryAll: vi.fn(),
+      ackAll: vi.fn(),
+    } as unknown as MessageBatch<typeof analysisMessage>;
+
+    await worker.queue(batch, envWithKv(), {} as ExecutionContext);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('markFailed threw'),
+      expect.any(Error)
+    );
   });
 });

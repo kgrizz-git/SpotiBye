@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { exportRoutes } from '../routes/export';
 import type { Env } from '../types/env';
+import { createTestEnv } from './helpers/env';
 
 // Mock the services
 vi.mock('../services/export', () => ({
@@ -184,10 +185,7 @@ describe('Export Routes', () => {
     const cacheStore = new Map<string, string>();
 
     mockEnv = {
-      ENVIRONMENT: 'test',
-      SPOTIFY_CLIENT_ID: 'test-client-id',
-      SPOTIFY_CLIENT_SECRET: 'test-client-secret',
-      JWT_SECRET: 'test-jwt-secret',
+      ...createTestEnv(),
       CACHE_KV: {
         get: vi.fn().mockImplementation(async (key: string) => cacheStore.get(key) ?? null),
         put: vi.fn().mockImplementation(async (key: string, value: string) => {
@@ -203,14 +201,10 @@ describe('Export Routes', () => {
           access_token: 'test-access-token',
           refresh_token: 'test-refresh-token',
           expires_at: Date.now() + 3600000,
-          spotify_data: {}
         })),
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined)
       } as any,
-      ANALYSIS_QUEUE: {
-        send: vi.fn().mockResolvedValue(undefined),
-      } as unknown as Queue,
     };
   });
 

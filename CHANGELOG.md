@@ -11,6 +11,19 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed backend playlist analysis failures caused by Spotify rejecting the removed batch artist endpoint by fetching artist metadata individually and continuing without genre data when artist enrichment fails.
 - Fixed export cancellation state so the frontend records active backend exports and can mark them cancelled during user cancellation or app shutdown.
 - Fixed filename extension handling in the export screen so incremental suffixes (e.g., _2) work correctly for all formats (CSV, JSON), not just Excel (.xlsx).
+- Fixed JWT expiration bypass where a forged token with `exp: 0` was accepted because the falsy check skipped expiration validation.
+- Fixed Spotify rate-limit busy spin by parsing `Retry-After` as both integer seconds and HTTP-date format, with a 1-second fallback.
+- Fixed playlist tracks fetch to no longer crash with `AttributeError` when the backend returns a list-shaped payload.
+- Fixed filename suffix increment so digit-ending basenames (e.g. `song_14.xlsx`) get a safe `_2` suffix instead of being silently corrupted.
+- Fixed OAuth `redirect_uri` open redirect by validating against a configured `ALLOWED_REDIRECT_URIS` allowlist (fail-closed when unset).
+- Fixed OAuth error handling so silent `catch {}` blocks log the underlying error for OAuth init, callback state parse fallback, logout, and user info.
+- Stopped storing raw PII (`email`, `country`, etc.) in the KV session record under the unread `spotify_data` field.
+- Fixed queue consumer infinite-retry loop when `markFailed` throws by wrapping the call in its own try/catch and always acking the message.
+- Preserved non-429 Spotify error response bodies in thrown error messages so diagnostic details are not lost.
+- Removed hardcoded ReccoBeats test data (`cached_track_1`/`cached_track_2`) that returned fabricated audio features in production.
+- Changed default `BACKEND_URL` from the developer's exposed Cloudflare Worker to `http://localhost:8787`; the worker URL remains available via the `SPOTIBYE_BACKEND_URL` env var override.
+- Deduplicated cache file path hashing in `BackendCacheManager` by extracting a private `_cache_file_path` helper used by all read/write/clear methods.
+- Removed dead `_get_basic_cache_stats` method that always reported zero items because of an incorrect format check.
 
 ### Changed
 - Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.

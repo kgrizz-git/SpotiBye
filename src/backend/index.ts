@@ -78,7 +78,13 @@ export default {
       } catch (error) {
         console.error(`[Queue] Failed to process job ${body.job_id} on attempt ${message.attempts}:`, error);
         if (message.attempts >= 3) {
-          await jobService.markFailed(body, error);
+          // Wrap markFailed so a KV write failure can't leave the message
+          // un-acked (which would push it past max_retries indefinitely).
+          try {
+            await jobService.markFailed(body, error);
+          } catch (markFailedError) {
+            console.error(`[Queue] markFailed threw for job ${body.job_id}; acking anyway:`, markFailedError);
+          }
           message.ack();
           continue;
         }

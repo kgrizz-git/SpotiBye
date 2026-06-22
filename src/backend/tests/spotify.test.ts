@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { spotifyRoutes } from '../routes/spotify';
 import type { Env } from '../types/env';
+import { createTestEnv } from './helpers/env';
 
 // Mock the services
 vi.mock('../services/spotify', () => ({
@@ -81,29 +82,17 @@ describe('Spotify Routes', () => {
     app.route('/spotify', spotifyRoutes);
 
     mockEnv = {
-      ENVIRONMENT: 'test',
-      SPOTIFY_CLIENT_ID: 'test-client-id',
-      SPOTIFY_CLIENT_SECRET: 'test-client-secret',
-      JWT_SECRET: 'test-jwt-secret',
-      CACHE_KV: {
-        get: vi.fn().mockResolvedValue(null),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined)
-      } as any,
+      ...createTestEnv(),
       SESSIONS_KV: {
         get: vi.fn().mockResolvedValue(JSON.stringify({
           user_id: 'test-user-id',
           access_token: 'test-access-token',
           refresh_token: 'test-refresh-token',
           expires_at: Date.now() + 3600000,
-          spotify_data: {}
         })),
         put: vi.fn().mockResolvedValue(undefined),
         delete: vi.fn().mockResolvedValue(undefined)
       } as any,
-      ANALYSIS_QUEUE: {
-        send: vi.fn().mockResolvedValue(undefined),
-      } as unknown as Queue,
     };
   });
 

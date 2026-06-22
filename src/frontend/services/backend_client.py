@@ -251,9 +251,23 @@ class BackendClient:
         return response
 
     def get_playlist_tracks(self, playlist_id: str) -> List[Dict[str, Any]]:
-        """Get tracks from a playlist."""
+        """Get tracks from a playlist.
+
+        Handles three legitimate response shapes from `_make_request`:
+          - A bare list of items (when the backend returns the items array
+            directly inside `{"data": [...]}` and `_make_request` unwraps
+            it).
+          - A dict with an `items` or `tracks` key (the documented
+            `NormalizedPlaylistItemsResponse` shape).
+          - Anything else (None, unexpected type) — returns `[]` defensively
+            instead of raising `AttributeError` on `.get()`.
+        """
         response = self._make_request("GET", f"/spotify/playlists/{playlist_id}/items")
-        return response.get("items", response.get("tracks", []))
+        if isinstance(response, list):
+            return response
+        if isinstance(response, dict):
+            return response.get("items", response.get("tracks", []))
+        return []
 
     def get_track_details(self, track_id: str) -> Dict[str, Any]:
         """Get detailed information about a track."""

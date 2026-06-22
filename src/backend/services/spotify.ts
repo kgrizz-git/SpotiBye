@@ -145,18 +145,32 @@ export class SpotifyService {
         });
 
         if (response.status === 429) {
-          // Rate limited - wait and retry
-          const retryAfter = parseInt(response.headers.get('Retry-After') || '1');
+          // Rate limited - wait and retry. `Retry-After` is either an integer
+          // (seconds) or an HTTP-date. NaN would cause a 0ms busy spin.
+          const retryAfter = parseRetryAfter(
+            response.headers.get('Retry-After')
+          );
           await this.sleep(retryAfter * 1000);
           continue;
         }
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          // Read the body so diagnostic details (e.g. Spotify's JSON error
+          // message) are not discarded. Non-429 errors are not retried
+          // because (a) 4xx is deterministic and (b) consuming the body
+          // would prevent reading it again on retry.
+          const body = await response.text();
+          throw new Error(`HTTP ${response.status}: ${body}`);
         }
 
         return response;
       } catch (error) {
+        // Non-recoverable: 4xx response (or other non-429 failure) was
+        // already thrown with a meaningful message — propagate immediately.
+        if (error instanceof Error && error.message.startsWith('HTTP ')) {
+          throw error;
+        }
+
         if (i === retries - 1) throw error;
 
         // Exponential backoff
@@ -194,4 +208,37 @@ export class SpotifyService {
     await Promise.all(workers);
     return results;
   }
+}
+
+/**
+ * Parse the `Retry-After` header value into a non-negative integer of
+ * seconds to wait. Per RFC 9110, the header is either an integer
+ * (delta-seconds) or an HTTP-date. Returns 1 second as a safe fallback
+ * when the value is missing or unparseable.
+ *
+ * Exported for direct unit testing.
+ */
+export function parseRetryAfter(header: string | null | undefined): number {
+  if (!header) {
+    return 1;
+  }
+
+  const trimmed = header.trim();
+  if (!trimmed) {
+    return 1;
+  }
+
+  // Pure integer form (most common).
+  if (/^\d+$/.test(trimmed)) {
+    return Math.max(0, parseInt(trimmed, 10));
+  }
+
+  // HTTP-date form. `Date.parse` returns NaN for invalid input.
+  const ms = Date.parse(trimmed);
+  if (!Number.isNaN(ms)) {
+    const seconds = Math.ceil((ms - Date.now()) / 1000);
+    return Math.max(0, seconds);
+  }
+
+  return 1;
 }

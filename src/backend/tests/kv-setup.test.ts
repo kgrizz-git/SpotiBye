@@ -1,32 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import app from '../index';
 import type { Env } from '../types/env';
+import { createTestEnv } from './helpers/env';
 
 describe('KV Namespace Setup Tests', () => {
   describe('KV Namespace Configuration', () => {
     it('should have proper KV namespace bindings', async () => {
       // Mock environment with KV namespaces
-      const mockEnv: Env = {
-        ENVIRONMENT: 'test',
-        SPOTIFY_CLIENT_ID: 'test-client-id',
-        SPOTIFY_CLIENT_SECRET: 'test-client-secret',
-        JWT_SECRET: 'test-jwt-secret',
-        CACHE_KV: {
-          get: vi.fn().mockResolvedValue(null),
-          put: vi.fn().mockResolvedValue(undefined),
-          delete: vi.fn().mockResolvedValue(undefined),
-          list: vi.fn().mockResolvedValue({ keys: [] })
-        } as any,
-        SESSIONS_KV: {
-          get: vi.fn().mockResolvedValue(null),
-          put: vi.fn().mockResolvedValue(undefined),
-          delete: vi.fn().mockResolvedValue(undefined),
-          list: vi.fn().mockResolvedValue({ keys: [] })
-        } as any,
-        ANALYSIS_QUEUE: {
-          send: vi.fn().mockResolvedValue(undefined),
-        } as unknown as Queue,
-      };
+      const mockEnv: Env = createTestEnv();
 
       // Test that KV namespaces are properly bound
       expect(mockEnv.CACHE_KV).toBeDefined();
@@ -57,15 +38,9 @@ describe('KV Namespace Setup Tests', () => {
       } as any;
 
       const mockEnv: Env = {
-        ENVIRONMENT: 'test',
-        SPOTIFY_CLIENT_ID: 'test-client-id',
-        SPOTIFY_CLIENT_SECRET: 'test-client-secret',
-        JWT_SECRET: 'test-jwt-secret',
+        ...createTestEnv(),
         CACHE_KV: errorKV,
         SESSIONS_KV: errorKV,
-        ANALYSIS_QUEUE: {
-          send: vi.fn().mockResolvedValue(undefined),
-        } as unknown as Queue,
       };
 
       // Test that the app can handle KV errors
@@ -121,27 +96,7 @@ describe('KV Namespace Setup Tests', () => {
   describe('Test Environment Isolation', () => {
     it('should isolate test data from production', async () => {
       // Ensure test environment uses different KV namespaces
-      const testEnv: Env = {
-        ENVIRONMENT: 'test',
-        SPOTIFY_CLIENT_ID: 'test-client-id',
-        SPOTIFY_CLIENT_SECRET: 'test-client-secret',
-        JWT_SECRET: 'test-jwt-secret',
-        CACHE_KV: {
-          get: vi.fn().mockResolvedValue(null),
-          put: vi.fn().mockResolvedValue(undefined),
-          delete: vi.fn().mockResolvedValue(undefined),
-          list: vi.fn().mockResolvedValue({ keys: [] })
-        } as any,
-        SESSIONS_KV: {
-          get: vi.fn().mockResolvedValue(null),
-          put: vi.fn().mockResolvedValue(undefined),
-          delete: vi.fn().mockResolvedValue(undefined),
-          list: vi.fn().mockResolvedValue({ keys: [] })
-        } as any,
-        ANALYSIS_QUEUE: {
-          send: vi.fn().mockResolvedValue(undefined),
-        } as unknown as Queue,
-      };
+      const testEnv: Env = createTestEnv();
 
       // Verify test environment
       expect(testEnv.ENVIRONMENT).toBe('test');

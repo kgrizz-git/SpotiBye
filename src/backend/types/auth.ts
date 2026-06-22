@@ -23,5 +23,9 @@ export interface SessionData {
   access_token: string;
   refresh_token: string;
   expires_at: number;
-  spotify_data: any;
+  // Optional — kept for backward compatibility with in-flight sessions that
+  // still have this field from older code. New sessions are written without
+  // it (see `routes/auth.ts`). Field will be removed entirely in a later
+  // plan once any in-flight sessions have aged out.
+  spotify_data?: unknown;
 }

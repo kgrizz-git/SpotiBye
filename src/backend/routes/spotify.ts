@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { authMiddleware } from '../middleware/auth';
 import { SpotifyService } from '../services/spotify';
@@ -129,9 +129,17 @@ app.get('/playlists/:id', async (c) => {
   }
 });
 
-const getPlaylistItemsHandler = async (c: any) => {
+const getPlaylistItemsHandler = async (
+  c: Context<{ Bindings: Env; Variables: Variables }>
+) => {
   try {
     const playlistId = c.req.param('id');
+    if (!playlistId) {
+      return c.json(
+        { error: { code: 'MISSING_PLAYLIST_ID', message: 'playlist id is required' } },
+        { status: 400 as ContentfulStatusCode }
+      );
+    }
     const accessToken = c.get('access_token');
     const userId = c.get('user').id;
     const limit = parseInt(c.req.query('limit') || '50');
