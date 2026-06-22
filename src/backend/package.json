@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "deploy:dev": "wrangler deploy --env development",
-    "deploy:prod": "wrangler deploy --env production",
+    "deploy:dev": "./scripts/deploy-with-metadata.sh development",
+    "deploy:prod": "./scripts/deploy-with-metadata.sh production",
     "build": "tsc",
     "lint": "eslint **/*.ts",
     "format": "prettier --write src/**/*.ts",

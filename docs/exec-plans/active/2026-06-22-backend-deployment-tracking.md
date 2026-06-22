@@ -115,7 +115,7 @@ npm run test:run -- tests/integration.test.ts
 
 Expected: all tests in `tests/integration.test.ts` pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/backend/types/env.ts src/backend/index.ts src/backend/tests/helpers/env.ts src/backend/tests/integration.test.ts
@@ -131,7 +131,7 @@ git commit -m "feat: expose backend deployment metadata"
 - Modify: `src/backend/package.json`
 - Modify: `.gitignore`
 
-- [ ] **Step 1: Create the deploy wrapper**
+- [x] **Step 1: Create the deploy wrapper**
 
 Create `src/backend/scripts/deploy-with-metadata.sh`:
 
@@ -180,7 +180,7 @@ printf '{\n  "environment": "%s",\n  "release_sha": "%s",\n  "release_version": 
 
 The `--var NAME:VALUE` syntax is supported by Wrangler v3+ and the repo pins Wrangler v4 through `src/backend/package.json`.
 
-- [ ] **Step 2: Make the wrapper executable**
+- [x] **Step 2: Make the wrapper executable**
 
 Run:
 
@@ -190,7 +190,7 @@ chmod +x src/backend/scripts/deploy-with-metadata.sh
 
 Expected: command exits with status 0.
 
-- [ ] **Step 3: Update package scripts**
+- [x] **Step 3: Update package scripts**
 
 In `src/backend/package.json`, replace the deploy scripts with:
 
@@ -202,7 +202,7 @@ In `src/backend/package.json`, replace the deploy scripts with:
 
 Keep the rest of the scripts unchanged.
 
-- [ ] **Step 4: Ignore the local deployment cache**
+- [x] **Step 4: Ignore the local deployment cache**
 
 Add this line to `.gitignore`:
 
@@ -210,7 +210,7 @@ Add this line to `.gitignore`:
 src/backend/.deployed-commit.json
 ```
 
-- [ ] **Step 5: Validate the wrapper without deploying**
+- [x] **Step 5: Validate the wrapper without deploying**
 
 Run:
 
