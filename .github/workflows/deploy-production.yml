@@ -16,6 +16,7 @@ concurrency:
 permissions:
   contents: read
   actions: write
+  deployments: write
 
 jobs:
   security-checks:
@@ -66,9 +67,11 @@ jobs:
     needs: [test, security-checks]
     if: always() && needs.test.result == 'success' && (needs.security-checks.result == 'success' || needs.security-checks.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       actions: write
+      deployments: write
 
     steps:
     - name: Checkout code
@@ -89,22 +92,3 @@ jobs:
       env:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-    - name: Update worker version
-      working-directory: src/backend
-      run: |
-        VERSION=$(date +%Y%m%d-%H%M%S)
-        echo "Deploying version $VERSION"
-
-        echo "Deployment Info:" > deployment-info.txt
-        echo "Version: $VERSION" >> deployment-info.txt
-        echo "Commit: ${{ github.sha }}" >> deployment-info.txt
-        echo "Timestamp: $(date -u)" >> deployment-info.txt
-        echo "Environment: production" >> deployment-info.txt
-
-    - name: Upload deployment info
-      uses: actions/upload-artifact@v4
-      with:
-        name: deployment-info-${{ github.sha }}
-        path: src/backend/deployment-info.txt
-        retention-days: 30

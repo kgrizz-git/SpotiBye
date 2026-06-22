@@ -221,7 +221,7 @@ bash -n scripts/deploy-with-metadata.sh
 
 Expected: command exits with status 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .gitignore src/backend/package.json src/backend/scripts/deploy-with-metadata.sh
@@ -236,13 +236,13 @@ git commit -m "chore: deploy backend with release metadata"
 - Modify: `.github/workflows/deploy-backend.yml`
 - Modify: `.github/workflows/deploy-production.yml`
 
-- [ ] **Step 1: Confirm GitHub deployment environments exist**
+- [x] **Step 1: Confirm GitHub deployment environments exist**
 
 Before adding `environment:` keys to workflow jobs, verify the repo has GitHub Environments named exactly `development` and `production` in **Settings > Environments**. Environment names are case-sensitive. If the repo has `Development` or `Production` instead, either rename/create lower-case environments before this task or use the exact existing names consistently in the workflow snippets below.
 
 Expected: `development` and `production` exist before the workflow changes are pushed. Without this prerequisite, deployment jobs may wait for approval unexpectedly or fail depending on organization settings.
 
-- [ ] **Step 2: Fix tag trigger in `deploy-backend.yml`**
+- [x] **Step 2: Fix tag trigger in `deploy-backend.yml`**
 
 In `.github/workflows/deploy-backend.yml`, replace the `push` trigger block with:
 
@@ -260,11 +260,11 @@ This makes the existing production job condition reachable for version tags.
 
 Important: GitHub Actions `paths` filters do not apply to tag pushes. Any pushed tag matching `v*` can trigger this workflow, even if the tagged commit has no backend changes. That is acceptable here because `v*` tags are treated as production release intent.
 
-- [ ] **Step 3: Remove the post-deploy package version mutation**
+- [x] **Step 3: Remove the post-deploy package version mutation**
 
 In `.github/workflows/deploy-backend.yml`, delete the production job steps named `Update worker version` and `Upload deployment info`. The deploy wrapper now injects metadata before deployment, and the old artifact was created after deployment so it did not describe the running Worker.
 
-- [ ] **Step 4: Keep the production deploy command unchanged**
+- [x] **Step 4: Keep the production deploy command unchanged**
 
 Leave this step in `.github/workflows/deploy-backend.yml`:
 
@@ -279,7 +279,7 @@ Leave this step in `.github/workflows/deploy-backend.yml`:
 
 The `npm run deploy:prod` wrapper computes `RELEASE_SHA`, `RELEASE_VERSION`, and `DEPLOYED_AT` before calling Wrangler.
 
-- [ ] **Step 5: Add GitHub deployment environments**
+- [x] **Step 5: Add GitHub deployment environments**
 
 In `.github/workflows/deploy-backend.yml`, add `environment: development` to the `deploy-dev` job:
 
@@ -311,11 +311,13 @@ In `.github/workflows/deploy-production.yml`, add `environment: production` to t
 
 This gives GitHub a durable deployment record alongside the live `/health` metadata.
 
-- [ ] **Step 6: Remove post-deploy artifact steps from `deploy-production.yml`**
+Because these workflows define explicit token permissions, also add `deployments: write` wherever workflow or job permissions are declared for deployment jobs.
+
+- [x] **Step 6: Remove post-deploy artifact steps from `deploy-production.yml`**
 
 In `.github/workflows/deploy-production.yml`, delete the steps named `Update worker version` and `Upload deployment info` for the same reason.
 
-- [ ] **Step 7: Validate workflow syntax structurally**
+- [x] **Step 7: Validate workflow syntax structurally**
 
 Run:
 
@@ -325,7 +327,7 @@ rg -n "Update worker version|deployment-info.txt|Upload deployment info" .github
 
 Expected: no matches.
 
-- [ ] **Step 8: Confirm deployment environments are declared**
+- [x] **Step 8: Confirm deployment environments are declared**
 
 Run:
 
