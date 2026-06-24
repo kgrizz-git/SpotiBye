@@ -22,9 +22,19 @@ function readLines(filePath: string): string[] {
 }
 
 function getFilesInDir(dir: string): string[] {
-  return fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-    .map((f) => path.join(dir, f)); // nosemgrep: path-join-resolve-traversal
+  let results: string[] = [];
+  if (!fs.existsSync(dir)) return results;
+  const list = fs.readdirSync(dir);
+  for (const file of list) {
+    const filePath = path.join(dir, file); // nosemgrep: path-join-resolve-traversal
+    const stat = fs.statSync(filePath);
+    if (stat && stat.isDirectory()) {
+      results = results.concat(getFilesInDir(filePath));
+    } else if (file.endsWith('.ts') && !file.endsWith('.test.ts')) {
+      results.push(filePath);
+    }
+  }
+  return results;
 }
 
 function extractImports(lines: string[]): string[] {
@@ -61,17 +71,48 @@ describe('services/ layer', () => {
 
 // ── Routes must not import from other routes ────────────────────────────────
 
+function isSameFamily(sourceFile: string, resolvedImport: string): boolean {
+  const sourceNormalized = sourceFile.replace(/\\/g, '/');
+  const importNormalized = resolvedImport.replace(/\\/g, '/');
+
+  const sourceRoutesIndex = sourceNormalized.indexOf('/routes/');
+  const importRoutesIndex = importNormalized.indexOf('/routes/');
+
+  if (sourceRoutesIndex === -1 || importRoutesIndex === -1) {
+    return true;
+  }
+
+  const sourceRelative = sourceNormalized.substring(sourceRoutesIndex + '/routes/'.length);
+  const importRelative = importNormalized.substring(importRoutesIndex + '/routes/'.length);
+
+  const sourceFamily = sourceRelative.split('/')[0].replace(/\.ts$/, '');
+  const importFamily = importRelative.split('/')[0].replace(/\.ts$/, '');
+
+  if (sourceRelative.endsWith('.ts') && !sourceRelative.includes('/') && sourceFamily === importFamily) {
+    return true;
+  }
+
+  return sourceFamily === importFamily;
+}
+
 describe('routes/ layer', () => {
   const routeFiles = getFilesInDir(path.join(ROOT, 'routes'));
 
   for (const file of routeFiles) {
-    const filename = path.basename(file);
+    const testName = path.relative(ROOT, file);
     const lines = readLines(file);
     const imports = extractImports(lines);
 
-    it(`${filename} must not import from other routes`, () => {
-      const violations = imports.filter((i) => i.includes('../routes') || i.startsWith('./routes'));
-      expect(violations, `Violation in routes/${filename}: ${violations.join(', ')}`).toHaveLength(0);
+    it(`${testName} must not import from other routes`, () => {
+      const relativeImports = imports.filter((i) => i.startsWith('.'));
+      const violations = relativeImports.filter((i) => {
+        const resolved = path.resolve(path.dirname(file), i);
+        if (!resolved.includes(path.join(ROOT, 'routes'))) {
+          return false;
+        }
+        return !isSameFamily(file, resolved);
+      });
+      expect(violations, `Violation in ${testName}: ${violations.join(', ')}`).toHaveLength(0);
     });
   }
 });

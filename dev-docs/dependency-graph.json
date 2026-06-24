@@ -228,11 +228,61 @@
     "src/backend/types/variables.ts"
   ],
   "src/backend/routes/export.ts": [
+    "src/backend/routes/export/index.ts"
+  ],
+  "src/backend/routes/export/helpers/cache-keys.ts": [],
+  "src/backend/routes/export/helpers/errors.ts": [],
+  "src/backend/routes/export/helpers/file-bytes.ts": [
+    "src/backend/routes/export/helpers/types.ts"
+  ],
+  "src/backend/routes/export/helpers/format.ts": [
+    "src/backend/routes/export/helpers/types.ts"
+  ],
+  "src/backend/routes/export/helpers/request-id.ts": [],
+  "src/backend/routes/export/helpers/types.ts": [],
+  "src/backend/routes/export/index.ts": [
     "src/backend/middleware/auth.ts",
+    "src/backend/routes/export/jobs.ts",
+    "src/backend/routes/export/playlist.ts",
+    "src/backend/routes/export/playlists.ts",
+    "src/backend/types/env.ts",
+    "src/backend/types/variables.ts"
+  ],
+  "src/backend/routes/export/jobs.ts": [
     "src/backend/services/export.ts",
     "src/backend/services/cache.ts",
     "src/backend/types/env.ts",
-    "src/backend/types/variables.ts"
+    "src/backend/types/variables.ts",
+    "src/backend/routes/export/helpers/cache-keys.ts",
+    "src/backend/routes/export/helpers/format.ts",
+    "src/backend/routes/export/helpers/errors.ts",
+    "src/backend/routes/export/helpers/file-bytes.ts",
+    "src/backend/routes/export/helpers/request-id.ts",
+    "src/backend/routes/export/helpers/types.ts"
+  ],
+  "src/backend/routes/export/playlist.ts": [
+    "src/backend/services/export.ts",
+    "src/backend/services/cache.ts",
+    "src/backend/types/env.ts",
+    "src/backend/types/variables.ts",
+    "src/backend/routes/export/helpers/cache-keys.ts",
+    "src/backend/routes/export/helpers/format.ts",
+    "src/backend/routes/export/helpers/errors.ts",
+    "src/backend/routes/export/helpers/file-bytes.ts",
+    "src/backend/routes/export/helpers/request-id.ts",
+    "src/backend/routes/export/helpers/types.ts"
+  ],
+  "src/backend/routes/export/playlists.ts": [
+    "src/backend/services/export.ts",
+    "src/backend/services/cache.ts",
+    "src/backend/types/env.ts",
+    "src/backend/types/variables.ts",
+    "src/backend/routes/export/helpers/cache-keys.ts",
+    "src/backend/routes/export/helpers/format.ts",
+    "src/backend/routes/export/helpers/errors.ts",
+    "src/backend/routes/export/helpers/file-bytes.ts",
+    "src/backend/routes/export/helpers/request-id.ts",
+    "src/backend/routes/export/helpers/types.ts"
   ],
   "src/backend/services/spotify.ts": [
     "src/backend/types/spotify.ts",

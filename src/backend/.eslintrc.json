@@ -1,4 +1,5 @@
 {
+  /* Maintenance note: Add new top-level route families to the group block list in overrides[0] to prevent nested sub-routes importing them. */
   "env": {
     "es2022": true,
     "worker": true
@@ -39,14 +40,14 @@
   },
   "overrides": [
     {
-      "files": ["routes/*.ts"],
+      "files": ["routes/**/*.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
               {
-                "group": ["../routes/*"],
+                "group": ["../routes/*", "../analysis", "../auth", "../spotify"],
                 "message": "Routes must not import from other routes. Extract shared logic into a service in services/ instead."
               }
             ]

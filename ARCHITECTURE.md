@@ -51,7 +51,7 @@ types/           ← Shared TypeScript interfaces and enums; no logic
 |------|---------------|
 | `routes/auth.ts` | OAuth PKCE flow: `POST /auth/spotify/login`, `GET /auth/spotify/callback`, `POST /auth/spotify/refresh`, `POST /auth/logout`, `GET /auth/me` |
 | `routes/spotify.ts` | Playlists and tracks: `GET /spotify/playlists`, `GET /spotify/playlists/:id`, `GET /spotify/playlists/:id/items`, `GET /spotify/playlists/:id/tracks` (alias), `GET /spotify/tracks/:id`, `GET /spotify/tracks/:id/audio-features` |
-| `routes/export.ts` | Single-playlist export (`POST /export/playlist/:id`), combined export (`POST /export/playlists`), chunked combined export (`POST /export/playlists/chunk`), resumable job API (`POST /export/jobs`, `POST /export/jobs/:jobId/step`, `GET /export/jobs/:jobId/status`, `GET /export/jobs/:jobId/download`), status and download endpoints for each |
+| `routes/export/index.ts` | Composed Hono sub-app: mounts `jobsApp` at `/jobs`, `playlistsApp` at `/playlists`, `playlistApp` at `/playlist`. Sub-routers live at `routes/export/{jobs,playlists,playlist}.ts`; helpers at `routes/export/helpers/`. Single-playlist export (`POST /export/playlist/:id`), combined export (`POST /export/playlists`), chunked combined export (`POST /export/playlists/chunk`), resumable job API (`POST /export/jobs`, `POST /export/jobs/:jobId/step`, `GET /export/jobs/:jobId/status`, `GET /export/jobs/:jobId/download`), status and download endpoints for each |
 | `routes/analysis.ts` | Playlist analysis job lifecycle: `POST /analysis/playlist/:id`, `GET /analysis/playlist/:id/status`, `GET /analysis/playlist/:id/results`, `DELETE /analysis/playlist/:id` |
 | `middleware/auth.ts` | JWT verification; loads full session from SESSIONS_KV; transparently refreshes Spotify access token when expired |
 | `middleware/error.ts` | Global error → structured `ErrorResponse` |
@@ -163,6 +163,12 @@ Cache keys in the backend do not follow a single format — each service uses it
 | Analysis results | `analysis:<playlistId>:<userId>:results` | 24 hr |
 | Export job | `export:job:<jobId>:<userId>` | 1 hr |
 | Export file bytes | `export:job:<jobId>:<userId>:file[:<mode>]` | 1 hr |
+| Batch export job | `export:batch:<jobId>:<userId>` | 1 hr |
+| Batch export data | `export:batch:<jobId>:<userId>:data` | 1 hr |
+| Batch export file | `export:batch:<jobId>:<userId>:file` | 1 hr |
+| Single export status | `export:<playlistId>:<userId>` | 1 hr |
+| Single export data | `export:<playlistId>:<userId>:data` | 1 hr |
+| Single export file | `export:<playlistId>:<userId>:file` | 1 hr |
 
 Sessions are stored separately in `SESSIONS_KV` (not `CACHE_KV`) with a 30-day TTL.
 

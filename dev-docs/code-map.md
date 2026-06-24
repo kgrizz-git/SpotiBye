@@ -148,7 +148,7 @@ graph TD
         R_AUTH["routes/auth.ts\nPOST /auth/spotify/login\nGET  /auth/spotify/callback"]
         R_SP["routes/spotify.ts\nGET /spotify/playlists"]
         R_AN["routes/analysis.ts\nPOST /analysis/playlist/:id\nGET  /analysis/playlist/:id/status\nGET  /analysis/playlist/:id/results\nDELETE /analysis/playlist/:id"]
-        R_EX["routes/export.ts\nPOST /export/playlists\nGET  /export/job/:id"]
+        R_EX["routes/export/index.ts\nComposed router\n/jobs · /playlists · /playlist"]
     end
 
     subgraph Middleware
@@ -261,7 +261,7 @@ graph TD
 | [routes/auth.ts](../src/backend/routes/auth.ts) | `POST /auth/spotify/login`, `GET /auth/spotify/callback` |
 | [routes/spotify.ts](../src/backend/routes/spotify.ts) | `GET /spotify/playlists` (KV-cached) |
 | [routes/analysis.ts](../src/backend/routes/analysis.ts) | Analysis job lifecycle — writes queued status and sends `ANALYSIS_QUEUE` messages |
-| [routes/export.ts](../src/backend/routes/export.ts) | Two-phase resumable export |
+| [routes/export/index.ts](../src/backend/routes/export/index.ts) | Composed router (facade at `routes/export.ts`) mounting resumable, batch, and single export sub-routers |
 | [services/spotify.ts](../src/backend/services/spotify.ts) | **Only** caller of `api.spotify.com` — playlists, tracks, audio features |
 | [services/spotify-auth.ts](../src/backend/services/spotify-auth.ts) | OAuth code exchange, token refresh |
 | [services/jwt.ts](../src/backend/services/jwt.ts) | HMAC-SHA256 JWT sign/verify (no external library) |

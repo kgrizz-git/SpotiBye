@@ -151,13 +151,13 @@ Sub-router for single-playlist routes (`playlistApp`). Instantiated with `<{ Bin
 
 ## Implementation Steps
 
-- [ ] Create folder structure and placeholder files (containing `export {};`) to ensure the project compiles:
+- [x] Create folder structure and placeholder files (containing `export {};`) to ensure the project compiles:
   - `src/backend/routes/export/index.ts`
   - `src/backend/routes/export/jobs.ts`
   - `src/backend/routes/export/playlists.ts`
   - `src/backend/routes/export/playlist.ts`
   - *Note:* Creating these placeholders creates a transient non-functional state in the import chain until the handlers and parent index are fully implemented in subsequent steps. Avoid running tests until the index composition is complete.
-- [ ] Create helper files and implement their actual contents:
+- [x] Create helper files and implement their actual contents:
   - `src/backend/routes/export/helpers/types.ts`
   - `src/backend/routes/export/helpers/cache-keys.ts`
   - `src/backend/routes/export/helpers/format.ts`
@@ -167,21 +167,21 @@ Sub-router for single-playlist routes (`playlistApp`). Instantiated with `<{ Bin
   - *Note:* From `routes/export/<file>.ts`, use `./helpers/*` for siblings in the same `export/` folder and `../../services|types|middleware/*` for parent-level folders. There is no case requiring `../../../` from any new file.
   - *Note:* Import `ContentfulStatusCode` from `hono/utils/http-status` inside `errors.ts` for `resolveErrorStatus` and in sub-router files where casts are needed. Do not import it in the facade or `index.ts`.
   - *Note:* In `helpers/types.ts`, add a comment noting that `ResumableExportJobState` is imported directly from `services/export-types.ts` (not re-exported) to keep it as a leaf module.
-- [ ] Add 3 new isolated unit test files in `src/backend/tests/` (`cache-keys.test.ts`, `format.test.ts`, and `errors.test.ts`), bringing the total test files count to 38. Pin key composition backwards compatibility and verify that `parseXlsxRenderMode` defaults to `'auto'` on invalid inputs.
-- [ ] Extract route handlers into `jobs.ts`, `playlists.ts`, and `playlist.ts` sub-apps. During extraction:
+- [x] Add 3 new isolated unit test files in `src/backend/tests/` (`cache-keys.test.ts`, `format.test.ts`, and `errors.test.ts`), bringing the total test files count to 38. Pin key composition backwards compatibility and verify that `parseXlsxRenderMode` defaults to `'auto'` on invalid inputs.
+- [x] Extract route handlers into `jobs.ts`, `playlists.ts`, and `playlist.ts` sub-apps. During extraction:
   - Extract the file-precaching block (lines 288-346 of the original) from the jobs step handler into `precacheJobFiles(...)` in `helpers/file-bytes.ts`.
   - Import standard types: `ResumableExportJobState` from `../../services/export-types` and `ResumableExportAssemblyState` from `../../services/export` (the facade).
   - Remove the 9 redundant `resolveErrorStatus(...) as ContentfulStatusCode` casts from handler files. Keep inline numeric casts (such as `{ status: 404 as ContentfulStatusCode }`) unchanged to preserve Hono compatibility.
   - Preserve the pre-existing inconsistency of passing status `400` (no-cast on line 192, explicit cast on lines 668 and 770) to prevent unnecessary diff noise.
   - Replace the 8 request-related `crypto.randomUUID()` calls (lines 180, 227, 513, 523, 655, 751, 944, 1021) with `newRequestId()`. Leave the 4 `jobId` declarations (lines 196, 550, 673, 775) using `crypto.randomUUID()`.
-- [ ] Implement `routes/export/index.ts` mounting all sub-apps under their respective prefixes with `authMiddleware` applied at the parent level.
-- [ ] Reduce `routes/export.ts` to exactly the specified 1-line re-export of `exportRoutes` from `routes/export/index.ts`.
-- [ ] Update the lint rule override in `src/backend/.eslintrc.json` to cover nested routes:
+- [x] Implement `routes/export/index.ts` mounting all sub-apps under their respective prefixes with `authMiddleware` applied at the parent level.
+- [x] Reduce `routes/export.ts` to exactly the specified 1-line re-export of `exportRoutes` from `routes/export/index.ts`.
+- [x] Update the lint rule override in `src/backend/.eslintrc.json` to cover nested routes:
   - Replace the `files: ["routes/*.ts"]` pattern with `["routes/**/*.ts"]`.
   - Update the restricted pattern `group: ["../routes/*"]` to `["../routes/*", "../analysis", "../auth", "../spotify"]` so sibling imports from nested route files to other route families are blocked. Document the maintenance burden of the explicit list in a comment inside `.eslintrc.json`.
-- [ ] Extend `src/backend/tests/architecture.test.ts` to recursively scan `routes/`. Ensure test names use the relative path prefix (e.g., `routes/export/jobs.ts` instead of `jobs.ts`) to avoid duplicate name collisions.
-- [ ] Update the architecture test violation pattern for routes. Since nested routes can use relative paths like `../` to reference siblings, resolve import paths relative to the source file. If the resolved absolute path points to a file within `src/backend/routes/` that belongs to a different route family (e.g., `analysis` from `export/`), treat it as a violation. Use a helper function `isSameFamily(sourceFile: string, resolvedImport: string): boolean` that compares the first directory segment under `routes/` (e.g., `export`, `analysis`, or top-level `""` family) and returns `false` if they differ (such as comparing a top-level route with a sub-family route, or different sub-families).
-- [ ] Update documentation references:
+- [x] Extend `src/backend/tests/architecture.test.ts` to recursively scan `routes/`. Ensure test names use the relative path prefix (e.g., `routes/export/jobs.ts` instead of `jobs.ts`) to avoid duplicate name collisions.
+- [x] Update the architecture test violation pattern for routes. Since nested routes can use relative paths like `../` to reference siblings, resolve import paths relative to the source file. If the resolved absolute path points to a file within `src/backend/routes/` that belongs to a different route family (e.g., `analysis` from `export/`), treat it as a violation. Use a helper function `isSameFamily(sourceFile: string, resolvedImport: string): boolean` that compares the first directory segment under `routes/` (e.g., `export`, `analysis`, or top-level `""` family) and returns `false` if they differ (such as comparing a top-level route with a sub-family route, or different sub-families).
+- [x] Update documentation references:
   - In `dev-docs/code-map.md`, update the Mermaid diagram route node and the file index entry for `routes/export.ts` to point to the new folder structure and `routes/export/index.ts`.
   - In `ARCHITECTURE.md`, update the `routes/export.ts` table row to reference `routes/export/index.ts` with sub-routers and helpers details:
     ```
@@ -190,12 +190,12 @@ Sub-router for single-playlist routes (`playlistApp`). Instantiated with `<{ Bin
     Also, add definitions for the batch and single-export keys in the KV Keys section.
   - In `docs/design-docs/resumable-export-cursors.md`, update the link referencing `routes/export.ts` for accuracy.
   - Leave historical completed plans and bug reviews unchanged.
-- [ ] Add a follow-up item in `dev-docs/TO_DO.md` to split the XLSX render-modes and prebuilt-format slots in `buildExportFileKey` as noted in the known smell follow-up.
-- [ ] Run full backend verification suite: `npm run test:run && npm run lint && npm run build` (should run all 38 test files cleanly).
-- [ ] Run `./scripts/verify-all.sh` from the repo root.
-- [ ] Add entry to `CHANGELOG.md` under the most recent `### Changed` block of the `## [Unreleased]` section:
+- [x] Add a follow-up item in `dev-docs/TO_DO.md` to split the XLSX render-modes and prebuilt-format slots in `buildExportFileKey` as noted in the known smell follow-up.
+- [x] Run full backend verification suite: `npm run test:run && npm run lint && npm run build` (should run all 38 test files cleanly).
+- [x] Run `./scripts/verify-all.sh` from the repo root.
+- [x] Add entry to `CHANGELOG.md` under the most recent `### Changed` block of the `## [Unreleased]` section:
   > Refactored `routes/export.ts` (1,050 lines) into a Hono sub-app composition at `routes/export/` with helper modules under `routes/export/helpers/` (types, cache-keys, format, errors, request-id, file-bytes). The public `exportRoutes` export is preserved; no call-site or test-assertion changes. The local `ResumableExportJobStatus` alias is removed in favor of the service-layer `ResumableExportJobState`; both name and shape are now sourced from `services/export-types.ts`.
-- [ ] Manually update `dev-docs/dependency-graph.json` to replace the `src/backend/routes/export.ts` entry with the new structure. Ensure the new keys are inserted in alphabetical order under the `src/backend/` prefix:
+- [x] Manually update `dev-docs/dependency-graph.json` to replace the `src/backend/routes/export.ts` entry with the new structure. Ensure the new keys are inserted in alphabetical order under the `src/backend/` prefix:
   - *Before:*
     ```json
     "src/backend/routes/export.ts": [
@@ -266,9 +266,7 @@ Sub-router for single-playlist routes (`playlistApp`). Instantiated with `<{ Bin
     "src/backend/routes/export/helpers/request-id.ts": [],
     "src/backend/routes/export/helpers/types.ts": []
     ```
-- [ ] Update `dev-docs/TO_DO.md`, move this plan to `docs/exec-plans/completed/`, and update the index.
-
----
+- [x] Update `dev-docs/TO_DO.md`, move this plan to `docs/exec-plans/completed/`, and update the index.
 
 ## Risks and Mitigations
 
@@ -279,8 +277,6 @@ Sub-router for single-playlist routes (`playlistApp`). Instantiated with `<{ Bin
 - **Logging Violations**: The 9 pre-existing `console.info` statements violate Golden Principle #5. They are explicitly accepted as "out of scope" for this structural refactoring to prevent diff noise. The 16 `console.warn`/`console.error` calls are also out of scope.
 - **Commit strategy**: While execution will follow sequential commits to keep tests passing at each step, the final payload will be merged as a single atomic PR.
 - **Pre-existing test defects**: Unrelated test defects (such as the mismatched status assertion in `tests/export.test.ts:255-270`) must not be touched in this PR to keep diff reviews focused.
-
----
 
 ## Success Criteria
 

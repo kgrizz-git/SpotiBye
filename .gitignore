@@ -32,6 +32,9 @@ docs/api_key_security.md
 # VSCode
 .vscode/
 
+# Temporary files (plan reviews, assessments, etc.)
+tmp/
+
 # AI/IDE tooling (local agent config, not project code)
 .claude/
 .kilo/
