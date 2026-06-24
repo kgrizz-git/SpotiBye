@@ -108,13 +108,28 @@
     "src/shared/logging_config.py"
   ],
   "src/frontend/screens/main_screen.py": [
-    "src/frontend/config/backend_config.py",
-    "src/frontend/state.py",
-    "src/frontend/ui/cache_explorer.py",
-    "src/frontend/ui/layouts.py",
-    "src/frontend/utils/platform_utils.py",
-    "src/shared/exceptions.py",
+    "src/frontend/screens/cache_explorer_adapter.py",
+    "src/frontend/screens/main_screen_cache.py",
+    "src/frontend/screens/main_screen_error_popup.py",
+    "src/frontend/screens/main_screen_export.py",
+    "src/frontend/screens/main_screen_filenames.py",
+    "src/frontend/screens/main_screen_logout.py",
+    "src/frontend/screens/main_screen_scheduler.py",
+    "src/frontend/screens/main_screen_search_sort_ui.py",
+    "src/frontend/screens/main_screen_selection.py",
+    "src/frontend/screens/main_screen_ui.py",
     "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/main_screen_search_sort_ui.py": [
+    "src/frontend/screens/main_screen_sort_filter.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/main_screen_selection.py": [
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/main_screen_ui.py": [
+    "src/frontend/config/backend_config.py",
+    "src/frontend/ui/layouts.py"
   ],
   "src/frontend/screens/cache_explorer_adapter.py": [
     "src/frontend/ui/cache_explorer.py",

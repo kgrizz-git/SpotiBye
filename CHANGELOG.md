@@ -7,6 +7,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Changed
+- Refactored `main_screen.py` (1,041 lines) into a coordinator (494 lines) plus `main_screen_ui.py` (`MainScreenUIBuilder`), `main_screen_selection.py` (`SelectionManager`), and `main_screen_search_sort_ui.py` (`SearchSortUIHandler`). Property facades preserve `BackendMainScreen` compatibility; no caller changes required. Added unit tests for selection, search/sort, and facade round-trips.
 - Refactored `backend_main_screen_adapter.py` (~1,100 lines) into a facade composing 9 mixin modules under `adapter_mixins/` (core, playlists, tracks, analysis, exports, exports_resumable, exports_download, jobs, utilities). All public names (`BackendMainScreenAdapter`, `create_backend_adapter`, `get_reccobeats_api`, `create_spotify_client_with_refresh`) are preserved at the same import path; no caller changes required.
 - Fixed a copy-paste error message in `get_playlist_tracks` that emitted `"Export generation failed"` instead of the correct `"Failed to load playlist tracks"`.
 - Refactored `routes/export.ts` (1,050 lines) into a Hono sub-app composition at `routes/export/` with helper modules under `routes/export/helpers/` (types, cache-keys, format, errors, request-id, file-bytes). The public `exportRoutes` export is preserved; no call-site or test-assertion changes. The local `ResumableExportJobStatus` alias is removed in favor of the service-layer `ResumableExportJobState`; both name and shape are now sourced from `services/export-types.ts`.

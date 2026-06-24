@@ -214,7 +214,10 @@ graph TD
 | [services/reccobeats_backend.py](../src/frontend/services/reccobeats_backend.py) | `ReccoBeatsBackendService` — analysis requests via backend |
 | [caching/backend_cache.py](../src/frontend/caching/backend_cache.py) | `BackendCacheManager` — disk cache for tokens, jobs, analysis |
 | [config/backend_config.py](../src/frontend/config/backend_config.py) | URLs, feature flags, timeouts, `OAUTH_CALLBACK_PORT`, `EXPORT_DIR` |
-| [screens/main_screen.py](../src/frontend/screens/main_screen.py) | `MainScreen` — backend-only base screen (no standalone/v2 deps) |
+| [screens/main_screen.py](../src/frontend/screens/main_screen.py) | `MainScreen` — backend-only coordinator; delegates to selection, search/sort, UI builder, export/cache/logout modules |
+| [screens/main_screen_ui.py](../src/frontend/screens/main_screen_ui.py) | `MainScreenUIBuilder` — Kivy widget construction and event binding |
+| [screens/main_screen_selection.py](../src/frontend/screens/main_screen_selection.py) | `SelectionManager` — playlist checkbox selection state |
+| [screens/main_screen_search_sort_ui.py](../src/frontend/screens/main_screen_search_sort_ui.py) | `SearchSortUIHandler` — debounced search/sort UI logic |
 | [screens/backend_main_screen.py](../src/frontend/screens/backend_main_screen.py) | `BackendMainScreen(MainScreen)` — overrides widget factory methods with frontend-native components |
 | [screens/backend_main_screen_adapter.py](../src/frontend/screens/backend_main_screen_adapter.py) | `BackendMainScreenAdapter` — thin facade composing 9 mixins from `adapter_mixins/` |
 | [screens/adapter_mixins/](../src/frontend/screens/adapter_mixins/) | Mixin modules: `core` (init/callbacks/retry), `playlists`, `tracks`, `analysis`, `exports`, `exports_resumable`, `exports_download`, `jobs`, `utilities` |

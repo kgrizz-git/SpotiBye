@@ -15,7 +15,7 @@
 ## Frontend
 
 - [x] Refactor `backend_main_screen_adapter.py` (1,116 lines) — [Plan](../docs/exec-plans/active/2026-06-24-refactor-backend-main-screen-adapter.md) (Completed 2026-06-24)
-- [ ] Refactor `main_screen.py` (1,041 lines) — [Plan](../docs/exec-plans/active/2026-06-24-refactor-main-screen.md)
+- [x] Refactor `main_screen.py` (1,041 lines) — [Plan](../docs/exec-plans/completed/2026-06-24-refactor-main-screen.md) (Completed 2026-06-24)
 - [ ] Fix UI handling of queued analysis jobs: recognize `queued`/`processing` states, display ReccoBeats audio feature data (currently only top artists show)
 - [ ] Add visual progress indicator for playlist analysis (wire `analysis_task` progress into UI)
 - [ ] Fix deprecated `AsyncImage` properties (`allow_stretch`, `keep_ratio`)

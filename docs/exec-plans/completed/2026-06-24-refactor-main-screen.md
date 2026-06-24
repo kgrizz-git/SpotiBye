@@ -1,5 +1,7 @@
 # Refactor main_screen.py
 
+**Completed:** 2026-06-24 — `main_screen.py` reduced from 1,041 to 494 lines. Extracted `main_screen_ui.py`, `main_screen_selection.py`, `main_screen_search_sort_ui.py`. `BackendMainScreen` unchanged.
+
 ## Objective
 Refactor `src/frontend/screens/main_screen.py` (currently ~1,041 lines) to improve maintainability and readability. Export, cache, and logout logic are already extracted; this pass extracts UI construction, search/sort event handling, and selection state into dedicated modules. Target size: **~450–500 lines** (facade surface on `MainScreen` makes tighter targets unrealistic).
 
@@ -63,15 +65,15 @@ Methods that stay on `MainScreen` but must route through facades: `load_playlist
 
 ## Plan
 
-- [ ] **Step 1: File backups**
+- [x] **Step 1: File backups**
   - `mkdir -p backups`, then copy `main_screen.py` and `backend_main_screen.py` to `backups/` before edits.
 
-- [ ] **Step 2: Extract `SelectionManager`**
+- [x] **Step 2: Extract `SelectionManager`**
   - Create `src/frontend/screens/main_screen_selection.py` — `__init__(self, screen)` stores `self.screen`, owns `selected_playlist_ids` set.
   - Move selection logic; remove unused `select_all()`. Read `playlist_widgets` via `self.screen.playlist_widgets`.
   - Wire facades from the table (`selected_playlist_ids` property + selection methods).
 
-- [ ] **Step 3: Extract `SearchSortUIHandler`**
+- [x] **Step 3: Extract `SearchSortUIHandler`**
   - Create `src/frontend/screens/main_screen_search_sort_ui.py` — same `__init__(self, screen)` convention.
   - Move debounced search/sort UI logic and state (`search_query`, sort keys, `_search_trigger` / `_sort_trigger`, `filtered_playlists`). Guard trigger cancel: `if self._search_trigger: self._search_trigger.cancel()`.
   - Rename method `sort_playlists` → `schedule_sort_refresh()`; debounce terminus calls `self.screen._perform_sort()`.
@@ -79,31 +81,31 @@ Methods that stay on `MainScreen` but must route through facades: `load_playlist
   - Keep `_get_filtered_playlists` / `_sort_playlists` on `MainScreen` as one-liner facades that read `search_query`, `current_sort_key`, `current_sort_reverse` via **property facades** (not raw attributes). `BackendMainScreen` call sites unchanged.
   - Wire remaining search/sort facades from the table.
 
-- [ ] **Step 4: Extract `MainScreenUIBuilder`**
+- [x] **Step 4: Extract `MainScreenUIBuilder`**
   - Create `src/frontend/screens/main_screen_ui.py`; move `build_ui` and `_create_*` helpers with their Kivy widget imports (including `RelativeLayout` — currently imported at module top and again inside export section).
   - Builder takes `MainScreen`, assigns widget contract attributes, binds events to `screen.*` facades.
   - Preserve existing `background_color` list literals as-is (Kivy 2.2+ tuple migration is out of scope).
   - `MainScreen.__init__`: managers first (see constraint #3), then `build_ui()`.
 
-- [ ] **Step 5: Consolidate `main_screen.py`**
+- [x] **Step 5: Consolidate `main_screen.py`**
   - Remove unused top-level `import re` (line 6).
   - Remove duplicate `RelativeLayout` import (now lives in UI builder module).
   - Keep on `MainScreen`: `playlists`, `playlist_widgets`, `backend_adapter`, `on_format_change`, `on_enter`, `load_playlists_with_cache`, `update_status_with_cache_info`, `_perform_sort` stub (`raise NotImplementedError`).
   - Verify ~450–500 lines.
 
-- [ ] **Step 6: Documentation**
+- [x] **Step 6: Documentation**
   - Update `dev-docs/code-map.md`.
   - Manually update `dev-docs/dependency-graph.json` with new module import edges (no generator script — follow pattern in completed adapter/export plans).
   - On completion: move plan to `docs/exec-plans/completed/` and index in `docs/exec-plans/completed/README.md`.
   - No `CHANGELOG.md` entry (internal refactor).
 
-- [ ] **Step 7: Verification**
+- [x] **Step 7: Verification**
   - **Unit tests** (mock `screen` with `selection_manager` / `search_sort`; patch `Clock.schedule_once` for debounce):
     - `SelectionManager`: toggle/deselect all, checkbox → live set, counter label.
     - `SearchSortUIHandler`: debounce + cancel on rapid input; search/clear trigger `display_playlists_with_cache`; sort triggers `screen._perform_sort` once after debounce.
     - `test_main_screen_facades.py`: `screen.selected_playlist_ids is screen.selection_manager.selected_playlist_ids`; mutation via property visible to manager; property round-trip for search/filter/sort state.
-  - **Frontend suite**: `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v`
-  - **Headed `BackendMainScreen` smoke** (login → search debounce → clear search → sort + direction → select all/clear all → single checkbox + filter persistence → export with selection).
+  - **Frontend suite**: `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v` — 126 passed, 7 skipped.
+  - **Headed `BackendMainScreen` smoke** (login → search debounce → clear search → sort + direction → select all/clear all → single checkbox + filter persistence → export with selection) — not run in CI; manual check recommended.
   - Sync `dev-docs/TO_DO.md`.
 
 ## Out of scope
