@@ -7,7 +7,7 @@
 
 ## Backend
 
-- [ ] Refactor `routes/export.ts` (1,045 lines)
+- [ ] Refactor `routes/export.ts` (1,050 lines) — [Plan](../docs/exec-plans/active/2026-06-24-refactor-routes-export-ts.md)
 - [ ] Refactor playlist analysis to fan-out queue architecture (distributed batches to handle >40 artists per Worker invocation)
 - [ ] Track/remove `esbuild` and `uuid` npm overrides in `src/backend/package.json` once upstream ships patched releases
 
