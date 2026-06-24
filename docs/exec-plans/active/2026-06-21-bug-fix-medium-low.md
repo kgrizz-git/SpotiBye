@@ -2,23 +2,22 @@
 
 > **Source audit:** [dev-docs/bug-review-2026-06-21-183947.md](../../dev-docs/bug-review-2026-06-21-183947.md)
 > **Scope:** 36 remaining findings: 21 in backend TypeScript (11 medium, 10 low); 15 in frontend Python (6 medium, 9 low).
-> **Sister plan:** [Critical & High bugs](./2026-06-21-bug-fix-critical-high.md) — finish that first.
-> **Coordination:** Several `export.ts` items (BE-TYPE-2, BE-LOG-6, BE-LOG-7, BE-API-3) overlap with the active [2026-06-21 Refactor export.ts](./2026-06-21-refactor-export-ts.md) plan. Apply the type-safety fixes inside the new modules during the split rather than re-touching the monolithic file.
-> **Dependency Note:** Line numbers for items in `src/backend/routes/auth.ts`, `src/backend/services/spotify.ts`, and `src/frontend/services/backend_client.py` will have shifted slightly due to insertions from the Critical & High plan (BT-3, BT-4, BT-7, FT-3). FL-1 and FL-9 explicitly rely on the `_cache_file_path` helper introduced by FT-5.
+> **Sister plan:** [Critical & High bugs](../completed/2026-06-21-bug-fix-critical-high.md) — ✅ **Complete as of 2026-06-24.** All pre-flight dependencies are in place.
+> **Coordination:** The `export.ts` refactor ([2026-06-21-refactor-export-ts.md](../completed/2026-06-21-refactor-export-ts.md)) is ✅ **complete as of 2026-06-24.** BM-4, BM-5, BL-2, BL-3, BL-10 targets have been updated accordingly — see individual items below.
+> **Dependency Note:** Line numbers in `src/backend/routes/auth.ts`, `src/backend/services/spotify.ts`, and `src/frontend/services/backend_client.py` shifted due to the critical-high plan (BT-3, BT-4, BT-7, FT-3). FL-1 and FL-9 rely on `_cache_file_path` (FT-5 — ✅ landed in `src/frontend/caching/backend_cache.py:311`).
 > **Verification:** `./scripts/verify-all.sh` after each step group.
 > **2nd-agent review:** [tmp/plan_review_2026-06-21_160000.md](../../../tmp/plan_review_2026-06-21_160000.md) — 20 findings, all addressed inline below.
 > **3rd-agent review:** [tmp/plan_assessment_2026-06-21_medium_low.md](../../../tmp/plan_assessment_2026-06-21_medium_low.md) — 2 errors + 8 gaps + 4 observations, addressed inline below.
 > **4th-agent review:** [tmp/bug-fix-medium-low-assessment.md](../../../tmp/bug-fix-medium-low-assessment.md) — 3 errors + 6 gaps + 2 improvements, addressed inline below.
+> **2026-06-24 update:** BL-10 and BL-3 resolved during the export.ts refactor. BM-4 and BL-2 retargeted from `services/export.ts` to `export-tracks.ts`. BM-5 is now unblocked. Pre-flight dependencies confirmed in place.
 
 ## Pre-flight Dependencies
 
-Before executing any commit in this plan, the following must be in place from the critical-high plan (the [sister plan](./2026-06-21-bug-fix-critical-high.md)):
+All pre-flight dependencies are ✅ confirmed in place as of 2026-06-24:
 
-- **`src/backend/tests/helpers/env.ts` with `createTestEnv()`** — required for BM-3 and BM-10 new test files. (Pre-flight task in the critical-high plan; verify it landed.)
-- **`BackendCacheManager._cache_file_path` helper (FT-5)** — required for FL-1 and FL-9. Both commit 1 of this plan and the critical-high plan's commit 5 must land before FL-1/FL-9 can execute. (Cross-reference: the critical-high plan's FT-5 should mention this downstream dependency in its own Coordination Notes section.)
-- **`chmod`-fix for FT-3** — any backend test that uses `createTestEnv` requires the critical-high pre-flight to have set `ALLOWED_REDIRECT_URIS` in `.env.test`. Verify `.env.test` is present.
-
-The critical-high plan's plan body should be updated to cross-reference FL-1/FL-9 in its own Coordination Notes — without that, an executor of the critical-high plan in isolation may not realize these downstream items depend on FT-5.
+- **`src/backend/tests/helpers/env.ts` with `createTestEnv()`** — ✅ `src/backend/tests/helpers/env.ts` exists with `createTestEnv` and `TEST_ALLOWED_REDIRECT_URIS`. Required for BM-3 and BM-10 test files.
+- **`BackendCacheManager._cache_file_path` helper (FT-5)** — ✅ `src/frontend/caching/backend_cache.py:311`. Required for FL-1 and FL-9.
+- **`ALLOWED_REDIRECT_URIS` in `.env.test`** — ✅ `src/backend/types/env.ts:21` has the field; `src/backend/.env.test` should be confirmed at execution time.
 
 ---
 
@@ -69,18 +68,28 @@ The critical-high plan's plan body should be updated to cross-reference FL-1/FL-
     2. **Completion-write test:** simulate a progress update (50) followed by a completion — the final write must include the `progress: 50` field set by the progress callback (not the stale `progress: 10` from the initial `processing` write).
     3. **Retry-write test:** simulate a progress update (50) followed by an exception — the catch-block retry write must include the `progress: 50` field, not the stale `progress: 10`.
 
-### BM-4: Remove pervasive `any` from `export.ts` (BE-TYPE-2)
+### BM-4: Remove pervasive `any` from export-tracks.ts (BE-TYPE-2)
 
-- [ ] **Files:** `src/backend/services/export.ts` — `buildPlaylistMetadata(playlist: any)` at `~line 818`, `buildExportTracks(allTracks: any[])` at `~line 837`, `calculateTotalDurationMs(items: any[])` at `~line 831`, and 4+ other locations
-  - **Skip-if-refactor-completes-first:** The active [2026-06-21 Refactor export.ts](./2026-06-21-refactor-export-ts.md) plan already extracts every `any` into typed `export-types.ts` definitions. Verify post-refactor with `rg "\\bany\\b" src/backend/services/export-*.ts`; the result should be empty (test mocks excluded).
-  - If the refactor has not landed by the time this plan runs, apply the type tightening in-place on the monolithic `export.ts` (change `playlist: any` → `playlist: SpotifyPlaylist`, `items: any[]` → `items: SpotifyPlaylistTrackItem[]`, etc., using the `SpotifyPlaylist`, `SpotifyTrack`, `SpotifyPlaylistTrackItem` types from `src/backend/types/spotify.ts`).
+> **2026-06-24 update:** The refactor is complete but did NOT eliminate `any` in `export-tracks.ts` — the types were carried over as-is. The "skip if refactor completes first" assumption was wrong. This item must still be applied, now targeting `export-tracks.ts` instead of the old `services/export.ts`.
+>
+> **Type mismatch to resolve first:** `buildPlaylistMetadata` accesses `playlist?.followers?.total`, but `SpotifyPlaylist` in `src/backend/types/spotify.ts` has no `followers` field. Before changing the param type, add `followers?: { total: number }` to `SpotifyPlaylist`. Confirm against the live Spotify API contract (the field is present on full playlist objects from `GET /playlists/{id}`).
+
+- [ ] **File:** `src/backend/services/export-tracks.ts`
+  - `buildPlaylistMetadata(playlist: any)` → `buildPlaylistMetadata(playlist: SpotifyPlaylist | undefined)` (see BL-2 below; these two items share the same function — do them together)
+  - `calculateTotalDurationMs(items: any[])` → `calculateTotalDurationMs(items: SpotifyPlaylistTrackItem[])`
+  - `mapTrackForExport(track: any, audioFeatures: any)` → `mapTrackForExport(track: SpotifyTrack, audioFeatures: SpotifyAudioFeatures | null | undefined)` (verify `SpotifyAudioFeatures` exists or define it in `src/backend/types/spotify-api.ts`)
+  - `buildExportTracks(allTracks: any[])` → `buildExportTracks(allTracks: SpotifyPlaylistTrackItem[])`
+  - `loadAudioFeaturesMap(...)` return type `Map<string, any>` → `Map<string, SpotifyAudioFeatures>`
+  - Inner `.filter((item: any) =>` / `.map((item: any) =>` lambdas — remove the redundant `any` annotations once the parameter type is `SpotifyPlaylistTrackItem[]`
+  - Import `SpotifyPlaylist`, `SpotifyTrack`, `SpotifyPlaylistTrackItem` from `src/backend/types/spotify.ts`; import (or define) `SpotifyAudioFeatures` as needed
 
 ### BM-5: Remove pervasive `any` from `routes/export.ts` (BE-TYPE-3)
+
+> **2026-06-24 update:** The refactor is complete and did not split `routes/export.ts` — the route file is unchanged. This item is now unblocked.
 
 - [ ] **File:** `src/backend/routes/export.ts` — `resolveStepSize(body: any)` at `~line 39`, `resolveRequestedFormat(body: any)` at `~line 75`, `resolveIncludeAudioFeatures(body: any)` at `~line 94`, and 5+ other locations
   - **Use hand-rolled type guards (recommended).** This matches the existing `parseXlsxRenderMode` pattern at `routes/export.ts:67-73` and avoids adding a new dependency. Introducing `zod` should be a separate "add Zod" PR with a `package.json` review, not bundled with this bug-fix pass.
   - Define lightweight types per endpoint (e.g. `interface CreateJobsBody { playlist_ids?: unknown[]; format?: unknown; ... }`) and a guard function (e.g. `function parseCreateJobsBody(raw: unknown): CreateJobsBody`). Replace every `body: any` parameter with the parsed type.
-  - **Defer until after `2026-06-21-refactor-export-ts.md` completes** — the route file shape may change. If the refactor splits the routes too, apply the type guards at the new module boundaries.
 
 ### BM-6: Replace double `as unknown as T` casts (BE-TYPE-5)
 
@@ -157,16 +166,16 @@ The critical-high plan's plan body should be updated to cross-reference FL-1/FL-
 
 ### BL-2: Guard `undefined` playlist in `buildPlaylistMetadata` (BE-LOG-6)
 
-- [ ] **File:** `src/backend/services/export.ts` ~lines 522-528
-  - Apply during the [2026-06-21 Refactor export.ts](./2026-06-21-refactor-export-ts.md) split. `buildPlaylistMetadata` must require a non-null `playlist` argument (signature change to `playlist: Playlist`) and the caller must pass a validated value.
-  - Add a unit test for the call site ensuring it never passes `undefined`.
+> **2026-06-24 update:** The refactor moved `buildPlaylistMetadata` to `export-tracks.ts`. The caller in `export-collect.ts:82` passes `playlist` which is `undefined` when `existingExportData` already has the matching ID (line 76-78). The correct signature is `SpotifyPlaylist | undefined`, not a non-null `Playlist`. Handle this together with BM-4 (same function).
 
-### BL-3: Reconcile Buffer detection (BE-LOG-7)
+- [ ] **File:** `src/backend/services/export-tracks.ts` (`buildPlaylistMetadata`, line 5)
+  - Change signature from `playlist: any` → `playlist: SpotifyPlaylist | undefined` (the caller legitimately passes `undefined` when existing data is reused — the function's optional-chaining already handles this correctly at runtime).
+  - This is the same function targeted by BM-4; apply both changes in one edit.
+- [ ] **Test:** Confirm the caller at `export-collect.ts:82` (`buildPlaylistMetadata(playlist, tracksData.total)`) compiles cleanly — `playlist` is `SpotifyPlaylist | undefined` after line 77's conditional.
 
-- [ ] **File:** `src/backend/services/export.ts` (`arrayBufferToBase64`, currently `~line 1105-1116`)
-  - **Single consumer:** `rg "Buffer\\." src/backend/` shows the `typeof Buffer !== 'undefined'` check exists only in `arrayBufferToBase64`. There's no "apply consistently across the codebase" — there's only this one site.
-  - Action: Either (a) leave the inline check as-is (it's two lines), or (b) extract to a `isNodeBuffer(x: unknown): boolean` helper in `src/backend/utils/buffer.ts` for testability. Recommend option (a) for minimum scope; the helper adds indirection without clear benefit when the check is one line.
-  - If doing the refactor-export-ts plan: `arrayBufferToBase64` moves to `export-xlsx-lite.ts` — same options apply in the new file.
+### BL-3: Reconcile Buffer detection (BE-LOG-7) — ✅ RESOLVED
+
+> **2026-06-24:** Resolved by the export.ts refactor. `arrayBufferToBase64` moved to `export-xlsx.ts:6-15` with the inline `typeof Buffer !== 'undefined'` check intact (option a as recommended). No further action needed.
 
 ### BL-4: Drop redundant `as JWTPayload` cast (BE-TYPE-4)
 
@@ -216,16 +225,15 @@ The critical-high plan's plan body should be updated to cross-reference FL-1/FL-
   - Update frontend consumers that read `data.token` to use `data.access_token`. The current `backend_client.refresh_token` already does `response.get("token") or response.get("access_token")` (line 228) — confirm that still works after the removal, then simplify the lookup to `response.get("access_token")`.
 - [ ] **Test update (3rd-agent review, G-2):** `src/backend/tests/auth.test.ts:170` asserts `expect(data.data).toHaveProperty('token', 'test-jwt-token')` — this will fail when the `token` field is removed. Delete this assertion line; keep the `access_token` assertion on the next line.
 
-### BL-10: Remove misleading playlist-fetch guard (BE-API-3)
+### BL-10: Remove misleading playlist-fetch guard (BE-API-3) — ✅ RESOLVED
 
-- [ ] **File:** `src/backend/services/export.ts` (`~lines 522-524`)
-  - **Guard Spotify API Fetch with existing data check:** Rather than dropping the conditional fetch entirely (which would cause a redundant Spotify API request when `existingExportData` already contains metadata), simplify the check to check for the presence of `existingExportData` directly. This preserves rate limits and avoids unnecessary latency:
-    ```ts
-    const playlist = existingExportData
-      ? undefined
-      : await spotifyService.getPlaylist(playlistId);
-    ```
-  - **Do this in the monolithic file BEFORE the refactor-export-ts plan lands** — the refactor moves `generatePlaylistExportSlice` to `export-collect.ts` and the fix is easier to verify in the original file. The refactor plan should call this out as a pre-requirement.
+> **2026-06-24:** Resolved during the export.ts refactor. `generatePlaylistExportSlice` moved to `export-collect.ts:61-98`. Lines 76-78 now correctly skip the Spotify fetch when existing data already covers this playlist:
+> ```ts
+> const playlist = existingExportData?.playlist.id === playlistId
+>   ? undefined
+>   : await spotifyService.getPlaylist(playlistId);
+> ```
+> The ID-match check is slightly more conservative than the plan's `existingExportData ? undefined : ...` form, and is correct. No further action needed.
 
 ---
 
@@ -486,16 +494,18 @@ The critical-high plan's plan body should be updated to cross-reference FL-1/FL-
 
 ## Coordination Notes
 
-### With `2026-06-21-refactor-export-ts.md`
-- **BL-10 (misleading playlist-fetch guard)** should be fixed in the monolithic `export.ts` BEFORE the refactor. The refactor moves `generatePlaylistExportSlice` to `export-collect.ts` and the fix is easier to verify in the original. **The refactor plan does not currently list BL-10 as a pre-requirement** — file a follow-up edit to the refactor plan to add a "Pre-requirements" section noting BL-10 must land first.
-- **BM-4 (`any` in `export.ts`)** — skip if the refactor lands first. The refactor already extracts types into `export-types.ts`. **The refactor plan should add a post-refactor step** noting that any remaining `any` in `routes/export.ts` (per BM-5) needs type guards.
-- **BM-5 (`any` in `routes/export.ts`)** — defer until after the refactor. The route file shape may change. **The refactor plan does not currently mention BM-5** — file a follow-up edit to the refactor plan to add a "Post-refactor follow-up" section referencing BM-5 in this plan.
-- **BL-2 (`buildPlaylistMetadata` undefined guard)** — apply during the refactor (the refactor moves this to `export-tracks.ts`). The refactor plan should cross-reference this.
-- **BL-3 (Buffer detection)** — apply in `export-xlsx-lite.ts` post-refactor, or in the monolithic `export.ts` if doing this plan first. The refactor plan should cross-reference this.
+### With `2026-06-21-refactor-export-ts.md` — ✅ Complete
 
-### With `2026-06-21-bug-fix-critical-high.md` (FT-5)
-- **FL-1 and FL-9 depend on the `_cache_file_path` helper introduced by FT-5** in the critical-high plan. The critical-high plan's FT-5 should mention this downstream dependency in its own Coordination Notes. Without the cross-reference, an executor of the critical-high plan in isolation will not know that FL-1/FL-9 (this plan) require FT-5 to land first.
-- **`createTestEnv` from `tests/helpers/env.ts`** — a pre-flight task in the critical-high plan. Required for BM-3 and BM-10 tests in this plan. Verify the pre-flight landed before starting this plan.
+- **BL-10** — ✅ Resolved during the refactor (see BL-10 above).
+- **BL-3** — ✅ Resolved during the refactor (see BL-3 above).
+- **BM-4** — The refactor did NOT eliminate `any` in `export-tracks.ts`. Item retargeted to `export-tracks.ts`; must still be applied (see updated BM-4).
+- **BM-5** — The refactor did not split `routes/export.ts`. Item is now unblocked (see updated BM-5).
+- **BL-2** — The refactor moved `buildPlaylistMetadata` to `export-tracks.ts`. Item retargeted; apply together with BM-4.
+
+### With `2026-06-21-bug-fix-critical-high.md` — ✅ Complete
+
+- **FL-1 and FL-9** — `_cache_file_path` (FT-5) is confirmed at `src/frontend/caching/backend_cache.py:311`. Unblocked.
+- **BM-3 and BM-10** — `createTestEnv` is confirmed at `src/backend/tests/helpers/env.ts`. Unblocked.
 
 ### With `2026-06-21-bug-review-medium-low-fixes.md` (RESOLVED — superseded)
 - ✅ **Resolved 2026-06-21.** The duplicate plan was moved to [`docs/exec-plans/completed/superseded/2026-06-21-bug-review-medium-low-fixes.md`](../../completed/superseded/2026-06-21-bug-review-medium-low-fixes.md) with a SUPERSEDED notice pointing back to this plan. The README index at `docs/exec-plans/completed/README.md` was updated.

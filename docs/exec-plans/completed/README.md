@@ -23,7 +23,7 @@
 
 | Plan | Description | Completed |
 |------|-------------|-----------|
-| [`2026-06-21-bug-fix-medium-low.md`](2026-06-21-bug-fix-medium-low.md) | Medium and low severity bug fixes across backend and frontend (BM-1,2,3,6,7,8,9,10; BL-6,7,8,9; FM-1,3,4,5,6; FL-1,2,5,6,7,9) | 2026-06-21 |
+| [`2026-06-21-bug-fix-critical-high.md`](2026-06-21-bug-fix-critical-high.md) | Critical and high severity bug fixes from 2026-06-21 audit (BT-1–8, FT-1–6): JWT bypass, Retry-After busy spin, OAuth redirect validation, silent catch blocks, queue consumer ack, PII in KV, context type loss, hardcoded test data, exposed dev URL, playlist track crash, filename corruption, cache path dedup, dead cache stats | 2026-06-24 |
 
 ## Refactor Plans
 
