@@ -7,6 +7,8 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Changed
+- Promoted `@typescript-eslint/no-explicit-any` from `warn` to `error` in `.eslintrc.json`; added `warn` override for test files. All `any` usages in non-test backend source files are now either properly typed (`ApiResponse<T = unknown>`, `ExportTrack` index signature, `get<ExportData[]>`, `ResumableExportConflictError` cast) or carry a justified `eslint-disable-next-line` comment (raw JSON boundary in `normalizePlaylistItemsResponse`, ExcelJS table type gap, backward-compat KV reads).
+- Added `[key: string]: string | number` index signature to `ExportTrack` so dynamic header-keyed access in CSV, XLSX, and lite-XLSX renderers no longer requires unsafe casts.
 - Refactored `services/export.ts` (1,186 lines) into focused modules: `export-types`, `export-cursor`, `export-job-state`, `export-assemble`, `export-collect`, `export-assembly`, `export-xlsx`, `export-xlsx-lite`, `export-csv`, `export-json`, `export-tracks`, `export-format-helpers`. The `ExportService` class is now a thin facade with static and instance delegating methods — no change to the public API, call sites, or output formats. Added unit tests for all extracted pure functions.
 
 ### Fixed
@@ -39,6 +41,12 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed `errorHandler` silently mapping 3rd-party errors (e.g., `pg`/`mongoose` `ValidationError`) to the wrong HTTP status by adding a required discriminator (`code` or `statusCode`) to each named-error branch.
 - Fixed playlist items with a missing `id` or `name` crashing the entire `/me/playlists` response — malformed items are now dropped with a `console.warn` instead of throwing.
 - Fixed `is_valid_backend_url` accepting obviously-invalid URLs like `https://x` or `http:///path`; it now parses the URL and requires a non-empty hostname containing a dot or equal to `localhost`.
+- Removed residual local `RefreshedToken` interface and `as RefreshedToken` cast from `analysis-job.ts`; `refreshAccessToken` already returns `AuthTokenResponse` so no cast is needed.
+- Removed `body: any` parameters from `resolveStepSize`, `resolveRequestedFormat`, `resolveIncludeAudioFeatures`, and `generateFileBytes` in `routes/export.ts`; parameters are now typed as `Record<string, unknown>` or `ExportData[]`.
+- Fixed `_update_analysis_ui` in `BackendPlaylistCard` being called from a background thread without main-thread dispatch; it is now decorated with `@mainthread` and the three `Clock.schedule_once` wrappers at call sites are removed.
+- Removed redundant `isinstance(details_payload, dict)` guards in `_format_backend_api_error`; `details_payload` is always a `dict` at that point.
+- Fixed `LabelBase` being re-imported on every iteration of the system-fonts fallback loop in `_setup_fonts`; the import is now done once outside the loop.
+- Fixed `ImportError` in `backend_cache_explorer.py` losing the diagnostic message; `as exc` is now captured, logged with the message, and stored in `_BACKEND_IMPORT_ERROR` so `initialize_backend_client` can surface it in the status label.
 - Fixed `download_export` accepting an unused `export_id` parameter in both `BackendClient` and `BackendMainScreenAdapter`; the parameter was dropped from the signatures and call sites.
 - Fixed tkinter screen-size detection leaking a hidden root window on exception by using try/finally to always call `root.destroy()`.
 - Fixed `clear_all_cache` showing a "Cache Cleared" popup without actually clearing the cache — the function now delegates to `screen.backend_adapter.cache_manager.clear_cache(None)`.
@@ -64,6 +72,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - `BackendClient.health_check` now catches `Exception` (in addition to `BackendAPIError`) and returns a documented three-state `status` value: `healthy` | `unhealthy` | `error`. Callers should branch on `result.get("status") == "healthy"`.
 - Renamed the custom `TimeoutError` to `NetworkTimeoutError` to avoid shadowing the Python builtin.
 - `BackendClient.download_export`, `download_batch_export`, and `download_export_job` now share a single `_download_file(endpoint, timeout, failure_prefix)` helper for auth/trace/error-parse logic.
+- `export-tracks.ts` functions (`buildPlaylistMetadata`, `calculateTotalDurationMs`, `mapTrackForExport`, `buildExportTracks`, `loadAudioFeaturesMap`) are now fully typed — all `any` parameters replaced with `SpotifyPlaylist | undefined`, `SpotifyPlaylistTrackItem[]`, `SpotifyTrack`, `SpotifyAudioFeatures | null | undefined`, and `Map<string, SpotifyAudioFeatures>`. Added `followers?: { total: number }` to `SpotifyPlaylist` (present on `GET /playlists/{id}` responses).
 - `perform_logout` now logs an error and returns gracefully when the running App lacks a `logout` method (instead of silently no-oping). Dev/test app mocks are no longer broken.
 - `Optional[callable]` annotations in `BackendMainScreenAdapter` upgraded to `Optional[Callable[..., Any]]` with the `Callable` import added.
 - Replaced `'as unknown as T'` casts in `spotify.ts` (`getAudioFeatures`, `getArtist`, `getMultipleAudioFeatures`) with typed wrappers that perform runtime shape checks and throw on invalid input.

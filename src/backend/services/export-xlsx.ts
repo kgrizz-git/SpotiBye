@@ -133,9 +133,9 @@ export async function generateCombinedExcelFile(exportDataList: ExportData[]): P
 
     let rowNumber = 12;
     for (const track of exportData.tracks) {
-      const rowValues = headers.map((header) => (track as any)[header] ?? '');
+      const rowValues = headers.map((header) => track[header] ?? '');
       sheet.getRow(rowNumber).values = rowValues;
-      const urlValue = (track as any)['Spotify URL'];
+      const urlValue = track['Spotify URL'];
       if (typeof urlValue === 'string' && urlValue.startsWith('http')) {
         sheet.getCell(`E${rowNumber}`).value = { text: urlValue, hyperlink: urlValue };
         sheet.getCell(`E${rowNumber}`).font = { color: { argb: 'FF0563C1' }, underline: true };
@@ -158,7 +158,9 @@ export async function generateCombinedExcelFile(exportDataList: ExportData[]): P
         columns: headers.map((header) => ({ name: header })),
         rows: [],
       });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ExcelJS Table type omits tableRef/autoFilterRef from its public declaration
       (tbl as any).table.tableRef = fullRef;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ExcelJS Table type omits tableRef/autoFilterRef from its public declaration
       (tbl as any).table.autoFilterRef = fullRef;
     }
 
@@ -206,7 +208,7 @@ export async function generateCombinedExcelFileFromAssembly(
       const track: Partial<ExportTrack> = {};
       for (let i = 0; i < worksheet.headers.length; i += 1) {
         const key = worksheet.headers[i] as keyof ExportTrack;
-        (track as any)[key] = row[i] ?? '';
+        track[key] = row[i] ?? '';
       }
       return track as ExportTrack;
     });

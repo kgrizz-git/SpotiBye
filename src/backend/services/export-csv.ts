@@ -14,7 +14,7 @@ export async function generateCsvFile(exportData: ExportData): Promise<ArrayBuff
   csvContent += `"Playlist: ${exportData.playlist.name}",,,,"Total Tracks: ${exportData.playlist.total_tracks}",,,,"Owner: ${exportData.playlist.owner}",,,,,,,\n`;
   csvContent += '\n';
   for (const track of exportData.tracks) {
-    const row = headers.map((header) => escapeCsvValue(String((track as any)[header] ?? '')));
+    const row = headers.map((header) => escapeCsvValue(String(track[header] ?? '')));
     csvContent += row.join(',') + '\n';
   }
   const encoder = new TextEncoder();

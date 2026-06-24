@@ -70,10 +70,12 @@ export class SpotifyService {
     return this.normalizePlaylistItemsResponse(rawData);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw JSON response boundary; shape is partially validated by parseSpotifyResponse before this call
   private normalizePlaylistItemsResponse(data: any): NormalizedPlaylistItemsResponse {
     const rawItems = Array.isArray(data?.items) ? data.items : [];
 
     const items = rawItems
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- entries are raw API objects not yet narrowed to SpotifyPlaylistTrackItem
       .map((entry: any) => {
         const normalizedTrack = entry?.track ?? entry?.item;
         if (!normalizedTrack?.id) {
@@ -85,6 +87,7 @@ export class SpotifyService {
           track: normalizedTrack,
         };
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- filter type guard asserts the narrowed shape; entry is raw API data
       .filter((entry: any): entry is SpotifyPlaylistTrackItem & { track: SpotifyTrack } => Boolean(entry));
 
     return {

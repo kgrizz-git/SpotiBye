@@ -12,12 +12,6 @@ interface SessionRecord {
   expires_at: number;
 }
 
-interface RefreshedToken {
-  access_token: string;
-  expires_in: number;
-  refresh_token?: string;
-}
-
 export interface AnalysisJobOutcome {
   acknowledged: boolean;
   reason: 'completed' | 'stale' | 'already-completed';
@@ -137,7 +131,7 @@ export class AnalysisJobService {
       this.env.SPOTIFY_CLIENT_ID,
       this.env.SPOTIFY_CLIENT_SECRET
     );
-    const refreshed = await spotifyAuth.refreshAccessToken(session.refresh_token) as RefreshedToken;
+    const refreshed = await spotifyAuth.refreshAccessToken(session.refresh_token);
     session = {
       ...session,
       access_token: refreshed.access_token,

@@ -1,4 +1,5 @@
 export interface ExportTrack {
+  [key: string]: string | number;
   Artist: string;
   Album: string;
   Track: string;

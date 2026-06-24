@@ -216,6 +216,11 @@ class BackendSpotifyExporterApp(MDApp):
             Config.set("kivy", "default_font", ["DejaVuSans", "DejaVuSans.ttf"])
             original_logger.info("Successfully set DejaVuSans as default font")
         except Exception:
+            try:
+                from kivy.core.text import LabelBase as _LabelBase
+            except ImportError:
+                original_logger.warning("Falling back to Kivy default font")
+                return
             system_fonts = {
                 "Windows": Path("C:/Windows/Fonts/DejaVuSans.ttf"),
                 "Darwin": Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -224,9 +229,7 @@ class BackendSpotifyExporterApp(MDApp):
             for path in system_fonts.values():
                 if path.exists():
                     try:
-                        from kivy.core.text import LabelBase
-
-                        LabelBase.register(name="DejaVuSans", fn_regular=str(path))
+                        _LabelBase.register(name="DejaVuSans", fn_regular=str(path))
                         Config.set("kivy", "default_font", ["DejaVuSans"])
                         return
                     except Exception:

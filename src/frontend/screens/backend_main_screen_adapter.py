@@ -94,16 +94,8 @@ class BackendMainScreenAdapter:
         if isinstance(error.response_data, dict):
             source = str(error.response_data.get("origin", source))
 
-        upstream = (
-            details_payload.get("upstream")
-            if isinstance(details_payload, dict)
-            else None
-        )
-        upstream_status = (
-            details_payload.get("upstream_status")
-            if isinstance(details_payload, dict)
-            else None
-        )
+        upstream = details_payload.get("upstream")
+        upstream_status = details_payload.get("upstream_status")
 
         parts = [fallback_prefix, status]
         parts.append(f"source={source}")

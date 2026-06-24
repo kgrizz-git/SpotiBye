@@ -8,7 +8,7 @@ from math import sqrt
 from typing import Any, Optional
 
 from kivy.app import App
-from kivy.clock import Clock
+from kivy.clock import Clock, mainthread
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
@@ -527,33 +527,20 @@ class BackendPlaylistCard(BoxLayout):
             app = App.get_running_app()
             adapter = getattr(app, "backend_adapter", None)
             if adapter is None:
-                Clock.schedule_once(
-                    lambda _dt: self._update_analysis_ui(
-                        analysis_container,
-                        duration_label,
-                        None,
-                        "No backend connection",
-                    ),
-                    0,
+                self._update_analysis_ui(
+                    analysis_container, duration_label, None, "No backend connection"
                 )
                 return
 
             analysis = adapter.analyze_playlist(playlist_id)
-            Clock.schedule_once(
-                lambda _dt, a=analysis: self._update_analysis_ui(
-                    analysis_container, duration_label, a, None
-                ),
-                0,
-            )
+            self._update_analysis_ui(analysis_container, duration_label, analysis, None)
         except Exception as exc:
             logger.warning("BackendPlaylistCard: analysis load error: %s", exc)
-            Clock.schedule_once(
-                lambda _dt, e=exc: self._update_analysis_ui(
-                    analysis_container, duration_label, None, str(e)
-                ),
-                0,
+            self._update_analysis_ui(
+                analysis_container, duration_label, None, str(exc)
             )
 
+    @mainthread
     def _update_analysis_ui(
         self,
         analysis_container: BoxLayout,

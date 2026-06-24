@@ -18,15 +18,17 @@ from kivy.uix.switch import Switch
 from ...shared.logging_config import logger
 from .cache_explorer import CacheExplorerPopup
 
+_BACKEND_IMPORT_ERROR: str = ""
 try:
     from ..services.backend_client import BackendClient
     from ..config.backend_config import resolve_startup_backend_url
     from ..caching.backend_cache import get_cache_manager
 
     BACKEND_AVAILABLE = True
-except ImportError:
+except ImportError as exc:
     BACKEND_AVAILABLE = False
-    logger.warning("Backend components not available for backend cache status")
+    _BACKEND_IMPORT_ERROR = str(exc)
+    logger.warning("Backend components not available for backend cache status: %s", exc)
 
 
 class BackendCacheExplorerPopup(Popup):
@@ -119,7 +121,11 @@ class BackendCacheExplorerPopup(Popup):
     def initialize_backend_client(self) -> None:
         """Initialize backend client if available."""
         if not BACKEND_AVAILABLE:
-            self.backend_status_label.text = "Backend: Not Available"
+            self.backend_status_label.text = (
+                f"Backend: Not Available ({_BACKEND_IMPORT_ERROR})"
+                if _BACKEND_IMPORT_ERROR
+                else "Backend: Not Available"
+            )
             return
 
         try:

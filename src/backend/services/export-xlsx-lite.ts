@@ -15,7 +15,7 @@ export function buildWorksheetAssembly(exportData: ExportData, usedSheetNames: S
     playlist_url: exportData.playlist.url || '',
     total_duration: formatDuration(exportData.total_duration_ms),
     headers,
-    rows: exportData.tracks.map((track) => headers.map((header) => (track as any)[header] ?? '')),
+    rows: exportData.tracks.map((track) => headers.map((header) => track[header] ?? '')),
   };
 }
 

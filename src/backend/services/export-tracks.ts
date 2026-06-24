@@ -1,8 +1,9 @@
 import type { ExportTrack, ExportData } from './export-types';
+import type { SpotifyPlaylist, SpotifyTrack, SpotifyPlaylistTrackItem, SpotifyAudioFeatures } from '../types/spotify';
 import { formatDuration } from './export-format-helpers';
 import { SpotifyService } from './spotify';
 
-export function buildPlaylistMetadata(playlist: any, fallbackTrackCount: number): ExportData['playlist'] {
+export function buildPlaylistMetadata(playlist: SpotifyPlaylist | undefined, fallbackTrackCount: number): ExportData['playlist'] {
   return {
     id: playlist?.id || '',
     name: playlist?.name || 'Unknown Playlist',
@@ -15,13 +16,13 @@ export function buildPlaylistMetadata(playlist: any, fallbackTrackCount: number)
   };
 }
 
-export function calculateTotalDurationMs(items: any[]): number {
+export function calculateTotalDurationMs(items: SpotifyPlaylistTrackItem[]): number {
   return items
-    .filter((item: any) => item.track && typeof item.track.duration_ms === 'number')
-    .reduce((acc: number, item: any) => acc + (item.track.duration_ms || 0), 0);
+    .filter((item) => item.track && typeof item.track.duration_ms === 'number')
+    .reduce((acc, item) => acc + (item.track!.duration_ms || 0), 0);
 }
 
-export function mapTrackForExport(track: any, audioFeatures: any): ExportTrack {
+export function mapTrackForExport(track: SpotifyTrack, audioFeatures: SpotifyAudioFeatures | null | undefined): ExportTrack {
   const keyMap = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const modeMap: Record<number, string> = { 0: 'minor', 1: 'major' };
   const keyName = typeof audioFeatures?.key === 'number' && audioFeatures.key >= 0 && audioFeatures.key < keyMap.length
@@ -31,7 +32,7 @@ export function mapTrackForExport(track: any, audioFeatures: any): ExportTrack {
   const keyValue = keyName ? `${keyName}${modeName ? ` ${modeName}` : ''}` : 'N/A';
 
   return {
-    Artist: track.artists.map((artist: any) => artist.name).join(', '),
+    Artist: track.artists.map((artist) => artist.name).join(', '),
     Album: track.album?.name || '',
     Track: track.name,
     Duration: formatDuration(track.duration_ms),
@@ -54,8 +55,8 @@ export async function loadAudioFeaturesMap(
   trackIds: string[],
   includeAudioFeatures: boolean,
   spotifyService: SpotifyService,
-): Promise<Map<string, any>> {
-  const audioFeaturesMap = new Map<string, any>();
+): Promise<Map<string, SpotifyAudioFeatures>> {
+  const audioFeaturesMap = new Map<string, SpotifyAudioFeatures>();
   let audioFeaturesUnavailable = false;
 
   if (!includeAudioFeatures || trackIds.length === 0) {
@@ -97,17 +98,17 @@ export async function loadAudioFeaturesMap(
 }
 
 export async function buildExportTracks(
-  allTracks: any[],
+  allTracks: SpotifyPlaylistTrackItem[],
   includeAudioFeatures: boolean,
   spotifyService: SpotifyService,
 ): Promise<ExportTrack[]> {
   const trackIds = allTracks
-    .filter((item: any) => item.track && item.track.id)
-    .map((item: any) => item.track.id);
+    .filter((item) => item.track && item.track.id)
+    .map((item) => item.track!.id);
 
   const audioFeaturesMap = await loadAudioFeaturesMap(trackIds, includeAudioFeatures, spotifyService);
 
   return allTracks
-    .filter((item: any) => item.track)
-    .map((item: any) => mapTrackForExport(item.track, audioFeaturesMap.get(item.track.id)));
+    .filter((item) => item.track)
+    .map((item) => mapTrackForExport(item.track!, audioFeaturesMap.get(item.track!.id) ?? null));
 }

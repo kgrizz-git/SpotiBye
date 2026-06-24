@@ -4,6 +4,7 @@ import { authMiddleware } from '../middleware/auth';
 import {
   ExportService,
   ResumableExportConflictError,
+  type ExportData,
   type ResumableExportAssemblyState,
   type XlsxRenderMode,
 } from '../services/export';
@@ -36,7 +37,7 @@ type BatchExportStatus = {
 
 type ResumableExportJobStatus = ReturnType<typeof ExportService.createJobState>;
 
-function resolveStepSize(body: any): number {
+function resolveStepSize(body: Record<string, unknown>): number {
   const requested = Number.isInteger(body?.max_playlists_per_step)
     ? Number(body.max_playlists_per_step)
     : Number.isInteger(body?.chunk_size)
@@ -72,7 +73,7 @@ function parseXlsxRenderMode(value: string | undefined): XlsxRenderMode {
   return 'auto';
 }
 
-function resolveRequestedFormat(body: any): ExportFormat {
+function resolveRequestedFormat(body: Record<string, unknown>): ExportFormat {
   const format = String(body?.format || '').toLowerCase();
   if (format === 'csv') return 'csv';
   if (format === 'json') return 'json';
@@ -91,7 +92,7 @@ function formatHttpMeta(format: ExportFormat): [string, string] {
   return ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'];
 }
 
-function resolveIncludeAudioFeatures(body: any): boolean {
+function resolveIncludeAudioFeatures(body: Record<string, unknown>): boolean {
   return body?.include_audio_features === true;
 }
 
@@ -139,7 +140,7 @@ function buildExportErrorPayload(code: string, message: string, requestId: strin
 // Shared helper: build the final download bytes for a completed export (xlsx, csv, or json).
 async function generateFileBytes(
   exportService: ExportService,
-  exportDataList: any[],
+  exportDataList: ExportData[],
   fileFormat: ExportFormat,
 ): Promise<ArrayBuffer> {
   if (fileFormat === 'json') {
@@ -238,7 +239,7 @@ app.post('/jobs/:jobId/step', async (c) => {
     const assemblyKey = buildExportJobAssemblyKey(jobId, userId);
     const cacheService = new CacheService(c.env.CACHE_KV);
     const job = await cacheService.get<ResumableExportJobStatus>(jobKey);
-    const exportDataList = await cacheService.get<any[]>(dataKey);
+    const exportDataList = await cacheService.get<ExportData[]>(dataKey);
     const assemblyState = await cacheService.get<ResumableExportAssemblyState>(assemblyKey);
 
     if (!job) {
@@ -249,12 +250,14 @@ app.post('/jobs/:jobId/step', async (c) => {
       ExportService.validateStepRequest(job, cursor, resumeToken);
     } catch (error) {
       const isConflictError = error instanceof ResumableExportConflictError
-        || ((error as any)?.name === 'ResumableExportConflictError'
-          && typeof (error as any)?.latestCursor === 'string'
-          && typeof (error as any)?.latestResumeToken === 'string');
+        || (error instanceof Error
+          && error.name === 'ResumableExportConflictError'
+          && 'latestCursor' in error
+          && 'latestResumeToken' in error);
       if (isConflictError) {
-        const latestCursor = (error as any).latestCursor;
-        const latestResumeToken = (error as any).latestResumeToken;
+        const conflictError = error as ResumableExportConflictError;
+        const latestCursor = conflictError.latestCursor;
+        const latestResumeToken = conflictError.latestResumeToken;
         return c.json({
           error: {
             code: 'EXPORT_JOB_CONFLICT',
@@ -491,7 +494,7 @@ app.get('/jobs/:jobId/download', async (c) => {
       });
     }
 
-    const exportDataList = await cacheService.get<any[]>(buildExportJobDataKey(jobId, userId));
+    const exportDataList = await cacheService.get<ExportData[]>(buildExportJobDataKey(jobId, userId));
     if (!Array.isArray(exportDataList) || exportDataList.length === 0) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, { status: 404 as ContentfulStatusCode });
     }
@@ -774,7 +777,7 @@ app.post('/playlists/chunk', async (c) => {
     const batchDataKey = `${batchKey}:data`;
 
     const cachedStatus = await cacheService.get<BatchExportStatus>(batchKey);
-    const cachedData = await cacheService.get<any[]>(batchDataKey);
+    const cachedData = await cacheService.get<ExportData[]>(batchDataKey);
 
     const status: BatchExportStatus = cachedStatus && cachedStatus.user_id === userId
       ? {
@@ -799,7 +802,7 @@ app.post('/playlists/chunk', async (c) => {
         };
 
     // Keep already-generated playlist exports between chunk calls.
-    const exportDataList: any[] = Array.isArray(cachedData) ? cachedData : [];
+    const exportDataList: ExportData[] = Array.isArray(cachedData) ? (cachedData as ExportData[]) : [];
     const effectiveCursor = Math.max(startCursor, status.next_cursor || 0);
     const endCursor = Math.min(effectiveCursor + chunkSize, playlistIds.length);
 
@@ -975,7 +978,9 @@ app.get('/playlist/:id/download', async (c) => {
     const cacheService = new CacheService(c.env.CACHE_KV);
 
     const exportKey = `export:${playlistId}:${userId}`;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- backward-compat read: shape varies across schema versions (old format stored ExportData directly)
     const exportStatus = await cacheService.get<any>(exportKey);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- backward-compat read: shape varies across schema versions
     let exportData = await cacheService.get<any>(`${exportKey}:data`);
     // Backward compatibility: older payloads stored export data directly under exportKey.
     if (!exportData && exportStatus && exportStatus.playlist && Array.isArray(exportStatus.tracks)) {

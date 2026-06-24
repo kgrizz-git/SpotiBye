@@ -21,6 +21,7 @@ export interface SpotifyPlaylist {
   owner: SpotifyUser;
   tracks?: SpotifyPlaylistTracks;
   items?: SpotifyPlaylistItems;
+  followers?: { total: number };
   images: SpotifyImage[];
   external_urls: { spotify: string };
   uri: string;
