@@ -25,6 +25,12 @@
 |------|-------------|-----------|
 | [`2026-06-21-bug-fix-medium-low.md`](2026-06-21-bug-fix-medium-low.md) | Medium and low severity bug fixes across backend and frontend (BM-1,2,3,6,7,8,9,10; BL-6,7,8,9; FM-1,3,4,5,6; FL-1,2,5,6,7,9) | 2026-06-21 |
 
+## Refactor Plans
+
+| Plan | Description | Completed |
+|------|-------------|-----------|
+| [`2026-06-21-refactor-export-ts.md`](2026-06-21-refactor-export-ts.md) | Split `services/export.ts` (1,186 lines) into 12 focused modules (`export-types`, `export-cursor`, `export-job-state`, `export-assemble`, `export-collect`, `export-assembly`, `export-xlsx`, `export-xlsx-lite`, `export-csv`, `export-json`, `export-tracks`, `export-format-helpers`). `ExportService` is now a thin facade; 8 new unit test files added; no API or output format changes. | 2026-06-24 |
+
 ## Infrastructure Plans
 
 | Plan | Description | Completed |

@@ -6,6 +6,9 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- Refactored `services/export.ts` (1,186 lines) into focused modules: `export-types`, `export-cursor`, `export-job-state`, `export-assemble`, `export-collect`, `export-assembly`, `export-xlsx`, `export-xlsx-lite`, `export-csv`, `export-json`, `export-tracks`, `export-format-helpers`. The `ExportService` class is now a thin facade with static and instance delegating methods — no change to the public API, call sites, or output formats. Added unit tests for all extracted pure functions.
+
 ### Fixed
 - Restored backend ReccoBeats audio-feature enrichment using the verified public no-auth API and removed stale ReccoBeats secret requirements from active backend config/docs.
 - Fixed backend playlist analysis failures caused by Spotify rejecting the removed batch artist endpoint by fetching artist metadata individually and continuing without genre data when artist enrichment fails.

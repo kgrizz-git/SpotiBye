@@ -91,9 +91,9 @@ The following five items require the [active refactor-export-ts plan](../docs/ex
     * [Fix plan](../docs/exec-plans/completed/dev-docs/fix-analysis-403-spotify-api-migration.md)
 
 - Refactor the 4 files over 1,000 lines — extract focused modules, reduce cohesion, improve testability.
-    - [ ] `src/backend/services/export.ts` (1,220) — [refactor plan](../docs/exec-plans/active/2026-06-21-refactor-export-ts.md)
+    - [x] `src/backend/services/export.ts` (1,186) — [completed refactor plan](../docs/exec-plans/completed/2026-06-21-refactor-export-ts.md). Split into 12 focused modules; `ExportService` is now a thin facade. 8 new unit test files added.
     - [ ] `src/frontend/screens/backend_main_screen_adapter.py` (1,116)
-    - [ ] `src/backend/routes/export.ts` (1,045) — [refactor plan](../docs/exec-plans/active/2026-06-21-refactor-export-ts.md)
+    - [ ] `src/backend/routes/export.ts` (1,045)
     - [ ] `src/frontend/screens/main_screen.py` (1,041)
 
 - Handle Spotify refresh token expiration (6-month limit) — announced June 18, 2026, enforced July 20, 2026 for existing apps
