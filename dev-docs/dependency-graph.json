@@ -54,8 +54,52 @@
   "src/frontend/screens/backend_main_screen_adapter.py": [
     "src/frontend/services/backend_client.py",
     "src/frontend/services/reccobeats_backend.py",
+    "src/frontend/screens/adapter_mixins/core.py",
+    "src/frontend/screens/adapter_mixins/playlists.py",
+    "src/frontend/screens/adapter_mixins/tracks.py",
+    "src/frontend/screens/adapter_mixins/analysis.py",
+    "src/frontend/screens/adapter_mixins/exports.py",
+    "src/frontend/screens/adapter_mixins/exports_resumable.py",
+    "src/frontend/screens/adapter_mixins/exports_download.py",
+    "src/frontend/screens/adapter_mixins/jobs.py",
+    "src/frontend/screens/adapter_mixins/utilities.py"
+  ],
+  "src/frontend/screens/adapter_mixins/core.py": [
+    "src/frontend/services/backend_client.py",
+    "src/frontend/services/reccobeats_backend.py",
     "src/frontend/caching/backend_cache.py",
     "src/frontend/utils/network_utils.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/adapter_mixins/playlists.py": [
+    "src/frontend/services/backend_client.py",
+    "src/frontend/utils/network_utils.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/adapter_mixins/tracks.py": [
+    "src/frontend/services/backend_client.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/adapter_mixins/analysis.py": [
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/adapter_mixins/exports.py": [
+    "src/frontend/services/backend_client.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/adapter_mixins/exports_resumable.py": [
+    "src/frontend/services/backend_client.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/adapter_mixins/exports_download.py": [
+    "src/frontend/services/backend_client.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/adapter_mixins/jobs.py": [
+    "src/frontend/services/backend_client.py",
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/screens/adapter_mixins/utilities.py": [
     "src/shared/logging_config.py"
   ],
   "src/frontend/screens/backend_main_screen.py": [

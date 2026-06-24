@@ -216,7 +216,8 @@ graph TD
 | [config/backend_config.py](../src/frontend/config/backend_config.py) | URLs, feature flags, timeouts, `OAUTH_CALLBACK_PORT`, `EXPORT_DIR` |
 | [screens/main_screen.py](../src/frontend/screens/main_screen.py) | `MainScreen` — backend-only base screen (no standalone/v2 deps) |
 | [screens/backend_main_screen.py](../src/frontend/screens/backend_main_screen.py) | `BackendMainScreen(MainScreen)` — overrides widget factory methods with frontend-native components |
-| [screens/backend_main_screen_adapter.py](../src/frontend/screens/backend_main_screen_adapter.py) | `BackendMainScreenAdapter` — bridges `MainScreen` to backend services |
+| [screens/backend_main_screen_adapter.py](../src/frontend/screens/backend_main_screen_adapter.py) | `BackendMainScreenAdapter` — thin facade composing 9 mixins from `adapter_mixins/` |
+| [screens/adapter_mixins/](../src/frontend/screens/adapter_mixins/) | Mixin modules: `core` (init/callbacks/retry), `playlists`, `tracks`, `analysis`, `exports`, `exports_resumable`, `exports_download`, `jobs`, `utilities` |
 | [screens/cache_explorer_adapter.py](../src/frontend/screens/cache_explorer_adapter.py) | Bridges `CacheExplorer` widget to backend-aware version |
 | [ui/backend_selector_popup.py](../src/frontend/ui/backend_selector_popup.py) | `BackendSelectorPopup` — startup URL picker |
 | [ui/backend_cache_explorer.py](../src/frontend/ui/backend_cache_explorer.py) | `BackendCacheExplorer` — enhanced cache browser |
