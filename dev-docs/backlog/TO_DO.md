@@ -1,32 +1,61 @@
 # To-Do List
 
+Each top-level checkbox should be one shippable outcome. Use nested checkboxes for acceptance criteria or required follow-up steps. Move anything that needs more than about one day of work to `dev-docs/exec-plans/active/`.
+
 ## Auth & Token Lifecycle
 
-- [ ] Handle Spotify refresh token expiration (6-month limit, enforced July 20, 2026): discard tokens on `invalid_grant`, redirect to re-sign-in, audit all token storage/refresh logic, test reauthorization flow
+- [ ] Handle Spotify refresh token expiration before July 20, 2026
+  - [ ] Confirm backend behavior when Spotify returns `invalid_grant`
+  - [ ] Discard invalid stored refresh and access tokens
+  - [ ] Return an auth-required response shape the frontend can parse
+  - [ ] Redirect the user to sign in again
+  - [ ] Audit all token storage and refresh paths
+  - [ ] Add backend and frontend tests for reauthorization
 
 ## Playlist Analysis — End-to-End
 
-- [ ] Add visual progress indicator for playlist analysis (wire `analysis_task` progress into UI)
-- [ ] Refactor playlist analysis to fan-out queue architecture (distributed batches for >40 artists per Worker invocation) — basic queue processing done via Track D, this is further scale-out
+- [ ] Add visual progress indicator for playlist analysis
+  - [ ] Wire `analysis_task` progress into the frontend state
+  - [ ] Render in-progress, completed, and failed states in the UI
+  - [ ] Add focused frontend tests for progress rendering
+- [ ] Refactor playlist analysis to fan-out queue architecture for large playlists
+  - [ ] Preserve existing Track D queue behavior
+  - [ ] Split work into distributed batches for playlists with more than 40 artists per Worker invocation
+  - [ ] Add backend tests for batch fan-out and aggregation
 
 **Related notes:** [API enrichment](spotify-api-enrichment.md) · [ReccoBeats contract](reccobeats-api-contract.md)
 
 ## Export
 
-- [ ] Split the XLSX render-modes and prebuilt-format slots in `buildExportFileKey` (resolve known smell of mixing 'default', 'rich', 'lite', and 'csv')
+- [ ] Split XLSX render modes from prebuilt export format slots in `buildExportFileKey`
+  - [ ] Separate `default`, `rich`, and `lite` XLSX modes from `csv`/other prebuilt format keys
+  - [ ] Preserve existing cache compatibility or add a documented migration path
+  - [ ] Add unit tests for generated export file keys
 
 ## Code Quality / Tech Debt
 
 - [ ] Fix deprecated `AsyncImage` properties (`allow_stretch`, `keep_ratio`)
-- [ ] Check for pyright issues and fix them
+- [ ] Run pyright and triage type issues
+  - [ ] Document the exact command and current issue count
+  - [ ] Fix straightforward issues
+  - [ ] Create follow-up backlog items or an execution plan for larger type-safety work
 - [ ] Track/remove `esbuild` and `uuid` npm overrides in `src/backend/package.json` once upstream ships patched releases
 
 ## Repo Cleanup & DevOps
 
-- [ ] Clean up repository: remove unused files, backups, duplicate code, outdated docs, stale references to `src/spotify_playlist_exporter_v2/`
+- [ ] Remove unused tracked backup and generated files
+- [ ] Remove stale references to `src/spotify_playlist_exporter_v2/`
+- [ ] Audit duplicate code candidates and create focused follow-up plans
+- [ ] Review outdated docs now that `docs/` and `dev-docs/` are split
 - [ ] Audit `.gitignore` vs tracked files (venv, node_modules, caches, IDE, `.DS_Store`; verify `.github/` and `.skills/` tracking)
 - [ ] Decide on default window size and placement
-- [ ] Update / verify build pipeline
-- [ ] Start new repo (after cleanup, before widespread release-readiness)
+- [ ] Verify release build pipeline
+  - [ ] Confirm frontend packaging command and output artifact
+  - [ ] Confirm backend deployment workflow and required secrets
+  - [ ] Confirm CI runs the expected frontend, backend, and structure checks
+- [ ] Decide whether to start a new repository before wider release-readiness work
+  - [ ] Complete repository cleanup prerequisites
+  - [ ] Decide what history, issues, and release artifacts must be retained
+  - [ ] Document the migration decision before creating a new repository
 
 See also: agent-first-retrofit, quality review/assessment
