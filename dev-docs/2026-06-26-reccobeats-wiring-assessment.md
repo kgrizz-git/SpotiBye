@@ -1,7 +1,7 @@
 # Assessment: ReccoBeats Wiring Plan & Implementation Status
 
 **Date:** 2026-06-26T00:37:07-04:00
-**Target Plan:** `docs/exec-plans/active/2026-06-21-reccobeats-wiring.md`
+**Target Plan:** `dev-docs/exec-plans/completed/2026-06-21-reccobeats-wiring.md`
 
 ## 1. Plan Verification & Progress Status
 The ReccoBeats wiring plan has successfully outlined and guided the migration from the old Python-monolith API calls to a Cloudflare Worker backend approach. 

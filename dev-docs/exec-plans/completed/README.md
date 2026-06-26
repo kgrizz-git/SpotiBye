@@ -42,6 +42,7 @@
 |------|-------------|-----------|
 | [`2026-06-21-repo-organization-guardrails.md`](2026-06-21-repo-organization-guardrails.md) | Consolidated plan/docs placement, removed duplicate agent config, added CLAUDE.md and structural guardrails. | 2026-06-21 |
 | [`2026-06-22-backend-deployment-tracking.md`](2026-06-22-backend-deployment-tracking.md) | Added live backend deployment metadata, metadata-aware deploy wrappers, status checks, and deployment docs. | 2026-06-22 |
+| [`2026-06-26-docs-taxonomy-migration.md`](2026-06-26-docs-taxonomy-migration.md) | Split user-facing docs from developer and agent-facing docs, updated guidance, and strengthened structure guardrails. | 2026-06-26 |
 
 ## Dev Docs Plans
 

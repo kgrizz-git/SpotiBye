@@ -23,20 +23,23 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 
 - **Start here:** [dev-docs/code-map.md](dev-docs/code-map.md) — file index, Mermaid diagrams, and role of every source file
 - **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md) — layer contracts, data flow, domain breakdown
-- **All docs:** [docs/index.md](docs/index.md) — full navigable map
+- **User docs:** [docs/index.md](docs/index.md) — end-user documentation map
+- **Developer docs:** [dev-docs/README.md](dev-docs/README.md) — contributor, agent, architecture, plan, and reference map
 - **Dependency graph:** [dev-docs/dependency-graph.json](dev-docs/dependency-graph.json) — machine-readable import graph for impact analysis
 
 ---
 
 ## Plans and Documentation Conventions
 
-- New implementation plans go in `docs/exec-plans/active/YYYY-MM-DD-topic.md`.
+- `docs/` is for end-user documentation only: installation, configuration, usage, FAQ, and troubleshooting.
+- `dev-docs/` is for developer, maintainer, and agent-facing material: architecture notes, implementation plans, references, investigations, assessments, and backlog.
+- New implementation plans go in `dev-docs/exec-plans/active/YYYY-MM-DD-topic.md`.
 - Plans must use checkbox steps (`- [ ]`) and executors must mark steps complete (`- [x]`) as work is completed.
-- If a plan comes from `dev-docs/TO_DO.md`, keep that TODO linked while active and remove it from the file when the plan is finished.
-- Completed or superseded plans move to `docs/exec-plans/completed/` and must be indexed in `docs/exec-plans/completed/README.md`.
-- Design decisions that should remain durable go in `docs/design-docs/`.
-- Third-party API/platform reference notes go in `docs/references/`.
-- Short-lived investigations, audits, and working notes go in `dev-docs/`.
+- If a plan comes from `dev-docs/backlog/TO_DO.md`, keep that TODO linked while active and remove it from the file when the plan is finished.
+- Completed or superseded plans move to `dev-docs/exec-plans/completed/` and must be indexed in `dev-docs/exec-plans/completed/README.md`.
+- Design decisions that should remain durable go in `dev-docs/architecture/design-decisions/`.
+- Third-party API/platform reference notes go in `dev-docs/references/`.
+- Short-lived investigations, audits, and working notes go in `dev-docs/investigations/` or `dev-docs/assessments/`.
 - Before creating a new doc, check `docs/index.md`, `dev-docs/README.md`, and `rg` for an existing page to update.
 - Do not leave completed plans in `active/`, and do not create new root-level `plans/` files. (Enforced by pre-commit hook.)
 - IDE security rules live in `.cursor/rules/` only. `.windsurf/rules/` and `.qwen/` have been removed and are gitignored.
@@ -52,7 +55,7 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 5. No `console.log` in non-test backend code — use structured logging
 6. No bare `except:` in Python — always name the exception type
 
-Full list: [docs/golden-principles.md](docs/golden-principles.md)
+Full list: [dev-docs/guides/golden-principles.md](dev-docs/guides/golden-principles.md)
 
 ---
 

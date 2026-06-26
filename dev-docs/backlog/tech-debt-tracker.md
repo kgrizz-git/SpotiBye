@@ -21,7 +21,7 @@
 
 | # | Area | Issue | Resolved |
 |---|------|-------|---------|
-| 10 | `docs/plans/` migrated | Legacy plan files consolidated under `docs/exec-plans/completed/legacy/`; active/completed indexes updated | Low | 2026-06-19 | Done |
+| 10 | `docs/plans/` migrated | Legacy plan files consolidated under `dev-docs/exec-plans/completed/legacy/`; active/completed indexes updated | Low | 2026-06-19 | Done |
 
 ---
 

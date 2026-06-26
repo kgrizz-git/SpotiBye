@@ -37,7 +37,7 @@ The refactor is complete as of June 19, 2026. `main_screen.py` stale imports wer
 - Modify: `src/frontend/screens/main_screen.py` — remove imports made obsolete by extraction; keep public wrappers used by other frontend code.
 - Modify: `src/frontend/screens/main_screen_export.py` — only if tests expose cancellation or cleanup defects.
 - Modify: `src/frontend/tests/test_main_screen_export.py` — add cancellation and terminal cleanup coverage using fake adapters and fake scheduler.
-- Modify: `dev-docs/TO_DO.md` — keep the task status and plan link accurate.
+- Modify: `dev-docs/backlog/TO_DO.md` — keep the task status and plan link accurate.
 - Modify: `dev-docs/refactor-assessments/main_screen-refactor-assessment-2026-06-15.md` — link this completion plan from the original assessment.
 - Optional after completion: move `docs/superpowers/plans/2026-06-16-main-screen-refactor-V3.md` to `docs/superpowers/plans/superseded/` or replace it with a short supersession note if no active references depend on it.
 
@@ -234,10 +234,10 @@ Expected: hits in the extracted modules only.
 ### Task 4: Repair Refactor Documentation
 
 **Files:**
-- Modify: `dev-docs/TO_DO.md`
+- Modify: `dev-docs/backlog/TO_DO.md`
 - Modify: `dev-docs/refactor-assessments/main_screen-refactor-assessment-2026-06-15.md`
 
-- [x] **Step 1: Update `dev-docs/TO_DO.md`**
+- [x] **Step 1: Update `dev-docs/backlog/TO_DO.md`**
 
 The main item should be checked after final verification:
 
@@ -270,7 +270,7 @@ Run:
 
 ```bash
 test -f docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md
-test -f "$(dirname dev-docs/TO_DO.md)/../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md"
+test -f "$(dirname dev-docs/backlog/TO_DO.md)/../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md"
 test -f "$(dirname dev-docs/refactor-assessments/main_screen-refactor-assessment-2026-06-15.md)/../../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md"
 ```
 
@@ -319,7 +319,7 @@ Expected: silent success or a zero exit status.
 
 - [x] **Step 4: Update tracker when complete**
 
-After Steps 1-3 pass, change the main item in `dev-docs/TO_DO.md` to checked:
+After Steps 1-3 pass, change the main item in `dev-docs/backlog/TO_DO.md` to checked:
 
 ```markdown
 - [x] **High Priority: Complete main screen refactor** — [completion plan](../docs/superpowers/plans/2026-06-19-main-screen-refactor-completion-plan.md). Completed after cleanup, cancellation branch coverage, and full verification.

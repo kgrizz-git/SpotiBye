@@ -109,7 +109,7 @@ utils/           ← Pure utility functions (no imports from other app layers)
 
 **Why session-backed JWT:** The JWT is long-lived (30 days) but contains only a `session_id`. The actual Spotify access token (1 hour TTL) lives in `SESSIONS_KV` and is refreshed transparently by the middleware. This avoids re-issuing JWTs on every token refresh and keeps short-lived secrets out of the JWT payload.
 
-Full flow doc: [docs/authentication-flow.md](docs/authentication-flow.md)
+Full flow doc: [dev-docs/guides/authentication-flow.md](dev-docs/guides/authentication-flow.md)
 
 ---
 
@@ -187,4 +187,4 @@ Sessions are stored separately in `SESSIONS_KV` (not `CACHE_KV`) with a 30-day T
 | Cloudflare KV (`SESSIONS_KV`) | Session storage — access/refresh tokens keyed by session_id | 30-day TTL; auth middleware reads this on every authenticated request |
 | Cloudflare Workers | Edge serverless runtime | CPU time limit applies; export steps are bounded to 1–3 playlists to stay within budget |
 | CustomTkinter | Python GUI toolkit | Limited agent training data; keep UI layer thin |
-| Spotify Web API | Music data source | See `docs/references/spotify-api-reference.md` and `docs/february-2026-spotify-migration-findings.md` |
+| Spotify Web API | Music data source | See `dev-docs/references/spotify-api-reference.md` and `dev-docs/investigations/february-2026-spotify-migration-findings.md` |

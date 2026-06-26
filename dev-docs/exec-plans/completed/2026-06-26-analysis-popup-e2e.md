@@ -1,6 +1,6 @@
 # Analysis Popup End-to-End Wiring Plan
 
-> **Linked from:** [TO_DO.md](../../dev-docs/TO_DO.md) · **Ties off:** [ReccoBeats wiring plan](2026-06-21-reccobeats-wiring.md) unchecked verification items
+> **Linked from:** [TO_DO.md](../../dev-docs/backlog/TO_DO.md) · **Ties off:** [ReccoBeats wiring plan](2026-06-21-reccobeats-wiring.md) unchecked verification items
 >
 > **For agentic workers:** Steps use checkbox (`- [ ]`) syntax for tracking. Mark steps complete (`- [x]`) as work is finished.
 
@@ -203,7 +203,7 @@ These are the unchecked items from the [ReccoBeats wiring plan](2026-06-21-recco
 
 When all steps are checked:
 
-1. Move this plan to `docs/exec-plans/completed/`
-2. Move the [ReccoBeats wiring plan](2026-06-21-reccobeats-wiring.md) to `docs/exec-plans/completed/` (all its items are now covered)
-3. Update [TO_DO.md](../../dev-docs/TO_DO.md) — mark the "Analysis popup e2e wiring" and related items complete
+1. Move this plan to `dev-docs/exec-plans/completed/`
+2. Move the [ReccoBeats wiring plan](2026-06-21-reccobeats-wiring.md) to `dev-docs/exec-plans/completed/` (all its items are now covered)
+3. Update [TO_DO.md](../../dev-docs/backlog/TO_DO.md) — mark the "Analysis popup e2e wiring" and related items complete
 4. Update `CHANGELOG.md` with the user-visible change (audio features now visible in analysis popup)

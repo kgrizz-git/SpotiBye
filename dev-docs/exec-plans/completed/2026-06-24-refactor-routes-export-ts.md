@@ -6,7 +6,7 @@ Split `src/backend/routes/export.ts` (1,050 lines) into focused modules so each 
 
 ## Context
 
-The 2026-06-21 refactor of `services/export.ts` (1,186 → 193 lines + 12 modules) is complete. That work is captured in `docs/exec-plans/completed/2026-06-21-refactor-export-ts.md` and intentionally left the HTTP route layer untouched. The route file has since grown — or always carried — ~1,050 lines mixing:
+The 2026-06-21 refactor of `services/export.ts` (1,186 → 193 lines + 12 modules) is complete. That work is captured in `dev-docs/exec-plans/completed/2026-06-21-refactor-export-ts.md` and intentionally left the HTTP route layer untouched. The route file has since grown — or always carried — ~1,050 lines mixing:
 
 - Key builders and format/header helpers (49-138)
 - `generateFileBytes` / `generateFileBytesFromAssembly` byte-builders (140-173)
@@ -188,9 +188,9 @@ Sub-router for single-playlist routes (`playlistApp`). Instantiated with `<{ Bin
     | `routes/export/index.ts` | Composed Hono sub-app: mounts `jobsApp` at `/jobs`, `playlistsApp` at `/playlists`, `playlistApp` at `/playlist`. Sub-routers live at `routes/export/{jobs,playlists,playlist}.ts`; helpers at `routes/export/helpers/`. Single-playlist export (`POST /export/playlist/:id`), combined export (`POST /export/playlists`), chunked combined export (`POST /export/playlists/chunk`), resumable job API (`POST /export/jobs`, `POST /export/jobs/:jobId/step`, `GET /export/jobs/:jobId/status`, `GET /export/jobs/:jobId/download`), status and download endpoints for each |
     ```
     Also, add definitions for the batch and single-export keys in the KV Keys section.
-  - In `docs/design-docs/resumable-export-cursors.md`, update the link referencing `routes/export.ts` for accuracy.
+  - In `dev-docs/architecture/design-decisions/resumable-export-cursors.md`, update the link referencing `routes/export.ts` for accuracy.
   - Leave historical completed plans and bug reviews unchanged.
-- [x] Add a follow-up item in `dev-docs/TO_DO.md` to split the XLSX render-modes and prebuilt-format slots in `buildExportFileKey` as noted in the known smell follow-up.
+- [x] Add a follow-up item in `dev-docs/backlog/TO_DO.md` to split the XLSX render-modes and prebuilt-format slots in `buildExportFileKey` as noted in the known smell follow-up.
 - [x] Run full backend verification suite: `npm run test:run && npm run lint && npm run build` (should run all 38 test files cleanly).
 - [x] Run `./scripts/verify-all.sh` from the repo root.
 - [x] Add entry to `CHANGELOG.md` under the most recent `### Changed` block of the `## [Unreleased]` section:
@@ -266,7 +266,7 @@ Sub-router for single-playlist routes (`playlistApp`). Instantiated with `<{ Bin
     "src/backend/routes/export/helpers/request-id.ts": [],
     "src/backend/routes/export/helpers/types.ts": []
     ```
-- [x] Update `dev-docs/TO_DO.md`, move this plan to `docs/exec-plans/completed/`, and update the index.
+- [x] Update `dev-docs/backlog/TO_DO.md`, move this plan to `dev-docs/exec-plans/completed/`, and update the index.
 
 ## Risks and Mitigations
 
@@ -287,5 +287,5 @@ Sub-router for single-playlist routes (`playlistApp`). Instantiated with `<{ Bin
 - Redundant `resolveErrorStatus(...) as ContentfulStatusCode` casts are removed from handler files (9 sites). Inline numeric status casts are unchanged.
 - No sub-app file (`jobs.ts`, `playlists.ts`, `playlist.ts`) imports or uses `authMiddleware`.
 - `src/backend/tests/architecture.test.ts` is extended recursively, detects sibling/cross-family route import violations, and passes cleanly.
-- `CHANGELOG.md`, `ARCHITECTURE.md`, `dev-docs/code-map.md`, `docs/design-docs/resumable-export-cursors.md`, and `dev-docs/dependency-graph.json` are updated.
+- `CHANGELOG.md`, `ARCHITECTURE.md`, `dev-docs/code-map.md`, `dev-docs/architecture/design-decisions/resumable-export-cursors.md`, and `dev-docs/dependency-graph.json` are updated.
 - `npm run build`, `npm run lint`, and `npm run test:run` are 100% clean.

@@ -21,7 +21,7 @@ Split `src/frontend/screens/backend_main_screen_adapter.py` (~1,100 lines) into 
 
 Public API surface: `screens/__init__.py` re-exports `BackendMainScreenAdapter`, `create_backend_adapter`, `get_reccobeats_api`, and `create_spotify_client_with_refresh`. Direct importers: `backend_app.py` and `test_main_screen_logout.py` import from `backend_main_screen_adapter` explicitly. Runtime consumers: `main_screen_export.py`, `main_screen_cache.py`, and `main_screen_error_popup.py` access the adapter through `screen.backend_adapter` (duck-typed, no direct import). `main_screen.py` receives the adapter via `initialize_with_backend()` and stores it as untyped `self.backend_adapter`. `get_reccobeats_api` and `create_spotify_client_with_refresh` are legacy compat exports with no active in-repo callers beyond `__init__.py`; preserved for external API stability.
 
-The refactored routes/export.ts plan (`docs/exec-plans/completed/2026-06-24-refactor-routes-export-ts.md`) is a useful structural precedent: keep a thin facade, split by concern, keep each module well under ~300 lines.
+The refactored routes/export.ts plan (`dev-docs/exec-plans/completed/2026-06-24-refactor-routes-export-ts.md`) is a useful structural precedent: keep a thin facade, split by concern, keep each module well under ~300 lines.
 
 ## Approach: Python Mixin Composition
 
@@ -251,7 +251,7 @@ Imports: `from __future__ import annotations`; `from typing import Any, Dict, Op
 - [ ] Update `dev-docs/code-map.md` — add `adapter_mixins/` subdirectory entries to the frontend file index
 - [ ] Update `dev-docs/dependency-graph.json` — replace `backend_main_screen_adapter.py` entry with new structure (facade + 9 mixins with correct import edges)
 - [ ] Add entry to `CHANGELOG.md` under `## [Unreleased]` → `### Changed`
-- [ ] Move this plan to `docs/exec-plans/completed/`, update `docs/exec-plans/completed/README.md`, and check the `[x]` box in `dev-docs/TO_DO.md`
+- [ ] Move this plan to `dev-docs/exec-plans/completed/`, update `dev-docs/exec-plans/completed/README.md`, and check the `[x]` box in `dev-docs/backlog/TO_DO.md`
 
 ## Risks and Mitigations
 

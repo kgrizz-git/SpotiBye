@@ -484,7 +484,7 @@ All pre-flight dependencies are ✅ confirmed in place as of 2026-06-24:
 
 - **Bug assessment:** [dev-docs/bug-review-2026-06-21-183947.md](../../dev-docs/bug-review-2026-06-21-183947.md)
 - **Critical & High plan:** [2026-06-21-bug-fix-critical-high.md](../completed/2026-06-21-bug-fix-critical-high.md) — ✅ Complete
-- **TODO entry:** [dev-docs/TO_DO.md](../../dev-docs/TO_DO.md) (see "Fix medium/low bugs from 2026-06-21 audit")
+- **TODO entry:** [dev-docs/backlog/TO_DO.md](../../dev-docs/backlog/TO_DO.md) (see "Fix medium/low bugs from 2026-06-21 audit")
 - **2nd-agent review:** [tmp/plan_review_2026-06-21_160000.md](../../../tmp/plan_review_2026-06-21_160000.md) — 20 findings, all addressed inline above.
 - **3rd-agent review:** [tmp/plan_assessment_2026-06-21_medium_low.md](../../../tmp/plan_assessment_2026-06-21_medium_low.md) — 2 errors + 8 gaps + 4 observations, all addressed inline above.
 - **4th-agent review:** [tmp/bug-fix-medium-low-assessment.md](../../../tmp/bug-fix-medium-low-assessment.md) — 3 errors + 6 gaps + 2 improvements, all addressed inline above.
@@ -505,7 +505,7 @@ All pre-flight dependencies are ✅ confirmed in place as of 2026-06-24:
 - **BM-3 and BM-10** — `createTestEnv` is confirmed at `src/backend/tests/helpers/env.ts`. Unblocked.
 
 ### With `2026-06-21-bug-review-medium-low-fixes.md` (RESOLVED — superseded)
-- ✅ **Resolved 2026-06-21.** The duplicate plan was moved to [`docs/exec-plans/completed/superseded/2026-06-21-bug-review-medium-low-fixes.md`](../../completed/superseded/2026-06-21-bug-review-medium-low-fixes.md) with a SUPERSEDED notice pointing back to this plan. The README index at `docs/exec-plans/completed/README.md` was updated.
+- ✅ **Resolved 2026-06-21.** The duplicate plan was moved to [`dev-docs/exec-plans/completed/superseded/2026-06-21-bug-review-medium-low-fixes.md`](../../completed/superseded/2026-06-21-bug-review-medium-low-fixes.md) with a SUPERSEDED notice pointing back to this plan. The README index at `dev-docs/exec-plans/completed/README.md` was updated.
 - The duplicate's useful elements (4-commit grouping, several test names) are now incorporated in the "Execution Grouping" section of this plan.
 
 ## Execution Grouping

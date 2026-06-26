@@ -2,7 +2,7 @@
 
 **Status:** Implemented
 **Date:** 2025
-**Full plan:** [`docs/exec-plans/completed/legacy/resumable-export-cursor-persistence-plan.md`](../exec-plans/completed/legacy/resumable-export-cursor-persistence-plan.md)
+**Full plan:** [`../../exec-plans/completed/legacy/resumable-export-cursor-persistence-plan.md`](../../exec-plans/completed/legacy/resumable-export-cursor-persistence-plan.md)
 **Relevant code:** `src/backend/services/export.ts`, `src/backend/routes/export/` (facade at `src/backend/routes/export.ts`)
 
 ---

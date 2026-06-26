@@ -4,7 +4,7 @@
 **File:** `src/frontend/screens/main_screen.py`
 **Lines:** 1,940 | **Methods:** ~45 | **Public methods:** ~25
 
-> **2026-06-19 status:** This refactor has been completed and verified. `main_screen.py` is now 1,053 lines, the planned helper modules exist, cancellation branch coverage was added, and completion details are tracked in [Main Screen Refactor Completion Implementation Plan](../../docs/exec-plans/completed/superpowers/2026-06-19-main-screen-refactor-completion-plan.md).
+> **2026-06-19 status:** This refactor has been completed and verified. `main_screen.py` is now 1,053 lines, the planned helper modules exist, cancellation branch coverage was added, and completion details are tracked in [Main Screen Refactor Completion Implementation Plan](../../dev-docs/exec-plans/completed/superpowers/2026-06-19-main-screen-refactor-completion-plan.md).
 
 ---
 

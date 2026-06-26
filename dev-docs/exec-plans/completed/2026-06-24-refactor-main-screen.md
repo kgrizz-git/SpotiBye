@@ -96,7 +96,7 @@ Methods that stay on `MainScreen` but must route through facades: `load_playlist
 - [x] **Step 6: Documentation**
   - Update `dev-docs/code-map.md`.
   - Manually update `dev-docs/dependency-graph.json` with new module import edges (no generator script — follow pattern in completed adapter/export plans).
-  - On completion: move plan to `docs/exec-plans/completed/` and index in `docs/exec-plans/completed/README.md`.
+  - On completion: move plan to `dev-docs/exec-plans/completed/` and index in `dev-docs/exec-plans/completed/README.md`.
   - No `CHANGELOG.md` entry (internal refactor).
 
 - [x] **Step 7: Verification**
@@ -106,7 +106,7 @@ Methods that stay on `MainScreen` but must route through facades: `load_playlist
     - `test_main_screen_facades.py`: `screen.selected_playlist_ids is screen.selection_manager.selected_playlist_ids`; mutation via property visible to manager; property round-trip for search/filter/sort state.
   - **Frontend suite**: `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v` — 126 passed, 7 skipped.
   - **Headed `BackendMainScreen` smoke** (login → search debounce → clear search → sort + direction → select all/clear all → single checkbox + filter persistence → export with selection) — not run in CI; manual check recommended.
-  - Sync `dev-docs/TO_DO.md`.
+  - Sync `dev-docs/backlog/TO_DO.md`.
 
 ## Out of scope
 

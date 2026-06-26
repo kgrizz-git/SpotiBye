@@ -106,10 +106,11 @@ except requests.HTTPError as e:
 
 ## 10. Docs Live in the Repo
 
-**Rule:** Any architectural decision, API quirk, or engineering convention that is discussed elsewhere (Slack, GitHub comments, external docs) must be captured as a versioned file in `docs/`. If it isn't in the repo, the agent can't see it and it effectively doesn't exist.
+**Rule:** Any architectural decision, API quirk, or engineering convention that is discussed elsewhere (Slack, GitHub comments, external docs) must be captured as a versioned file in this repo. If it isn't in the repo, the agent can't see it and it effectively doesn't exist.
 
 **Where to put things:**
-- Non-trivial design decisions → `docs/design-docs/`
-- Third-party API notes → `docs/references/`
-- Active work plans → `docs/exec-plans/active/`
-- General guides → `docs/`
+- Non-trivial design decisions → `dev-docs/architecture/design-decisions/`
+- Third-party API notes → `dev-docs/references/`
+- Active work plans → `dev-docs/exec-plans/active/`
+- Developer guides → `dev-docs/guides/`
+- User-facing guides → `docs/`

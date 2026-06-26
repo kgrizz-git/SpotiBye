@@ -3,7 +3,7 @@
 > Based on principles from OpenAI's [Harness Engineering](https://openai.com/index/harness-engineering/) post (February 2026).
 > Goal: reshape this repo so AI coding agents (Copilot, Codex, etc.) can reason about, navigate, and modify it reliably — maximizing throughput while preserving coherence.
 
-> **Status (2026-06-19):** Historical guide. The recommended migration is complete — plans now live under [`docs/exec-plans/active/`](../docs/exec-plans/active/) and [`docs/exec-plans/completed/`](../docs/exec-plans/completed/). AGENTS.md, ARCHITECTURE.md, docs/index.md, docs/tech-debt-tracker.md, and the Copilot instructions are all in place. Path references in the body of this guide intentionally describe the original audit findings; consult the current indexes for canonical locations.
+> **Status (2026-06-19):** Historical guide. The recommended migration is complete — plans now live under [`dev-docs/exec-plans/active/`](../dev-docs/exec-plans/active/) and [`dev-docs/exec-plans/completed/`](../dev-docs/exec-plans/completed/). AGENTS.md, ARCHITECTURE.md, docs/index.md, dev-docs/backlog/tech-debt-tracker.md, and the Copilot instructions are all in place. Path references in the body of this guide intentionally describe the original audit findings; consult the current indexes for canonical locations.
 
 ---
 
@@ -60,14 +60,14 @@ All context the agent needs must exist as versioned, in-repo artifacts. Design d
 
 2. **Add `docs/index.md`** as a navigable map of all docs — what each file is, its status (current/stale/draft).
 
-3. **Create `docs/design-docs/`** for non-trivial decisions, with entries like:
+3. **Create `dev-docs/architecture/design-decisions/`** for non-trivial decisions, with entries like:
    - `cloudflare-worker-choice.md`
    - `resumable-export-cursors.md`
    - `spotify-api-migration-feb-2026.md` (already exists as a flat file — move it here)
 
-4. **Create `docs/exec-plans/active/` and `docs/exec-plans/completed/`** — move existing plan docs from `docs/plans/` into this structure, keeping only active ones open.
+4. **Create `dev-docs/exec-plans/active/` and `dev-docs/exec-plans/completed/`** — move existing plan docs from `docs/plans/` into this structure, keeping only active ones open.
 
-5. **Create `docs/tech-debt-tracker.md`** listing known shortcuts, brittle areas, and things to clean up. Agents use this to prioritize and avoid re-introducing known-bad patterns.
+5. **Create `dev-docs/backlog/tech-debt-tracker.md`** listing known shortcuts, brittle areas, and things to clean up. Agents use this to prioritize and avoid re-introducing known-bad patterns.
 
 6. **Add a `QUALITY_SCORE.md`** grading each domain (auth, export, analysis, caching, frontend screens) on test coverage, error handling robustness, and documentation completeness. Agents use this to know where to invest effort.
 
@@ -151,22 +151,22 @@ Encode "golden principles" — opinionated, mechanical rules — directly into t
 
 ### SpotiBye today
 - No golden principles document exists.
-- Technical debt is partially tracked in `dev-docs/TO_DO.md` but informally.
+- Technical debt is partially tracked in `dev-docs/backlog/TO_DO.md` but informally.
 
 ### Actions
-1. **Create `docs/golden-principles.md`** with explicit, mechanical rules such as:
+1. **Create `dev-docs/guides/golden-principles.md`** with explicit, mechanical rules such as:
    - Prefer shared utility functions over duplicated helpers — if something appears twice, extract it
    - Never probe a Spotify API response shape without validating it first (parse-don't-validate)
    - All Spotify API calls go through `services/spotify.ts` — no direct `fetch` to Spotify in routes
    - Export cursors are always persisted before any destructive step
    - Cache keys are always namespaced: `<user_id>:<resource_type>:<identifier>`
 
-2. **Convert `dev-docs/TO_DO.md` into `docs/tech-debt-tracker.md`** with structured entries:
+2. **Convert `dev-docs/backlog/TO_DO.md` into `dev-docs/backlog/tech-debt-tracker.md`** with structured entries:
    ```
    | Area | Issue | Severity | First Seen |
    ```
 
-3. **Add a recurring prompt** (saved in `docs/exec-plans/active/doc-gardening.md`) for periodic agent runs that:
+3. **Add a recurring prompt** (saved in `dev-docs/exec-plans/active/doc-gardening.md`) for periodic agent runs that:
    - Scan for golden principle violations and open fix PRs
    - Check that all services in `src/backend/services/` have a corresponding doc-block pointing to design docs
    - Update `QUALITY_SCORE.md`
@@ -228,7 +228,7 @@ In priority order, these are the highest-leverage moves:
 |---|--------|--------|----------|
 | 1 | Create `AGENTS.md` at repo root | Low | High — unlocks all agent runs |
 | 2 | Create `ARCHITECTURE.md` | Medium | High — prevents structural drift |
-| 3 | Create `docs/golden-principles.md` | Low | High — continuous quality enforcement |
+| 3 | Create `dev-docs/guides/golden-principles.md` | Low | High — continuous quality enforcement |
 | 4 | Add `docs/index.md` | Low | Medium — progressive disclosure for agents |
 | 5 | Add structural lint rules (backend) | Medium | High — mechanically enforced architecture |
 | 6 | Add structural test (frontend) | Medium | High — same for Python layer |

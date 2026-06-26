@@ -23,10 +23,10 @@
 
 ## Phase 2: Consolidate Plans
 
-- [x] Move `dev-docs/plans/reccobeats-wiring.md` → `docs/exec-plans/active/2026-06-21-reccobeats-wiring.md`
+- [x] Move `dev-docs/plans/reccobeats-wiring.md` → `dev-docs/exec-plans/active/2026-06-21-reccobeats-wiring.md`
 - [x] Delete `dev-docs/plans/` directory entirely
-- [x] Update all references in `dev-docs/TO_DO.md` that point to `plans/reccobeats-wiring.md` → new path `../docs/exec-plans/active/2026-06-21-reccobeats-wiring.md`
-- [x] Update `docs/exec-plans/active/README.md` to list the moved plan
+- [x] Update all references in `dev-docs/backlog/TO_DO.md` that point to `plans/reccobeats-wiring.md` → new path `../dev-docs/exec-plans/active/2026-06-21-reccobeats-wiring.md`
+- [x] Update `dev-docs/exec-plans/active/README.md` to list the moved plan
 
 ---
 
@@ -53,7 +53,7 @@
   - Investigation notes older than 60 days without updates should be reviewed for archival or deletion
   - Date-prefix tactical notes: `YYYY-MM-DD-topic.md` (e.g., `2026-06-15-bug-review.md`)
   - If a note becomes durable guidance, move it to `docs/` and update `docs/index.md`
-  - Plans never go here — use `docs/exec-plans/active/`
+  - Plans never go here — use `dev-docs/exec-plans/active/`
 
 ---
 
@@ -61,7 +61,7 @@
 
 - [x] Create `scripts/check-repo-structure.sh` (make executable) with these checks:
   1. **No plans in wrong locations**: Fail if any `.md` file exists in `dev-docs/plans/`
-  2. **No completed plans left in active/**: Warn (don't fail) if any file in `docs/exec-plans/active/` has >3 checkboxes and 0 unchecked (all `- [x]`, no `- [x]`)
+  2. **No completed plans left in active/**: Warn (don't fail) if any file in `dev-docs/exec-plans/active/` has >3 checkboxes and 0 unchecked (all `- [x]`, no `- [x]`)
   3. **No .DS_Store staged**: Fail if any `.DS_Store` is in the staged files
   4. **No .windsurf/rules/ resurrection**: Fail if `.windsurf/rules/` directory exists with content
 
@@ -105,8 +105,8 @@
 | `.pre-commit-config.yaml` | Edit — add local hook |
 | `.gitignore` | Edit — add `memory/`, `.qwen/` |
 | `dev-docs/README.md` | Edit — add lifecycle rules |
-| `dev-docs/TO_DO.md` | Edit — fix plan path references |
-| `docs/exec-plans/active/README.md` | Edit — add reccobeats plan entry |
+| `dev-docs/backlog/TO_DO.md` | Edit — fix plan path references |
+| `dev-docs/exec-plans/active/README.md` | Edit — add reccobeats plan entry |
 | `AGENTS.md` | Edit — small additions |
 | `.windsurf/` | Delete |
 | `.qwen/` | Delete |

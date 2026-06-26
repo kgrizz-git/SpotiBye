@@ -76,7 +76,7 @@
 
 ### BT-4: Add structured error logging to silent catch blocks (BE-ERR-1)
 
-> **`console.error` is the correct choice here.** Golden Principle #5 (`docs/golden-principles.md:53`) explicitly permits `console.error` and `console.warn` in catch blocks "where a proper logger is unavailable." The codebase has no structured logger today, and `console.error` is already the established pattern in `index.ts:79` and `middleware/auth.ts:52`. A future plan can introduce a structured logger and migrate these calls; for now, follow the existing pattern.
+> **`console.error` is the correct choice here.** Golden Principle #5 (`dev-docs/guides/golden-principles.md:53`) explicitly permits `console.error` and `console.warn` in catch blocks "where a proper logger is unavailable." The codebase has no structured logger today, and `console.error` is already the established pattern in `index.ts:79` and `middleware/auth.ts:52`. A future plan can introduce a structured logger and migrate these calls; for now, follow the existing pattern.
 
 - [ ] **File:** `src/backend/routes/auth.ts` — four silent catches, not three:
   - Line 39 (OAuth init) — change `catch {` to `catch (err) {`; add `console.error('OAuth init error:', err)`.
@@ -204,11 +204,11 @@
 - [ ] Run frontend tests: `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v`
 - [ ] Confirm `CHANGELOG.md` has an entry under `[Unreleased] / Fixed` for each user-visible change (FT-2, BT-4, BT-7, FT-3 at minimum).
 - [ ] Confirm the dev-docs `TO_DO.md` "Fix critical/high bugs" item is updated (and remains linked to this plan until completed, per the plan-hygiene rules in `AGENTS.md`).
-- [ ] After the plan is fully executed, move this file to `docs/exec-plans/completed/` and add a row to `docs/exec-plans/completed/README.md` (per `AGENTS.md` "Plans and Documentation Conventions").
+- [ ] After the plan is fully executed, move this file to `dev-docs/exec-plans/completed/` and add a row to `dev-docs/exec-plans/completed/README.md` (per `AGENTS.md` "Plans and Documentation Conventions").
 
 ---
 
 ## Links
 
 - **Bug assessment:** [dev-docs/bug-review-2026-06-21-183947.md](../../dev-docs/bug-review-2026-06-21-183947.md)
-- **TODO entry:** [dev-docs/TO_DO.md](../../dev-docs/TO_DO.md) (see "Fix critical/high bugs from 2026-06-21 audit")
+- **TODO entry:** [dev-docs/backlog/TO_DO.md](../../dev-docs/backlog/TO_DO.md) (see "Fix critical/high bugs from 2026-06-21 audit")

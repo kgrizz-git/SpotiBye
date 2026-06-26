@@ -66,7 +66,7 @@ Update any workflow/docs still building via legacy entrypoint:
 
 ### 5) Documentation Consistency
 Update docs that still imply monolithic or legacy startup:
-- `docs/build-and-deploy-guide.md`
+- `dev-docs/guides/build-and-deploy-guide.md`
 - `docs/plans/phase-3-production-deployment.md` (distribution snippet currently shows `pyinstaller --onefile main.py`)
 - Any debug docs that assume `python main.py` as the default split-arch launcher.
 
@@ -74,7 +74,7 @@ Update docs that still imply monolithic or legacy startup:
 
 Must update:
 - `spotibye.spec` (entrypoint + packaging boundaries)
-- `docs/build-and-deploy-guide.md` (canonical build command and architecture note)
+- `dev-docs/guides/build-and-deploy-guide.md` (canonical build command and architecture note)
 - `docs/plans/phase-3-production-deployment.md` (fix outdated distribution command snippet)
 
 Likely update:

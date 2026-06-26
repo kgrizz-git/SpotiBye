@@ -323,7 +323,7 @@ git commit -m "fix: clean up frontend screen edge cases"
 
 **Files:**
 - Modify: `CHANGELOG.md`
-- Modify: `dev-docs/TO_DO.md`
+- Modify: `dev-docs/backlog/TO_DO.md`
 
 - [ ] **Step 1: Add a changelog entry for the user-visible fixes**
 
@@ -336,7 +336,7 @@ git commit -m "fix: clean up frontend screen edge cases"
 - [ ] **Step 2: Update the todo item when the plan is in progress**
 
 ```md
-- [ ] Fix medium and low findings from 2026-06-21 bug review — see [fix plan](../docs/exec-plans/active/2026-06-21-bug-review-medium-low-fixes.md).
+- [ ] Fix medium and low findings from 2026-06-21 bug review — see [fix plan](../dev-docs/exec-plans/active/2026-06-21-bug-review-medium-low-fixes.md).
 ```
 
 - [ ] **Step 3: Run the repo verification script**
@@ -347,6 +347,6 @@ Expected: exit 0 with no output on success.
 - [ ] **Step 4: Commit the release-ready cleanup**
 
 ```bash
-git add CHANGELOG.md dev-docs/TO_DO.md
+git add CHANGELOG.md dev-docs/backlog/TO_DO.md
 git commit -m "docs: track medium and low bug review fixes"
 ```

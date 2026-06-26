@@ -8,7 +8,8 @@
 
 - **Code map:** [dev-docs/code-map.md](dev-docs/code-map.md) — file index, Mermaid diagrams, role of every source file
 - **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md) — layer contracts, data flow, domain breakdown
-- **All docs:** [docs/index.md](docs/index.md) — full navigable map
+- **User docs:** [docs/index.md](docs/index.md) — end-user documentation map
+- **Developer docs:** [dev-docs/README.md](dev-docs/README.md) — contributor, agent, architecture, plan, and reference map
 - **Sub-agents:** [.claude/sub-agents/](.claude/sub-agents/) — architecture-analyst, dependency-analyst, test-coverage-analyst, security-scanner, evaluator
 
 ---
@@ -41,18 +42,20 @@ KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -
 5. No `console.log` in non-test backend code — use structured logging
 6. No bare `except:` in Python — always name the exception type
 
-Full list: [docs/golden-principles.md](docs/golden-principles.md)
+Full list: [dev-docs/guides/golden-principles.md](dev-docs/guides/golden-principles.md)
 
 ---
 
 ## Plans & Docs Placement
 
-- New implementation plans → `docs/exec-plans/active/YYYY-MM-DD-topic.md` (checkbox steps, mark complete as you go)
-- Completed plans → move to `docs/exec-plans/completed/` and index in its `README.md`
-- Design decisions → `docs/design-docs/`
-- Third-party API references → `docs/references/`
-- Short-lived investigations, audits, working notes → `dev-docs/`
-- Before creating a new doc, check `docs/index.md` and run `rg "<topic>" dev-docs docs`
+- `docs/` is for end-user documentation only.
+- `dev-docs/` is for developer, maintainer, and agent-facing material.
+- New implementation plans → `dev-docs/exec-plans/active/YYYY-MM-DD-topic.md` (checkbox steps, mark complete as you go)
+- Completed plans → move to `dev-docs/exec-plans/completed/` and index in its `README.md`
+- Design decisions → `dev-docs/architecture/design-decisions/`
+- Third-party API references → `dev-docs/references/`
+- Short-lived investigations and audits → `dev-docs/investigations/` or `dev-docs/assessments/`
+- Before creating a new doc, check `docs/index.md`, `dev-docs/README.md`, and run `rg "<topic>" dev-docs docs`
 
 ---
 

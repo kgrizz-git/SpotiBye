@@ -165,7 +165,7 @@ File: `src/frontend/app/__init__.py` (if needed)
 
 ## Documentation Updates Required
 
-- [x] `docs/build-and-deploy-guide.md`: Add section for selecting backend in GUI vs env vars.
+- [x] `dev-docs/guides/build-and-deploy-guide.md`: Add section for selecting backend in GUI vs env vars.
 - [x] `docs/plans/phase-2-real-integration-testing.md`: Add startup step to select backend target before auth tests.
 
 ## Definition of Done

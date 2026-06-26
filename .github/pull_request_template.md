@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] Golden principles respected ([docs/golden-principles.md](docs/golden-principles.md))
+- [ ] Golden principles respected ([dev-docs/guides/golden-principles.md](dev-docs/guides/golden-principles.md))
 - [ ] Layer architecture not violated (routes → services → types; no cross-layer imports)
 - [ ] `CHANGELOG.md` updated if this is a user-visible change
 - [ ] Relevant docs updated if behavior changed

@@ -53,5 +53,5 @@ SpotiBye originally had a local Python backend. As the app matured, a decision w
 ## Agent Notes
 
 - Do not add a Node.js-specific library that requires filesystem access or native modules — they will not work in Workers.
-- When in doubt about what Workers supports, check [`docs/references/cloudflare-workers-constraints.md`](../references/cloudflare-workers-constraints.md).
+- When in doubt about what Workers supports, check [`../../references/cloudflare-workers-constraints.md`](../../references/cloudflare-workers-constraints.md).
 - The `nodejs_compat` flag is enabled in `wrangler.toml` — a limited subset of Node.js APIs is available.
