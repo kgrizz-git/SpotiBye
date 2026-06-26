@@ -32,7 +32,7 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 
 - New implementation plans go in `docs/exec-plans/active/YYYY-MM-DD-topic.md`.
 - Plans must use checkbox steps (`- [ ]`) and executors must mark steps complete (`- [x]`) as work is completed.
-- If a plan comes from `dev-docs/TO_DO.md`, keep that TODO linked while active and mark it complete when the plan is finished.
+- If a plan comes from `dev-docs/TO_DO.md`, keep that TODO linked while active and remove it from the file when the plan is finished.
 - Completed or superseded plans move to `docs/exec-plans/completed/` and must be indexed in `docs/exec-plans/completed/README.md`.
 - Design decisions that should remain durable go in `docs/design-docs/`.
 - Third-party API/platform reference notes go in `docs/references/`.
@@ -109,4 +109,28 @@ Run the script from a fresh local checkout of the target branch, normally `main`
 ## Changelog Rule
 
 Any user-visible change must update `CHANGELOG.md` in the same PR.
-See [.github/copilot-instructions.md](.github/copilot-instructions.md) for details.
+
+User-visible changes include:
+- New features or removed features
+- Bug fixes that alter behavior
+- UI and UX changes users can notice
+- Build and distribution changes that affect delivered artifacts
+
+Changelog updates should:
+- Add concise bullet points under the correct unreleased or release version section
+- Use sections such as Added, Changed, Fixed, and Known Issues as appropriate
+- Keep entries focused on outcomes and user impact
+
+Changelog updates are not required for internal-only changes, such as:
+- Refactors with no user-visible behavior changes
+- Test-only changes
+- Documentation-only updates that do not change product behavior
+- CI/internal tooling changes with no user-facing impact
+
+---
+
+## PR Conventions
+
+- PRs should change one logical thing. Split changes > ~400 lines.
+- Every PR description must state what changed and why.
+- Architecture violations caught by linters must be fixed before merging.
