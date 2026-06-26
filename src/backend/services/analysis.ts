@@ -175,14 +175,40 @@ export class AnalysisService {
     }
   }
 
-  private async fetchReccoBeatsAudioFeatures(trackIds: string[]): Promise<ReccoBeatsAudioFeature[]> {
+  private async fetchReccoBeatsAudioFeatures(
+    trackIds: string[]
+  ): Promise<ReccoBeatsAudioFeature[]> {
     const uniqueIds = [...new Set(trackIds.filter(Boolean))];
-    if (uniqueIds.length === 0) {
-      return [];
+    if (uniqueIds.length === 0) return [];
+
+    const BATCH_SIZE = 50;
+    const batches: string[][] = [];
+    for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
+      batches.push(uniqueIds.slice(i, i + BATCH_SIZE));
     }
 
+    const allFeatures: ReccoBeatsAudioFeature[] = [];
+
+    // Process batches with bounded concurrency
+    const CONCURRENCY = 3;
+    for (let i = 0; i < batches.length; i += CONCURRENCY) {
+      const chunk = batches.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        chunk.map((batch) => this.fetchReccoBeatsAudioFeaturesBatch(batch))
+      );
+      for (const features of results) {
+        allFeatures.push(...features);
+      }
+    }
+
+    return allFeatures;
+  }
+
+  private async fetchReccoBeatsAudioFeaturesBatch(
+    batchIds: string[]
+  ): Promise<ReccoBeatsAudioFeature[]> {
     const url = new URL(`${this.reccoBeatsUrl}/audio-features`);
-    for (const trackId of uniqueIds) {
+    for (const trackId of batchIds) {
       url.searchParams.append('ids', trackId);
     }
 

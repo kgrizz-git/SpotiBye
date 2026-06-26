@@ -273,17 +273,30 @@ class MockBackendHandler(BaseHTTPRequestHandler):
                 "playlist_id": playlist_id,
                 "analysis_type": "audio_features",
                 "results": {
-                    "average_danceability": 0.7,
-                    "average_energy": 0.8,
-                    "average_valence": 0.6,
-                    "track_analysis": [
-                        {
-                            "track_id": "track_1",
-                            "danceability": 0.8,
-                            "energy": 0.9,
-                            "valence": 0.7,
+                    "overview": {
+                        "total_tracks": 1,
+                        "total_duration_ms": 180000,
+                        "average_duration_ms": 180000,
+                        "formatted_duration": "3m 0s"
+                    },
+                    "genre_distribution": {
+                        "pop": { "count": 1, "percentage": 100 }
+                    },
+                    "artists": {
+                        "unique_artists": 1,
+                        "top_artists": [{ "artist": "Artist 1", "count": 1 }],
+                        "diversity": 1.0
+                    },
+                    "audio_features": {
+                        "track_count": 1,
+                        "averages": {
+                            "danceability": 0.7,
+                            "energy": 0.8,
+                            "valence": 0.6,
+                            "tempo": 120.0,
+                            "acousticness": 0.2
                         }
-                    ],
+                    }
                 },
                 "completed_at": time.time(),
             },
@@ -450,17 +463,30 @@ DEFAULT_TEST_DATA = {
             "playlist_id": "small_playlist",
             "analysis_type": "audio_features",
             "results": {
-                "average_danceability": 0.7,
-                "average_energy": 0.8,
-                "average_valence": 0.6,
-                "track_analysis": [
-                    {
-                        "track_id": "track_1",
-                        "danceability": 0.8,
-                        "energy": 0.9,
-                        "valence": 0.7,
+                "overview": {
+                    "total_tracks": 1,
+                    "total_duration_ms": 180000,
+                    "average_duration_ms": 180000,
+                    "formatted_duration": "3m 0s"
+                },
+                "genre_distribution": {
+                    "pop": { "count": 1, "percentage": 100 }
+                },
+                "artists": {
+                    "unique_artists": 1,
+                    "top_artists": [{ "artist": "Artist 1", "count": 1 }],
+                    "diversity": 1.0
+                },
+                "audio_features": {
+                    "track_count": 1,
+                    "averages": {
+                        "danceability": 0.7,
+                        "energy": 0.8,
+                        "valence": 0.6,
+                        "tempo": 120.0,
+                        "acousticness": 0.2
                     }
-                ],
+                }
             },
             "completed_at": time.time(),
         }

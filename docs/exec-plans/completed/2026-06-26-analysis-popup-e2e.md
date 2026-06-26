@@ -39,11 +39,11 @@ The analysis popup flow works as follows:
 
 **Problem:** All track IDs are appended to a single `GET /v1/audio-features?ids=...&ids=...` URL. For 300+ tracks with 22-char Spotify IDs, the query string exceeds ~8KB URL limits → HTTP 414.
 
-- [ ] Chunk `uniqueIds` into batches of 50 IDs per request inside `fetchReccoBeatsAudioFeatures()`
-- [ ] Make parallel requests (bounded concurrency, e.g. 3 concurrent) for each batch
-- [ ] Concatenate `content` arrays from all batch responses before aggregating
-- [ ] Add a test case with >50 mocked track IDs to verify batching occurs (assert multiple fetch calls)
-- [ ] Add a test case verifying that aggregated averages are correct across batches
+- [x] Chunk `uniqueIds` into batches of 50 IDs per request inside `fetchReccoBeatsAudioFeatures()`
+- [x] Make parallel requests (bounded concurrency, e.g. 3 concurrent) for each batch
+- [x] Concatenate `content` arrays from all batch responses before aggregating
+- [x] Add a test case with >50 mocked track IDs to verify batching occurs (assert multiple fetch calls)
+- [x] Add a test case verifying that aggregated averages are correct across batches
 
 **Implementation sketch:**
 
@@ -116,12 +116,12 @@ private async fetchReccoBeatsAudioFeaturesBatch(
 
 The popup currently shows genre distribution and artist analysis but has no section for audio features.
 
-- [ ] After the artist analysis section in `_update_analysis_ui()`, add an "Audio Features" section
-- [ ] Read `results.get("audio_features", {})` and extract `averages` dict
-- [ ] Display the most useful subset as a compact section: danceability, energy, valence (mood), tempo (BPM), acousticness
-- [ ] Format 0–1 values as percentages (e.g. `0.65` → `65%`) and tempo as integer BPM
-- [ ] If `audio_features` is absent or empty, either skip the section entirely or show "Audio features unavailable"
-- [ ] Do not display `liveness`, `loudness`, `speechiness` by default — these are less meaningful to most users. Keep the section concise.
+- [x] After the artist analysis section in `_update_analysis_ui()`, add an "Audio Features" section
+- [x] Read `results.get("audio_features", {})` and extract `averages` dict
+- [x] Display the most useful subset as a compact section: danceability, energy, valence (mood), tempo (BPM), acousticness
+- [x] Format 0–1 values as percentages (e.g. `0.65` → `65%`) and tempo as integer BPM
+- [x] If `audio_features` is absent or empty, either skip the section entirely or show "Audio features unavailable"
+- [x] Do not display `liveness`, `loudness`, `speechiness` by default — these are less meaningful to most users. Keep the section concise.
 
 **Implementation sketch:**
 
@@ -163,8 +163,8 @@ if averages:
 **Files:**
 - Modify: `src/frontend/ui/backend_playlist_card.py` — `_build_analysis_popup_content()`
 
-- [ ] Change line 481 from `"Retrieving analysis from ReccoBeats API..."` to `"Analyzing playlist..."`
-- [ ] This is a single string replacement — the analysis is Spotify-backed with best-effort ReccoBeats enrichment, not a ReccoBeats API call
+- [x] Change line 481 from `"Retrieving analysis from ReccoBeats API..."` to `"Analyzing playlist..."`
+- [x] This is a single string replacement — the analysis is Spotify-backed with best-effort ReccoBeats enrichment, not a ReccoBeats API call
 
 ---
 
@@ -173,11 +173,11 @@ if averages:
 **Files:**
 - Audit: `src/frontend/services/reccobeats_backend.py`
 
-- [ ] Verify that `get_multiple_track_audio_features_safe()` (raises `NotImplementedError`) is never called from production code
+- [x] Verify that `get_multiple_track_audio_features_safe()` (raises `NotImplementedError`) is never called from production code
   - Expected result: only called by `get_multiple_track_audio_features()` (self-delegation) and test cases
   - If confirmed unreachable, no code change needed — just document in this step
-- [ ] Verify that the analysis popup flow only reaches `ReccoBeatsBackendService.analyze_playlist()` → `_poll_analysis_completion()` → `BackendClient` methods, never the legacy stubs
-- [ ] If stubs are confirmed dead, add a brief comment at the top of the class noting they exist only for compatibility and are not called in production
+- [x] Verify that the analysis popup flow only reaches `ReccoBeatsBackendService.analyze_playlist()` → `_poll_analysis_completion()` → `BackendClient` methods, never the legacy stubs
+- [x] If stubs are confirmed dead, add a brief comment at the top of the class noting they exist only for compatibility and are not called in production
 
 ---
 
@@ -185,12 +185,12 @@ if averages:
 
 These are the unchecked items from the [ReccoBeats wiring plan](2026-06-21-reccobeats-wiring.md) verification checklist.
 
-- [ ] Double-clicking a playlist card opens the Playlist Analysis popup
-- [ ] Duration and artist sections populate with real data
-- [ ] Genre distribution either populates or shows "No genre data available" without failing the job
-- [ ] Audio features section appears when ReccoBeats returns data, or is absent/skipped gracefully
-- [ ] For a large playlist (200+ tracks), analysis completes without HTTP 414 errors
-- [ ] Popup loading text says "Analyzing playlist..." (not "ReccoBeats API")
+- [x] Double-clicking a playlist card opens the Playlist Analysis popup
+- [x] Duration and artist sections populate with real data
+- [x] Genre distribution either populates or shows "No genre data available" without failing the job
+- [x] Audio features section appears when ReccoBeats returns data, or is absent/skipped gracefully
+- [x] For a large playlist (200+ tracks), analysis completes without HTTP 414 errors
+- [x] Popup loading text says "Analyzing playlist..." (not "ReccoBeats API")
 
 **How to verify:**
 1. Run `cd src/backend && npm run test:run && npm run lint` — all backend tests pass

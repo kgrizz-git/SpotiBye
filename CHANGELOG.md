@@ -6,7 +6,11 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Added "Audio Features" section to the playlist analysis popup displaying danceability, energy, mood (valence), acousticness, and tempo averages from ReccoBeats.
+
 ### Changed
+- Changed playlist analysis loading text from "Retrieving analysis from ReccoBeats API..." to "Analyzing playlist..." to accurately reflect that the analysis is Spotify-backed.
 - Refactored `main_screen.py` (1,041 lines) into a coordinator (494 lines) plus `main_screen_ui.py` (`MainScreenUIBuilder`), `main_screen_selection.py` (`SelectionManager`), and `main_screen_search_sort_ui.py` (`SearchSortUIHandler`). Property facades preserve `BackendMainScreen` compatibility; no caller changes required. Added unit tests for selection, search/sort, and facade round-trips.
 - Refactored `backend_main_screen_adapter.py` (~1,100 lines) into a facade composing 9 mixin modules under `adapter_mixins/` (core, playlists, tracks, analysis, exports, exports_resumable, exports_download, jobs, utilities). All public names (`BackendMainScreenAdapter`, `create_backend_adapter`, `get_reccobeats_api`, `create_spotify_client_with_refresh`) are preserved at the same import path; no caller changes required.
 - Fixed a copy-paste error message in `get_playlist_tracks` that emitted `"Export generation failed"` instead of the correct `"Failed to load playlist tracks"`.
@@ -16,6 +20,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Refactored `services/export.ts` (1,186 lines) into focused modules: `export-types`, `export-cursor`, `export-job-state`, `export-assemble`, `export-collect`, `export-assembly`, `export-xlsx`, `export-xlsx-lite`, `export-csv`, `export-json`, `export-tracks`, `export-format-helpers`. The `ExportService` class is now a thin facade with static and instance delegating methods — no change to the public API, call sites, or output formats. Added unit tests for all extracted pure functions.
 
 ### Fixed
+- Fixed backend ReccoBeats audio features fetching by batching track IDs (50 per batch, concurrency 3) to prevent HTTP 414 URL too long errors on playlists with 300+ tracks.
 - Restored backend ReccoBeats audio-feature enrichment using the verified public no-auth API and removed stale ReccoBeats secret requirements from active backend config/docs.
 - Fixed backend playlist analysis failures caused by Spotify rejecting the removed batch artist endpoint by fetching artist metadata individually and continuing without genre data when artist enrichment fails.
 - Fixed export cancellation state so the frontend records active backend exports and can mark them cancelled during user cancellation or app shutdown.

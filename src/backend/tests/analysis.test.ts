@@ -252,6 +252,74 @@ describe('AnalysisService', () => {
       })
     );
   });
+
+  it('chunks track IDs into batches of 50 and aggregates correct averages across batches', async () => {
+    const tracksList = Array.from({ length: 60 }, (_, i) => ({
+      added_by: null,
+      track: spotifyTrack(`track${i + 1}`, `artist${i + 1}`, `Artist ${i + 1}`, 120000),
+    }));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      expect(url.origin).toBe('https://api.reccobeats.com');
+      expect(url.pathname).toBe('/v1/audio-features');
+      const ids = url.searchParams.getAll('ids');
+      expect(ids.length).toBeLessThanOrEqual(50);
+
+      const content = ids.map((id) => ({
+        id: `recco-${id}`,
+        href: `https://open.spotify.com/track/${id}`,
+        acousticness: 0.2,
+        danceability: 0.4,
+        energy: 0.6,
+        instrumentalness: 0.1,
+        liveness: 0.1,
+        loudness: -6,
+        speechiness: 0.05,
+        tempo: 100,
+        valence: 0.5,
+      }));
+
+      return new Response(JSON.stringify({ content }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 60,
+      rawCount: 60,
+      items: tracksList,
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const service = new AnalysisService('access-token');
+    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const firstBatchCallUrl = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(firstBatchCallUrl.searchParams.getAll('ids').length).toBe(50);
+
+    const secondBatchCallUrl = new URL(String(fetchMock.mock.calls[1][0]));
+    expect(secondBatchCallUrl.searchParams.getAll('ids').length).toBe(10);
+
+    expect((result as any).audio_features).toEqual({
+      track_count: 60,
+      averages: {
+        acousticness: 0.2,
+        danceability: 0.4,
+        energy: 0.6,
+        instrumentalness: 0.1,
+        liveness: 0.1,
+        loudness: -6,
+        speechiness: 0.05,
+        tempo: 100,
+        valence: 0.5,
+      },
+    });
+  });
 });
 
 describe('Analysis Routes', () => {

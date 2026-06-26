@@ -478,7 +478,7 @@ class BackendPlaylistCard(BoxLayout):
         )
         analysis_container.add_widget(
             Label(
-                text="Retrieving analysis from ReccoBeats API...",
+                text="Analyzing playlist...",
                 font_size=dp(11),
                 color=(0.75, 0.55, 0.15, 1),
                 halign="left",
@@ -646,6 +646,35 @@ class BackendPlaylistCard(BoxLayout):
                     for a in top_artists[:5]
                 )
                 analysis_container.add_widget(_small_label(f"Top Artists: {top_str}"))
+
+        # Audio features (from ReccoBeats, best-effort)
+        audio_features = results.get("audio_features") or {}
+        averages = audio_features.get("averages") or {}
+        if averages:
+            analysis_container.add_widget(_section_header("Audio Features:"))
+            feature_labels = [
+                ("Danceability", averages.get("danceability")),
+                ("Energy", averages.get("energy")),
+                ("Mood (Valence)", averages.get("valence")),
+                ("Acousticness", averages.get("acousticness")),
+            ]
+            parts = []
+            for label, val in feature_labels:
+                if val is not None:
+                    parts.append(f"{label}: {val * 100:.0f}%")
+            tempo = averages.get("tempo")
+            if tempo is not None:
+                parts.append(f"Tempo: {int(tempo)} BPM")
+            if parts:
+                analysis_container.add_widget(_small_label(" · ".join(parts)))
+            track_count = audio_features.get("track_count", 0)
+            if track_count:
+                analysis_container.add_widget(
+                    _small_label(
+                        f"Based on {track_count} tracks with available audio data",
+                        color=(0.55, 0.55, 0.55, 1),
+                    )
+                )
 
     # ------------------------------------------------------------------
     # Tracks window  (opened via "Show Tracks" button)

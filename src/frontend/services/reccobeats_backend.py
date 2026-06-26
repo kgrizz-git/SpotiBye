@@ -13,7 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class ReccoBeatsBackendService:
-    """ReccoBeats service using Cloudflare Worker backend."""
+    """
+    ReccoBeats service using Cloudflare Worker backend.
+
+    Note: Legacy compatibility methods (such as get_multiple_track_audio_features, etc.)
+    are kept only for interface compatibility and are not called in the production
+    end-to-end analysis popup flow.
+    """
 
     def __init__(self, backend_client: Optional[BackendClient] = None):
         """
