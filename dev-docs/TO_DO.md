@@ -19,14 +19,10 @@ All backend tracks (A–D) from the [ReccoBeats wiring plan](../docs/exec-plans/
 
 ## Export
 
-- [x] Refactor `routes/export.ts` (1,050 lines) — [Plan](../docs/exec-plans/completed/2026-06-24-refactor-routes-export-ts.md) (Completed 2026-06-24)
 - [ ] Split the XLSX render-modes and prebuilt-format slots in `buildExportFileKey` (resolve known smell of mixing 'default', 'rich', 'lite', and 'csv')
 
 ## Code Quality / Tech Debt
 
-- [x] Refactor `backend_main_screen_adapter.py` (1,116 lines) — [Plan](../docs/exec-plans/active/2026-06-24-refactor-backend-main-screen-adapter.md) (Completed 2026-06-24)
-- [x] Refactor `main_screen.py` (1,041 lines) — [Plan](../docs/exec-plans/completed/2026-06-24-refactor-main-screen.md) (Completed 2026-06-24)
-- [x] **BM-11** — Done 2026-06-24: `no-explicit-any` is now `error` for non-test code; test files retain `warn`.
 - [ ] Fix deprecated `AsyncImage` properties (`allow_stretch`, `keep_ratio`)
 - [ ] Check for pyright issues and fix them
 - [ ] Track/remove `esbuild` and `uuid` npm overrides in `src/backend/package.json` once upstream ships patched releases
