@@ -1,5 +1,7 @@
 # Backend Playlist Analysis / ReccoBeats Wiring Plan
 
+> **Note:** See the [ReccoBeats Wiring Assessment](../../../dev-docs/2026-06-26-reccobeats-wiring-assessment.md) for a review of the plan status, bugs, and API usage.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Restore backend-mode playlist analysis so the Kivy popup receives useful duration, artist, and genre data, while preserving the path to ReccoBeats integration from the old monolithic app.
