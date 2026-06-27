@@ -32,7 +32,7 @@ Running `basedpyright` globally from the repository root reports **37 errors**, 
 
 Add basedpyright to the development dependencies and configure global exclusions to prevent scanning backups, environments, and other non-active directories.
 
-- [ ] Add `"basedpyright>=1.21.0"` to the `[project.optional-dependencies] development` list.
+- [ ] Add `"basedpyright>=1.39.6"` to the `[project.optional-dependencies] development` list.
 - [ ] Add `exclude` paths to the `[tool.basedpyright]` section:
   ```toml
   exclude = [
@@ -43,7 +43,9 @@ Add basedpyright to the development dependencies and configure global exclusions
       "**/srcamas",
       "**/.venv",
       "**/venv",
-      "**/node_modules"
+      "**/node_modules",
+      "**/build",
+      "**/dist"
   ]
   ```
 
@@ -59,14 +61,16 @@ Add basedpyright to the development dependencies and configure global exclusions
 
 - [ ] Add the local hook entry to target frontend and shared sources:
   ```yaml
-        - id: basedpyright
-          name: basedpyright type check
-          description: Run basedpyright type checker on frontend and shared code before push
-          entry: basedpyright src/frontend src/shared --level error
-          language: system
-          pass_filenames: false
-          always_run: true
-          stages: [pre-push]
+  - repo: local
+    hooks:
+      - id: basedpyright
+        name: basedpyright type check
+        description: Run basedpyright type checker on frontend and shared code before push
+        entry: basedpyright src/frontend src/shared --level error
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
   ```
 
 > **Why `language: system`?** The hook uses the project's venv (where basedpyright is installed). `system` keeps the dependency managed centrally in `pyproject.toml`.
@@ -82,10 +86,10 @@ Add basedpyright to the development dependencies and configure global exclusions
 - [ ] Remove from `src/frontend/app/backend_app.py:159,504-506`
 
 Verify the remaining 10 are still needed:
-- [ ] `src/frontend/screens/cache_explorer_adapter.py:53` — `reportReturnType`
+- [ ] `src/frontend/screens/cache_explorer_adapter.py:55` — `reportReturnType`
 - [ ] `src/frontend/screens/main_screen_error_popup.py:124-125` — `reportPossiblyUnboundVariable`
 - [ ] `src/frontend/utils/platform_utils.py:92,105,326` — `reportMissingImports` for macOS-only imports
-- [ ] `src/frontend/ui/backend_playlist_card.py:825-832` — `reportArgumentType`
+- [ ] `src/frontend/ui/backend_playlist_card.py:823,825,829,830` — `reportArgumentType`
 
 - [ ] Verify no regressions: `basedpyright --level error` (should still be 0)
 
