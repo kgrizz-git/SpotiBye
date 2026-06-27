@@ -10,14 +10,19 @@ export function buildExportJobAssemblyKey(jobId: string, userId: string): string
   return `${buildExportJobKey(jobId, userId)}:assembly`;
 }
 
-// mode: 'default' = canonical export file (served by fallback chain)
-//       'rich' | 'lite' = XLSX render variants (served by mode query)
-//       'csv' = pre-built CSV write target only — never selected by the fallback chain
-export function buildExportFileKey(baseKey: string, mode: 'default' | 'rich' | 'lite' | 'csv' = 'default'): string {
-  if (mode === 'default') {
-    return `${baseKey}:file`;
-  }
-  return `${baseKey}:file:${mode}`;
+/** canonical fallback slot */
+export function buildExportFileKey(baseKey: string): string {
+  return `${baseKey}:file`;
+}
+
+/** XLSX render variants rich/lite */
+export function buildXlsxVariantKey(baseKey: string, variant: 'rich' | 'lite'): string {
+  return `${baseKey}:file:${variant}`;
+}
+
+/** prebuilt format slots like csv */
+export function buildPrebuiltFormatKey(baseKey: string, format: 'csv'): string {
+  return `${baseKey}:file:${format}`;
 }
 
 export function buildBatchKey(jobId: string, userId: string): string {

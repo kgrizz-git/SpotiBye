@@ -3,7 +3,7 @@ import type { CacheService } from '../../../services/cache';
 import type { ExportData, ResumableExportAssemblyState, ResumableExportJobState } from '../../../services/export-types';
 import type { XlsxRenderMode } from '../../../services/export';
 import type { ExportFormat } from './types';
-import { buildExportFileKey } from './cache-keys';
+import { buildExportFileKey, buildXlsxVariantKey, buildPrebuiltFormatKey } from './cache-keys';
 
 export async function generateFileBytes(
   exportService: ExportService,
@@ -69,7 +69,7 @@ export async function precacheJobFiles(
     try {
       const fileBytes = await generateFileBytesFromAssembly(exportService, assemblyState, completedFormat);
       if (completedFormat === 'csv') {
-        await cacheService.setBuffer(buildExportFileKey(jobKey, 'csv'), fileBytes, 3600);
+        await cacheService.setBuffer(buildPrebuiltFormatKey(jobKey, 'csv'), fileBytes, 3600);
       }
       await cacheService.setBuffer(buildExportFileKey(jobKey), fileBytes, 3600);
       console.info('[export-job] file cached', { jobId: job.job_id, fileFormat: completedFormat });
@@ -83,7 +83,7 @@ export async function precacheJobFiles(
     // Always prebuild lite variant for reliability. Optionally prebuild rich when small enough.
     try {
       const liteBytes = await generateFileBytesFromAssembly(exportService, assemblyState, 'xlsx', 'lite');
-      await cacheService.setBuffer(buildExportFileKey(jobKey, 'lite'), liteBytes, 3600);
+      await cacheService.setBuffer(buildXlsxVariantKey(jobKey, 'lite'), liteBytes, 3600);
       await cacheService.setBuffer(buildExportFileKey(jobKey), liteBytes, 3600);
     } catch (liteErr) {
       console.warn('[export-job] lite xlsx pre-build failed; download will generate on demand', {
@@ -95,7 +95,7 @@ export async function precacheJobFiles(
     if (richEligible) {
       try {
         const richBytes = await generateFileBytesFromAssembly(exportService, assemblyState, 'xlsx', 'rich');
-        await cacheService.setBuffer(buildExportFileKey(jobKey, 'rich'), richBytes, 3600);
+        await cacheService.setBuffer(buildXlsxVariantKey(jobKey, 'rich'), richBytes, 3600);
       } catch (richErr) {
         console.warn('[export-job] rich xlsx pre-build failed; lite remains available', {
           jobId: job.job_id,

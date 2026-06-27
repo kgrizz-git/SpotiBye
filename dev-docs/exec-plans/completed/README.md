@@ -35,6 +35,7 @@
 | [`2026-06-24-refactor-routes-export-ts.md`](2026-06-24-refactor-routes-export-ts.md) | Split `routes/export.ts` (1,050 lines) into a Hono sub-app composition at `routes/export/` with helper modules under `routes/export/helpers/` (types, cache-keys, format, errors, request-id, file-bytes). Facade preserved; no public API changes; ESLint and architecture test expanded; 3 new unit test files added. | 2026-06-24 |
 | [`2026-06-24-refactor-backend-main-screen-adapter.md`](2026-06-24-refactor-backend-main-screen-adapter.md) | Split `backend_main_screen_adapter.py` (~1,100 lines) into a facade composing 9 mixin modules under `adapter_mixins/` (core, playlists, tracks, analysis, exports, exports_resumable, exports_download, jobs, utilities). No caller changes; all public names preserved. Fixed `get_playlist_tracks` copy-paste error message. | 2026-06-24 |
 | [`2026-06-24-refactor-main-screen.md`](2026-06-24-refactor-main-screen.md) | Split `main_screen.py` (1,041 lines) into coordinator (494 lines) plus `main_screen_ui.py`, `main_screen_selection.py`, and `main_screen_search_sort_ui.py`. Property facades preserve `BackendMainScreen` compatibility; 3 new unit test files added. | 2026-06-24 |
+| [`2026-06-26-split-xlsx-render-modes.md`](2026-06-26-split-xlsx-render-modes.md) | Split `buildExportFileKey` conflated `mode` parameter into dedicated functions (`buildXlsxVariantKey`, `buildPrebuiltFormatKey`) to separate XLSX render variants from prebuilt format slots. | 2026-06-27 |
 
 ## Infrastructure Plans
 

@@ -13,6 +13,8 @@ import {
   buildExportJobDataKey,
   buildExportJobAssemblyKey,
   buildExportFileKey,
+  buildXlsxVariantKey,
+  buildPrebuiltFormatKey,
 } from './helpers/cache-keys';
 import {
   parseXlsxRenderMode,
@@ -178,8 +180,8 @@ app.get('/:jobId/status', async (c) => {
 
     const jobKey = buildExportJobKey(jobId, userId);
     const hasDefaultFile = await cacheService.exists(buildExportFileKey(jobKey));
-    const hasLiteFile = await cacheService.exists(buildExportFileKey(jobKey, 'lite'));
-    const hasRichFile = await cacheService.exists(buildExportFileKey(jobKey, 'rich'));
+    const hasLiteFile = await cacheService.exists(buildXlsxVariantKey(jobKey, 'lite'));
+    const hasRichFile = await cacheService.exists(buildXlsxVariantKey(jobKey, 'rich'));
 
     return c.json({
       data: {
@@ -223,17 +225,18 @@ app.get('/:jobId/download', async (c) => {
       ? (requestedMode === 'auto' ? (exportStatus.render_mode_hint || 'auto') : requestedMode)
       : fileFormat;
 
-    const prebuiltKeyOrder = fileFormat === 'csv'
-      ? [buildExportFileKey(jobKey, 'csv'), buildExportFileKey(jobKey)]
-      : fileFormat === 'json'
-        ? [buildExportFileKey(jobKey)]
-        : renderMode === 'rich'
-          ? [buildExportFileKey(jobKey, 'rich'), buildExportFileKey(jobKey), buildExportFileKey(jobKey, 'lite')]
-          : renderMode === 'lite'
-            ? [buildExportFileKey(jobKey, 'lite'), buildExportFileKey(jobKey)]
-            : [buildExportFileKey(jobKey), buildExportFileKey(jobKey, 'lite'), buildExportFileKey(jobKey, 'rich')];
+    const keyChecks =
+      fileFormat === 'csv'
+        ? [buildPrebuiltFormatKey(jobKey, 'csv'), buildExportFileKey(jobKey)]
+        : fileFormat === 'json'
+          ? [buildExportFileKey(jobKey)]
+          : renderMode === 'rich'
+            ? [buildXlsxVariantKey(jobKey, 'rich'), buildExportFileKey(jobKey), buildXlsxVariantKey(jobKey, 'lite')]
+            : renderMode === 'lite'
+              ? [buildXlsxVariantKey(jobKey, 'lite'), buildExportFileKey(jobKey)]
+              : [buildExportFileKey(jobKey), buildXlsxVariantKey(jobKey, 'lite'), buildXlsxVariantKey(jobKey, 'rich')];
 
-    for (const key of prebuiltKeyOrder) {
+    for (const key of keyChecks) {
       const prebuiltBytes = await cacheService.getBuffer(key);
       if (prebuiltBytes) {
         const resolvedMode = key.endsWith(':file:rich')
@@ -257,13 +260,18 @@ app.get('/:jobId/download', async (c) => {
     const assemblyState = await cacheService.get<ResumableExportAssemblyState>(assemblyKey);
     if (assemblyState && Array.isArray(assemblyState.summary_rows) && exportStatus.phase === 'assemble') {
       const exportService = new ExportService(c.get('access_token'));
-      if (fileFormat === 'xlsx') {
+      const completedFormat = fileFormat;
+      if (completedFormat === 'xlsx') {
         try {
-          const preferredMode = renderMode === 'csv' ? 'auto' : (renderMode as XlsxRenderMode);
-          const rendered = await generateFileBytesFromAssembly(exportService, assemblyState, fileFormat, preferredMode);
+          const preferredMode = renderMode as XlsxRenderMode;
+          const rendered = await generateFileBytesFromAssembly(exportService, assemblyState, completedFormat, preferredMode);
           const variant = preferredMode === 'rich' ? 'rich' : preferredMode === 'lite' ? 'lite' : 'default';
-          await cacheService.setBuffer(buildExportFileKey(jobKey, variant as 'default' | 'rich' | 'lite'), rendered, 3600);
-          await cacheService.setBuffer(buildExportFileKey(jobKey), rendered, 3600);
+          if (variant === 'default') {
+            await cacheService.setBuffer(buildExportFileKey(jobKey), rendered, 3600);
+          } else {
+            await cacheService.setBuffer(buildXlsxVariantKey(jobKey, variant), rendered, 3600);
+            await cacheService.setBuffer(buildExportFileKey(jobKey), rendered, 3600);
+          }
           return new Response(rendered, {
             headers: {
               'Content-Type': dlContentType,
@@ -273,8 +281,8 @@ app.get('/:jobId/download', async (c) => {
           });
         } catch {
           // If rich/auto rendering fails (e.g., CPU), degrade to lightweight render for reliability.
-          const liteBytes = await generateFileBytesFromAssembly(exportService, assemblyState, fileFormat, 'lite');
-          await cacheService.setBuffer(buildExportFileKey(jobKey, 'lite'), liteBytes, 3600);
+          const liteBytes = await generateFileBytesFromAssembly(exportService, assemblyState, completedFormat, 'lite');
+          await cacheService.setBuffer(buildXlsxVariantKey(jobKey, 'lite'), liteBytes, 3600);
           await cacheService.setBuffer(buildExportFileKey(jobKey), liteBytes, 3600);
           return new Response(liteBytes, {
             headers: {
@@ -287,9 +295,9 @@ app.get('/:jobId/download', async (c) => {
         }
       }
 
-      const fallbackBytes = await generateFileBytesFromAssembly(exportService, assemblyState, fileFormat);
-      if (fileFormat === 'csv') {
-        await cacheService.setBuffer(buildExportFileKey(jobKey, 'csv'), fallbackBytes, 3600);
+      const fallbackBytes = await generateFileBytesFromAssembly(exportService, assemblyState, completedFormat);
+      if (completedFormat === 'csv') {
+        await cacheService.setBuffer(buildPrebuiltFormatKey(jobKey, 'csv'), fallbackBytes, 3600);
       }
       await cacheService.setBuffer(buildExportFileKey(jobKey), fallbackBytes, 3600);
       return new Response(fallbackBytes, {
@@ -303,7 +311,7 @@ app.get('/:jobId/download', async (c) => {
     }
     const exportService = new ExportService(c.get('access_token'));
     const fallbackBytes = await generateFileBytes(exportService, exportDataList, fileFormat);
-    await cacheService.setBuffer(`${jobKey}:file`, fallbackBytes, 3600);
+    await cacheService.setBuffer(buildExportFileKey(jobKey), fallbackBytes, 3600);
     return new Response(fallbackBytes, {
       headers: { 'Content-Type': dlContentType, 'Content-Disposition': `attachment; filename="${dlFilename}"` },
     });

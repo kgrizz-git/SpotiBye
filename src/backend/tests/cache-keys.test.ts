@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
   buildExportJobKey,
   buildExportJobDataKey,
   buildExportJobAssemblyKey,
   buildExportFileKey,
+  buildXlsxVariantKey,
+  buildPrebuiltFormatKey,
   buildBatchKey,
   buildBatchDataKey,
   buildBatchFileKey,
@@ -30,10 +32,20 @@ describe('cache-keys helper', () => {
   });
 
   it('buildExportFileKey matches historical key structure', () => {
-    expect(buildExportFileKey('export:job:123', 'default')).toBe('export:job:123:file');
-    expect(buildExportFileKey('export:job:123', 'rich')).toBe('export:job:123:file:rich');
-    expect(buildExportFileKey('export:job:123', 'lite')).toBe('export:job:123:file:lite');
-    expect(buildExportFileKey('export:job:123', 'csv')).toBe('export:job:123:file:csv');
+    expect(buildExportFileKey('export:job:123')).toBe('export:job:123:file');
+  });
+
+  it('buildXlsxVariantKey matches historical key structure', () => {
+    expect(buildXlsxVariantKey('export:job:123', 'rich')).toBe('export:job:123:file:rich');
+    expect(buildXlsxVariantKey('export:job:123', 'lite')).toBe('export:job:123:file:lite');
+    
+    expectTypeOf(buildXlsxVariantKey).parameter(1).toEqualTypeOf<'rich' | 'lite'>();
+  });
+
+  it('buildPrebuiltFormatKey matches historical key structure', () => {
+    expect(buildPrebuiltFormatKey('export:job:123', 'csv')).toBe('export:job:123:file:csv');
+    
+    expectTypeOf(buildPrebuiltFormatKey).parameter(1).toEqualTypeOf<'csv'>();
   });
 
   it('buildBatchKey matches historical inline structure', () => {
