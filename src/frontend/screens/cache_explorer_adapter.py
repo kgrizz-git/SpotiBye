@@ -38,9 +38,7 @@ class CacheExplorerAdapter:
 
         if self.backend_available and resolve_startup_backend_url is not None:
             try:
-                self.backend_config = {
-                    "backend_url": resolve_startup_backend_url()
-                }
+                self.backend_config = {"backend_url": resolve_startup_backend_url()}
                 logger.info("Backend cache explorer adapter initialized")
             except Exception as exc:
                 logger.warning("Backend config unavailable: %s", exc)
@@ -48,7 +46,11 @@ class CacheExplorerAdapter:
 
     def get_cache_explorer(self) -> CacheExplorerPopup:
         """Get appropriate cache explorer based on backend availability."""
-        if self.backend_available and self.backend_config and BackendCacheExplorerPopup is not None:
+        if (
+            self.backend_available
+            and self.backend_config
+            and BackendCacheExplorerPopup is not None
+        ):
             try:
                 return BackendCacheExplorerPopup()  # pyright: ignore[reportReturnType]
             except Exception as exc:

@@ -536,9 +536,7 @@ class BackendPlaylistCard(BoxLayout):
             self._update_analysis_ui(analysis_container, duration_label, analysis, None)
         except Exception as exc:
             logger.warning("BackendPlaylistCard: analysis load error: %s", exc)
-            self._update_analysis_ui(
-                analysis_container, duration_label, None, str(exc)
-            )
+            self._update_analysis_ui(analysis_container, duration_label, None, str(exc))
 
     @mainthread
     def _update_analysis_ui(

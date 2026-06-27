@@ -20,7 +20,9 @@ BackendCacheExplorerPopup: Any = None
 CacheExplorerAdapter: Any = None
 create_cache_explorer: Any = None
 try:
-    from ..ui.backend_cache_explorer import BackendCacheExplorerPopup as _BackendCacheExplorerPopup
+    from ..ui.backend_cache_explorer import (
+        BackendCacheExplorerPopup as _BackendCacheExplorerPopup,
+    )
     from ..screens.cache_explorer_adapter import (
         CacheExplorerAdapter as _CacheExplorerAdapter,
     )
@@ -34,7 +36,9 @@ try:
     backend_available = True
 except ImportError:
     try:
-        from src.frontend.ui.backend_cache_explorer import BackendCacheExplorerPopup as _BackendCacheExplorerPopup
+        from src.frontend.ui.backend_cache_explorer import (
+            BackendCacheExplorerPopup as _BackendCacheExplorerPopup,
+        )
         from src.frontend.screens.cache_explorer_adapter import (
             CacheExplorerAdapter as _CacheExplorerAdapter,
         )

@@ -315,7 +315,12 @@ def is_retryable_error(error: Exception) -> bool:
     Returns:
         True if error is retryable, False otherwise
     """
-    retryable_errors = (ConnectionError, NetworkTimeoutError, ServerError, RateLimitError)
+    retryable_errors = (
+        ConnectionError,
+        NetworkTimeoutError,
+        ServerError,
+        RateLimitError,
+    )
     return isinstance(error, retryable_errors)
 
 

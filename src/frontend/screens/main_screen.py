@@ -323,7 +323,9 @@ class MainScreen(Screen):
 
     def _make_playlist_widget(self, playlist: dict[str, Any]):
         """Create a playlist widget for a playlist row."""
-        raise NotImplementedError("_make_playlist_widget must be implemented by subclass")
+        raise NotImplementedError(
+            "_make_playlist_widget must be implemented by subclass"
+        )
 
     def update_status_with_cache_info(self) -> None:
         """Update the status bar with current playlist information.
@@ -407,9 +409,7 @@ class MainScreen(Screen):
         """Sanitize playlist/file name component for cross-platform safe filenames."""
         return sanitize_export_filename_component(value)
 
-    def _build_backend_output_path(
-        self, base_output_path: str, multiple: bool
-    ) -> str:
+    def _build_backend_output_path(self, base_output_path: str, multiple: bool) -> str:
         """Build output file path for backend export."""
         return self.export_orchestrator._build_backend_output_path(
             base_output_path, multiple

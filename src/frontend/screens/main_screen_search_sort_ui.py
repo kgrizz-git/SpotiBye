@@ -166,7 +166,9 @@ class SearchSortUIHandler:
             logger.warning("Error filtering playlists: %s", exc)
             return self.screen.playlists.copy()
 
-    def sort_playlist_list(self, playlists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def sort_playlist_list(
+        self, playlists: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Sort playlists using current sort key and direction."""
         from .main_screen_sort_filter import sort_playlists
 

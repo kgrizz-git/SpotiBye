@@ -1,6 +1,5 @@
 import tempfile
 import unittest
-from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -47,9 +46,7 @@ class TestResumableExportCache(unittest.TestCase):
         # The cached file lives at the env-hashed path produced by
         # `_cache_file_path` (FE-HIGH-3). Verify the file is present at
         # that exact path before clearing.
-        cached_path = self.cache_manager._cache_file_path(
-            "active_export_job.json"
-        )
+        cached_path = self.cache_manager._cache_file_path("active_export_job.json")
         self.assertTrue(cached_path.exists())
 
         self.cache_manager.clear_active_export_job()

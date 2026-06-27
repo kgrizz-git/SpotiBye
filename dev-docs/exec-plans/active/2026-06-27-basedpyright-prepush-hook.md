@@ -22,7 +22,7 @@
 | `backups/` | **37** | ⚠️ **Needs exclusion** |
 
 Currently, running `basedpyright src/frontend src/shared --level error` reports **0 errors**.
-Running `basedpyright` globally from the repository root reports **37 errors**, all of which are contained within the `backups/` directory. These are caused by lack of explicit `exclude` paths in the `[tool.basedpyright]` configuration. 
+Running `basedpyright` globally from the repository root reports **37 errors**, all of which are contained within the `backups/` directory. These are caused by lack of explicit `exclude` paths in the `[tool.basedpyright]` configuration.
 
 ---
 

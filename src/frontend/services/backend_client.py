@@ -76,9 +76,7 @@ class BackendClient:
 
         return session
 
-    def _make_request(
-        self, method: str, endpoint: str, **kwargs: Any
-    ) -> Any:
+    def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> Any:
         """
         Make HTTP request to backend API.
 
@@ -428,9 +426,7 @@ class BackendClient:
             failure_prefix="Export job download failed",
         )
 
-    def _download_file(
-        self, endpoint: str, timeout: int, failure_prefix: str
-    ) -> bytes:
+    def _download_file(self, endpoint: str, timeout: int, failure_prefix: str) -> bytes:
         """Download a binary file from the given endpoint.
 
         Shares the auth/trace header setup and the error-parsing logic

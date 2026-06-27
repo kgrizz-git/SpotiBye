@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-def filter_playlists(playlists: List[Dict[str, Any]], search_query: str) -> List[Dict[str, Any]]:
+def filter_playlists(
+    playlists: List[Dict[str, Any]], search_query: str
+) -> List[Dict[str, Any]]:
     """Get playlists filtered by the current search query.
 
     Args:
@@ -30,21 +32,21 @@ def filter_playlists(playlists: List[Dict[str, Any]], search_query: str) -> List
         owner_name = playlist.get("owner", {}).get("display_name", "").lower()
 
         # Match all search terms (AND logic)
-        return all(
-            term in playlist_name or term in owner_name for term in search_terms
-        )
+        return all(term in playlist_name or term in owner_name for term in search_terms)
 
     return [p for p in playlists if matches_search(p)]
 
 
-def sort_playlists(playlists: List[Dict[str, Any]], sort_key: str, reverse: bool) -> List[Dict[str, Any]]:
+def sort_playlists(
+    playlists: List[Dict[str, Any]], sort_key: str, reverse: bool
+) -> List[Dict[str, Any]]:
     """Sort playlists based on current sort key and direction.
-    
+
     Args:
         playlists: List of playlist dictionaries to sort
         sort_key: The key to sort by ('default', 'name', 'tracks', 'owner')
         reverse: Whether to sort in reverse order
-        
+
     Returns:
         Sorted list of playlists
     """

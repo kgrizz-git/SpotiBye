@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 
 def get_file_extension(format_type: str) -> str:
@@ -21,7 +21,9 @@ def selected_export_format(format_text: Optional[str]) -> str:
 
 
 def generate_default_filename(
-    username: Optional[str] = None, format_type: str = "xlsx", now: Optional[datetime] = None
+    username: Optional[str] = None,
+    format_type: str = "xlsx",
+    now: Optional[datetime] = None,
 ) -> str:
     """Generate a default export filename based on username and current timestamp."""
     # Handle None or empty username cases

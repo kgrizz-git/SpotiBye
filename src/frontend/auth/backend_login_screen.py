@@ -171,7 +171,9 @@ class BackendLoginScreen(Screen):
         threading.Thread(target=check_connection, daemon=True).start()
 
     @mainthread
-    def _update_connection_status(self, text: str, color: tuple[float, float, float, float]) -> None:
+    def _update_connection_status(
+        self, text: str, color: tuple[float, float, float, float]
+    ) -> None:
         """Update connection status label."""
         if self.connection_status_label:
             self.connection_status_label.text = text

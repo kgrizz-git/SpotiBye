@@ -64,8 +64,7 @@ class ResponsiveGridLayout(GridLayout):
                     )
                     card_width = min(
                         self.max_card_width,
-                        (available_width - ((max_cols - 1) * spacing[0]))
-                        / max_cols,
+                        (available_width - ((max_cols - 1) * spacing[0])) / max_cols,
                     )
 
                 if (
