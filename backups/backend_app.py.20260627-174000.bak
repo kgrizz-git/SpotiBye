@@ -156,7 +156,7 @@ class BackendSpotifyExporterApp(MDApp):
             on_apply=self.apply_backend_url,
             on_cancel=self._on_backend_selector_cancel,
         )
-        self.backend_selector_popup.bind(
+        self.backend_selector_popup.bind(  # pyright: ignore[reportAttributeAccessIssue]
             on_dismiss=lambda _instance: self._clear_backend_selector_popup()
         )
         self.backend_selector_popup.open()
@@ -501,9 +501,9 @@ class BackendSpotifyExporterApp(MDApp):
                 self.backend_adapter.clear_active_export_job()
             _dismiss()
 
-        resume_button.bind(on_press=_resume)
-        discard_button.bind(on_press=_discard)
-        popup.bind(
+        resume_button.bind(on_press=_resume)  # pyright: ignore[reportAttributeAccessIssue]
+        discard_button.bind(on_press=_discard)  # pyright: ignore[reportAttributeAccessIssue]
+        popup.bind(  # pyright: ignore[reportAttributeAccessIssue]
             on_dismiss=lambda *_args: setattr(self, "pending_export_popup", None)
         )
         popup.open()

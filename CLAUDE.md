@@ -29,6 +29,9 @@ npm run lint            # eslint
 ```bash
 # Always use the venv's pytest from the repo root — never the system pytest
 KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v
+
+# Type checking (also enforced as a pre-push hook)
+.venv/bin/basedpyright src/frontend src/shared --level error
 ```
 
 ---

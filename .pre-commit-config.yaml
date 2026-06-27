@@ -89,6 +89,17 @@ repos:
         language: script
         pass_filenames: false
 
+      # Prune stale code backups (older than 5 commits) so backups/ stays lean.
+      # On prune, the deletion is staged and pre-commit aborts; re-run the commit.
+      - id: prune-backups
+        name: Prune stale code backups
+        description: Remove backups/ files older than 5 commits before committing
+        entry: scripts/prune-backups.sh
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
   # Pre-push hooks - longer running checks
   # These run before git push, not on every commit
 
@@ -131,6 +142,18 @@ repos:
         name: Full Security Scan
         description: Run comprehensive security checks before push
         entry: python scripts/check-dependencies.py --security
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+  # Python type checking (basedpyright) before push
+  - repo: local
+    hooks:
+      - id: basedpyright
+        name: basedpyright type check
+        description: Run basedpyright type checker on frontend and shared code before push
+        entry: basedpyright src/frontend src/shared --level error
         language: system
         pass_filenames: false
         always_run: true

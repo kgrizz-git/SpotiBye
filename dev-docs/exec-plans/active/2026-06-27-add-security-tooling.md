@@ -1,45 +1,102 @@
-# Plan: Add Zod, Dependabot, and OSV-Scanner
+# Plan: Add Zod and OSV-Scanner
 
 ## Objective
-Enhance the repository's security posture and data validation by adding Zod for the backend, OSV-Scanner for dependency vulnerability scanning, and Dependabot for automated updates. Per user request, OSV-Scanner checks will be run locally as a `pre-push` hook to catch issues before CI fails on GitHub.
+Enhance the repository's security posture and data validation through two independent workstreams:
+1. **Zod Validation**: Add Zod to the TypeScript backend for robust parsing at all external boundaries (HTTP requests, KV storage, Cloudflare Queues, Environment Variables, and external API boundaries).
+2. **OSV-Scanner**: Integrate Google's `osv-scanner` as a `pre-push` hook and in CI workflows to catch vulnerable dependencies, replacing existing audit tools.
 
-## Scope
-1. **Zod Validation**: Add `zod` and `@hono/zod-validator` to the TypeScript backend to parse and validate data at the boundaries.
-2. **OSV-Scanner**: Integrate Google's `osv-scanner` as a `pre-push` hook to catch vulnerable dependencies (Python and Node) before they hit CI.
-3. **Dependabot**: Add a `.github/dependabot.yml` configuration to automatically open PRs when dependencies require updates (Note: Dependabot runs exclusively on GitHub, so it cannot be a local hook).
+*(Note: Dependabot is already configured in the repo).*
 
-## Execution Steps
+---
 
-### 1. Zod Implementation (Backend)
-- [ ] Install dependencies in `src/backend/`:
-  - `npm install zod @hono/zod-validator`
-- [ ] Refactor backend routes to use Zod validators for parsing query parameters, headers, and request bodies.
-  - *Golden Principle check: Parse data shapes at boundaries - never pass raw, unvalidated API responses between layers.*
-- [ ] Run backend tests (`npm run test:run`) to ensure no existing functionality is broken.
+## Part 1: Zod Implementation (Backend)
 
-### 2. OSV-Scanner Integration (Pre-push)
-- [ ] Update `.pre-commit-config.yaml` to include the `osv-scanner` hook in the `pre-push` stage.
+### 1.1 Setup & Installation
+- [ ] Verify Hono v4 compatibility with `@hono/zod-validator`. (Sticking with `@hono/zod-validator` as migrating to `@hono/zod-openapi` is too large of an architectural shift).
+- [ ] Check `src/backend/tsconfig.json` and ensure `strict: true` is enabled to maximize Zod's type inference.
+- [ ] Install dependencies in `src/backend/`: `npm install zod @hono/zod-validator`
+
+### 1.2 HTTP Route Payload Validation
+Refactor routes to use Zod (lazily instantiate schemas to avoid cold-start latency):
+- [ ] `/auth/spotify/login`: validate `redirect_uri` string.
+- [ ] Export routes: validate request bodies for endpoints like `POST /export/playlists`, `POST /export/playlist/:id`, `POST /export/jobs`.
+- [ ] Analysis routes (`routes/analysis.ts`): validate request bodies (e.g., `POST /analysis/playlist/:id`).
+- [ ] Spotify routes (e.g., `/spotify/playlists/:id/tracks`): validate `limit` and `offset` query params.
+
+### 1.3 System Boundary Validation (Env, KV, Queues, APIs)
+- [ ] **Environment Variables**: Define an `Env` schema and parse bindings on startup or global middleware to fail fast if secrets/bindings are misconfigured.
+- [ ] **KV Storage**: Refactor `middleware/auth.ts` to use Zod for `safeParseSession` when reading from KV.
+- [ ] **Cloudflare Queues**: Define an `AnalysisQueueMessageSchema` and validate message bodies at the top of the `queue()` handler in `src/backend/index.ts` before passing them to the service layer.
+- [ ] **Spotify API**: Gradually migrate `parseSpotifyResponse<T>` in `types/spotify-api.ts` to use Zod schemas, wrapping the existing function and updating call-sites sequentially.
+
+### 1.4 Testing & Verification
+- [ ] Write unit tests for each new Zod schema (valid, invalid, edge cases).
+- [ ] Write integration tests for route handlers using `@hono/zod-validator`.
+- [ ] Verify that `parseSpotifyResponse` call-sites still pass in `src/backend/tests/`.
+- [ ] Check the Cloudflare Worker bundle size. Zod adds ~12KB (min+gzip). Ensure the bundle remains well within limits.
+
+---
+
+## Part 2: OSV-Scanner Integration
+
+### 2.1 Pre-commit Configuration
+- [ ] Update `.pre-commit-config.yaml` at the **repo root** to include the `osv-scanner-docker` hook in the `pre-push` stage using the `v2.3.5` revision.
   ```yaml
   - repo: https://github.com/google/osv-scanner
-    rev: v1.7.4 # Check for latest version
+    rev: v2.3.5 
     hooks:
-      - id: osv-scanner
+      - id: osv-scanner-docker
         name: OSV-Scanner (pre-push)
         stages: [pre-push]
-        args: ["-r", "."]
+        args:
+          - "scan"
+          - "source"
+          - "--format=vertical"
+          - "--recursive"
+          - "--verbosity=error"
+          - "--skip-dirs=.venv"
+          - "--skip-dirs=node_modules"
+          - "--skip-dirs=backups"
+          - "--skip-dirs=docs/old-docs-backup"
+          - "."
   ```
-- [ ] (Optional) Update `scripts/check-dependencies.py` to optionally run `osv-scanner` if a manual local check is preferred.
-- [ ] Run `pre-commit run --hook-stage push osv-scanner` locally to ensure it successfully scans `requirements.txt` and `package-lock.json` without false positives.
+- [ ] Update the `security-scan` hook (running `check-dependencies.py`) in `.pre-commit-config.yaml` to include the `--ci` flag, ensuring it returns a non-zero exit code on failure and properly blocks the push:
+  ```yaml
+      - id: security-scan
+        name: Full Security Scan
+        description: Run comprehensive security checks before push
+        entry: python scripts/check-dependencies.py --security --ci
+        language: system
+        pass_filenames: false
+  ```
 
-### 3. Dependabot Configuration
-- [ ] Create `.github/dependabot.yml`.
-- [ ] Configure it to monitor:
-  - `pip` ecosystem at `/` (weekly)
-  - `npm` ecosystem at `/src/backend` (weekly)
-  - `github-actions` ecosystem at `/` (weekly)
-- [ ] Commit and push the configuration (if `osv-scanner` passes locally).
+### 2.2 CI Workflow (`security.yml`) Refactor
+- [ ] Update `.github/workflows/security.yml` to replace the individual `pip-audit` and `npm-audit` jobs (which currently use `|| true` and ignore failures) with a unified `google/osv-scanner-action/bootstrap-action`.
+  ```yaml
+  dependency-scan:
+    name: Dependency Vulnerabilities (OSV-Scanner)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # Allows uploading SARIF to GitHub security tab
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/bootstrap-action@v1.0.2
+        with:
+          scan-args: |
+            -r
+            --skip-dirs=.venv,node_modules,backups,docs/old-docs-backup
+            ./
+  ```
+
+### 2.3 Verification
+- [ ] Run `pre-commit run --hook-stage push osv-scanner-docker` locally to ensure it successfully scans dependencies without false positives.
+
+---
 
 ## Rollback Plan
-- Revert `package.json` changes and remove Zod validators if they introduce severe performance or typing regressions.
-- Remove `osv-scanner` from `.pre-commit-config.yaml` if it blocks pushes due to unpatchable vulnerabilities (can temporarily skip using `git push --no-verify`).
-- Delete `.github/dependabot.yml` if the automated PRs become too noisy.
+- **Part 1 (Zod)**: Revert `package.json` changes, remove Zod validators, and revert modified boundary/test files if severe performance or typing regressions occur.
+- **Part 2 (OSV-Scanner)**: Revert `.pre-commit-config.yaml` and `.github/workflows/security.yml` if the OSV scans become overly noisy or block deployments unnecessarily.

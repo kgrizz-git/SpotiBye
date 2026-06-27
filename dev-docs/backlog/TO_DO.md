@@ -30,7 +30,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
 ## Code Quality / Tech Debt
 
 - [ ] Fix deprecated `AsyncImage` properties (`allow_stretch`, `keep_ratio`)
-- [ ] Add basedpyright as a pre-push hook in `.pre-commit-config.yaml` ([plan](../dev-docs/exec-plans/active/2026-06-27-basedpyright-prepush-hook.md))
+- [x] Add basedpyright as a pre-push hook in `.pre-commit-config.yaml` ([plan](../exec-plans/completed/2026-06-27-basedpyright-prepush-hook.md)) — **done 2026-06-27**
 - [ ] Run pyright and triage type issues **NEEDS REVIEW**
   - [x] Document the exact command and current issue count
     - [`dev-docs/assessments/pyright-utils.md`](../assessments/pyright-utils.md) — `src/frontend/utils/` (16 errors) — **fixed 2026-06-27**

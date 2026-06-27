@@ -113,7 +113,7 @@ class BackendLoginScreen(Screen):
             pos_hint={"center_x": 0.5},
             font_size=dp(16),
         )
-        login_btn.bind(on_press=self.start_login)
+        login_btn.bind(on_press=self.start_login)  # pyright: ignore[reportAttributeAccessIssue]
         layout.add_widget(login_btn)
         self.login_button = login_btn
 
@@ -124,7 +124,7 @@ class BackendLoginScreen(Screen):
             pos_hint={"center_x": 0.5},
             font_size=dp(14),
         )
-        change_backend_btn.bind(on_press=self._on_change_backend)
+        change_backend_btn.bind(on_press=self._on_change_backend)  # pyright: ignore[reportAttributeAccessIssue]
         layout.add_widget(change_backend_btn)
 
         # Status label

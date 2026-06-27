@@ -44,6 +44,7 @@
 | [`2026-06-21-repo-organization-guardrails.md`](2026-06-21-repo-organization-guardrails.md) | Consolidated plan/docs placement, removed duplicate agent config, added CLAUDE.md and structural guardrails. | 2026-06-21 |
 | [`2026-06-22-backend-deployment-tracking.md`](2026-06-22-backend-deployment-tracking.md) | Added live backend deployment metadata, metadata-aware deploy wrappers, status checks, and deployment docs. | 2026-06-22 |
 | [`2026-06-26-docs-taxonomy-migration.md`](2026-06-26-docs-taxonomy-migration.md) | Split user-facing docs from developer and agent-facing docs, updated guidance, and strengthened structure guardrails. | 2026-06-26 |
+| [`2026-06-27-basedpyright-prepush-hook.md`](2026-06-27-basedpyright-prepush-hook.md) | Added `basedpyright` as a pre-push hook in `.pre-commit-config.yaml` (targets `src/frontend` + `src/shared` at `--level error`), added it to dev dependencies, configured `[tool.basedpyright]` excludes for backup/build dirs, removed 6 redundant `reportAttributeAccessIssue` suppressions, and documented the type-check command in AGENTS/CLAUDE. | 2026-06-27 |
 
 ## Dev Docs Plans
 

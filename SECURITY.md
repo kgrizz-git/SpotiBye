@@ -138,6 +138,8 @@ Fast checks that run on staged files:
 | `bandit` | Python security linting |
 | `ruff` | Python linting and formatting |
 | `eslint` | JavaScript/TypeScript linting |
+| `check-repo-structure` | Enforces repo structure/placement conventions |
+| `prune-backups` | Removes `backups/` files older than 5 commits (staged for deletion; re-run the commit after a prune) |
 
 ### Pre-push Hooks (run before every push)
 
@@ -147,7 +149,9 @@ Longer-running checks that ensure code quality:
 |------|---------|
 | `python-tests` | Runs Python test suite |
 | `node-tests` | Runs Node.js test suite |
+| `semgrep` | Full SAST scan (OWASP Top 10, CWE Top 25) |
 | `security-scan` | Full dependency security scan |
+| `basedpyright` | Python type checking of `src/frontend` and `src/shared` (`--level error`) |
 
 ### Manual Usage
 
