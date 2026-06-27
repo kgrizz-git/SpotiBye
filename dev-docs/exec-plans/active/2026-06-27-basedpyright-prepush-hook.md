@@ -1,13 +1,14 @@
 # Add basedpyright as a Pre-Push Hook
 
-> **Linked from:** [TO_DO.md](../../dev-docs/backlog/TO_DO.md)
+> **Linked from:** [TO_DO.md](../../backlog/TO_DO.md)
 >
 > **For agentic workers:** Steps use checkbox (`- [ ]`) syntax for tracking. Mark steps complete (`- [x]`) as work is finished.
 
 **Goal:** Add basedpyright as a pre-push hook in `.pre-commit-config.yaml` so type errors are caught before pushing. Add proper `exclude` paths to `pyproject.toml` to prevent the type checker from scanning old backup directories and virtual environments. Since both `src/frontend` and `src/shared` (including tests) are already clean under `--level error`, they will be targeted by the hook from the beginning.
 
 **Prerequisites:**
-- `basedpyright` is already installed in the virtual environment (v1.39.6) and on `PATH`, but **not** listed in `pyproject.toml` dev dependencies yet.
+- `basedpyright` v1.39.6 is resolvable on `PATH` (currently via a pyenv shim, not the project `.venv`), and is **not** yet listed in `pyproject.toml` dev dependencies. Step 1/Step 2 add it to the dev extras and install it into `.venv` so the tool is managed by the project rather than relying on a global/pyenv install.
+- `pre-commit` is likewise only available via a global/pyenv shim (not in `.venv`); installing the dev extras in Step 2 also pins it into the project environment.
 - `src/frontend/` and `src/frontend/tests/` are already clean under `--level error` (legitimate type mismatches and `reportUninitializedInstanceVariable` violations in tests have already been resolved via class-level attributes and typing annotations).
 
 ---
@@ -48,11 +49,13 @@ Add basedpyright to the development dependencies and configure global exclusions
       "**/dist"
   ]
   ```
+  > **Note:** Only `backups/` currently exists in the tree (it holds the 37 errors). `backend-backup`, `SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY`, `docs/old-docs-backup`, and `srcamas` do not exist today but are kept as defensive entries that mirror the existing `[tool.bandit] exclude_dirs` and `.pre-commit-config.yaml` exclude regex, so re-introduced backup dirs stay out of scope.
 
 ## Step 2 — Sync environment and verify CLI
 
-- [ ] Confirm on PATH: `basedpyright --version` (expect `1.39.6`)
-- [ ] Sync lock/install dev deps: `.venv/bin/pip install -e ".[development]"`
+- [ ] Confirm a copy is resolvable on PATH: `basedpyright --version` (expect `1.39.6`)
+- [ ] Install dev deps into the project venv: `.venv/bin/pip install -e ".[development]"`
+- [ ] Confirm it is now installed **inside the venv** (not just the pyenv shim): `.venv/bin/basedpyright --version` (expect `1.39.6`)
 - [ ] Run global check: `basedpyright --level error` (expect **0 errors** now that `backups/` is excluded)
 
 ## Step 3 — Add pre-push hook entry
@@ -73,7 +76,7 @@ Add basedpyright to the development dependencies and configure global exclusions
         stages: [pre-push]
   ```
 
-> **Why `language: system`?** The hook uses the project's venv (where basedpyright is installed). `system` keeps the dependency managed centrally in `pyproject.toml`.
+> **Why `language: system`?** `system` runs whatever `basedpyright` is first on `PATH` at push time (the activated `.venv` if active, otherwise the pyenv/global shim) rather than having pre-commit build an isolated env. This matches the existing pre-push hooks (`python-tests`, `node-tests`, `security-scan`) and keeps the dependency declared centrally in `pyproject.toml`. Step 2 ensures the venv copy exists so an activated venv is self-contained.
 > **Why `--level error`?** Only actual type errors block the push; warnings/informationals (e.g. Kivy dynamic typing/Any warnings) are suppressed to prevent false-positive blocks.
 
 - [ ] Run `pre-commit install --hook-type pre-push` (to ensure the hook type is registered).
@@ -98,6 +101,7 @@ Verify the remaining 10 are still needed:
 - [ ] Run `pre-commit run --hook-stage pre-push basedpyright --all-files` to confirm the hook passes.
 - [ ] Add a deliberate type error to a source file, run the hook, verify it rejects the push, and then revert the error.
 - [ ] Run `./scripts/verify-all.sh` to confirm all repo structure, tests, and hooks pass.
+- [ ] Update developer docs that list verification/hooks (e.g. `AGENTS.md` / `CLAUDE.md` "Running Tests & Verification", and any pre-commit/hook reference under `dev-docs/`) to mention the new basedpyright pre-push hook. (No `CHANGELOG.md` entry needed — internal tooling change with no user-facing impact.)
 - [ ] Update the `TO_DO.md` entry to mark "Add basedpyright as a pre-push hook" as done.
 
 ---
