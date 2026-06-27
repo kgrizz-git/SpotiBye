@@ -6,6 +6,7 @@ import logging
 import queue
 import threading
 import time
+from typing import Any
 
 import pytest
 
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 class TestCachePerformance:
+    backend_client: BackendClient | None = None
+    cache_manager: BackendCacheManager | None = None
+
     @pytest.fixture(autouse=True)
     def setup_clients(self, mock_backend_server):
         backend_url = mock_backend_server.get_base_url()
@@ -77,7 +81,7 @@ class TestCachePerformance:
         ), f"Expected 10 cached items, got {stats['playlists_count']}"
 
         start_time = time.time()
-        cached_data = self.cache_manager.get_cached_playlists()
+        cached_data = self.cache_manager.get_cached_playlists() or []
         retrieve_time = time.time() - start_time
 
         assert (
@@ -96,7 +100,7 @@ class TestCachePerformance:
         test_data = [
             {"id": f"concurrent_{i}", "name": f"Concurrent Test {i}"} for i in range(50)
         ]
-        results: queue.Queue = queue.Queue()
+        results: queue.Queue[dict[str, Any]] = queue.Queue()
 
         def cache_worker(worker_id: int) -> None:
             try:

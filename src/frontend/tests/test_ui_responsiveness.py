@@ -17,11 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 class TestUIResponsiveness:
+    backend_client: BackendClient | None = None
+    ui_events: List[Dict[str, Any]] = []
+
     @pytest.fixture(autouse=True)
     def setup_clients(self, mock_backend_server):
         backend_url = mock_backend_server.get_base_url()
         self.backend_client = BackendClient(backend_url)
-        self.ui_events: List[Dict[str, Any]] = []
+        self.ui_events = []
 
     def _emit(self, event_type: str, data: Dict[str, Any] | None = None) -> None:
         self.ui_events.append(

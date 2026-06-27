@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from ..services.backend_client import BackendClient
 from ..services.reccobeats_backend import ReccoBeatsBackendService
@@ -56,7 +56,7 @@ def get_reccobeats_api():
     return ReccoBeatsBackendService()
 
 
-def create_spotify_client_with_refresh(token_info: dict | None):
+def create_spotify_client_with_refresh(token_info: dict[str, Any] | None):
     """Legacy compatibility function - not used in backend mode."""
     return None
 

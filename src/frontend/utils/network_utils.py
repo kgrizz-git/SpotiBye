@@ -47,8 +47,8 @@ class ServerError(NetworkError):
 def retry_on_network_error(
     max_retries: int = 3,
     backoff_factor: float = 1.0,
-    retryable_errors: Optional[List[type]] = None,
-) -> Callable:
+    retryable_errors: Optional[tuple[type[BaseException], ...]] = None,
+) -> Callable[..., Any]:
     """
     Decorator to retry function on network errors.
 
@@ -61,17 +61,17 @@ def retry_on_network_error(
         Decorated function
     """
     if retryable_errors is None:
-        retryable_errors = [ConnectionError, NetworkTimeoutError, ServerError]
+        retryable_errors = (ConnectionError, NetworkTimeoutError, ServerError)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
-            last_error = None
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_error: BaseException | None = None
 
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
-                except tuple(retryable_errors) as e:
+                except retryable_errors as e:
                     last_error = e
 
                     if attempt < max_retries:
@@ -87,6 +87,7 @@ def retry_on_network_error(
                     # Don't retry on non-network errors
                     raise e
 
+            assert last_error is not None
             raise last_error
 
         return wrapper
@@ -94,7 +95,7 @@ def retry_on_network_error(
     return decorator
 
 
-def handle_network_errors(func: Callable) -> Callable:
+def handle_network_errors(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator to handle network errors and convert them to user-friendly messages.
 
@@ -168,9 +169,10 @@ class NetworkStatusMonitor:
             return self.last_status.get("status") == "healthy"
 
         try:
-            self.last_status = self.backend_client.health_check()
+            status = self.backend_client.health_check()
+            self.last_status = status
             self.last_check_time = current_time
-            return self.last_status.get("status") == "healthy"
+            return status.get("status") == "healthy"
         except Exception as e:
             logger.error(f"Health check failed: {e}")
             self.last_status = {"status": "unhealthy", "error": str(e)}
@@ -318,8 +320,8 @@ def is_retryable_error(error: Exception) -> bool:
 
 
 def create_progress_callback(
-    progress_bar, status_label: Optional[str] = None
-) -> Callable:
+    progress_bar: Any, status_label: Any = None
+) -> Callable[..., Any]:
     """
     Create a progress callback for UI components.
 

@@ -14,7 +14,7 @@ def get_file_extension(format_type: str) -> str:
     return extensions.get(format_type.lower(), ".xlsx")
 
 
-def selected_export_format(format_text: str) -> str:
+def selected_export_format(format_text: Optional[str]) -> str:
     """Return the normalized export format ('xlsx', 'csv', or 'json')."""
     fmt = (format_text or "xlsx").strip().lower()
     return fmt if fmt in ("xlsx", "csv", "json") else "xlsx"
@@ -67,7 +67,7 @@ def increment_filename_suffix(filename: str) -> str:
     return base + "_2" + extension
 
 
-def sanitize_export_filename_component(value: str) -> str:
+def sanitize_export_filename_component(value: Optional[str]) -> str:
     """Sanitize playlist/file name component for cross-platform safe filenames."""
     safe = re.sub(r"[^A-Za-z0-9._ -]+", "_", value or "").strip()
     return safe[:80] if safe else "playlist"

@@ -139,6 +139,7 @@ class BackendAuthenticator:
         self.callback_timeout = 300  # 5 minutes
         self.server_thread: Optional[threading.Thread] = None
         self.http_server: Optional[HTTPServer] = None
+        self.auth_result_container: Dict[str, str] = {}
 
     def login(
         self,
@@ -229,7 +230,7 @@ class BackendAuthenticator:
             self._stop_callback_server()
 
             # Container to store authorization code
-            self.auth_result_container: Dict[str, str] = {}
+            self.auth_result_container = {}
 
             # Create HTTP server
             def handler(*args, **kwargs):

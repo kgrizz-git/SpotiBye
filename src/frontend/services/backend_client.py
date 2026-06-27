@@ -20,7 +20,7 @@ class BackendAPIError(Exception):
         self,
         message: str,
         status_code: Optional[int] = None,
-        response_data: Optional[Dict] = None,
+        response_data: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(message)
         self.status_code = status_code
@@ -78,7 +78,7 @@ class BackendClient:
 
     def _make_request(
         self, method: str, endpoint: str, **kwargs: Any
-    ) -> Dict[str, Any]:
+    ) -> Any:
         """
         Make HTTP request to backend API.
 

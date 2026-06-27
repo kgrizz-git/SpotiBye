@@ -5,11 +5,12 @@ from __future__ import annotations
 import platform
 import subprocess
 import importlib
+import importlib.util
 from typing import Tuple
 
 from kivy.clock import Clock
 
-from shared.logging_config import logger
+from ...shared.logging_config import logger
 
 
 def _window():
@@ -88,7 +89,7 @@ def get_screen_resolution() -> Tuple[int, int]:
                 logger.info("osascript method failed: %s", exc)
 
             try:
-                from Quartz import CGDisplayBounds, CGMainDisplayID  # type: ignore
+                from Quartz import CGDisplayBounds, CGMainDisplayID  # pyright: ignore[reportMissingImports]
 
                 bounds = CGDisplayBounds(CGMainDisplayID())
                 width = int(bounds.size.width)
@@ -101,7 +102,7 @@ def get_screen_resolution() -> Tuple[int, int]:
                 logger.info("CoreGraphics method failed: %s", exc)
 
             try:
-                from AppKit import NSScreen  # type: ignore
+                from AppKit import NSScreen  # pyright: ignore[reportMissingImports]
 
                 main_screen = NSScreen.mainScreen()
                 if main_screen:
@@ -322,7 +323,7 @@ def set_window_on_top() -> None:
 
                 def bring_to_front_pyobjc(dt):
                     try:
-                        from AppKit import NSApplication  # type: ignore
+                        from AppKit import NSApplication  # pyright: ignore[reportMissingImports]
 
                         app = NSApplication.sharedApplication()
                         if app:

@@ -18,16 +18,24 @@ from kivy.uix.switch import Switch
 from ...shared.logging_config import logger
 from .cache_explorer import CacheExplorerPopup
 
-_BACKEND_IMPORT_ERROR: str = ""
+_backend_import_error: str = ""
+_backend_client_cls: Any = None
+_resolve_startup_backend_url: Any = None
+_get_cache_manager: Any = None
+backend_available: bool = False
 try:
-    from ..services.backend_client import BackendClient
-    from ..config.backend_config import resolve_startup_backend_url
-    from ..caching.backend_cache import get_cache_manager
+    from ..services.backend_client import BackendClient as _BackendClient
+    from ..config.backend_config import (
+        resolve_startup_backend_url as _resolve_startup_backend_url,
+    )
+    from ..caching.backend_cache import get_cache_manager as _get_cache_manager
 
-    BACKEND_AVAILABLE = True
+    _backend_client_cls = _BackendClient
+    _resolve_startup_backend_url = _resolve_startup_backend_url
+    _get_cache_manager = _get_cache_manager
+    backend_available = True
 except ImportError as exc:
-    BACKEND_AVAILABLE = False
-    _BACKEND_IMPORT_ERROR = str(exc)
+    _backend_import_error = str(exc)
     logger.warning("Backend components not available for backend cache status: %s", exc)
 
 
@@ -41,9 +49,11 @@ class BackendCacheExplorerPopup(Popup):
         self.auto_dismiss = False
 
         # Backend client for cache status
-        self.backend_client = None
-        self.backend_cache_status = None
-        self.cache_manager = get_cache_manager() if BACKEND_AVAILABLE else None
+        self.backend_client: Any = None
+        self.backend_cache_status: Any = None
+        self.cache_manager: Any = (
+            _get_cache_manager() if _get_cache_manager is not None else None
+        )
 
         # UI components
         self.main_layout = None
@@ -89,7 +99,7 @@ class BackendCacheExplorerPopup(Popup):
         status_layout.add_widget(self.backend_status_label)
 
         # Backend toggle switch
-        if BACKEND_AVAILABLE:
+        if backend_available:
             toggle_layout = BoxLayout(
                 orientation="horizontal", size_hint_x=0.3, spacing=dp(5)
             )
@@ -120,16 +130,16 @@ class BackendCacheExplorerPopup(Popup):
 
     def initialize_backend_client(self) -> None:
         """Initialize backend client if available."""
-        if not BACKEND_AVAILABLE:
+        if not backend_available:
             self.backend_status_label.text = (
-                f"Backend: Not Available ({_BACKEND_IMPORT_ERROR})"
-                if _BACKEND_IMPORT_ERROR
+                f"Backend: Not Available ({_backend_import_error})"
+                if _backend_import_error
                 else "Backend: Not Available"
             )
             return
 
         try:
-            self.backend_client = BackendClient(resolve_startup_backend_url())
+            self.backend_client = _backend_client_cls(_resolve_startup_backend_url())
             self.backend_status_label.text = "Backend: Connected"
             self.backend_switch.active = True
         except Exception as exc:
@@ -241,7 +251,8 @@ class BackendCacheExplorerPopup(Popup):
         def _merged_on_cache_data_loaded(cache_data):
             if not cache_data.get("playlists"):
                 cache_data["playlists"] = backend_playlists
-            original_method(self.cache_explorer, cache_data)
+            if self.cache_explorer is not None:
+                original_method(self.cache_explorer, cache_data)
 
         self.cache_explorer._on_cache_data_loaded = _merged_on_cache_data_loaded
 

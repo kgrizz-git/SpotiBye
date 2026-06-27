@@ -111,7 +111,7 @@ class BackendMainScreenAdapterCore:
     def _run_with_transient_retry(
         self,
         operation_name: str,
-        func: callable,
+        func: Callable[..., Any],
         max_attempts: int = 4,
         base_delay: float = 1.0,
     ):

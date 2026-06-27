@@ -1,6 +1,20 @@
 # Pyright Assessment — `src/frontend/caching/`
 
-**NEEDS REVIEW**
+**FIXED (2026-06-27)**
+
+## Resolution (2026-06-27)
+
+- **Status:** Fixed. `basedpyright --level error src/frontend/caching/` now reports 0 errors.
+- **Fix applied:** Initialized `temp_file: Path | None = None` at the top of the `with file_lock:` block in `_atomic_write_cache_file` (`src/frontend/caching/backend_cache.py:289`), and added a `temp_file is not None` guard before the `if temp_file.exists()` check in the `except` handler.
+- **Verification:** `pytest test_cache.py test_backend_cache_explorer.py test_resumable_export_cache.py test_cache_explorer_mock.py` — 19 passed, 6 skipped (pre-existing skips).
+
+## Antigravity Verification (2026-06-27)
+
+- **Validation:** Confirmed.
+- **Findings:**
+  - Actual error count is 2, as reported.
+  - `temp_file` is indeed flagged as possibly unbound on lines 304 and 306 in `backend_cache.py`.
+  - The suggestion to initialize `temp_file = None` before the conditional block is correct and verified.
 
 ## Verified Findings (2026-06-27)
 

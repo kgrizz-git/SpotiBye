@@ -6,7 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 from urllib.parse import urlparse
 
 # Backend API configuration. Default to localhost so the shipped binary does
@@ -252,7 +252,7 @@ def validate_config() -> list[str]:
 
 
 # Get configuration summary
-def get_config_summary() -> dict:
+def get_config_summary() -> dict[str, Any]:
     """
     Get configuration summary for debugging.
 

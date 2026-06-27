@@ -1,6 +1,30 @@
 # Pyright Assessment — `src/frontend/utils/`
 
-**NEEDS REVIEW**
+**FIXED (2026-06-27)**
+
+## Resolution (2026-06-27)
+
+- **Status:** Fixed. `basedpyright --level error src/frontend/utils/` now reports 0 errors.
+- **Fixes applied (`network_utils.py`):**
+  - Changed `retryable_errors` parameter from `Optional[List[type]]` to `Optional[tuple[type[BaseException], ...]]` so it can be used directly in `except` clauses.
+  - Replaced 5 unparameterized `Callable` annotations with `Callable[..., Any]`.
+  - Replaced 2 `last_error`/`raise last_error` pattern with `last_error: BaseException | None = None` plus `assert last_error is not None` before raising.
+  - Used a local `status` variable in `is_connected` so `.get()` doesn't see `Optional[Dict]`.
+  - Replaced `status_label: Optional[str]` with `status_label: Any` in `create_progress_callback` (it's a Kivy widget at runtime).
+- **Fixes applied (`platform_utils.py`):**
+  - Changed `from shared.logging_config import logger` to relative `from ...shared.logging_config import logger`.
+  - Added explicit `import importlib.util` at the top.
+  - Changed `# type: ignore` to `# pyright: ignore[reportMissingImports]` on the 3 `Quartz`/`AppKit` imports (lines 91, 104, 325) — `# type: ignore` did not suppress `reportMissingImports` in basedpyright, the explicit `pyright:` prefix with diagnostic code does.
+- **Verification:** Full frontend test suite `pytest src/frontend/tests/` — 126 passed, 7 skipped (pre-existing skips).
+
+## Antigravity Verification (2026-06-27)
+
+- **Validation:** Confirmed.
+- **Findings:**
+  - Actual error count matches the 16 errors reported.
+  - Verified 6 occurrences of `Callable` missing type arguments.
+  - Confirmed `platform_utils.py:325` AppKit import needs `# type: ignore` (and note that while `# type: ignore` was present on AppKit, it did not suppress `reportMissingImports` inside the checked environment - standard configuration or stub override is recommended).
+  - All suggested resolutions (using `ParamSpec`, None guards, local variables, relative imports) are correct and appropriate.
 
 ## Verified Findings (2026-06-27)
 

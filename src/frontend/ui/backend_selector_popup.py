@@ -254,6 +254,6 @@ class BackendSelectorPopup(Popup):
             self._on_cancel()
 
     @mainthread
-    def _update_status(self, text: str, color: tuple) -> None:
+    def _update_status(self, text: str, color: tuple[float, float, float, float]) -> None:
         self.status_label.text = text
         self.status_label.color = color

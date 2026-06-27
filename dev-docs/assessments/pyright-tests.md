@@ -1,6 +1,28 @@
 # Pyright Assessment — `src/frontend/tests/`
 
-**NEEDS REVIEW**
+**FIXED (2026-06-27)**
+
+## Resolution (2026-06-27)
+
+- **Status:** Fixed. `basedpyright --level error src/frontend/tests/` now reports 0 errors.
+- **Fixes applied:**
+  - `test_auth.py`, `test_cache.py`, `test_cache_explorer_mock.py`, `test_performance.py`, `test_ui.py`, `test_ui_responsiveness.py`: declared the test-fixture instance variables as class-level annotations with `None` initial values (the uninitialized-variable check requires an actual assignment in the class body or `__init__`, not just a type annotation).
+  - `test_backend_cache_explorer.py`: same pattern for `mock_client`; renamed `BACKEND_AVAILABLE` to `backend_available` and initialized the imported module-level names (`BackendCacheExplorerPopup`, `CacheExplorerAdapter`, `create_cache_explorer`) to `None` in the `except` branch so the conditional-import fallback pattern doesn't trip the possibly-unbound check.
+  - `test_cache.py`: added `queue.Queue[dict[str, Any]]` type arguments; defaulted `cached_data` to `[]` so `len(cached_data)` works when the cache returns `None`.
+  - `test_cache_explorer_mock.py`: cast `cache_hits` and `total_requests` to `float` before dividing in the hit-rate calculation.
+  - `test_main_screen_state.py`: added an `assert job is not None` guard before subscripting.
+  - `test_performance.py`: added `queue.Queue[dict[str, Any]]` type arguments.
+  - `test_resumable_export_cache.py`: same class-level annotation pattern; typed `temp_dir` and `home_patch` as `Any` to avoid leaky internal types.
+  - `main_screen_filenames.py` (the module under test): widened `selected_export_format` and `sanitize_export_filename_component` parameters from `str` to `Optional[str]` so the `None` test cases type-check.
+- **Verification:** Full frontend test suite `pytest src/frontend/tests/` — 126 passed, 7 skipped (pre-existing skips).
+
+## Antigravity Verification (2026-06-27)
+
+- **Validation:** Confirmed.
+- **Findings:**
+  - Actual error count matches the 49 errors reported.
+  - Confirmed uninitialized test instance variables, conditional import fallback patterns, division of mixed types, and incorrect class attribute accesses.
+  - All suggested fixes (annotating test class variables, None guards, type arguments, and standardizing imports) are correct and verified.
 
 ## Verified Findings (2026-06-27)
 

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class SelectionManager:
     """Tracks selected playlist IDs and updates selection-related widgets."""
 
-    def __init__(self, screen: MainScreen) -> None:
+    def __init__(self, screen: "MainScreen") -> None:
         self.screen = screen
         self.selected_playlist_ids: Set[str] = set()
 

@@ -1,12 +1,17 @@
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from ..caching.backend_cache import BackendCacheManager
 
 
 class TestResumableExportCache(unittest.TestCase):
+    temp_dir: Any = None
+    home_patch: Any = None
+    cache_manager: BackendCacheManager | None = None
+
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.home_patch = patch("os.path.expanduser", return_value=self.temp_dir.name)

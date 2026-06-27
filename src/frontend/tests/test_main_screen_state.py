@@ -24,7 +24,9 @@ def test_mark_cancelled():
         output_path="/tmp/test.xlsx"
     )
     assert state.mark_current_export_cancelled() is True
-    assert state.get_current_export_job()["cancelled"] is True
+    job = state.get_current_export_job()
+    assert job is not None
+    assert job["cancelled"] is True
 
 def test_mark_cancelled_no_job():
     assert state.mark_current_export_cancelled() is False

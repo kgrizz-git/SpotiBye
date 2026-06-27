@@ -1,6 +1,24 @@
 # Pyright Assessment — `src/frontend/services/`
 
-**NEEDS REVIEW**
+**FIXED (2026-06-27)**
+
+## Resolution (2026-06-27)
+
+- **Status:** Fixed. `basedpyright --level error src/frontend/services/` now reports 0 errors.
+- **Fixes applied:**
+  - Added type arguments `Dict[str, Any]` to `response_data` parameter on `BackendAPIError.__init__` (`src/frontend/services/backend_client.py:23`).
+  - Widened `_make_request` return type from `Dict[str, Any]` to `Any` since the API can return any JSON shape (`src/frontend/services/backend_client.py:81`).
+  - Added missing `NetworkTimeoutError` import in `reccobeats_backend.py:10` (was raising without import — real runtime bug risk confirmed).
+- **Verification:** `pytest test_backend_client.py test_reccobeats_backend.py` — 12 passed.
+
+## Antigravity Verification (2026-06-27)
+
+- **Validation:** Confirmed.
+- **Findings:**
+  - Actual error count is 3, as reported.
+  - Confirmed `Dict` missing type arguments (line 23) and return type mismatch (line 144) in `backend_client.py`.
+  - Confirmed the real bug risk where `NetworkTimeoutError` is not defined/imported in `reccobeats_backend.py:131`.
+  - The suggested fixes (adding type arguments, widening return type, and importing `NetworkTimeoutError`) are correct and verified.
 
 ## Verified Findings (2026-06-27)
 

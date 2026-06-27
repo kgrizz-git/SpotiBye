@@ -287,6 +287,7 @@ class BackendCacheManager:
         file_lock = self._get_file_lock(cache_path)
 
         with file_lock:
+            temp_file: Path | None = None
             try:
                 # Write to temporary file first
                 temp_file = cache_path.with_suffix(".tmp")
@@ -301,7 +302,7 @@ class BackendCacheManager:
             except Exception as e:
                 logger.error(f"Failed to atomically write cache file {cache_path}: {e}")
                 # Clean up temp file if it exists
-                if temp_file.exists():
+                if temp_file is not None and temp_file.exists():
                     try:
                         temp_file.unlink()
                     except OSError:

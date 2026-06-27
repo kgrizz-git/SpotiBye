@@ -52,7 +52,7 @@ class BackendPlaylistCard(BoxLayout):
         # Touch-interaction state
         self._is_touch_down = False
         self._touch_start_time: float = 0.0
-        self._touch_start_pos: Optional[tuple] = None
+        self._touch_start_pos: Optional[tuple[float, float]] = None
         self._last_click_time: float = 0.0
         self._long_press_event: Optional[Any] = None
         self._pending_single_click: Optional[Any] = None
@@ -175,7 +175,7 @@ class BackendPlaylistCard(BoxLayout):
     def _setup_interactions(self) -> None:
         pass  # handled by on_touch_down / on_touch_up overrides
 
-    def on_touch_down(self, touch) -> bool:
+    def on_touch_down(self, touch) -> bool | None:
         if not self.collide_point(*touch.pos):
             return super().on_touch_down(touch)
 
@@ -192,7 +192,7 @@ class BackendPlaylistCard(BoxLayout):
         )
         return True
 
-    def on_touch_move(self, touch) -> bool:
+    def on_touch_move(self, touch) -> bool | None:
         if touch.grab_current is self and self._is_touch_down and self._touch_start_pos:
             dx = touch.pos[0] - self._touch_start_pos[0]
             dy = touch.pos[1] - self._touch_start_pos[1]
@@ -207,7 +207,7 @@ class BackendPlaylistCard(BoxLayout):
             self._is_touch_down = False
             self.show_detailed_playlist_window()
 
-    def on_touch_up(self, touch) -> bool:
+    def on_touch_up(self, touch) -> bool | None:
         if touch.grab_current is not self:
             return super().on_touch_up(touch)
 
@@ -545,7 +545,7 @@ class BackendPlaylistCard(BoxLayout):
         self,
         analysis_container: BoxLayout,
         duration_label: Label,
-        analysis: Optional[dict],
+        analysis: Optional[dict[str, Any]],
         error: Optional[str],
     ) -> None:
         analysis_container.clear_widgets()
@@ -822,10 +822,15 @@ class BackendPlaylistCard(BoxLayout):
             )
             if width is not None:
                 kw.update(
-                    size_hint=(None, 1), width=width, text_size=(width - dp(4), None)
+                    size_hint=(None, 1),  # pyright: ignore[reportArgumentType]
+                    width=width,
+                    text_size=(width - dp(4), None),  # pyright: ignore[reportArgumentType]
                 )
             else:
-                kw.update(size_hint=(size_hint_x, 1), text_size=(None, None))
+                kw.update(
+                    size_hint=(size_hint_x, 1),  # pyright: ignore[reportArgumentType]
+                    text_size=(None, None),  # pyright: ignore[reportArgumentType]
+                )
             return Label(**kw)
 
         row.add_widget(cell(num, width=self._COL_NUM, align="right"))

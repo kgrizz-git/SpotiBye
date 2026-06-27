@@ -1,6 +1,20 @@
 # Pyright Assessment — `src/frontend/config/`
 
-**NEEDS REVIEW**
+**FIXED (2026-06-27)**
+
+## Resolution (2026-06-27)
+
+- **Status:** Fixed. `basedpyright --level error src/frontend/config/` now reports 0 errors.
+- **Fix applied:** Added `Any` import and changed return annotation `dict` → `dict[str, Any]` on `get_config_summary` (`src/frontend/config/backend_config.py:255`).
+- **Verification:** `pytest src/frontend/tests/test_configuration.py` — 19 passed.
+
+## Antigravity Verification (2026-06-27)
+
+- **Validation:** Confirmed.
+- **Findings:**
+  - Actual error count is 1, as reported.
+  - The type annotation at line 255 of `backend_config.py` uses `dict` without type arguments.
+  - The suggested fix of adding type arguments (e.g., `dict[str, Any]`) is correct and verified.
 
 ## Verified Findings (2026-06-27)
 

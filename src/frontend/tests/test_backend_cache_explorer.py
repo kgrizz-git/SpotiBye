@@ -7,6 +7,7 @@ import platform
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 SRC_ROOT = Path(__file__).resolve().parents[2]
@@ -14,25 +15,39 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 # Test the backend cache explorer components
+backend_available = False
+BackendCacheExplorerPopup: Any = None
+CacheExplorerAdapter: Any = None
+create_cache_explorer: Any = None
 try:
-    from ..ui.backend_cache_explorer import BackendCacheExplorerPopup
+    from ..ui.backend_cache_explorer import BackendCacheExplorerPopup as _BackendCacheExplorerPopup
     from ..screens.cache_explorer_adapter import (
-        CacheExplorerAdapter,
-        create_cache_explorer,
+        CacheExplorerAdapter as _CacheExplorerAdapter,
+    )
+    from ..screens.cache_explorer_adapter import (
+        create_cache_explorer as _create_cache_explorer,
     )
 
-    BACKEND_AVAILABLE = True
+    BackendCacheExplorerPopup = _BackendCacheExplorerPopup
+    CacheExplorerAdapter = _CacheExplorerAdapter
+    create_cache_explorer = _create_cache_explorer
+    backend_available = True
 except ImportError:
     try:
-        from src.frontend.ui.backend_cache_explorer import BackendCacheExplorerPopup
+        from src.frontend.ui.backend_cache_explorer import BackendCacheExplorerPopup as _BackendCacheExplorerPopup
         from src.frontend.screens.cache_explorer_adapter import (
-            CacheExplorerAdapter,
-            create_cache_explorer,
+            CacheExplorerAdapter as _CacheExplorerAdapter,
+        )
+        from src.frontend.screens.cache_explorer_adapter import (
+            create_cache_explorer as _create_cache_explorer,
         )
 
-        BACKEND_AVAILABLE = True
+        BackendCacheExplorerPopup = _BackendCacheExplorerPopup
+        CacheExplorerAdapter = _CacheExplorerAdapter
+        create_cache_explorer = _create_cache_explorer
+        backend_available = True
     except ImportError:
-        BACKEND_AVAILABLE = False
+        pass
 
 
 def _kivy_display_available() -> bool:
@@ -57,9 +72,11 @@ KIVY_DISPLAY_AVAILABLE = _kivy_display_available()
 class TestBackendCacheExplorer(unittest.TestCase):
     """Test backend cache explorer functionality."""
 
+    mock_client: Mock | None = None
+
     def setUp(self):
         """Set up test fixtures."""
-        if not BACKEND_AVAILABLE:
+        if not backend_available:
             self.skipTest("Backend components not available")
         if not KIVY_DISPLAY_AVAILABLE:
             self.skipTest("Kivy window not available in this environment")
@@ -180,7 +197,7 @@ class TestCacheExplorerAdapter(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        if not BACKEND_AVAILABLE:
+        if not backend_available:
             self.skipTest("Backend components not available")
 
     @patch("src.frontend.screens.cache_explorer_adapter.resolve_startup_backend_url")
@@ -237,7 +254,7 @@ class TestCreateCacheExplorer(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        if not BACKEND_AVAILABLE:
+        if not backend_available:
             self.skipTest("Backend components not available")
 
     @patch("src.frontend.screens.cache_explorer_adapter.get_cache_explorer_adapter")
@@ -260,7 +277,7 @@ class TestCacheExplorerIntegration(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        if not BACKEND_AVAILABLE:
+        if not backend_available:
             self.skipTest("Backend components not available")
         if not KIVY_DISPLAY_AVAILABLE:
             self.skipTest("Kivy window not available in this environment")

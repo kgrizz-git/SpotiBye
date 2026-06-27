@@ -46,6 +46,13 @@ class CacheExplorerPopup(Popup):
         self.details_column = None
         self.features_column = None
 
+        self.search_input: Any = None
+        self.breadcrumb_label: Any = None
+        self.playlists_content: Any = None
+        self.tracks_content: Any = None
+        self.details_content: Any = None
+        self.features_content: Any = None
+
         self.build_ui()
         self.load_cache_data()
 
@@ -474,7 +481,8 @@ class CacheExplorerPopup(Popup):
         self.features_column.opacity = 1
 
         self.populate_details_column(track)
-        self.populate_tracks_column(self.selected_playlist)
+        if self.selected_playlist is not None:
+            self.populate_tracks_column(self.selected_playlist)
 
     def populate_details_column(self, track: Dict[str, Any]) -> None:
         self.details_content.clear_widgets()

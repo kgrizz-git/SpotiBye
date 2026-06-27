@@ -17,6 +17,9 @@ TEST_OAUTH_STATE = "test_state_12345"
 
 
 class TestAuthenticationFlow:
+    backend_client: BackendClient | None = None
+    authenticator: BackendAuthenticator | None = None
+
     @pytest.fixture(autouse=True)
     def setup_clients(self, mock_backend_server):
         backend_url = mock_backend_server.get_base_url()

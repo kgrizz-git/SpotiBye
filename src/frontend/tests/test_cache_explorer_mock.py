@@ -11,6 +11,12 @@ from unittest.mock import Mock, patch
 class TestCacheExplorerMock(unittest.TestCase):
     """Test cache explorer functionality with mocked components."""
 
+    mock_config: Mock | None = None
+    mock_client: Mock | None = None
+    mock_popup: Mock | None = None
+    mock_label: Mock | None = None
+    mock_switch: Mock | None = None
+
     def setUp(self):
         """Set up test fixtures with mocks."""
         # Mock backend config
@@ -90,9 +96,11 @@ class TestCacheExplorerMock(unittest.TestCase):
 
         # Validate hit rate calculation
         expected_hit_rate = (
-            cache_status["cache_hits"] / cache_status["total_requests"]
-        ) * 100
-        self.assertAlmostEqual(cache_status["hit_rate"], expected_hit_rate, places=1)
+            float(cache_status["cache_hits"]) / float(cache_status["total_requests"])
+        ) * 100.0
+        self.assertAlmostEqual(
+            float(cache_status["hit_rate"]), expected_hit_rate, places=1
+        )
 
     def test_cache_status_display_formatting(self):
         """Test cache status display formatting."""

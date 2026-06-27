@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .main_screen import MainScreen
 from ..ui.backend_playlist_card import BackendPlaylistCard
 from ...shared.logging_config import logger
@@ -20,7 +22,7 @@ class BackendMainScreen(MainScreen):
     # Widget factory
     # ------------------------------------------------------------------
 
-    def _make_playlist_widget(self, playlist: dict) -> BackendPlaylistCard:
+    def _make_playlist_widget(self, playlist: dict[str, Any]) -> BackendPlaylistCard:
         return BackendPlaylistCard(playlist)
 
     # ------------------------------------------------------------------

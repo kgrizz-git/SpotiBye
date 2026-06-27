@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 class MainScreenUIBuilder:
     """Builds MainScreen widgets and binds events to screen facade methods."""
 
-    def __init__(self, screen: MainScreen) -> None:
+    def __init__(self, screen: "MainScreen") -> None:
         self.screen = screen
 
     def build_ui(self) -> None:

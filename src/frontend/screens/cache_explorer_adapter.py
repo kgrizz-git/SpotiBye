@@ -9,11 +9,21 @@ from ...shared.logging_config import logger
 
 try:
     from ..ui.backend_cache_explorer import BackendCacheExplorerPopup
+    from ..ui.backend_cache_explorer import (
+        BackendCacheExplorerPopup as _BackendCacheExplorerPopup,
+    )
     from ..config.backend_config import resolve_startup_backend_url
+    from ..config.backend_config import (
+        resolve_startup_backend_url as _resolve_startup_backend_url,
+    )
 
-    BACKEND_AVAILABLE = True
+    backend_available = True
 except ImportError:
-    BACKEND_AVAILABLE = False
+    BackendCacheExplorerPopup = None
+    _BackendCacheExplorerPopup = None
+    resolve_startup_backend_url = None
+    _resolve_startup_backend_url = None
+    backend_available = False
     logger.debug("Backend cache explorer not available")
 
 from ..ui.cache_explorer import CacheExplorerPopup
@@ -23,12 +33,14 @@ class CacheExplorerAdapter:
     """Adapter that provides appropriate cache explorer based on backend availability."""
 
     def __init__(self):
-        self.backend_available = BACKEND_AVAILABLE
-        self.backend_config = None
+        self.backend_available = backend_available
+        self.backend_config: dict[str, Any] | None = None
 
-        if self.backend_available:
+        if self.backend_available and resolve_startup_backend_url is not None:
             try:
-                self.backend_config = {"backend_url": resolve_startup_backend_url()}
+                self.backend_config = {
+                    "backend_url": resolve_startup_backend_url()
+                }
                 logger.info("Backend cache explorer adapter initialized")
             except Exception as exc:
                 logger.warning("Backend config unavailable: %s", exc)
@@ -36,9 +48,9 @@ class CacheExplorerAdapter:
 
     def get_cache_explorer(self) -> CacheExplorerPopup:
         """Get appropriate cache explorer based on backend availability."""
-        if self.backend_available and self.backend_config:
+        if self.backend_available and self.backend_config and BackendCacheExplorerPopup is not None:
             try:
-                return BackendCacheExplorerPopup()
+                return BackendCacheExplorerPopup()  # pyright: ignore[reportReturnType]
             except Exception as exc:
                 logger.error("Failed to create backend cache explorer: %s", exc)
                 # Fallback to standard cache explorer

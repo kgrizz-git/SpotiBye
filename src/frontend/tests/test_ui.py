@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class TestUIFunctionality:
+    backend_client: BackendClient | None = None
+    recco_service: ReccoBeatsBackendService | None = None
+    cache_manager: BackendCacheManager | None = None
+
     @pytest.fixture(autouse=True)
     def setup_clients(self, mock_backend_server):
         backend_url = mock_backend_server.get_base_url()

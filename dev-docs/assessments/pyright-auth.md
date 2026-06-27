@@ -1,6 +1,29 @@
 # Pyright Assessment — `src/frontend/auth/`
 
-**NEEDS REVIEW**
+**FIXED (2026-06-27)**
+
+## Resolution (2026-06-27)
+
+- **Status:** Fixed. `basedpyright --level error src/frontend/auth/` now reports 0 errors.
+- **Fixes applied:**
+  - `backend_auth.py`: initialized `self.auth_result_container: Dict[str, str] = {}` in `__init__` to satisfy the uninitialized instance variable check.
+  - `backend_login_screen.py`:
+    - Added `# pyright: ignore[reportAttributeAccessIssue]` to the 2 `.bind()` calls (lines 116, 127).
+    - Added `if self.backend_client is None: return` guard in nested `check_connection` for line 153.
+    - Added `tuple[float, float, float, float]` type args to `_update_connection_status.color` parameter (line 174).
+    - Added `dict[str, Any]` to `_on_login_success` parameter (line 259).
+    - Added `if self.authenticator is None: return` guard at start of `login_worker` (line 239).
+    - Added `if app is None or self.backend_client is None: return` guard in `_on_login_success` (line 282).
+    - Added `if app is None: return` guard in `logout` (line 343).
+- **Verification:** `pytest test_auth.py` — 5 passed.
+
+## Antigravity Verification (2026-06-27)
+
+- **Validation:** Confirmed.
+- **Findings:**
+  - Actual error count is 13 (as noted in the findings, the original count of 14 has an overcount of 1).
+  - Confirmed 1 uninitialized instance variable error in `backend_auth.py` and 12 errors in `backend_login_screen.py`.
+  - Verified that all suggested fixes (using None guards, asserting non-optional, adding type arguments, and standardizing Kivy bind suppression) are correct and verified.
 
 ## Verified Findings (2026-06-27)
 

@@ -113,7 +113,7 @@ class BackendLoginScreen(Screen):
             pos_hint={"center_x": 0.5},
             font_size=dp(16),
         )
-        login_btn.bind(on_press=self.start_login)
+        login_btn.bind(on_press=self.start_login)  # pyright: ignore[reportAttributeAccessIssue]
         layout.add_widget(login_btn)
         self.login_button = login_btn
 
@@ -124,7 +124,7 @@ class BackendLoginScreen(Screen):
             pos_hint={"center_x": 0.5},
             font_size=dp(14),
         )
-        change_backend_btn.bind(on_press=self._on_change_backend)
+        change_backend_btn.bind(on_press=self._on_change_backend)  # pyright: ignore[reportAttributeAccessIssue]
         layout.add_widget(change_backend_btn)
 
         # Status label
@@ -150,6 +150,8 @@ class BackendLoginScreen(Screen):
 
         def check_connection():
             try:
+                if self.backend_client is None:
+                    return
                 health = self.backend_client.health_check()
                 if health.get("status") == "healthy":
                     self._update_connection_status(
@@ -169,7 +171,7 @@ class BackendLoginScreen(Screen):
         threading.Thread(target=check_connection, daemon=True).start()
 
     @mainthread
-    def _update_connection_status(self, text: str, color: tuple) -> None:
+    def _update_connection_status(self, text: str, color: tuple[float, float, float, float]) -> None:
         """Update connection status label."""
         if self.connection_status_label:
             self.connection_status_label.text = text
@@ -235,6 +237,8 @@ class BackendLoginScreen(Screen):
         logger.info("Backend login worker started")
 
         try:
+            if self.authenticator is None:
+                return
             # Start OAuth flow using backend authenticator
             success = self.authenticator.login(
                 on_success=self._on_login_success, on_error=self._on_login_error
@@ -254,7 +258,7 @@ class BackendLoginScreen(Screen):
             Clock.schedule_once(lambda dt: self._set_login_state(False), 0)
 
     @mainthread
-    def _on_login_success(self, token_response: dict) -> None:
+    def _on_login_success(self, token_response: dict[str, Any]) -> None:
         """Handle successful login."""
         try:
             user = (
@@ -279,6 +283,9 @@ class BackendLoginScreen(Screen):
 
             # Update app state
             app = App.get_running_app()
+            if app is None or self.backend_client is None:
+                self._on_login_error("App or backend client unavailable")
+                return
             app.token_info = {"access_token": token}  # Store JWT token
             app.username = username
 
@@ -340,6 +347,8 @@ class BackendLoginScreen(Screen):
 
             # Clear app state
             app = App.get_running_app()
+            if app is None:
+                return
             app.token_info = None
             app.username = None
 

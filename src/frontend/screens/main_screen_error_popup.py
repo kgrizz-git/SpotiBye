@@ -110,6 +110,8 @@ def show_backend_error_popup(screen, message: str) -> None:
 
         def _resume_export(_instance):
             popup.dismiss()
+            if resumable_export is None:
+                return
             screen.begin_backend_export(
                 resumable_export["playlists"],
                 resumable_export["output_path"],
@@ -119,8 +121,8 @@ def show_backend_error_popup(screen, message: str) -> None:
         copy_btn.bind(on_press=_copy_details)
         close_btn.bind(on_press=popup.dismiss)
         if resumable_export:
-            resume_btn.bind(on_press=_resume_export)
-            discard_btn.bind(on_press=_clear_resume_job)
+            resume_btn.bind(on_press=_resume_export)  # pyright: ignore[reportPossiblyUnboundVariable]
+            discard_btn.bind(on_press=_clear_resume_job)  # pyright: ignore[reportPossiblyUnboundVariable]
         popup.bind(
             on_dismiss=lambda *_args: setattr(screen, "_backend_resume_popup", None)
         )

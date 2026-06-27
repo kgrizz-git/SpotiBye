@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List
 
 
-def filter_playlists(playlists: List[dict], search_query: str) -> List[dict]:
+def filter_playlists(playlists: List[Dict[str, Any]], search_query: str) -> List[Dict[str, Any]]:
     """Get playlists filtered by the current search query.
-    
+
     Args:
         playlists: List of playlist dictionaries to filter
         search_query: The text to search for
-        
+
     Returns:
         Filtered list of playlists
     """
@@ -25,7 +25,7 @@ def filter_playlists(playlists: List[dict], search_query: str) -> List[dict]:
     if not search_terms:
         return playlists.copy()
 
-    def matches_search(playlist):
+    def matches_search(playlist: Dict[str, Any]) -> bool:
         playlist_name = playlist.get("name", "").lower()
         owner_name = playlist.get("owner", {}).get("display_name", "").lower()
 
@@ -37,7 +37,7 @@ def filter_playlists(playlists: List[dict], search_query: str) -> List[dict]:
     return [p for p in playlists if matches_search(p)]
 
 
-def sort_playlists(playlists: List[dict], sort_key: str, reverse: bool) -> List[dict]:
+def sort_playlists(playlists: List[Dict[str, Any]], sort_key: str, reverse: bool) -> List[Dict[str, Any]]:
     """Sort playlists based on current sort key and direction.
     
     Args:

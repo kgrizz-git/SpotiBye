@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from kivy.clock import Clock
 from kivy.metrics import dp
@@ -16,12 +16,12 @@ if TYPE_CHECKING:
 class SearchSortUIHandler:
     """Handles search/sort widget state, debouncing, and filter bookkeeping."""
 
-    def __init__(self, screen: MainScreen) -> None:
+    def __init__(self, screen: "MainScreen") -> None:
         self.screen = screen
         self.search_query = ""
         self.current_sort_key = "default"
         self.current_sort_reverse = False
-        self.filtered_playlists: List[dict] = []
+        self.filtered_playlists: List[Dict[str, Any]] = []
         self._search_trigger: Optional[object] = None
         self._sort_trigger: Optional[object] = None
         self._search_debounce_seconds = 0.3
@@ -156,7 +156,7 @@ class SearchSortUIHandler:
 
         self.screen.display_playlists_with_cache()
 
-    def get_filtered_playlists(self) -> List[dict]:
+    def get_filtered_playlists(self) -> List[Dict[str, Any]]:
         """Return playlists filtered by the current search query."""
         from .main_screen_sort_filter import filter_playlists
 
@@ -166,7 +166,7 @@ class SearchSortUIHandler:
             logger.warning("Error filtering playlists: %s", exc)
             return self.screen.playlists.copy()
 
-    def sort_playlist_list(self, playlists: List[dict]) -> List[dict]:
+    def sort_playlist_list(self, playlists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Sort playlists using current sort key and direction."""
         from .main_screen_sort_filter import sort_playlists
 

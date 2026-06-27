@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from kivy.app import App
 from kivy.clock import Clock, mainthread
@@ -29,17 +29,23 @@ from .main_screen_ui import MainScreenUIBuilder
 # Import backend cache explorer adapter if available.
 # Prefer the runtime path used by the packaged launcher (`src.frontend...`),
 # then fall back to `frontend...` for editable/local package layouts.
+create_cache_explorer: Optional[Callable[[], Any]] = None
+backend_cache_explorer_available = False
 try:
-    from src.frontend.screens.cache_explorer_adapter import create_cache_explorer
+    from .cache_explorer_adapter import create_cache_explorer as _create_cache_explorer
 
-    BACKEND_CACHE_EXPLORER_AVAILABLE = True
+    create_cache_explorer = _create_cache_explorer
+    backend_cache_explorer_available = True
 except ImportError:
     try:
-        from frontend.screens.cache_explorer_adapter import create_cache_explorer
+        from src.frontend.screens.cache_explorer_adapter import (
+            create_cache_explorer as _create_cache_explorer,
+        )
 
-        BACKEND_CACHE_EXPLORER_AVAILABLE = True
+        create_cache_explorer = _create_cache_explorer
+        backend_cache_explorer_available = True
     except ImportError:
-        BACKEND_CACHE_EXPLORER_AVAILABLE = False
+        pass
 
 
 class MainScreen(Screen):
@@ -48,8 +54,8 @@ class MainScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.backend_adapter = None
-        self.playlists: List[dict] = []
-        self.playlist_widgets: List = []
+        self.playlists: List[Dict[str, Any]] = []
+        self.playlist_widgets: List[Any] = []
         self._backend_error_phase = "idle"
         self._backend_error_step = ""
         self.trace_mode_enabled = os.getenv("SPOTIBYE_TRACE_MODE", "0").lower() in {
@@ -101,11 +107,11 @@ class MainScreen(Screen):
         self.search_sort.search_query = value
 
     @property
-    def filtered_playlists(self) -> List[dict]:
+    def filtered_playlists(self) -> List[Dict[str, Any]]:
         return self.search_sort.filtered_playlists
 
     @filtered_playlists.setter
-    def filtered_playlists(self, value: List[dict]) -> None:
+    def filtered_playlists(self, value: List[Dict[str, Any]]) -> None:
         self.search_sort.filtered_playlists = value
 
     @property
@@ -154,10 +160,10 @@ class MainScreen(Screen):
     def clear_search(self, instance) -> None:
         self.search_sort.clear_search(instance)
 
-    def _get_filtered_playlists(self) -> List[dict]:
+    def _get_filtered_playlists(self) -> List[Dict[str, Any]]:
         return self.search_sort.get_filtered_playlists()
 
-    def _sort_playlists(self, playlists: List[dict]) -> List[dict]:
+    def _sort_playlists(self, playlists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return self.search_sort.sort_playlist_list(playlists)
 
     def _perform_sort(self) -> None:
@@ -315,7 +321,7 @@ class MainScreen(Screen):
             "display_playlists_with_cache must be implemented by subclass"
         )
 
-    def _make_playlist_widget(self, playlist: dict):
+    def _make_playlist_widget(self, playlist: dict[str, Any]):
         """Create a playlist widget for a playlist row."""
         raise NotImplementedError("_make_playlist_widget must be implemented by subclass")
 
@@ -459,8 +465,8 @@ class MainScreen(Screen):
 
     def open_cache_explorer(self, *_args) -> None:
         main_screen_cache.open_cache_explorer(
-            self, BACKEND_CACHE_EXPLORER_AVAILABLE, create_cache_explorer, *_args
-        )
+            self, backend_cache_explorer_available, create_cache_explorer, *_args
+        ) if create_cache_explorer is not None else None
 
     # ------------------------------------------------------------------
     # Filename helpers

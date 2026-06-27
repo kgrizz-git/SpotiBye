@@ -6,6 +6,7 @@ import logging
 import queue
 import threading
 import time
+from typing import Any
 
 import pytest
 
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 class TestPerformance:
+    backend_client: BackendClient | None = None
+    recco_service: ReccoBeatsBackendService | None = None
+
     @pytest.fixture(autouse=True)
     def setup_clients(self, mock_backend_server):
         backend_url = mock_backend_server.get_base_url()
@@ -52,7 +56,7 @@ class TestPerformance:
     def test_concurrent_requests(self):
         playlists = self.backend_client.get_playlists()
         target = len(playlists[:3])
-        results: queue.Queue = queue.Queue()
+        results: queue.Queue[dict[str, Any]] = queue.Queue()
 
         def load_playlist(playlist_id: str) -> None:
             try:

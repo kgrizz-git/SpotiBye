@@ -7,7 +7,11 @@ import time
 from typing import Any, Dict, List, Optional
 
 from .backend_client import BackendClient, BackendAPIError
-from ..utils.network_utils import retry_on_network_error, handle_network_errors
+from ..utils.network_utils import (
+    NetworkTimeoutError,
+    handle_network_errors,
+    retry_on_network_error,
+)
 
 logger = logging.getLogger(__name__)
 
