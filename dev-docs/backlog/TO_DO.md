@@ -27,7 +27,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
 
 ## Export
 
-- [ ] Split XLSX render modes from prebuilt export format slots in `buildExportFileKey`
+- [ ] Split XLSX render modes from prebuilt export format slots in `buildExportFileKey` ([plan](dev-docs/exec-plans/active/2026-06-26-split-xlsx-render-modes.md))
   - [ ] Separate `default`, `rich`, and `lite` XLSX modes from `csv`/other prebuilt format keys
   - [ ] Preserve existing cache compatibility or add a documented migration path
   - [ ] Add unit tests for generated export file keys
