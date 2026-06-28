@@ -47,7 +47,7 @@ Refactor routes to use Zod (lazily instantiate schemas to avoid cold-start laten
 - [x] Update `.pre-commit-config.yaml` at the **repo root** to include the `osv-scanner-docker` hook in the `pre-push` stage using the `v2.3.5` revision.
   ```yaml
   - repo: https://github.com/google/osv-scanner
-    rev: v2.3.5 
+    rev: v2.3.5
     hooks:
       - id: osv-scanner-docker
         name: OSV-Scanner (pre-push)

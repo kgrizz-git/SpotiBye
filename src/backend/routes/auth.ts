@@ -137,7 +137,7 @@ app.get('/spotify/callback', async (c) => {
   } catch (error) {
     console.error('OAuth callback error:', error);
     const errMessage = error instanceof Error ? error.message : String(error);
-    
+
     let code = 'OAUTH_CALLBACK_FAILED';
     if (errMessage.includes('Token expired')) {
       code = 'OAUTH_TOKEN_EXPIRED';
