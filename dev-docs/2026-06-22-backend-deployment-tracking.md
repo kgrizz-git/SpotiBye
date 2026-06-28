@@ -23,8 +23,8 @@ Provide a script like `scripts/backend-deploy-status.sh` that aggregates this in
 
 ## 4. Documentation & Agent Rules (`AGENTS.md`)
 Whatever technical solution is chosen, you must document it explicitly so agents know how to interact with it.
-- **Implementation:** Add a new section to `AGENTS.md` (e.g., `## Backend Deployments`) detailing how to check the deployment status. 
-- **Example Rule:** 
+- **Implementation:** Add a new section to `AGENTS.md` (e.g., `## Backend Deployments`) detailing how to check the deployment status.
+- **Example Rule:**
   > **Backend Deployments:** To check what changes are pending deployment, run `./scripts/backend-deploy-status.sh` or compare HEAD to the commit hash in `src/backend/.deployed-commit`. If there are un-deployed changes in `src/backend/`, ask the user if they would like you to deploy them.
 
 ## Recommended Approach

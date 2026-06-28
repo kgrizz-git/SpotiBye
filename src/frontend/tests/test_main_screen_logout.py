@@ -16,22 +16,24 @@ class TestDownloadExportSignature:
 
         client = BackendClient(base_url="http://localhost:8787")
         import inspect
+
         sig = inspect.signature(client.download_export)
         params = list(sig.parameters.keys())
-        assert "export_id" not in params, (
-            "download_export should not accept export_id (FM-1)"
-        )
+        assert (
+            "export_id" not in params
+        ), "download_export should not accept export_id (FM-1)"
         assert "playlist_id" in params
 
     def test_adapter_download_export_signature(self):
         from ..screens.backend_main_screen_adapter import BackendMainScreenAdapter
 
         import inspect
+
         sig = inspect.signature(BackendMainScreenAdapter.download_export)
         params = list(sig.parameters.keys())
-        assert "export_id" not in params, (
-            "BackendMainScreenAdapter.download_export should not accept export_id (FM-1)"
-        )
+        assert (
+            "export_id" not in params
+        ), "BackendMainScreenAdapter.download_export should not accept export_id (FM-1)"
         assert "playlist_id" in params
         assert "save_path" in params
 
@@ -78,17 +80,21 @@ class TestPerformLogoutMissingMethod:
         # Build a mock App that has no `logout` attribute
         mock_app = MagicMock(spec=[])  # spec=[] means no attributes
 
-        with caplog.at_level(logging.ERROR, logger="src.frontend.screens.main_screen_logout"):
+        with caplog.at_level(
+            logging.ERROR, logger="src.frontend.screens.main_screen_logout"
+        ):
             with patch("src.frontend.screens.main_screen_logout.App") as MockApp:
                 MockApp.get_running_app.return_value = mock_app
                 # Should NOT raise
                 perform_logout()
 
         # Verify an error was logged about missing logout method
-        error_messages = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
-        assert any("logout" in msg.lower() for msg in error_messages), (
-            f"Expected error log about missing logout method, got: {error_messages}"
-        )
+        error_messages = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR
+        ]
+        assert any(
+            "logout" in msg.lower() for msg in error_messages
+        ), f"Expected error log about missing logout method, got: {error_messages}"
 
     def test_calls_logout_when_method_exists(self):
         from ..screens.main_screen_logout import perform_logout

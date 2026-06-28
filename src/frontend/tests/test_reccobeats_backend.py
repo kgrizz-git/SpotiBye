@@ -24,21 +24,15 @@ class TestGetMultipleTrackAudioFeaturesSafe:
         # `{"danceability": 0.8, "energy": 0.9}` for this ID. Verify the
         # behavior is gone.
         with pytest.raises(NotImplementedError):
-            self._service().get_multiple_track_audio_features_safe(
-                ["cached_track_1"]
-            )
+            self._service().get_multiple_track_audio_features_safe(["cached_track_1"])
 
     def test_raises_not_implemented_for_legacy_cached_track_id_2(self) -> None:
         with pytest.raises(NotImplementedError):
-            self._service().get_multiple_track_audio_features_safe(
-                ["cached_track_2"]
-            )
+            self._service().get_multiple_track_audio_features_safe(["cached_track_2"])
 
     def test_does_not_return_fabricated_audio_features(self) -> None:
         with pytest.raises(NotImplementedError):
-            self._service().get_multiple_track_audio_features_safe(
-                ["any_track_id"]
-            )
+            self._service().get_multiple_track_audio_features_safe(["any_track_id"])
 
     def test_returns_empty_dict_for_cancelled_analysis(self) -> None:
         class _CancelledTask:

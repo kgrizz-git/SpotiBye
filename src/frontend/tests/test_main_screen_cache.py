@@ -12,7 +12,6 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 # Stub out kivy.uix.popup before importing the screen module, so the
 # Popup() calls inside clear_all_cache do not try to construct a real
@@ -55,12 +54,12 @@ class TestCacheClearEnvHashScoped:
 
         # Assert: data file gone, auth + selection preserved
         assert not data_file.exists(), "data file should be cleared"
-        assert manager.token_cache_path.exists(), (
-            "auth token should NOT be deleted by clear_cache"
-        )
-        assert selection_file.exists(), (
-            "backend_selection.json should NOT be deleted by clear_cache"
-        )
+        assert (
+            manager.token_cache_path.exists()
+        ), "auth token should NOT be deleted by clear_cache"
+        assert (
+            selection_file.exists()
+        ), "backend_selection.json should NOT be deleted by clear_cache"
 
     def test_clear_file_removes_env_hashed_path(self, tmp_path):
         backend_url = "http://localhost:8787"
@@ -119,8 +118,9 @@ class TestClearAllCacheCallsClear:
         screen.backend_adapter = MagicMock()
         popup = MagicMock()
 
-        with patch.object(main_screen_cache, "Popup") as MockPopup, \
-             patch.object(main_screen_cache, "Label"):
+        with patch.object(main_screen_cache, "Popup") as MockPopup, patch.object(
+            main_screen_cache, "Label"
+        ):
             MockPopup.return_value = MagicMock()
             main_screen_cache.clear_all_cache(screen, popup)
 
@@ -135,8 +135,9 @@ class TestClearAllCacheCallsClear:
         screen.backend_adapter = None
         popup = MagicMock()
 
-        with patch.object(main_screen_cache, "Popup") as MockPopup, \
-             patch.object(main_screen_cache, "Label"):
+        with patch.object(main_screen_cache, "Popup") as MockPopup, patch.object(
+            main_screen_cache, "Label"
+        ):
             MockPopup.return_value = MagicMock()
             main_screen_cache.clear_all_cache(screen, popup)
 
@@ -148,11 +149,14 @@ class TestClearAllCacheCallsClear:
 
         screen = MagicMock()
         screen.backend_adapter = MagicMock()
-        screen.backend_adapter.cache_manager.clear_cache.side_effect = OSError("disk error")
+        screen.backend_adapter.cache_manager.clear_cache.side_effect = OSError(
+            "disk error"
+        )
         popup = MagicMock()
 
-        with patch.object(main_screen_cache, "Popup"), \
-             patch.object(main_screen_cache, "Label"):
+        with patch.object(main_screen_cache, "Popup"), patch.object(
+            main_screen_cache, "Label"
+        ):
             main_screen_cache.clear_all_cache(screen, popup)
 
         # status_label should reflect the error

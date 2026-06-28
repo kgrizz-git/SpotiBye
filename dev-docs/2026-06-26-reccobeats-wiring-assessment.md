@@ -4,7 +4,7 @@
 **Target Plan:** `dev-docs/exec-plans/completed/2026-06-21-reccobeats-wiring.md`
 
 ## 1. Plan Verification & Progress Status
-The ReccoBeats wiring plan has successfully outlined and guided the migration from the old Python-monolith API calls to a Cloudflare Worker backend approach. 
+The ReccoBeats wiring plan has successfully outlined and guided the migration from the old Python-monolith API calls to a Cloudflare Worker backend approach.
 
 - **Track A (Spotify Analysis):** Implemented successfully. `AnalysisService.analyzePlaylist` properly paginates using `rawCount` and extracts `overview`, `artists`, and `genre_distribution`.
 - **Track B (ReccoBeats Spike & Adapter):** The API contract is documented accurately at `dev-docs/reccobeats-api-contract.md`. The backend code targets the correct public endpoint `GET /v1/audio-features`.
@@ -33,6 +33,6 @@ If a playlist contains many tracks (e.g., 300+ tracks), appending all IDs to the
 In `src/frontend/services/reccobeats_backend.py`, the legacy stub `get_multiple_track_audio_features_safe` raises a `NotImplementedError`. While the new `backend_playlist_card.py` is supposed to parse the flat JSON returned by the backend queue, any accidental usage of the old legacy methods elsewhere in the UI will crash the app. The unchecked verification steps suggest that the frontend UI integration needs an end-to-end runtime test.
 
 ## 3. ReccoBeats API Usage Status
-- **Usage Model:** SpotiBye is no longer using ReccoBeats for genre distribution. Instead, it uses ReccoBeats exclusively for retrieving audio features (`danceability`, `energy`, etc.) based on Spotify track IDs. 
+- **Usage Model:** SpotiBye is no longer using ReccoBeats for genre distribution. Instead, it uses ReccoBeats exclusively for retrieving audio features (`danceability`, `energy`, etc.) based on Spotify track IDs.
 - **Data Persistence:** The worker does not persist raw ReccoBeats responses. It computes averages and stores a compact `audio_features` summary in the KV store result payload.
 - **Fault Tolerance:** The backend implementation is robust to ReccoBeats failures. If the `fetchReccoBeatsAudioFeatures` call fails (e.g., due to the URL length bug mentioned above, or rate limits), the `try...catch` block gracefully catches the error and allows the analysis job to complete using only the Spotify metadata.

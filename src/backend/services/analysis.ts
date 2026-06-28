@@ -86,8 +86,8 @@ export class AnalysisService {
   }
 
   async analyzePlaylist(
-    playlistId: string, 
-    userId: string, 
+    playlistId: string,
+    userId: string,
     jobId: string,
     onProgress?: (progress: number) => Promise<void>
   ): Promise<AnalysisResult> {

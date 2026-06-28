@@ -38,13 +38,13 @@ describe('cache-keys helper', () => {
   it('buildXlsxVariantKey matches historical key structure', () => {
     expect(buildXlsxVariantKey('export:job:123', 'rich')).toBe('export:job:123:file:rich');
     expect(buildXlsxVariantKey('export:job:123', 'lite')).toBe('export:job:123:file:lite');
-    
+
     expectTypeOf(buildXlsxVariantKey).parameter(1).toEqualTypeOf<'rich' | 'lite'>();
   });
 
   it('buildPrebuiltFormatKey matches historical key structure', () => {
     expect(buildPrebuiltFormatKey('export:job:123', 'csv')).toBe('export:job:123:file:csv');
-    
+
     expectTypeOf(buildPrebuiltFormatKey).parameter(1).toEqualTypeOf<'csv'>();
   });
 

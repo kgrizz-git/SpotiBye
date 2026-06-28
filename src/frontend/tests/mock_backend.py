@@ -277,15 +277,13 @@ class MockBackendHandler(BaseHTTPRequestHandler):
                         "total_tracks": 1,
                         "total_duration_ms": 180000,
                         "average_duration_ms": 180000,
-                        "formatted_duration": "3m 0s"
+                        "formatted_duration": "3m 0s",
                     },
-                    "genre_distribution": {
-                        "pop": { "count": 1, "percentage": 100 }
-                    },
+                    "genre_distribution": {"pop": {"count": 1, "percentage": 100}},
                     "artists": {
                         "unique_artists": 1,
-                        "top_artists": [{ "artist": "Artist 1", "count": 1 }],
-                        "diversity": 1.0
+                        "top_artists": [{"artist": "Artist 1", "count": 1}],
+                        "diversity": 1.0,
                     },
                     "audio_features": {
                         "track_count": 1,
@@ -294,9 +292,9 @@ class MockBackendHandler(BaseHTTPRequestHandler):
                             "energy": 0.8,
                             "valence": 0.6,
                             "tempo": 120.0,
-                            "acousticness": 0.2
-                        }
-                    }
+                            "acousticness": 0.2,
+                        },
+                    },
                 },
                 "completed_at": time.time(),
             },
@@ -467,15 +465,13 @@ DEFAULT_TEST_DATA = {
                     "total_tracks": 1,
                     "total_duration_ms": 180000,
                     "average_duration_ms": 180000,
-                    "formatted_duration": "3m 0s"
+                    "formatted_duration": "3m 0s",
                 },
-                "genre_distribution": {
-                    "pop": { "count": 1, "percentage": 100 }
-                },
+                "genre_distribution": {"pop": {"count": 1, "percentage": 100}},
                 "artists": {
                     "unique_artists": 1,
-                    "top_artists": [{ "artist": "Artist 1", "count": 1 }],
-                    "diversity": 1.0
+                    "top_artists": [{"artist": "Artist 1", "count": 1}],
+                    "diversity": 1.0,
                 },
                 "audio_features": {
                     "track_count": 1,
@@ -484,9 +480,9 @@ DEFAULT_TEST_DATA = {
                         "energy": 0.8,
                         "valence": 0.6,
                         "tempo": 120.0,
-                        "acousticness": 0.2
-                    }
-                }
+                        "acousticness": 0.2,
+                    },
+                },
             },
             "completed_at": time.time(),
         }

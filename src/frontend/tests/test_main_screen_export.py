@@ -4,11 +4,14 @@ from unittest.mock import MagicMock, patch
 from src.frontend import state
 from src.frontend.screens.main_screen_export import MainScreenExportOrchestrator
 
+
 class FakeScheduler:
     def call_soon(self, callback):
         callback()
+
     def call_later(self, delay, callback):
         callback()
+
 
 class CancelDuringGenerateAdapter:
     def __init__(self):
@@ -28,6 +31,7 @@ class CancelDuringGenerateAdapter:
     def download_batch_export(self, *_args, **_kwargs):
         raise AssertionError("download_batch_export should not run after cancellation")
 
+
 @pytest.fixture
 def mock_screen():
     screen = MagicMock()
@@ -43,13 +47,16 @@ def mock_screen():
     screen._backend_error_step = ""
     return screen
 
+
 @pytest.fixture
 def orchestrator(mock_screen):
     return MainScreenExportOrchestrator(mock_screen, FakeScheduler())
 
+
 def test_orchestrator_initialization(orchestrator, mock_screen):
     assert orchestrator.screen == mock_screen
     assert isinstance(orchestrator.scheduler, FakeScheduler)
+
 
 def test_build_backend_output_path_single(orchestrator):
     path = orchestrator._build_backend_output_path("/tmp/file.xlsx", False)
@@ -80,28 +87,38 @@ def test_main_screen_delegation(mock_screen):
 
     # Verify the method exists with the new signature
     import inspect
+
     sig = inspect.signature(MainScreen._build_backend_output_path)
     params = list(sig.parameters.keys())
     assert "playlist" not in params
     assert "base_output_path" in params
     assert "multiple" in params
 
+
 def test_cancel_export(orchestrator, mock_screen):
-    with patch("src.frontend.screens.main_screen_export.mark_current_export_cancelled", return_value=True):
+    with patch(
+        "src.frontend.screens.main_screen_export.mark_current_export_cancelled",
+        return_value=True,
+    ):
         orchestrator.cancel_export()
         assert mock_screen.cancel_btn.disabled is True
         assert mock_screen.status_label.text == "Cancelling export..."
 
+
 def test_cleanup_after_export(orchestrator, mock_screen):
-    with patch("src.frontend.screens.main_screen_export.clear_current_export_job") as mock_clear:
+    with patch(
+        "src.frontend.screens.main_screen_export.clear_current_export_job"
+    ) as mock_clear:
         orchestrator.cleanup_after_export()
         assert mock_screen.export_btn.disabled is False
         assert mock_screen.progress_bar.value == 0
         mock_clear.assert_called_once()
 
+
 def test_handle_export_cancelled(orchestrator, mock_screen):
     orchestrator.handle_export_cancelled()
     assert mock_screen.status_label.text == "Export cancelled"
+
 
 def test_worker_stops_when_cancelled_after_generation(orchestrator, mock_screen):
     state.clear_current_export_job()

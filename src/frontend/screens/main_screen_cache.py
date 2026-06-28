@@ -110,7 +110,9 @@ def clear_all_cache(screen, popup) -> None:
         error_popup.open()
 
 
-def open_cache_explorer(screen, backend_available: bool, create_cache_explorer_fn, *_args) -> None:
+def open_cache_explorer(
+    screen, backend_available: bool, create_cache_explorer_fn, *_args
+) -> None:
     """Open the cache explorer popup with backend support."""
     try:
         if backend_available and create_cache_explorer_fn:

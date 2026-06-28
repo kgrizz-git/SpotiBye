@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 from unittest.mock import patch
 
-import pytest
 
 from src.frontend.services.backend_client import BackendClient
 
 
 def _track(track_id: str) -> Dict[str, Any]:
-    return {"id": track_id, "name": f"Track {track_id}", "uri": f"spotify:track:{track_id}"}
+    return {
+        "id": track_id,
+        "name": f"Track {track_id}",
+        "uri": f"spotify:track:{track_id}",
+    }
 
 
 class TestGetPlaylistTracksResponseShape:

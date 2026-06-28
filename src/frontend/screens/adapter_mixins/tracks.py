@@ -67,7 +67,9 @@ class TracksMixin:
             return tracks
 
         except BackendAPIError as e:
-            error_msg = self._format_backend_api_error(e, "Failed to load playlist tracks")
+            error_msg = self._format_backend_api_error(
+                e, "Failed to load playlist tracks"
+            )
             if self.error_callback:
                 self.error_callback(error_msg)
             return None

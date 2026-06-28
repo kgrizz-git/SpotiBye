@@ -1,6 +1,5 @@
 from __future__ import annotations
 from datetime import datetime
-import pytest
 from src.frontend.screens.main_screen_filenames import (
     get_file_extension,
     selected_export_format,
@@ -9,12 +8,14 @@ from src.frontend.screens.main_screen_filenames import (
     sanitize_export_filename_component,
 )
 
+
 def test_get_file_extension():
     assert get_file_extension("xlsx") == ".xlsx"
     assert get_file_extension("XLSX") == ".xlsx"
     assert get_file_extension("csv") == ".csv"
     assert get_file_extension("json") == ".json"
     assert get_file_extension("unknown") == ".xlsx"
+
 
 def test_selected_export_format():
     assert selected_export_format("XLSX") == "xlsx"
@@ -23,15 +24,19 @@ def test_selected_export_format():
     assert selected_export_format("") == "xlsx"
     assert selected_export_format(None) == "xlsx"
 
+
 def test_generate_default_filename():
     now = datetime(2026, 6, 16, 9, 30, 0)
     # Expected format: Spotify_Playlists_{user}_{YYYY-MM-DD_HH-MM-SSAM/PM}.xlsx
     expected = "Spotify_Playlists_Ada_2026-06-16_09-30-00AM.csv"
     assert generate_default_filename("Ada", "csv", now=now) == expected
-    
+
     # Test fallback username
     assert "Spotify_Playlists_user_" in generate_default_filename(None, "xlsx", now=now)
-    assert "Spotify_Playlists_user_" in generate_default_filename("None", "xlsx", now=now)
+    assert "Spotify_Playlists_user_" in generate_default_filename(
+        "None", "xlsx", now=now
+    )
+
 
 def test_increment_filename_suffix():
     # Test .xlsx (existing behavior)
@@ -52,9 +57,12 @@ def test_increment_filename_suffix():
     # (`song_14.xlsx` previously became `song_1_5.xlsx`).
     assert increment_filename_suffix("song_14.xlsx") == "song_14_2.xlsx"
     assert increment_filename_suffix("song_35.xlsx") == "song_35_2.xlsx"
-    assert increment_filename_suffix("My_Playlist_2026.xlsx") == "My_Playlist_2026_2.xlsx"
+    assert (
+        increment_filename_suffix("My_Playlist_2026.xlsx") == "My_Playlist_2026_2.xlsx"
+    )
     # After appending _2, a subsequent call increments _2 -> _3.
     assert increment_filename_suffix("song_14_2.xlsx") == "song_14_3.xlsx"
+
 
 def test_sanitize_export_filename_component():
     assert sanitize_export_filename_component("My Playlist/Name") == "My Playlist_Name"

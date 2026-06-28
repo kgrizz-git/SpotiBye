@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
 
 from ....shared.logging_config import logger
 from ...services.backend_client import BackendAPIError

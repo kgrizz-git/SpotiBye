@@ -13,14 +13,19 @@ from src.frontend.screens.main_screen_search_sort_ui import SearchSortUIHandler
 @pytest.fixture
 def screen():
     with (
-        patch("src.frontend.screens.main_screen.Screen.__init__", lambda self, **kwargs: None),
+        patch(
+            "src.frontend.screens.main_screen.Screen.__init__",
+            lambda self, **kwargs: None,
+        ),
         patch.object(MainScreen, "build_ui"),
     ):
         return MainScreen()
 
 
 def test_selected_playlist_ids_is_live_set_reference(screen):
-    assert screen.selected_playlist_ids is screen.selection_manager.selected_playlist_ids
+    assert (
+        screen.selected_playlist_ids is screen.selection_manager.selected_playlist_ids
+    )
     screen.selected_playlist_ids.add("playlist-x")
     assert "playlist-x" in screen.selection_manager.selected_playlist_ids
 

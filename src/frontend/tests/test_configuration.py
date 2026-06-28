@@ -229,6 +229,7 @@ class TestIsValidBackendUrl:
 
     def _is_valid(self, url):
         from ..config.backend_config import is_valid_backend_url
+
         return is_valid_backend_url(url)
 
     def test_accepts_https_with_dot(self):
@@ -264,4 +265,3 @@ class TestIsValidBackendUrl:
 
     def test_rejects_garbage(self):
         assert not self._is_valid("not-a-url")
-

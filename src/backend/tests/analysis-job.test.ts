@@ -82,7 +82,7 @@ describe('AnalysisJobService stale-snapshot prevention', () => {
     expect(progress10Write?.started_at).toBeDefined();
     expect(progress60Write?.started_at).toBe(progress10Write?.started_at);
     expect(progress60Write?.updated_at).toBeDefined();
-    
+
     const startMs = new Date(progress60Write!.started_at!).getTime();
     const updateMs = new Date(progress60Write!.updated_at!).getTime();
     expect(updateMs).toBeGreaterThanOrEqual(startMs);
