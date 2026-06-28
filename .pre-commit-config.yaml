@@ -56,6 +56,7 @@ repos:
         args: ['-c', 'pyproject.toml']
         additional_dependencies: ['bandit[toml]']
         files: ".+\\.py$"
+        stages: [pre-commit]
 
   # Python linting (Ruff)
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -138,14 +139,42 @@ repos:
   # Comprehensive security scan before push
   - repo: local
     hooks:
-      - id: security-scan
-        name: Full Security Scan
-        description: Run comprehensive security checks before push
-        entry: python scripts/check-dependencies.py --security
+      - id: bandit-full
+        name: Bandit Python Security (pre-push)
+        description: Full-tree Bandit scan before push; uses project policy in pyproject.toml
+        entry: bandit -r src/ -c pyproject.toml
         language: system
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+
+      - id: security-scan
+        name: Full Security Scan
+        description: Run comprehensive security checks before push
+        entry: python scripts/check-dependencies.py --security --ci
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+  # Dependency vulnerability scan (OSV-Scanner) before push
+  - repo: https://github.com/google/osv-scanner
+    rev: v2.3.5
+    hooks:
+      - id: osv-scanner-docker
+        name: OSV-Scanner (pre-push)
+        stages: [pre-push]
+        args:
+          - "scan"
+          - "source"
+          - "--format=vertical"
+          - "--recursive"
+          - "--verbosity=error"
+          - "--skip-dirs=.venv"
+          - "--skip-dirs=node_modules"
+          - "--skip-dirs=backups"
+          - "--skip-dirs=docs/old-docs-backup"
+          - "."
 
   # Python type checking (basedpyright) before push
   - repo: local

@@ -6,14 +6,17 @@ import { spotifyRoutes } from './routes/spotify';
 import { analysisRoutes } from './routes/analysis';
 import { exportRoutes } from './routes/export';
 import { errorHandler } from './middleware/error';
+import { envValidationMiddleware } from './middleware/env';
 import { AnalysisJobService } from './services/analysis-job';
 import type { AnalysisQueueMessage } from './types/analysis-queue';
 import type { Env } from './types/env';
+import { AnalysisQueueMessagePayloadSchema } from './validation/schemas/queue';
 
 const app = new Hono<{ Bindings: Env }>();
 
 // Global middleware
 app.use('*', logger());
+app.use('*', envValidationMiddleware);
 app.use('*', cors({
   origin: ['http://localhost:3000', 'https://spotibye.com'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -74,8 +77,18 @@ export default {
     const jobService = new AnalysisJobService(env);
 
     for (const message of batch.messages) {
+      const payloadResult = AnalysisQueueMessagePayloadSchema.safeParse(message.body);
+      if (!payloadResult.success) {
+        console.error(
+          `[Queue] Invalid message body for job ${message.body?.job_id ?? 'unknown'}:`,
+          payloadResult.error.flatten(),
+        );
+        message.ack();
+        continue;
+      }
+
       const body = {
-        ...message.body,
+        ...payloadResult.data,
         attempt: message.attempts,
       };
 

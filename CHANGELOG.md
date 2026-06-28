@@ -7,9 +7,13 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Added Zod request and boundary validation to the TypeScript backend: invalid inputs return the app's `{ error: { code, message } }` envelope. Existing route-specific codes are preserved where they already existed (`MISSING_REDIRECT_URI`, `INVALID_PLAYLISTS`); newly validated path and query parameters use `VALIDATION_ERROR`. KV sessions, queue messages, and Worker env bindings are schema-validated at boundaries.
+- Integrated OSV-Scanner for unified Python + Node.js dependency vulnerability scanning in CI and as a pre-push hook; Bandit now enforces the project `pyproject.toml` policy on pre-push (full tree) and in CI (blocking).
+- Bumped Dependabot version-update cadence from monthly to weekly for all ecosystems.
 - Added "Audio Features" section to the playlist analysis popup displaying danceability, energy, mood (valence), acousticness, and tempo averages from ReccoBeats.
 
 ### Changed
+- Backend now validates path parameters (`:id`, `:jobId`) and Spotify pagination query params (`limit`, `offset`), returning HTTP 400 with `VALIDATION_ERROR` when they are missing or out of range. Previously these were not schema-checked at the HTTP boundary.
 - Refactored `buildExportFileKey` to split its conflated `mode` parameter into dedicated `buildXlsxVariantKey` (for XLSX render variants `rich` and `lite`) and `buildPrebuiltFormatKey` (for prebuilt format slots like `csv`) functions. Cache key strings are unchanged; no in-flight cache entries are invalidated. Avoided one redundant cache write for the `default` XLSX render variant during download fallback regeneration.
 - Changed playlist analysis loading text from "Retrieving analysis from ReccoBeats API..." to "Analyzing playlist..." to accurately reflect that the analysis is Spotify-backed.
 - Refactored `main_screen.py` (1,041 lines) into a coordinator (494 lines) plus `main_screen_ui.py` (`MainScreenUIBuilder`), `main_screen_selection.py` (`SelectionManager`), and `main_screen_search_sort_ui.py` (`SearchSortUIHandler`). Property facades preserve `BackendMainScreen` compatibility; no caller changes required. Added unit tests for selection, search/sort, and facade round-trips.

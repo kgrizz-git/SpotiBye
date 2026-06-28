@@ -21,15 +21,17 @@ import {
 } from './helpers/errors';
 import { generateFileBytes } from './helpers/file-bytes';
 import { newRequestId } from './helpers/request-id';
+import { zValidator } from '../../validation/z-validator';
+import { IdParamSchema } from '../../validation/schemas/common';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // POST /export/playlist/:id - Generate playlist export
-app.post('/:id', async (c) => {
+app.post('/:id', zValidator('param', IdParamSchema), async (c) => {
   const requestId = newRequestId();
   const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
     const body = await c.req.json().catch(() => ({}));
@@ -157,9 +159,9 @@ app.post('/:id', async (c) => {
 });
 
 // GET /export/playlist/:id/status - Get export status
-app.get('/:id/status', async (c) => {
+app.get('/:id/status', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 
@@ -178,9 +180,9 @@ app.get('/:id/status', async (c) => {
 });
 
 // GET /export/playlist/:id/download - Download generated file
-app.get('/:id/download', async (c) => {
+app.get('/:id/download', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 
@@ -233,9 +235,9 @@ app.get('/:id/download', async (c) => {
 });
 
 // DELETE /export/playlist/:id - Delete export
-app.delete('/:id', async (c) => {
+app.delete('/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 

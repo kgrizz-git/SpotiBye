@@ -8,7 +8,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
       time: "09:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 5
@@ -36,7 +36,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
       day: "monday"
       time: "09:00"
       timezone: "America/New_York"
@@ -55,7 +55,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/src/backend"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
       time: "09:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 5
@@ -88,7 +88,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
       time: "09:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 5
@@ -114,7 +114,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/backend-backup"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
       time: "09:00"
       timezone: "America/New_York"
     open-pull-requests-limit: 3

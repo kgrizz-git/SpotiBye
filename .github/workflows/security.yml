@@ -97,10 +97,10 @@ jobs:
         run: pip install bandit[toml]
 
       - name: Run Bandit
-        run: bandit -r src/ -f json -o bandit-report.json || true
+        run: bandit -r src/ -c pyproject.toml -f json -o bandit-report.json
 
       - name: Display Bandit results
-        run: bandit -r src/ -f txt || true
+        run: bandit -r src/ -c pyproject.toml -f txt
 
       - name: Upload Bandit report
         uses: actions/upload-artifact@v4
@@ -110,75 +110,24 @@ jobs:
           retention-days: 30
           path: bandit-report.json
 
-  # Dependency Scanning - Python
-  pip-audit:
-    name: Python Dependency Audit
+  # Dependency Scanning (Python + Node.js via OSV-Scanner)
+  dependency-scan:
+    name: Dependency Vulnerabilities (OSV-Scanner)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/bootstrap-action@v1.0.2
         with:
-          python-version: '3.10'
-
-      - name: Install pip-audit
-        run: pip install pip-audit
-
-      - name: Run pip-audit
-        run: pip-audit --requirement=requirements.txt --format=json --output=pip-audit-report.json || true
-
-      - name: Display pip-audit results
-        run: pip-audit --requirement=requirements.txt || true
-
-      - name: Upload pip-audit report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: pip-audit-report
-          retention-days: 30
-          path: pip-audit-report.json
-
-  # Dependency Scanning - Node.js (only on Node.js file changes)
-  npm-audit:
-    name: Node.js Dependency Audit
-    runs-on: ubuntu-latest
-    # Only run if Node.js dependencies changed
-    if: |
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.changed_files, 'package') ||
-      contains(github.event.pull_request.changed_files, '.js') ||
-      contains(github.event.pull_request.changed_files, '.ts')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        working-directory: src/backend
-        run: npm ci
-
-      - name: Run npm audit
-        working-directory: src/backend
-        run: npm audit --audit-level=moderate || true
-
-      - name: Run npm audit (JSON output)
-        working-directory: src/backend
-        run: npm audit --json > npm-audit-report.json || true
-
-      - name: Upload npm audit report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: npm-audit-report
-          retention-days: 30
-          path: src/backend/npm-audit-report.json
+          scan-args: |
+            -r
+            --skip-dirs=.venv,node_modules,backups,docs/old-docs-backup
+            ./
 
   # Infrastructure as Code Scanning (if wrangler.toml exists)
   iac-scan:
@@ -209,7 +158,7 @@ jobs:
   # Summary
   security-summary:
     name: Security Summary
-    needs: [secret-scan, semgrep, bandit, pip-audit, npm-audit]
+    needs: [secret-scan, semgrep, bandit, dependency-scan]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -222,6 +171,5 @@ jobs:
             echo "| Secret Scan (TruffleHog) | ${{ needs.secret-scan.result }} |"
             echo "| SAST (Semgrep) | ${{ needs.semgrep.result }} |"
             echo "| Python SAST (Bandit) | ${{ needs.bandit.result }} |"
-            echo "| Python Dependencies (pip-audit) | ${{ needs.pip-audit.result }} |"
-            echo "| Node.js Dependencies (npm-audit) | ${{ needs.npm-audit.result }} |"
+            echo "| Dependencies (OSV-Scanner) | ${{ needs.dependency-scan.result }} |"
           } >> "$GITHUB_STEP_SUMMARY"

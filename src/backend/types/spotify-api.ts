@@ -5,6 +5,7 @@
  * internal use. Aligns with Golden Principle #1.
  */
 import type { SpotifyPlaylist } from './spotify';
+import { spotifyResponseShapeSchema } from '../validation/schemas/spotify-response';
 export interface SpotifyUserResponse {
   id: string;
   display_name: string | null;
@@ -129,14 +130,16 @@ export function parseSpotifyResponse<T>(
   data: unknown,
   expectedKeys: string[],
 ): asserts data is T {
-  if (!data || typeof data !== 'object') {
-    throw new Error('Invalid Spotify response shape: expected object');
-  }
-  const record = data as Record<string, unknown>;
-  for (const key of expectedKeys) {
-    if (!(key in record)) {
-      throw new Error(`Missing required field: ${key}`);
+  const result = spotifyResponseShapeSchema(expectedKeys).safeParse(data);
+  if (!result.success) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid Spotify response shape: expected object');
     }
+    const missingKeyIssue = result.error.issues.find((issue) => issue.code === 'invalid_type');
+    if (missingKeyIssue) {
+      throw new Error(`Missing required field: ${String(missingKeyIssue.path[0] ?? 'unknown')}`);
+    }
+    throw new Error(result.error.issues[0]?.message ?? 'Invalid Spotify response shape');
   }
 }
 

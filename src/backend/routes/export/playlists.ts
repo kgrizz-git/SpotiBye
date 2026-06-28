@@ -23,26 +23,26 @@ import {
 } from './helpers/errors';
 import { generateFileBytes } from './helpers/file-bytes';
 import { newRequestId } from './helpers/request-id';
+import { zValidator } from '../../validation/z-validator';
+import { IdParamSchema, JobIdParamSchema } from '../../validation/schemas/common';
+import {
+  ExportBatchBodySchema,
+  ExportBatchChunkBodySchema,
+} from '../../validation/schemas/export';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // POST /export/playlists - Generate combined export for multiple playlists
-app.post('/', async (c) => {
+app.post('/', zValidator('json', ExportBatchBodySchema, 'INVALID_PLAYLISTS'), async (c) => {
   const requestId = newRequestId();
   const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
-    const body = await c.req.json().catch(() => ({}));
-    const playlistIds: string[] = Array.isArray(body?.playlist_ids)
-      ? body.playlist_ids.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
-      : [];
+    const body = c.req.valid('json');
+    const playlistIds = body.playlist_ids;
     const requestedFormat = resolveRequestedFormat(body);
     const includeAudioFeatures = resolveIncludeAudioFeatures(body);
-
-    if (playlistIds.length === 0) {
-      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, { status: 400 as ContentfulStatusCode });
-    }
 
     const exportService = new ExportService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
@@ -123,28 +123,22 @@ app.post('/', async (c) => {
 });
 
 // POST /export/playlists/chunk - Generate combined export incrementally across invocations
-app.post('/chunk', async (c) => {
+app.post('/chunk', zValidator('json', ExportBatchChunkBodySchema, 'INVALID_PLAYLISTS'), async (c) => {
   const requestId = newRequestId();
   const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
-    const body = await c.req.json().catch(() => ({}));
-    const playlistIds: string[] = Array.isArray(body?.playlist_ids)
-      ? body.playlist_ids.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
-      : [];
+    const body = c.req.valid('json');
+    const playlistIds = body.playlist_ids;
     const requestedFormat = resolveRequestedFormat(body);
     const includeAudioFeatures = resolveIncludeAudioFeatures(body);
-    const providedJobId = typeof body?.job_id === 'string' && body.job_id.trim().length > 0
+    const providedJobId = typeof body.job_id === 'string' && body.job_id.trim().length > 0
       ? body.job_id.trim()
       : '';
-    const startCursor = Number.isInteger(body?.cursor) && body.cursor >= 0 ? Number(body.cursor) : 0;
-    const requestedChunkSize = Number.isInteger(body?.chunk_size) ? Number(body.chunk_size) : 1;
+    const startCursor = Number.isInteger(body.cursor) && body.cursor >= 0 ? Number(body.cursor) : 0;
+    const requestedChunkSize = Number.isInteger(body.chunk_size) ? Number(body.chunk_size) : 1;
     const chunkSize = Math.min(Math.max(requestedChunkSize, 1), 3);
-
-    if (playlistIds.length === 0) {
-      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, { status: 400 as ContentfulStatusCode });
-    }
 
     const exportService = new ExportService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
@@ -254,9 +248,9 @@ app.post('/chunk', async (c) => {
 });
 
 // GET /export/playlists/:jobId/status - Get combined export status
-app.get('/:jobId/status', async (c) => {
+app.get('/:jobId/status', zValidator('param', JobIdParamSchema), async (c) => {
   try {
-    const jobId = c.req.param('jobId');
+    const { jobId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
     const batchKey = buildBatchKey(jobId, userId);
@@ -274,10 +268,10 @@ app.get('/:jobId/status', async (c) => {
 });
 
 // GET /export/playlists/:jobId/download - Download combined generated file
-app.get('/:jobId/download', async (c) => {
+app.get('/:jobId/download', zValidator('param', JobIdParamSchema), async (c) => {
   const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
-    const jobId = c.req.param('jobId');
+    const { jobId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 

@@ -20,8 +20,7 @@ This project uses multiple security scanning tools integrated into CI/CD:
 - **ESLint**: TypeScript/JavaScript security rules (via @typescript-eslint)
 
 ### Dependency Scanning
-- **pip-audit**: Scans Python dependencies for known vulnerabilities
-- **npm audit**: Scans Node.js dependencies for known vulnerabilities
+- **OSV-Scanner**: Unified Python + Node.js dependency vulnerability scanning (CI and pre-push)
 - **Dependency Review**: GitHub-native PR dependency scanning
 
 ### Infrastructure as Code (IaC) Scanning
@@ -34,6 +33,8 @@ Security scans run on:
 - Every pull request to `main` or `develop`
 - Weekly scheduled scans (Mondays at midnight UTC)
 - Manual workflow dispatch
+
+**Path-filter note:** PR workflows only run when changed files match the `paths:` filters in `security.yml` (source, manifests, workflow). PRs that touch only docs or unrelated config may not re-run dependency scans; the weekly schedule still scans installed dependencies for newly disclosed CVEs.
 
 ### Workflow Files
 - `.github/workflows/security.yml` - Main security scanning workflow
@@ -67,7 +68,7 @@ If you discover a security vulnerability, please:
 
 - [x] Secret scanning (TruffleHog, Gitleaks)
 - [x] SAST (Semgrep, Bandit)
-- [x] Dependency scanning (pip-audit, npm audit)
+- [x] Dependency scanning (OSV-Scanner)
 - [x] Automated dependency updates (Dependabot)
 - [x] IaC scanning (Checkov)
 - [x] Pre-commit hooks (secrets, linting, SAST)
@@ -150,7 +151,9 @@ Longer-running checks that ensure code quality:
 | `python-tests` | Runs Python test suite |
 | `node-tests` | Runs Node.js test suite |
 | `semgrep` | Full SAST scan (OWASP Top 10, CWE Top 25) |
-| `security-scan` | Full dependency security scan |
+| `bandit-full` | Full-tree Python SAST scan (project `pyproject.toml` policy) |
+| `osv-scanner-docker` | Dependency vulnerability scan (OSV-Scanner) |
+| `security-scan` | Dependency security check (`check-dependencies.py --security --ci`) |
 | `basedpyright` | Python type checking of `src/frontend` and `src/shared` (`--level error`) |
 
 ### Manual Usage
@@ -179,6 +182,36 @@ git commit --no-verify  # Skip pre-commit
 git push --no-verify      # Skip pre-push
 ```
 
+### Dependabot vs local checks
+
+Dependabot runs **only on GitHub** — there is no supported way to run the full Dependabot version-update engine locally against this repo. Use the mapping below instead:
+
+| What Dependabot does | Local equivalent |
+|----------------------|------------------|
+| **Version updates** (weekly PRs for outdated deps) | `python scripts/check-dependencies.py --outdated` — uses `pip-review` and `npm outdated` |
+| **Security updates** (CVE PRs; enable in repo settings) | `python scripts/check-dependencies.py --security` — uses `pip-audit` and `npm audit` today; OSV-Scanner (pre-push + CI) is the planned replacement |
+| **Apply updates yourself** | Python: `pip-review --local --auto` · Node: `npm update` or `npx npm-check-updates -i` in `src/backend/` |
+
+OSV-Scanner (once wired per the security tooling plan) is the best local CVE scan — it covers Python and Node lockfiles in one pass:
+
+```bash
+# After OSV-Scanner pre-push hook is added (requires Docker):
+pre-commit run --hook-stage push osv-scanner-docker
+
+# Or run the scanner directly (Docker):
+docker run --rm -v "$(pwd):/src" ghcr.io/google/osv-scanner scan -r /src
+```
+
+Until OSV-Scanner lands, the existing script is the one-command local check:
+
+```bash
+pip install -e ".[development]"
+python scripts/check-dependencies.py --security    # CVEs only
+python scripts/check-dependencies.py --outdated    # version drift only
+python scripts/check-dependencies.py               # both
+python scripts/check-dependencies.py --security --ci  # blocking (pre-push uses this)
+```
+
 ## Local Dependency Checking
 
 For local development, use the provided script or individual tools:
@@ -204,6 +237,10 @@ python scripts/check-dependencies.py --ci
 
 ### Individual Tools
 ```bash
+# Unified dependency CVE scan (Docker; same engine as CI pre-push hook)
+docker run --rm -v "$(pwd):/src" ghcr.io/google/osv-scanner scan -r /src
+
+# Legacy per-ecosystem security scans (still used by check-dependencies.py)
 # Python security vulnerabilities
 pip-audit --requirement=requirements.txt
 

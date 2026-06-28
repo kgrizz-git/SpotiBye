@@ -5,6 +5,8 @@ import { CacheService } from '../services/cache';
 import type { AnalysisStatusRecord } from '../types/analysis-queue';
 import type { Env } from '../types/env';
 import type { Variables } from '../types/variables';
+import { zValidator } from '../validation/z-validator';
+import { IdParamSchema } from '../validation/schemas/common';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -12,9 +14,9 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', authMiddleware);
 
 // POST /analysis/playlist/:id - Analyze playlist
-app.post('/playlist/:id', async (c) => {
+app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 
@@ -75,9 +77,9 @@ app.post('/playlist/:id', async (c) => {
 });
 
 // GET /analysis/playlist/:id/status - Get analysis status
-app.get('/playlist/:id/status', async (c) => {
+app.get('/playlist/:id/status', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 
@@ -96,9 +98,9 @@ app.get('/playlist/:id/status', async (c) => {
 });
 
 // GET /analysis/playlist/:id/results - Get analysis results
-app.get('/playlist/:id/results', async (c) => {
+app.get('/playlist/:id/results', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 
@@ -117,9 +119,9 @@ app.get('/playlist/:id/results', async (c) => {
 });
 
 // DELETE /analysis/playlist/:id - Delete analysis
-app.delete('/playlist/:id', async (c) => {
+app.delete('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 

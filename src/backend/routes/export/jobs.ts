@@ -34,25 +34,22 @@ import {
   precacheJobFiles,
 } from './helpers/file-bytes';
 import { newRequestId } from './helpers/request-id';
+import { zValidator } from '../../validation/z-validator';
+import { JobIdParamSchema } from '../../validation/schemas/common';
+import { ExportJobBodySchema } from '../../validation/schemas/export';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // POST /export/jobs - Create resumable export job
-app.post('/', async (c) => {
+app.post('/', zValidator('json', ExportJobBodySchema, 'INVALID_PLAYLISTS'), async (c) => {
   const requestId = newRequestId();
   const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
     const userId = c.get('user').id;
-    const body = await c.req.json().catch(() => ({}));
-    const playlistIds: string[] = Array.isArray(body?.playlist_ids)
-      ? body.playlist_ids.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
-      : [];
+    const body = c.req.valid('json');
+    const playlistIds = body.playlist_ids;
     const requestedFormat = resolveRequestedFormat(body);
     const includeAudioFeatures = resolveIncludeAudioFeatures(body);
-
-    if (playlistIds.length === 0) {
-      return c.json({ error: { code: 'INVALID_PLAYLISTS', message: 'playlist_ids must contain at least one playlist id' } }, { status: 400 });
-    }
 
     const cacheService = new CacheService(c.env.CACHE_KV);
     const jobId = crypto.randomUUID();
@@ -85,13 +82,13 @@ app.post('/', async (c) => {
 });
 
 // POST /export/jobs/:jobId/step - Process one resumable export step
-app.post('/:jobId/step', async (c) => {
+app.post('/:jobId/step', zValidator('param', JobIdParamSchema), async (c) => {
   const requestId = newRequestId();
   const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
-    const jobId = c.req.param('jobId');
+    const { jobId } = c.req.valid('param');
     const body = await c.req.json().catch(() => ({}));
     const cursor = typeof body?.cursor === 'string' ? body.cursor : '';
     const resumeToken = typeof body?.resume_token === 'string' ? body.resume_token : '';
@@ -167,9 +164,9 @@ app.post('/:jobId/step', async (c) => {
 });
 
 // GET /export/jobs/:jobId/status - Get resumable export job status
-app.get('/:jobId/status', async (c) => {
+app.get('/:jobId/status', zValidator('param', JobIdParamSchema), async (c) => {
   try {
-    const jobId = c.req.param('jobId');
+    const { jobId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
     const job = await cacheService.get<ResumableExportJobState>(buildExportJobKey(jobId, userId));
@@ -201,10 +198,10 @@ app.get('/:jobId/status', async (c) => {
 });
 
 // GET /export/jobs/:jobId/download - Download resumable export file
-app.get('/:jobId/download', async (c) => {
+app.get('/:jobId/download', zValidator('param', JobIdParamSchema), async (c) => {
   const traceId = c.req.header('X-SpotiBye-Trace-Id') || undefined;
   try {
-    const jobId = c.req.param('jobId');
+    const { jobId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
     const jobKey = buildExportJobKey(jobId, userId);

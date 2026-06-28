@@ -6,6 +6,8 @@ import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
 import type { SpotifyPlaylist } from '../types/spotify';
 import type { Variables } from '../types/variables';
+import { zValidator } from '../validation/z-validator';
+import { IdParamSchema, PaginationQuerySchema } from '../validation/schemas/common';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -101,9 +103,9 @@ app.get('/playlists', async (c) => {
 });
 
 // GET /spotify/playlists/:id - Get playlist details
-app.get('/playlists/:id', async (c) => {
+app.get('/playlists/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const playlistId = c.req.param('id');
+    const { id: playlistId } = c.req.valid('param');
     const accessToken = c.get('access_token');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
@@ -133,17 +135,10 @@ const getPlaylistItemsHandler = async (
   c: Context<{ Bindings: Env; Variables: Variables }>
 ) => {
   try {
-    const playlistId = c.req.param('id');
-    if (!playlistId) {
-      return c.json(
-        { error: { code: 'MISSING_PLAYLIST_ID', message: 'playlist id is required' } },
-        { status: 400 as ContentfulStatusCode }
-      );
-    }
+    const { id: playlistId } = c.req.valid('param');
+    const { limit, offset } = c.req.valid('query');
     const accessToken = c.get('access_token');
     const userId = c.get('user').id;
-    const limit = parseInt(c.req.query('limit') || '50');
-    const offset = parseInt(c.req.query('offset') || '0');
 
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
@@ -169,15 +164,25 @@ const getPlaylistItemsHandler = async (
 };
 
 // GET /spotify/playlists/:id/items - Get playlist items (February 2026 API naming)
-app.get('/playlists/:id/items', getPlaylistItemsHandler);
+app.get(
+  '/playlists/:id/items',
+  zValidator('param', IdParamSchema),
+  zValidator('query', PaginationQuerySchema),
+  getPlaylistItemsHandler,
+);
 
 // GET /spotify/playlists/:id/tracks - Backward-compatible alias
-app.get('/playlists/:id/tracks', getPlaylistItemsHandler);
+app.get(
+  '/playlists/:id/tracks',
+  zValidator('param', IdParamSchema),
+  zValidator('query', PaginationQuerySchema),
+  getPlaylistItemsHandler,
+);
 
 // GET /spotify/tracks/:id - Get track details
-app.get('/tracks/:id', async (c) => {
+app.get('/tracks/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const trackId = c.req.param('id');
+    const { id: trackId } = c.req.valid('param');
     const accessToken = c.get('access_token');
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);
@@ -202,9 +207,9 @@ app.get('/tracks/:id', async (c) => {
 });
 
 // GET /spotify/tracks/:id/audio-features - Get track audio features
-app.get('/tracks/:id/audio-features', async (c) => {
+app.get('/tracks/:id/audio-features', zValidator('param', IdParamSchema), async (c) => {
   try {
-    const trackId = c.req.param('id');
+    const { id: trackId } = c.req.valid('param');
     const accessToken = c.get('access_token');
     const cacheService = new CacheService(c.env.CACHE_KV);
     const spotifyService = new SpotifyService(accessToken);

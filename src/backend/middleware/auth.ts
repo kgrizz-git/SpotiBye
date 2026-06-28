@@ -6,29 +6,20 @@ import type { Env } from '../types/env';
 import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
 import type { Variables } from '../types/variables';
 import type { AuthTokenResponse } from '../types/spotify-api';
+import { SessionDataSchema, type ParsedSessionData } from '../validation/schemas/session';
 
-export interface SessionData {
-  user_id: string;
-  access_token: string;
-  refresh_token?: string;
-  expires_at: number;
-}
+export type SessionData = ParsedSessionData;
 
 export function safeParseSession(raw: string | null, logContext = 'unknown'): SessionData | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw);
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      typeof parsed.user_id === 'string' &&
-      typeof parsed.access_token === 'string' &&
-      typeof parsed.expires_at === 'number'
-    ) {
-      return parsed as SessionData;
+    const parsed: unknown = JSON.parse(raw);
+    const result = SessionDataSchema.safeParse(parsed);
+    if (!result.success) {
+      console.error(`Session schema validation failed for session ${logContext.substring(0, 8)}`);
+      return null;
     }
-    console.error(`Session schema validation failed for session ${logContext.substring(0, 8)}`);
-    return null;
+    return result.data;
   } catch (err) {
     console.error(`Session JSON parse failed for session ${logContext.substring(0, 8)}:`, err);
     return null;

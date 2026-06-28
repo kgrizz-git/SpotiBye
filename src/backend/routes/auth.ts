@@ -5,17 +5,15 @@ import { JWTService } from '../services/jwt';
 import type { Env } from '../types/env';
 import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
 import type { AuthTokens } from '../types/auth';
+import { zValidator } from '../validation/z-validator';
+import { SpotifyLoginBodySchema } from '../validation/schemas/auth';
 
 const app = new Hono<{ Bindings: Env }>();
 
 // POST /auth/spotify/login - Initiate OAuth flow
-app.post('/spotify/login', async (c) => {
+app.post('/spotify/login', zValidator('json', SpotifyLoginBodySchema, 'MISSING_REDIRECT_URI'), async (c) => {
   try {
-    const { redirect_uri } = await c.req.json();
-
-    if (!redirect_uri) {
-      return c.json({ error: { code: 'MISSING_REDIRECT_URI', message: 'redirect_uri is required' } }, 400);
-    }
+    const { redirect_uri } = c.req.valid('json');
 
     // Allowlist validation. Exact-match against a comma-separated list of
     // permitted `redirect_uri` values from env. Fail-closed when unset: an
