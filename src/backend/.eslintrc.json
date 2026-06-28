@@ -61,6 +61,12 @@
         "no-restricted-imports": "off",
         "@typescript-eslint/no-explicit-any": "warn"
       }
+    },
+    {
+      "files": ["index.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ],
   "ignorePatterns": ["dist/", "node_modules/"]

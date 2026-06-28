@@ -24,7 +24,7 @@ import {
 import { generateFileBytes } from './helpers/file-bytes';
 import { newRequestId } from './helpers/request-id';
 import { zValidator } from '../../validation/z-validator';
-import { IdParamSchema, JobIdParamSchema } from '../../validation/schemas/common';
+import { JobIdParamSchema } from '../../validation/schemas/common';
 import {
   ExportBatchBodySchema,
   ExportBatchChunkBodySchema,

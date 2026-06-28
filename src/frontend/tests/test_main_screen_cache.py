@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 _FAKE_POPUP = MagicMock()
 sys.modules.setdefault("kivy.uix.popup", MagicMock(Popup=_FAKE_POPUP))
 
-from ..caching.backend_cache import BackendCacheManager
+from ..caching.backend_cache import BackendCacheManager  # noqa: E402
 
 
 class TestCacheClearEnvHashScoped:

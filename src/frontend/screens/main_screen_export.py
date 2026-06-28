@@ -490,7 +490,7 @@ class MainScreenExportOrchestrator:
         except Exception as exc:
             logger.error("Backend export failed: %s", exc)
             self.scheduler.call_soon(
-                lambda: setattr(
+                lambda exc=exc: setattr(
                     screen.status_label, "text", f"Backend export failed: {exc}"
                 )
             )
@@ -564,10 +564,6 @@ class MainScreenExportOrchestrator:
             if not export_info:
                 failed_playlist_ids.append(playlist_id)
                 continue
-
-            export_id = (
-                export_info.get("job_id", "") if isinstance(export_info, dict) else ""
-            )
 
             self.scheduler.call_soon(
                 lambda i=index, t=total, name=playlist_name: setattr(

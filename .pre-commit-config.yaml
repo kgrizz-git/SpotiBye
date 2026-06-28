@@ -18,14 +18,21 @@ repos:
     rev: v4.5.0
     hooks:
       - id: detect-private-key
+        stages: [pre-commit]
       - id: detect-aws-credentials
         args: [--allow-missing-credentials]
+        stages: [pre-commit]
       - id: check-added-large-files
         args: ['--maxkb=500']
+        stages: [pre-commit]
       - id: check-merge-conflict
+        stages: [pre-commit]
       - id: check-symlinks
+        stages: [pre-commit]
       - id: trailing-whitespace
+        stages: [pre-commit]
       - id: end-of-file-fixer
+        stages: [pre-commit]
 
   # Gitleaks - comprehensive secret scanning
   - repo: https://github.com/gitleaks/gitleaks
@@ -34,6 +41,7 @@ repos:
       - id: gitleaks
         name: Gitleaks Secret Scan
         description: Detect hardcoded secrets using Gitleaks
+        stages: [pre-commit]
 
   # Semgrep - secrets only on commit (fast, no network); full SAST scan deferred to pre-push and CI
   - repo: https://github.com/returntocorp/semgrep
@@ -65,8 +73,10 @@ repos:
       - id: ruff
         name: Ruff Linter
         args: [--fix]
+        stages: [pre-commit]
       - id: ruff-format
         name: Ruff Formatter
+        stages: [pre-commit]
 
   # Node.js linting (ESLint) - only on JS/TS files
   - repo: https://github.com/pre-commit/mirrors-eslint
@@ -76,6 +86,7 @@ repos:
         name: ESLint
         files: \.[jt]sx?$
         types: [file]
+        stages: [pre-commit]
         additional_dependencies:
           - eslint@8.57.0
           - "@typescript-eslint/eslint-plugin@6.0.0"
@@ -89,6 +100,7 @@ repos:
         entry: scripts/check-repo-structure.sh
         language: script
         pass_filenames: false
+        stages: [pre-commit]
 
       # Prune stale code backups (older than 5 commits) so backups/ stays lean.
       # On prune, the deletion is staged and pre-commit aborts; re-run the commit.

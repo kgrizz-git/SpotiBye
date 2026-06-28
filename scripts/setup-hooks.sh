@@ -4,6 +4,9 @@
 
 set -e
 
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
 echo "🔧 Setting up Git hooks for SpotiBye..."
 
 # Check if pre-commit is installed
@@ -19,15 +22,24 @@ echo ""
 echo "📦 Installing pre-commit hooks..."
 pre-commit install --hook-type pre-commit --hook-type pre-push
 
+# Replace the generated pre-push hook with our summary wrapper so failed pushes
+# print which hooks failed and how to re-run them.
+echo ""
+echo "📦 Installing pre-push summary wrapper..."
+chmod +x scripts/pre-push-check.sh
+cp scripts/pre-push-check.sh .git/hooks/pre-push
+
 echo ""
 echo "✅ Hooks installed successfully!"
 echo ""
 echo "Hook stages:"
 echo "  - pre-commit: Fast checks on every commit (secrets, linting, SAST)"
-echo "  - pre-push:  Full checks before push (tests, security scans)"
+echo "  - pre-push:   Full checks before push (tests, security scans)"
 echo ""
 echo "To run manually:"
 echo "  pre-commit run --all-files"
+echo "  pre-commit run --hook-stage pre-push --all-files"
+echo "  .git/hooks/pre-push   # same as push, with failure summary"
 echo ""
 echo "To skip in emergencies:"
 echo "  git commit --no-verify"

@@ -10,7 +10,7 @@ _SRC_DIR = Path(__file__).parent.resolve() / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from src.frontend.app import SpotifyExporterApp
+from src.frontend.app import SpotifyExporterApp  # noqa: E402
 
 
 def main() -> None:
