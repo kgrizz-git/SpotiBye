@@ -124,9 +124,10 @@ jobs:
       - name: Run OSV-Scanner
         uses: google/osv-scanner-action/bootstrap-action@v1.0.2
         with:
-          scan-args: |
+          # OSV-Scanner honours .gitignore by default, so .venv/, node_modules/,
+          # backups/, and docs/old-docs-backup/ are skipped without extra flags.
+          scan-args: |-
             -r
-            --skip-dirs=.venv,node_modules,backups,docs/old-docs-backup
             ./
 
   # Infrastructure as Code Scanning (if wrangler.toml exists)

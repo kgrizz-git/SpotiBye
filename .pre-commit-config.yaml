@@ -157,11 +157,14 @@ repos:
         always_run: true
         stages: [pre-push]
 
-  # Dependency vulnerability scan (OSV-Scanner) before push
+  # Dependency vulnerability scan (OSV-Scanner) before push.
+  # Uses the native (Go) hook: pre-commit (>=3.0) bootstraps Go automatically,
+  # so no local Docker or Go install is required. OSV-Scanner honours .gitignore
+  # by default, so .venv/, node_modules/, backups/, etc. are skipped already.
   - repo: https://github.com/google/osv-scanner
     rev: v2.3.5
     hooks:
-      - id: osv-scanner-docker
+      - id: osv-scanner
         name: OSV-Scanner (pre-push)
         stages: [pre-push]
         args:
@@ -170,10 +173,6 @@ repos:
           - "--format=vertical"
           - "--recursive"
           - "--verbosity=error"
-          - "--skip-dirs=.venv"
-          - "--skip-dirs=node_modules"
-          - "--skip-dirs=backups"
-          - "--skip-dirs=docs/old-docs-backup"
           - "."
 
   # Python type checking (basedpyright) before push

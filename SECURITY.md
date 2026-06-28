@@ -152,7 +152,7 @@ Longer-running checks that ensure code quality:
 | `node-tests` | Runs Node.js test suite |
 | `semgrep` | Full SAST scan (OWASP Top 10, CWE Top 25) |
 | `bandit-full` | Full-tree Python SAST scan (project `pyproject.toml` policy) |
-| `osv-scanner-docker` | Dependency vulnerability scan (OSV-Scanner) |
+| `osv-scanner` | Dependency vulnerability scan (OSV-Scanner; pre-commit bootstraps Go, no Docker needed) |
 | `security-scan` | Dependency security check (`check-dependencies.py --security --ci`) |
 | `basedpyright` | Python type checking of `src/frontend` and `src/shared` (`--level error`) |
 
@@ -195,11 +195,11 @@ Dependabot runs **only on GitHub** — there is no supported way to run the full
 OSV-Scanner (once wired per the security tooling plan) is the best local CVE scan — it covers Python and Node lockfiles in one pass:
 
 ```bash
-# After OSV-Scanner pre-push hook is added (requires Docker):
-pre-commit run --hook-stage push osv-scanner-docker
+# Run the OSV-Scanner pre-push hook directly (pre-commit bootstraps Go for you):
+pre-commit run --hook-stage pre-push osv-scanner
 
-# Or run the scanner directly (Docker):
-docker run --rm -v "$(pwd):/src" ghcr.io/google/osv-scanner scan -r /src
+# Or, if you have the osv-scanner binary installed locally:
+osv-scanner scan source -r .
 ```
 
 Until OSV-Scanner lands, the existing script is the one-command local check:
@@ -237,8 +237,8 @@ python scripts/check-dependencies.py --ci
 
 ### Individual Tools
 ```bash
-# Unified dependency CVE scan (Docker; same engine as CI pre-push hook)
-docker run --rm -v "$(pwd):/src" ghcr.io/google/osv-scanner scan -r /src
+# Unified dependency CVE scan (same engine as the CI + pre-push hook)
+osv-scanner scan source -r .
 
 # Legacy per-ecosystem security scans (still used by check-dependencies.py)
 # Python security vulnerabilities

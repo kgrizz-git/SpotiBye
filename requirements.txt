@@ -1,8 +1,10 @@
 kivy==2.3.1
 kivymd==1.2.0
-spotipy
+spotipy>=2.25.2
 pandas
 openpyxl
 requests
-pillow
+pillow>=12.2.0
 pyinstaller
+idna>=3.15
+pygments>=2.20.0

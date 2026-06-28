@@ -12,11 +12,13 @@ requires-python = ">=3.10"
 dependencies = [
     "kivy",
     "kivymd==1.2.0",
-    "spotipy",
+    "spotipy>=2.25.2",
     "pandas",
     "openpyxl",
     "requests",
-    "pillow",
+    "pillow>=12.2.0",
+    "idna>=3.15",
+    "pygments>=2.20.0",
 ]
 
 [project.optional-dependencies]
