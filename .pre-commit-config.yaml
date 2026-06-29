@@ -137,6 +137,15 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      - id: node-typecheck
+        name: Node.js Type Check
+        description: Run tsc --noEmit on the backend before push (mirrors CI Backend (TypeScript) job)
+        entry: bash -c 'cd src/backend && npx tsc --noEmit'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
   # Full Semgrep SAST before push (mirrors CI ruleset)
   - repo: https://github.com/returntocorp/semgrep
     rev: v1.59.0

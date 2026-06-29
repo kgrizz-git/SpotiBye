@@ -5,5 +5,12 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    typecheck: {
+      enabled: true,
+      checker: 'tsc',
+      include: ['tests/**/*.test.ts'],
+      exclude: ['**/node_modules/**'],
+      tsconfig: './tsconfig.json',
+    },
   },
 });
