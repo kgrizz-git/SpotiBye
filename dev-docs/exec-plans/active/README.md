@@ -4,4 +4,4 @@
 
 | Plan | Description | Started |
 |------|-------------|---------|
-| [`2026-06-28-bump-ci-node-24.md`](2026-06-28-bump-ci-node-24.md) | Bump CI Node version from 20 (EOL Apr 2026) to 24 LTS across 3 workflow files, add `.nvmrc`, document in AGENTS.md/CLAUDE.md. | 2026-06-28 |
+| _None_ | No active execution plans. | - |
