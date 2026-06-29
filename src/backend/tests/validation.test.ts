@@ -44,3 +44,69 @@ describe('zValidator error envelope', () => {
     expect(body.error.message).toContain('redirect_uri');
   });
 });
+
+describe('formatZodMessage path formatting', () => {
+  it('joins nested object paths with dots', async () => {
+    const app = new Hono();
+    app.post(
+      '/test',
+      zValidator('json', z.object({ user: z.object({ name: z.string().min(1) }) })),
+      (c) => c.json({ ok: true }),
+    );
+    const response = await app.request('http://localhost/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: {} }),
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { message: string } };
+    expect(body.error.message).toContain('user.name:');
+  });
+
+  it('renders array indices in the path', async () => {
+    const app = new Hono();
+    app.post(
+      '/test',
+      zValidator('json', z.object({ items: z.array(z.string().min(1)) })),
+      (c) => c.json({ ok: true }),
+    );
+    const response = await app.request('http://localhost/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: ['ok', ''] }),
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { message: string } };
+    expect(body.error.message).toContain('items.1:');
+  });
+
+  it('falls back to "request" for empty path (root-level failure)', async () => {
+    const app = new Hono();
+    app.post('/test', zValidator('json', z.string().min(1)), (c) => c.json({ ok: true }));
+    const response = await app.request('http://localhost/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(123),
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { message: string } };
+    expect(body.error.message).toMatch(/^request:/);
+  });
+
+  it('joins multiple issues with semicolons', async () => {
+    const app = new Hono();
+    app.post(
+      '/test',
+      zValidator('json', z.object({ a: z.string().min(1), b: z.string().min(1) })),
+      (c) => c.json({ ok: true }),
+    );
+    const response = await app.request('http://localhost/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { message: string } };
+    expect(body.error.message).toMatch(/a:.*; .*b:/);
+  });
+});

@@ -131,12 +131,13 @@ app.get('/playlists/:id', zValidator('param', IdParamSchema), async (c) => {
   }
 });
 
-const getPlaylistItemsHandler = async (
-  c: Context<{ Bindings: Env; Variables: Variables }>
+const handleGetPlaylistItems = async (
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  playlistId: string,
+  limit: number = 50,
+  offset: number = 0,
 ) => {
   try {
-    const { id: playlistId } = c.req.valid('param');
-    const { limit, offset } = c.req.valid('query');
     const accessToken = c.get('access_token');
     const userId = c.get('user').id;
 
@@ -168,7 +169,11 @@ app.get(
   '/playlists/:id/items',
   zValidator('param', IdParamSchema),
   zValidator('query', PaginationQuerySchema),
-  getPlaylistItemsHandler,
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const { limit, offset } = c.req.valid('query');
+    return handleGetPlaylistItems(c, id, limit, offset);
+  },
 );
 
 // GET /spotify/playlists/:id/tracks - Backward-compatible alias
@@ -176,7 +181,11 @@ app.get(
   '/playlists/:id/tracks',
   zValidator('param', IdParamSchema),
   zValidator('query', PaginationQuerySchema),
-  getPlaylistItemsHandler,
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const { limit, offset } = c.req.valid('query');
+    return handleGetPlaylistItems(c, id, limit, offset);
+  },
 );
 
 // GET /spotify/tracks/:id - Get track details

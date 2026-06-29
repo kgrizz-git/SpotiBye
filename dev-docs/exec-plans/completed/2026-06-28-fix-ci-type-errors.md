@@ -6,7 +6,7 @@
 
 ## TL;DR
 
-- **Step 1 (z-validator.ts):** Option A — import `ZodError` as a type and rewrite `formatZodMessage` to use it. Use `.map(String)` for symbol-safe path joining.
+- **Step 1 (z-validator.ts):** Use a structural type `{ issues: Array<{ path: Array<PropertyKey>; message: string }> }` for `formatZodMessage` and use `.map(String)` for symbol-safe path joining. Do NOT use `ZodError` from `'zod'` — see the v3→v4 split note below Step 1.
 - **Step 2 (routes/spotify.ts):** Option A — replace the standalone `getPlaylistItemsHandler` with a `handleGetPlaylistItems` helper plus two inline route wrappers. Add `limit: number = 50, offset: number = 0` defaults to the helper for future-proofing.
 - **Step 3 (validation/schemas/export.ts):** Option B (recommended) — add `cursor`, `chunk_size`, `job_id` as `z.any().optional()` to `ExportBatchChunkBodySchema`, with a per-schema comment explaining the Zod v4 passthrough behavior. **Also update the top-of-file block comment** at lines 3-9 so the "left permissive" claim is scoped to the schemas that actually remain pure passthrough.
 - **Tests:** Add the 4 `formatZodMessage` path-formatting subtests to `src/backend/tests/validation.test.ts` (drop-in skeleton provided below).
@@ -52,26 +52,12 @@ routes/export/playlists.ts(139,58): error TS18046: 'body.cursor' is of type 'unk
 
 Update `formatZodMessage` in [validation/z-validator.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/validation/z-validator.ts) to accept Zod v4's `PropertyKey[]` path, and map path elements using `String()` to prevent runtime TypeErrors if a symbol is present.
 
-- [ ] Implement **Option A (Import and use ZodError - Recommended)**:
-  Importing the actual `ZodError` type directly from `zod` is cleaner, avoids inline type signature divergence, and explicitly matches the actual runtime type returned by Hono's validator. Use a `type`-only import alongside the existing `ZodSchema` import so `ZodError` is erased from the bundle and the imports stay grouped:
+- [x] **Implement the structural-type fix (Recommended):** Use an inline structural type that matches the shape of what `@hono/zod-validator` actually returns. Verified locally — passes `tsc --noEmit` and `npm run lint`:
   ```typescript
-  import type { ZodError, ZodSchema } from 'zod';
-  // ...
-  function formatZodMessage(error: ZodError): string {
-    if (error.issues.length === 0) {
-      return 'Request validation failed';
-    }
-    return error.issues
-      .map((issue) => {
-        const path = issue.path.length > 0 ? issue.path.map(String).join('.') : 'request';
-        return `${path}: ${issue.message}`;
-      })
-      .join('; ');
-  }
-  ```
+  import { zValidator as baseZValidator } from '@hono/zod-validator';
+  import type { ValidationTargets } from 'hono';
+  import type { ZodSchema } from 'zod';
 
-- [ ] Alternatively, implement **Option B (Accept PropertyKey[] path in signature)**:
-  ```typescript
   function formatZodMessage(error: { issues: Array<{ path: Array<PropertyKey>; message: string }> }): string {
     if (error.issues.length === 0) {
       return 'Request validation failed';
@@ -85,15 +71,18 @@ Update `formatZodMessage` in [validation/z-validator.ts](file:///Users/kevingriz
   }
   ```
 
+> [!IMPORTANT]
+> **Why not `import type { ZodError } from 'zod'`?** In Zod v3, `ZodError` was the public class that validators returned. In **Zod v4, the public `ZodError` is a separate interface that *extends* the internal base interface `$ZodError<T>`** (defined in `zod/v4/core/errors.d.ts`) with extra methods (`format`, `flatten`, `addIssue`, `addIssues`, `isEmpty`). `@hono/zod-validator` returns the *base* `$ZodError<T>`, not the extended `ZodError`. So `function formatZodMessage(error: ZodError)` fails `tsc` with `'$ZodError<unknown>' is missing the following properties from type 'ZodError<unknown>': format, flatten, addIssue, addIssues, isEmpty`. `$ZodError` is not re-exported from the main `'zod'` entry (only from `zod/v4/core`), so the structural-type fix is both correct and avoids a deep import path. The plan was originally written with a Zod v3 mental model on this point; the structural-type fix is what the CI verifier accepts.
+
 ### Step 2 — Fix Context validation targets in spotify routes
 
 Resolve the `c.req.valid` type error in `getPlaylistItemsHandler` in [routes/spotify.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/routes/spotify.ts).
 
-- [ ] Implement **Option A (Inline Handler wrappers + Helper function - Recommended/Type-Safe)**:
+- [x] Implement **Option A (Inline Handler wrappers + Helper function - Recommended/Type-Safe)**:
 
   The root cause is that `getPlaylistItemsHandler` is declared with the generic `c: Context<{ Bindings: Env; Variables: Variables }>` annotation, which erases Hono's middleware-inferred validation targets. The fix is to let the entry-point handler infer `c` (so `c.req.valid('param' | 'query')` resolves to the validated types) and move the shared body into a plain helper.
 
-  - [ ] **Define `handleGetPlaylistItems` helper** (new constant — paste this in place of the old handler):
+  - [x] **Define `handleGetPlaylistItems` helper** (new constant — paste this in place of the old handler):
   ```typescript
   const handleGetPlaylistItems = async (
     c: Context<{ Bindings: Env; Variables: Variables }>,
@@ -129,9 +118,9 @@ Resolve the `c.req.valid` type error in `getPlaylistItemsHandler` in [routes/spo
   };
   ```
 
-  - [ ] **Delete the old `getPlaylistItemsHandler` constant** (lines 134-164 of [routes/spotify.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/routes/spotify.ts)) — otherwise the file ends up with both the old handler and the new helper, leaving dead code.
+  - [x] **Delete the old `getPlaylistItemsHandler` constant** (lines 134-164 of [routes/spotify.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/routes/spotify.ts)) — otherwise the file ends up with both the old handler and the new helper, leaving dead code.
 
-  - [ ] **Replace the route registrations at lines 167-180** of [routes/spotify.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/routes/spotify.ts) with inline handlers that extract validated parameters (leveraging correct, automatic type inference) and invoke the helper. To make the wrapper resilient to a future `PaginationQuerySchema` refactor that drops the `.default(...)` (which would change `c.req.valid('query')` to `{ limit?: number; offset?: number }` and break the strict `number` parameters on the helper), also update the helper signature to give `limit` and `offset` defaults that mirror the schema's defaults:
+  - [x] **Replace the route registrations at lines 167-180** of [routes/spotify.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/routes/spotify.ts) with inline handlers that extract validated parameters (leveraging correct, automatic type inference) and invoke the helper. To make the wrapper resilient to a future `PaginationQuerySchema` refactor that drops the `.default(...)` (which would change `c.req.valid('query')` to `{ limit?: number; offset?: number }` and break the strict `number` parameters on the helper), also update the helper signature to give `limit` and `offset` defaults that mirror the schema's defaults:
   ```typescript
   const handleGetPlaylistItems = async (
     c: Context<{ Bindings: Env; Variables: Variables }>,
@@ -179,7 +168,7 @@ Resolve the `c.req.valid` type error in `getPlaylistItemsHandler` in [routes/spo
 
 Resolve the `unknown` type issue for `body.cursor`, `body.chunk_size`, and `body.job_id` in [routes/export/playlists.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/routes/export/playlists.ts).
 
-- [ ] Choose and implement one of the following approaches (mark exactly one):
+- [x] Choose and implement one of the following approaches (mark exactly one):
 
   > [!IMPORTANT]
   > The repo's `.eslintrc.json` sets `@typescript-eslint/no-explicit-any: "error"`. Do NOT cast with `as any` or `as Record<string, any>` — both fail the linter and will be rejected by `npm run lint`. If you go the cast route, use `as Record<string, unknown>` and narrow at each call site (see Option A below); the cleanest path is Option B, which keeps the route handler unchanged.
@@ -199,7 +188,7 @@ Resolve the `unknown` type issue for `body.cursor`, `body.chunk_size`, and `body
     const requestedChunkSize = Number.isInteger(body.chunk_size) ? Number(body.chunk_size) : 1;
     ```
 
-  - [ ] **Option B (Add permissive fields to Zod Schema - Recommended):** Add optional `cursor`, `chunk_size`, and `job_id` properties to `ExportBatchChunkBodySchema` inside [validation/schemas/export.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/validation/schemas/export.ts) using `z.any().optional()` to keep them permissive. The route handler continues to use the same `body.cursor` / `body.chunk_size` / `body.job_id` accesses unchanged, and the linter stays clean because `z.any()` is a Zod call, not an explicit TypeScript `any` annotation. Add a short comment above the schema documenting the Zod v4 behavior so the next reader doesn't try to "clean up" the explicit fields:
+  - [x] **Option B (Add permissive fields to Zod Schema - Recommended):** Add optional `cursor`, `chunk_size`, and `job_id` properties to `ExportBatchChunkBodySchema` inside [validation/schemas/export.ts](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/validation/schemas/export.ts) using `z.any().optional()` to keep them permissive. The route handler continues to use the same `body.cursor` / `body.chunk_size` / `body.job_id` accesses unchanged, and the linter stays clean because `z.any()` is a Zod call, not an explicit TypeScript `any` annotation. Add a short comment above the schema documenting the Zod v4 behavior so the next reader doesn't try to "clean up" the explicit fields:
     ```typescript
     // Explicitly declare passthrough fields accessed directly in handlers as z.any().optional().
     // In Zod v4, `.passthrough()` types extra fields as `unknown` (rather than `any`), which
@@ -214,7 +203,7 @@ Resolve the `unknown` type issue for `body.cursor`, `body.chunk_size`, and `body
       .passthrough();
     ```
 
-    - [ ] **Update the top-of-file block comment** in [validation/schemas/export.ts:3-9](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/validation/schemas/export.ts#L3) so the "Other fields (`format`, `include_audio_features`, `chunk_size`, etc.) are left permissive" claim no longer overstates things. Once `ExportBatchChunkBodySchema` explicitly declares `cursor`/`chunk_size`/`job_id`, the blanket "left permissive" wording is no longer accurate for that one schema. Either scope the comment to `ExportJobBodySchema` and `ExportBatchBodySchema` (the two that remain pure passthrough), or amend it to call out `ExportBatchChunkBodySchema` as the exception. Example edit:
+    - [x] **Update the top-of-file block comment** in [validation/schemas/export.ts:3-9](file:///Users/kevingrizzard/MyCode/SpotiBye/src/backend/validation/schemas/export.ts#L3) so the "Other fields (`format`, `include_audio_features`, `chunk_size`, etc.) are left permissive" claim no longer overstates things. Once `ExportBatchChunkBodySchema` explicitly declares `cursor`/`chunk_size`/`job_id`, the blanket "left permissive" wording is no longer accurate for that one schema. Either scope the comment to `ExportJobBodySchema` and `ExportBatchBodySchema` (the two that remain pure passthrough), or amend it to call out `ExportBatchChunkBodySchema` as the exception. Example edit:
     ```typescript
     /**
      * Body schemas intentionally enforce ONLY the rules the routes enforced before
@@ -236,17 +225,17 @@ Resolve the `unknown` type issue for `body.cursor`, `body.chunk_size`, and `body
 
 Run these commands to verify all fixes:
 
-- [ ] Run the full backend verification script from the repo root: `./scripts/verify-all.sh` (runs `tsc --noEmit` and `npm run lint`; silent on success, errors on failure)
-- [ ] Pre-commit config is structurally valid: `pre-commit validate-config` (catches malformed `.pre-commit-config.yaml` — useful since this PR adds a new pre-push hook)
-- [ ] Type check passes: `cd src/backend && npx tsc --noEmit` (must exit 0)
-- [ ] Linter passes: `cd src/backend && npm run lint` (must exit 0)
-- [ ] Tests pass: `cd src/backend && npm run test:run` (all tests must pass)
-- [ ] Integration validation test: Run the existing tests in `src/backend/tests/validation.test.ts` to confirm that the custom error envelope is returned on schema failure and that no regression occurs.
-- [ ] **Add `formatZodMessage` path-formatting regression tests** in `src/backend/tests/validation.test.ts`. This is the only safety net for the Step 1 fix: it locks the contract (dot-joined paths, array indices, empty-path fallback, multiple-issue joining) so a future Zod upgrade or refactor that drops the `.map(String)` will fail loudly. Add a new `describe('formatZodMessage path formatting', ...)` block with the following four subtests, each going through the public `zValidator` API (no need to export the helper):
-  - [ ] **Nested object path is dot-joined.** Post `{}` against `z.object({ user: z.object({ name: z.string().min(1) }) })` and assert the error message contains `user.name:` (guards the `path.map(String).join('.')` line).
-  - [ ] **Array indices appear in the path.** Post `{ items: ['ok', ''] }` against `z.object({ items: z.array(z.string().min(1)) })` and assert the error message contains `items.1:` (guards that numeric path elements are stringified, not rendered as `[object]`).
-  - [ ] **Empty path falls back to `request:`.** Post `123` (a number) against `z.string().min(1)` and assert the error message starts with `request:` (guards the `issue.path.length > 0 ? ... : 'request'` branch — this is the only way the empty-path branch is reached through the public API).
-  - [ ] **Multiple issues are joined with `; `.** Post `{}` against `z.object({ a: z.string().min(1), b: z.string().min(1) })` and assert the error message matches `/a:.*; .*b:/` (guards that all issues surface in one message, not just the first).
+- [x] Run the full backend verification script from the repo root: `./scripts/verify-all.sh` (runs `tsc --noEmit` and `npm run lint`; silent on success, errors on failure)
+- [x] Pre-commit config is structurally valid: `pre-commit validate-config` (catches malformed `.pre-commit-config.yaml` — useful since this PR adds a new pre-push hook)
+- [x] Type check passes: `cd src/backend && npx tsc --noEmit` (must exit 0)
+- [x] Linter passes: `cd src/backend && npm run lint` (must exit 0)
+- [x] Tests pass: `cd src/backend && npm run test:run` (all tests must pass)
+- [x] Integration validation test: Run the existing tests in `src/backend/tests/validation.test.ts` to confirm that the custom error envelope is returned on schema failure and that no regression occurs.
+- [x] **Add `formatZodMessage` path-formatting regression tests** in `src/backend/tests/validation.test.ts`. This is the only safety net for the Step 1 fix: it locks the contract (dot-joined paths, array indices, empty-path fallback, multiple-issue joining) so a future Zod upgrade or refactor that drops the `.map(String)` will fail loudly. Add a new `describe('formatZodMessage path formatting', ...)` block with the following four subtests, each going through the public `zValidator` API (no need to export the helper):
+  - [x] **Nested object path is dot-joined.** Post `{}` against `z.object({ user: z.object({ name: z.string().min(1) }) })` and assert the error message contains `user.name:` (guards the `path.map(String).join('.')` line).
+  - [x] **Array indices appear in the path.** Post `{ items: ['ok', ''] }` against `z.object({ items: z.array(z.string().min(1)) })` and assert the error message contains `items.1:` (guards that numeric path elements are stringified, not rendered as `[object]`).
+  - [x] **Empty path falls back to `request:`.** Post `123` (a number) against `z.string().min(1)` and assert the error message starts with `request:` (guards the `issue.path.length > 0 ? ... : 'request'` branch — this is the only way the empty-path branch is reached through the public API).
+  - [x] **Multiple issues are joined with `; `.** Post `{}` against `z.object({ a: z.string().min(1), b: z.string().min(1) })` and assert the error message matches `/a:.*; .*b:/` (guards that all issues surface in one message, not just the first).
 
   Example skeleton (drop into the existing file alongside the current `describe('zValidator error envelope', ...)`):
 
@@ -320,8 +309,8 @@ Run these commands to verify all fixes:
 
 ## Pre-Merge Housekeeping
 
-- [ ] Update `dev-docs/exec-plans/active/README.md` to add a row for this plan (the table currently says "No active execution plans").
-- [ ] Confirm `CHANGELOG.md` does not need an entry: this is a CI-only fix that does not change shipped behavior, runtime contracts, or user-facing error messages, so per AGENTS.md it likely falls under the "internal-only" exception. Add a "Fixed" entry only if the team prefers to log CI fixes for traceability.
+- [x] Update `dev-docs/exec-plans/active/README.md` to add a row for this plan (the table currently says "No active execution plans"). (Done as part of plan completion: row added in `active/README.md` before move, then this plan is moved to `completed/`.)
+- [x] Confirm `CHANGELOG.md` does not need an entry: this is a CI-only fix that does not change shipped behavior, runtime contracts, or user-facing error messages, so per AGENTS.md it likely falls under the "internal-only" exception. Add a "Fixed" entry only if the team prefers to log CI fixes for traceability. **Decision: skip the CHANGELOG entry** — runtime contract unchanged, no shipped artifact impact.
 
 ## Why CI Caught It But Pre-Commit/Pre-Push Did Not (Context for the Fix)
 

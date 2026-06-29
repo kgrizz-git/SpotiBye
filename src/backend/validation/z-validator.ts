@@ -6,13 +6,13 @@ import { zValidator as baseZValidator } from '@hono/zod-validator';
 import type { ValidationTargets } from 'hono';
 import type { ZodSchema } from 'zod';
 
-function formatZodMessage(error: { issues: Array<{ path: Array<string | number>; message: string }> }): string {
+function formatZodMessage(error: { issues: Array<{ path: Array<PropertyKey>; message: string }> }): string {
   if (error.issues.length === 0) {
     return 'Request validation failed';
   }
   return error.issues
     .map((issue) => {
-      const path = issue.path.length > 0 ? issue.path.join('.') : 'request';
+      const path = issue.path.length > 0 ? issue.path.map(String).join('.') : 'request';
       return `${path}: ${issue.message}`;
     })
     .join('; ');
