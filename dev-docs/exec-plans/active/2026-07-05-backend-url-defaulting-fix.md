@@ -9,7 +9,7 @@
 
 ## 1. Config fix — `src/frontend/config/backend_config.py`
 
-- [ ] Add a dedicated dev-Worker constant, decoupled from the shipped-binary default. Include a comment explaining the distinction — the two constants being conflated is exactly what caused this bug:
+- [x] Add a dedicated dev-Worker constant, decoupled from the shipped-binary default. Include a comment explaining the distinction — the two constants being conflated is exactly what caused this bug:
   ```python
   # Cloudflare development worker, used only by the "Cloudflare Dev" preset in
   # the selector UI. Deliberately decoupled from BACKEND_URL: BACKEND_URL is
@@ -21,7 +21,7 @@
   )
   ```
   Place it directly below `LOCALHOST_BACKEND_URL` (~line 24).
-- [ ] Update `BACKEND_PRESETS` (~line 57-61) to reference the new constant instead of `BACKEND_URL`:
+- [x] Update `BACKEND_PRESETS` (~line 57-61) to reference the new constant instead of `BACKEND_URL`:
   ```python
   BACKEND_PRESETS: Final[dict[str, str]] = {
       "Localhost": LOCALHOST_BACKEND_URL,
@@ -29,17 +29,17 @@
       "Cloudflare Prod": PRODUCTION_BACKEND_URL,
   }
   ```
-- [ ] Leave `BACKEND_URL` (~line 15-18) and `CURRENT_BACKEND_URL` untouched — the shipped-binary safety default from FT-2 must be preserved.
-- [ ] Add `DEV_BACKEND_URL` to `__all__` (~line 288-315).
+- [x] Leave `BACKEND_URL` (~line 15-18) and `CURRENT_BACKEND_URL` untouched — the shipped-binary safety default from FT-2 must be preserved.
+- [x] Add `DEV_BACKEND_URL` to `__all__` (~line 288-315).
 
 ## 2. Re-export — `src/frontend/config/__init__.py`
 
-- [ ] Add `DEV_BACKEND_URL` to both the `from .backend_config import (...)` block and `__all__` list, matching the existing `LOCALHOST_BACKEND_URL` / `PRODUCTION_BACKEND_URL` pattern.
+- [x] Add `DEV_BACKEND_URL` to both the `from .backend_config import (...)` block and `__all__` list, matching the existing `LOCALHOST_BACKEND_URL` / `PRODUCTION_BACKEND_URL` pattern.
 
 ## 3. Regression tests — `src/frontend/tests/test_configuration.py`
 
-- [ ] Add `"SPOTIBYE_DEV_BACKEND_URL"` **and** `"SPOTIBYE_LOCALHOST_BACKEND_URL"` to the `_ENV_KEYS` list (~line 20-28) so `TestConfiguration.restore_env` cleans up both — `SPOTIBYE_LOCALHOST_BACKEND_URL` is a pre-existing env var that was already missing from this list; add it now for consistency since we're touching the list anyway. Note this fixture is scoped to `TestConfiguration` only — it does not apply to the new `TestBackendPresetsDistinct` class below, which must handle its own env cleanup via `monkeypatch`.
-- [ ] Add a new test class covering the aliasing bug directly. **Use `monkeypatch.setenv`, not raw `os.environ[...] =`, for the override test** — this class does not inherit `TestConfiguration`'s `restore_env` fixture (that fixture is scoped to `TestConfiguration` only), so a raw env mutation would leak into later tests/files. `monkeypatch` self-cleans regardless of class:
+- [x] Add `"SPOTIBYE_DEV_BACKEND_URL"` **and** `"SPOTIBYE_LOCALHOST_BACKEND_URL"` to the `_ENV_KEYS` list (~line 20-28) so `TestConfiguration.restore_env` cleans up both — `SPOTIBYE_LOCALHOST_BACKEND_URL` is a pre-existing env var that was already missing from this list; add it now for consistency since we're touching the list anyway. Note this fixture is scoped to `TestConfiguration` only — it does not apply to the new `TestBackendPresetsDistinct` class below, which must handle its own env cleanup via `monkeypatch`.
+- [x] Add a new test class covering the aliasing bug directly. **Use `monkeypatch.setenv`, not raw `os.environ[...] =`, for the override test** — this class does not inherit `TestConfiguration`'s `restore_env` fixture (that fixture is scoped to `TestConfiguration` only), so a raw env mutation would leak into later tests/files. `monkeypatch` self-cleans regardless of class:
   ```python
   class TestBackendPresetsDistinct:
       """Regression test: BACKEND_PRESETS entries must not alias each other,
@@ -99,7 +99,7 @@
           )
   ```
   After this test's `importlib.reload`, `backend_config` module state reflects the monkeypatched env var until the next reload — `monkeypatch` restores the env var itself at teardown, but if a later test in the same file depends on `backend_config` reflecting *unset* `SPOTIBYE_DEV_BACKEND_URL`, it must reload the module itself first (same convention `TestConfiguration` already follows for its own env vars).
-- [ ] Run: `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/test_configuration.py -v`
+- [x] Run: `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/test_configuration.py -v` — 12/12 passed.
 
 ## 4. New popup test file — `src/frontend/tests/test_backend_selector_popup.py`
 
@@ -182,7 +182,7 @@ finally:
             sys.modules[_name] = _orig
 ```
 
-- [ ] Mock `BackendClient` at its **point of use in the popup module**, not its definition module — `backend_selector_popup.py` does `from ..services.backend_client import BackendClient`, which binds the name into `backend_selector_popup`'s own namespace. Patch the **absolute** path, matching the codebase's existing convention (`test_backend_cache_explorer.py` uses `@patch("src.frontend.ui.backend_cache_explorer._backend_client_cls")`, not a relative dotted path): use `@patch("src.frontend.ui.backend_selector_popup.BackendClient")`, and configure `mock_backend_client.return_value.health_check.return_value = {"status": "healthy"}` so `_start_health_check`'s background thread doesn't make real network calls if it happens to run. Applied to every test, e.g.:
+- [x] Mock `BackendClient` at its **point of use in the popup module**, not its definition module — `backend_selector_popup.py` does `from ..services.backend_client import BackendClient`, which binds the name into `backend_selector_popup`'s own namespace. Patch the **absolute** path, matching the codebase's existing convention (`test_backend_cache_explorer.py` uses `@patch("src.frontend.ui.backend_cache_explorer._backend_client_cls")`, not a relative dotted path): use `@patch("src.frontend.ui.backend_selector_popup.BackendClient")`, and configure `mock_backend_client.return_value.health_check.return_value = {"status": "healthy"}` so `_start_health_check`'s background thread doesn't make real network calls if it happens to run. Applied to every test, e.g.:
   ```python
   @patch("src.frontend.ui.backend_selector_popup.BackendClient")
   def test_preset_switch_updates_url_input(self, mock_backend_client):
@@ -194,19 +194,21 @@ finally:
       assert popup.url_input.text == BACKEND_PRESETS["Cloudflare Dev"]
       assert popup.url_input.text != BACKEND_PRESETS["Localhost"]
   ```
-- [ ] `test_preset_switch_updates_url_input` (shown above): call `popup._on_preset_changed(popup.preset_spinner, "Cloudflare Dev")` **directly** — do not assign `popup.preset_spinner.text = ...` and rely on a bound callback firing; the stub widgets' `.bind()` is a no-op, so no dispatch happens, and this also sidesteps any question of whether real Kivy property-observer dispatch is synchronous under headless. Calling the handler directly also matches the codebase's existing pattern in `test_backend_cache_explorer.py::test_backend_toggle_functionality`, which calls `explorer.on_backend_toggle(...)` directly rather than mutating `.active` and waiting for a dispatch. This is the direct regression test for the non-functional preset button.
-- [ ] `test_initialize_from_default_url_matches_correct_preset`: construct the popup with `default_url=BACKEND_PRESETS["Cloudflare Dev"]` and assert `popup.preset_spinner.text == "Cloudflare Dev"` (not `"Localhost"`) — this runs synchronously inside `__init__` via `_initialize_from_default_url`, no dispatch involved. Regression test for the peer review's third symptom (preset-restore-on-relaunch picking the first dict key on aliasing). Note this assertion depends on `_initialize_from_default_url()` being called after `_build_ui()` inside `__init__` (it mutates `preset_spinner.text` after the initial `self._preset_names[0]` default set during construction) — if a future refactor reorders those two calls, this test's premise changes.
-- [ ] `test_custom_url_not_misidentified_as_preset`: construct with `default_url="https://example.com/custom"` and assert `popup.preset_spinner.text == "Custom"` and `popup.url_input.readonly is False`.
-- [ ] Run both in isolation and as part of the full directory (CI runs the latter): `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/test_backend_selector_popup.py -v` and `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v` — both must show these three tests `passed`, not `skipped`, and must not abort the process.
+- [x] `test_preset_switch_updates_url_input` (shown above): call `popup._on_preset_changed(popup.preset_spinner, "Cloudflare Dev")` **directly** — do not assign `popup.preset_spinner.text = ...` and rely on a bound callback firing; the stub widgets' `.bind()` is a no-op, so no dispatch happens, and this also sidesteps any question of whether real Kivy property-observer dispatch is synchronous under headless. Calling the handler directly also matches the codebase's existing pattern in `test_backend_cache_explorer.py::test_backend_toggle_functionality`, which calls `explorer.on_backend_toggle(...)` directly rather than mutating `.active` and waiting for a dispatch. This is the direct regression test for the non-functional preset button.
+- [x] `test_initialize_from_default_url_matches_correct_preset`: construct the popup with `default_url=BACKEND_PRESETS["Cloudflare Dev"]` and assert `popup.preset_spinner.text == "Cloudflare Dev"` (not `"Localhost"`) — this runs synchronously inside `__init__` via `_initialize_from_default_url`, no dispatch involved. Regression test for the peer review's third symptom (preset-restore-on-relaunch picking the first dict key on aliasing). Note this assertion depends on `_initialize_from_default_url()` being called after `_build_ui()` inside `__init__` (it mutates `preset_spinner.text` after the initial `self._preset_names[0]` default set during construction) — if a future refactor reorders those two calls, this test's premise changes.
+- [x] `test_custom_url_not_misidentified_as_preset`: construct with `default_url="https://example.com/custom"` and assert `popup.preset_spinner.text == "Custom"` and `popup.url_input.readonly is False`.
+- [x] Run both in isolation and as part of the full directory (CI runs the latter): `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/test_backend_selector_popup.py -v` and `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v` — both must show these three tests `passed`, not `skipped`, and must not abort the process. Confirmed: all 3 `passed`; full frontend suite is 133 passed, 7 skipped (pre-existing, unrelated).
 
 > **Note:** `_schedule_auto_health_check` goes through `Clock.schedule_once`, which needs the Kivy clock to be pumped (e.g. via `App.run()`) to actually fire — it does not crash headless (verified: `kivy.clock.Clock.schedule_once` works fine without a `Window`), it just won't invoke the callback synchronously in a test. The three tests above don't depend on it firing. Don't extend these tests to assert on `status_label.text` without first pumping `Clock` or calling `_start_health_check` directly.
 
 ## 5. Type check
 
-- [ ] `.venv/bin/basedpyright src/frontend src/shared --level error`
-- [ ] `./scripts/verify-all.sh` (full backend + frontend verification, confirms this change doesn't regress anything outside the touched files)
+- [x] `.venv/bin/basedpyright src/frontend src/shared --level error` — 0 errors, 0 warnings, 0 notes.
+- [x] `./scripts/verify-all.sh` (full backend + frontend verification, confirms this change doesn't regress anything outside the touched files) — passed.
 
 ## 6. Manual verification
+
+> Not performed by the implementing agent — requires launching the actual GUI app and a reachable Cloudflare dev Worker. Left for a human to verify before merge.
 
 - [ ] Launch `python3 run_frontend_backend.py` with no `SPOTIBYE_*` env vars and no `~/.spotibye_cache/backend_selection.json`.
 - [ ] In the `Choose Backend` popup, switch the spinner between `Localhost`, `Cloudflare Dev`, and `Cloudflare Prod` — confirm the URL field updates to a distinct value each time.
@@ -216,7 +218,7 @@ finally:
 
 ## 7. CHANGELOG.md
 
-- [ ] Add an entry under `[Unreleased] / Fixed` (per the project's Changelog Rule — any user-visible change needs one in the same PR):
+- [x] Add an entry under `[Unreleased] / Fixed` (per the project's Changelog Rule — any user-visible change needs one in the same PR):
   > Fixed the "Cloudflare Dev" preset in the startup backend selector being a no-op and silently losing the saved preset choice across relaunches — both were caused by `BACKEND_PRESETS["Cloudflare Dev"]` aliasing the same URL as `"Localhost"` after FT-2's shipped-binary safety default change. Added a dedicated `DEV_BACKEND_URL` constant (override via `SPOTIBYE_DEV_BACKEND_URL`) so the two concepts are decoupled.
 
 ---

@@ -7,7 +7,7 @@ preview_urls = true
 
 [vars]
 ENVIRONMENT = "development"
-ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080"
+ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080,http://127.0.0.1:8080/callback"
 
 # KV Namespaces
 [[kv_namespaces]]
@@ -33,7 +33,7 @@ dead_letter_queue = "spotibye-analysis-dlq"
 
 # Environment-specific configuration
 [env.development]
-vars = { ENVIRONMENT = "development", ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080" }
+vars = { ENVIRONMENT = "development", ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080,http://127.0.0.1:8080/callback" }
 
 [[env.development.kv_namespaces]]
 binding = "CACHE_KV"

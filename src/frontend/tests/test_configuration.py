@@ -25,6 +25,8 @@ _ENV_KEYS = [
     "SPOTIBYE_OAUTH_PORT",
     "SPOTIBYE_CACHE_DIR",
     "SPOTIBYE_EXPORT_DIR",
+    "SPOTIBYE_DEV_BACKEND_URL",
+    "SPOTIBYE_LOCALHOST_BACKEND_URL",
 ]
 
 
@@ -220,6 +222,64 @@ class TestConfiguration:
             assert (
                 not backend_config.USE_PRODUCTION
             ), "Should default to False for invalid boolean"
+
+
+class TestBackendPresetsDistinct:
+    """Regression test: BACKEND_PRESETS entries must not alias each other,
+    or the selector spinner and preset-restore-on-relaunch silently break.
+
+    Assumes SPOTIBYE_LOCALHOST_BACKEND_URL is unset for the duration of
+    this class (nothing in TestConfiguration currently sets it, but if a
+    future test does, test_presets_are_pairwise_distinct_by_default could
+    spuriously fail if the localhost override happens to collide with the
+    dev URL)."""
+
+    def test_presets_are_pairwise_distinct_by_default(self):
+        import importlib
+        from ..config import backend_config
+
+        importlib.reload(backend_config)
+        urls = list(backend_config.BACKEND_PRESETS.values())
+        assert len(urls) == len(
+            set(urls)
+        ), f"BACKEND_PRESETS has duplicate URLs: {backend_config.BACKEND_PRESETS}"
+
+    def test_cloudflare_dev_preset_uses_dev_backend_url(self):
+        import importlib
+        from ..config import backend_config
+
+        importlib.reload(backend_config)
+        assert (
+            backend_config.BACKEND_PRESETS["Cloudflare Dev"]
+            == backend_config.DEV_BACKEND_URL
+        )
+
+    def test_dev_backend_url_reexported_from_config_package(self):
+        # Regression check for the config/__init__.py re-export.
+        # config/__init__.py does `from .backend_config import DEV_BACKEND_URL`,
+        # a name binding captured at *its own* import time — reloading
+        # backend_config alone does not update it. Reload both, in
+        # dependency order, so this actually exercises the re-export wiring
+        # rather than comparing two values from the same stale snapshot.
+        import importlib
+        from ..config import backend_config
+        from .. import config as config_pkg
+
+        importlib.reload(backend_config)
+        importlib.reload(config_pkg)
+        assert config_pkg.DEV_BACKEND_URL == backend_config.DEV_BACKEND_URL
+
+    def test_dev_backend_url_env_override(self, monkeypatch):
+        monkeypatch.setenv("SPOTIBYE_DEV_BACKEND_URL", "https://custom-dev.example.com")
+
+        import importlib
+        from ..config import backend_config
+
+        importlib.reload(backend_config)
+        assert (
+            backend_config.BACKEND_PRESETS["Cloudflare Dev"]
+            == "https://custom-dev.example.com"
+        )
 
 
 class TestIsValidBackendUrl:

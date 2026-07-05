@@ -22,6 +22,14 @@ PRODUCTION_BACKEND_URL: Final[str] = os.environ.get(
 LOCALHOST_BACKEND_URL: Final[str] = os.environ.get(
     "SPOTIBYE_LOCALHOST_BACKEND_URL", "http://localhost:8787"
 )
+# Cloudflare development worker, used only by the "Cloudflare Dev" preset in
+# the selector UI. Deliberately decoupled from BACKEND_URL: BACKEND_URL is
+# the shipped-binary startup default (kept as localhost per FT-2's security
+# intent) and must not be aliased to this preset's URL again.
+DEV_BACKEND_URL: Final[str] = os.environ.get(
+    "SPOTIBYE_DEV_BACKEND_URL",
+    "https://spotibye-backend-development.kevin-grizzard.workers.dev",
+)
 
 # Determine which backend URL to use
 USE_PRODUCTION: Final[bool] = (
@@ -56,7 +64,7 @@ BACKEND_SELECTION_PATH: Final[Path] = CACHE_DIR / "backend_selection.json"
 # Backend presets shown in the selector UI
 BACKEND_PRESETS: Final[dict[str, str]] = {
     "Localhost": LOCALHOST_BACKEND_URL,
-    "Cloudflare Dev": BACKEND_URL,
+    "Cloudflare Dev": DEV_BACKEND_URL,
     "Cloudflare Prod": PRODUCTION_BACKEND_URL,
 }
 
@@ -290,6 +298,7 @@ __all__ = [
     "BACKEND_URL",
     "LOCALHOST_BACKEND_URL",
     "PRODUCTION_BACKEND_URL",
+    "DEV_BACKEND_URL",
     "BACKEND_PRESETS",
     "BACKEND_SELECTION_PATH",
     "ENABLE_BACKEND_SELECTOR",
