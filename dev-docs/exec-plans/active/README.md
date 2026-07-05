@@ -4,4 +4,4 @@
 
 | Plan | Description | Started |
 |------|-------------|---------|
-| _None_ | No active execution plans. | - |
+| [2026-07-05-backend-url-defaulting-fix.md](./2026-07-05-backend-url-defaulting-fix.md) | Fix `BACKEND_PRESETS` aliasing between "Localhost" and "Cloudflare Dev" (non-functional preset button, lost preset choice on relaunch) | 2026-07-05 |
