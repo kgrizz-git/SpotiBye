@@ -38,7 +38,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
 
 - [ ] Fix deprecated `AsyncImage` properties (`allow_stretch`, `keep_ratio`)
 - [x] Add basedpyright as a pre-push hook in `.pre-commit-config.yaml` ([plan](../exec-plans/completed/2026-06-27-basedpyright-prepush-hook.md)) — **done 2026-06-27**
-- [ ] Run pyright and triage type issues **NEEDS REVIEW**
+- [x] Run pyright and triage type issues **NEEDS REVIEW**
   - [x] Document the exact command and current issue count
     - [`dev-docs/assessments/pyright-utils.md`](../assessments/pyright-utils.md) — `src/frontend/utils/` (16 errors) — **fixed 2026-06-27**
     - [`dev-docs/assessments/pyright-config.md`](../assessments/pyright-config.md) — `src/frontend/config/` (1 error) — **fixed 2026-06-27**
@@ -51,7 +51,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
     - [`dev-docs/assessments/pyright-adapter-mixins.md`](../assessments/pyright-adapter-mixins.md) — `src/frontend/screens/adapter_mixins/` (147 errors) — **fixed 2026-06-27**
     - [`dev-docs/assessments/pyright-tests.md`](../assessments/pyright-tests.md) — `src/frontend/tests/` (49 errors) — **fixed 2026-06-27**
     - [`dev-docs/assessments/pyright-root.md`](../assessments/pyright-root.md) — `src/frontend/` root files (0 errors)
-  - [ ] Fix straightforward issues
+  - [x] Fix straightforward issues (all pyright errors resolved — verified `basedpyright src/frontend src/shared --level error` returns 0 errors)
   - [ ] Create follow-up backlog items or an execution plan for larger type-safety work
 - [ ] Track/remove `esbuild` and `uuid` npm overrides in `src/backend/package.json` once upstream ships patched releases
 
@@ -67,8 +67,8 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Confirm frontend packaging command and output artifact
   - [ ] Confirm backend deployment workflow and required secrets
   - [ ] Confirm CI runs the expected frontend, backend, and structure checks
-  - [x] Bump CI Node version from 20 (EOL Apr 2026) to 24 LTS ([plan](../exec-plans/active/2026-06-28-bump-ci-node-24.md)) — **done 2026-06-29**
-  - [ ] Align `.pre-commit-config.yaml` typescript-eslint versions (v6.0.0 in eslint hook's `additional_dependencies`) with `src/backend/package.json` (^8.61.0) — pre-existing version mismatch surfaced during the Node 24 bump plan.
+- [x] Bump CI Node version from 20 (EOL Apr 2026) to 24 LTS ([plan](../exec-plans/completed/2026-06-28-bump-ci-node-24.md)) — **done 2026-06-29**
+- [ ] Align `.pre-commit-config.yaml` typescript-eslint versions (v6.0.0 in eslint hook's `additional_dependencies`) with `src/backend/package.json` (^8.61.0) — pre-existing version mismatch surfaced during the Node 24 bump plan. ([plan](../exec-plans/active/2026-07-06-align-eslint-typescript-versions.md))
 - [ ] Decide whether to start a new repository before wider release-readiness work
   - [ ] Complete repository cleanup prerequisites
   - [ ] Decide what history, issues, and release artifacts must be retained
