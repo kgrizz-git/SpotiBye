@@ -35,12 +35,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0  # Required for TruffleHog to scan history
 
       - name: TruffleHog OSS
-        uses: trufflesecurity/trufflehog@v3.95.5
+        uses: trufflesecurity/trufflehog@d411fff7b8879a62509f3fa98c07f247ac089a51
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
@@ -50,7 +50,7 @@ jobs:
         if: github.event_name == 'pull_request'
 
       - name: TruffleHog OSS (Full History)
-        uses: trufflesecurity/trufflehog@v3.95.5
+        uses: trufflesecurity/trufflehog@d411fff7b8879a62509f3fa98c07f247ac089a51
         with:
           path: ./
           extra_args: --debug --only-verified
@@ -65,7 +65,7 @@ jobs:
       image: semgrep/semgrep
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Semgrep scan
         run: semgrep ci --config=auto
@@ -86,10 +86,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.10'
 
@@ -103,7 +103,7 @@ jobs:
         run: bandit -r src/ -c pyproject.toml -f txt
 
       - name: Upload Bandit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: bandit-report
@@ -119,7 +119,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Run OSV-Scanner
         uses: google/osv-scanner-action/bootstrap-action@v1.0.2
@@ -136,7 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Check if wrangler.toml exists
         id: check_file
@@ -149,7 +149,7 @@ jobs:
 
       - name: Checkov Scan
         if: steps.check_file.outputs.exists == 'true'
-        uses: bridgecrewio/checkov-action@master
+        uses: bridgecrewio/checkov-action@a7683e7b72a04503521247973281ec8142e1ac1f
         with:
           directory: src/backend/
           framework: cloudformation,terraform
