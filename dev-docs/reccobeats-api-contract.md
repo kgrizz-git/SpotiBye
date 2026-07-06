@@ -119,3 +119,7 @@ Use the **audio features lookup** path:
 
 Do not call `https://api.recocbeats.com`.
 Do not call unverified `POST /v1/analyze`.
+
+## See Also
+
+- [`dev-docs/investigations/2026-07-05-reccobeats-enrichment-gaps.md`](investigations/2026-07-05-reccobeats-enrichment-gaps.md) — full audit of which ReccoBeats endpoints we use vs. skip, what we display vs. retrieve, Spotify `/audio-features` history, and unimplemented backend features.
