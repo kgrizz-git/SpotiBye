@@ -68,7 +68,6 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Confirm backend deployment workflow and required secrets
   - [ ] Confirm CI runs the expected frontend, backend, and structure checks
 - [x] Bump CI Node version from 20 (EOL Apr 2026) to 24 LTS ([plan](../exec-plans/completed/2026-06-28-bump-ci-node-24.md)) — **done 2026-06-29**
-- [ ] Align `.pre-commit-config.yaml` typescript-eslint versions (v6.0.0 in eslint hook's `additional_dependencies`) with `src/backend/package.json` (^8.61.0) — pre-existing version mismatch surfaced during the Node 24 bump plan. ([plan](../exec-plans/active/2026-07-06-align-eslint-typescript-versions.md))
 - [ ] Decide whether to start a new repository before wider release-readiness work
   - [ ] Complete repository cleanup prerequisites
   - [ ] Decide what history, issues, and release artifacts must be retained
