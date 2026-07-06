@@ -122,7 +122,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Run OSV-Scanner
-        uses: google/osv-scanner-action/bootstrap-action@v1.0.2
+        uses: google/osv-scanner-action/osv-scanner-action@c51854704019a247608d928f370c98740469d4b5
         with:
           # OSV-Scanner honours .gitignore by default, so .venv/, node_modules/,
           # backups/, and docs/old-docs-backup/ are skipped without extra flags.

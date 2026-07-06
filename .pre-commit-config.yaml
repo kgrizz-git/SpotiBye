@@ -44,14 +44,15 @@ repos:
         stages: [pre-commit]
 
   # Semgrep - secrets only on commit (fast, no network); full SAST scan deferred to pre-push and CI
-  - repo: https://github.com/returntocorp/semgrep
-    rev: v1.59.0
+  - repo: local
     hooks:
-      - id: semgrep
+      - id: semgrep-secrets
         name: Semgrep Secrets (pre-commit)
         description: Fast secrets-only scan on commit; full SAST runs pre-push and in CI
-        args: ['--config=p/secrets', '--error', '--skip-unknown-extensions']
-        exclude: '^tests/|^docs/|^src/backend/docs/|^\.venv/|^venv/|^node_modules/|^build/|^dist/|^backups/|^backend-backup/|^SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY/|^docs/old-docs-backup/|^srcamas/'
+        entry: semgrep --config=p/secrets --error --skip-unknown-extensions
+        language: system
+        pass_filenames: false
+        always_run: true
         stages: [pre-commit]
 
   # Python security (Bandit) - only on Python files
@@ -122,7 +123,7 @@ repos:
       - id: python-tests
         name: Python Tests
         description: Run Python test suite before push
-        entry: python -m pytest src/frontend/tests -v --tb=long
+        entry: bash -c 'KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/python -m pytest src/frontend/tests -v --tb=long'
         language: system
         pass_filenames: false
         always_run: true
@@ -147,14 +148,15 @@ repos:
         stages: [pre-push]
 
   # Full Semgrep SAST before push (mirrors CI ruleset)
-  - repo: https://github.com/returntocorp/semgrep
-    rev: v1.59.0
+  - repo: local
     hooks:
-      - id: semgrep
+      - id: semgrep-sast
         name: Semgrep SAST (pre-push)
         description: Full SAST scan matching CI — OWASP Top 10, CWE Top 25, JS/TS/Python
-        args: ['--config=p/security-audit', '--config=p/owasp-top-ten', '--config=p/cwe-top-25', '--error', '--skip-unknown-extensions']
-        exclude: '^tests/|^docs/|^src/backend/docs/|^\.venv/|^venv/|^node_modules/|^build/|^dist/|^backups/|^backend-backup/|^SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY/|^docs/old-docs-backup/|^srcamas/'
+        entry: semgrep --config=p/security-audit --config=p/owasp-top-ten --config=p/cwe-top-25 --error --skip-unknown-extensions
+        language: system
+        pass_filenames: false
+        always_run: true
         stages: [pre-push]
 
   # Comprehensive security scan before push
