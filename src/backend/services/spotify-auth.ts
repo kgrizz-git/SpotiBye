@@ -1,6 +1,7 @@
 import type { AuthTokens } from '../types/auth';
 import type { SpotifyUser } from '../types/spotify';
 import type { AuthTokenResponse } from '../types/spotify-api';
+import { AuthRequiredException } from '../types/errors';
 
 export class SpotifyAuthService {
   private clientId: string;
@@ -99,8 +100,10 @@ export class SpotifyAuthService {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to exchange code for tokens: ${error}`);
+      const raw = await response.text();
+      let errorMsg = raw;
+      try { errorMsg = (JSON.parse(raw) as { error?: string }).error || raw; } catch { /* non-JSON */ }
+      throw new Error(`Failed to exchange code for tokens: ${errorMsg || response.statusText}`);
     }
 
     return await response.json();
@@ -120,8 +123,17 @@ export class SpotifyAuthService {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to refresh token: ${error}`);
+      const raw = await response.text();
+      try {
+        const body = JSON.parse(raw) as { error?: string };
+        if (body.error === 'invalid_grant') {
+          throw new AuthRequiredException();
+        }
+        throw new Error(`Failed to refresh token: ${body.error || response.statusText}`);
+      } catch (parseError) {
+        if (parseError instanceof AuthRequiredException) throw parseError;
+        throw new Error(`Failed to refresh token: ${raw || response.statusText}`);
+      }
     }
 
     return await response.json();
@@ -135,8 +147,10 @@ export class SpotifyAuthService {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to get user profile: ${error}`);
+      const raw = await response.text();
+      let errorMsg = raw;
+      try { errorMsg = (JSON.parse(raw) as { error?: string }).error || raw; } catch { /* non-JSON */ }
+      throw new Error(`Failed to get user profile: ${errorMsg || response.statusText}`);
     }
 
     return await response.json();

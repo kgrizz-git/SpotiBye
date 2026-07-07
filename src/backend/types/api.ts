@@ -1,3 +1,5 @@
+export const AUTH_REQUIRED = 'AUTH_REQUIRED' as const;
+
 export interface ApiResponse<T = unknown> {
   data?: T;
   error?: ApiError;

@@ -52,7 +52,11 @@ app.post('/spotify/login', zValidator('json', SpotifyLoginBodySchema, 'MISSING_R
       }
     });
   } catch (err) {
-    console.error('OAuth init error:', err);
+    console.error(JSON.stringify({
+      event: 'OAUTH_INIT_FAILED',
+      error: err instanceof Error ? err.message : String(err),
+      timestamp: new Date().toISOString(),
+    }));
     return c.json({ error: { code: 'OAUTH_INIT_FAILED', message: 'Failed to initiate OAuth flow' } }, 500);
   }
 });
@@ -135,7 +139,11 @@ app.get('/spotify/callback', async (c) => {
       }
     });
   } catch (error) {
-    console.error('OAuth callback error:', error);
+    console.error(JSON.stringify({
+      event: 'OAUTH_CALLBACK_FAILED',
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    }));
     const errMessage = error instanceof Error ? error.message : String(error);
 
     let code = 'OAUTH_CALLBACK_FAILED';
@@ -166,22 +174,6 @@ app.post('/spotify/refresh', authMiddleware, async (c) => {
       return c.json({ error: { code: 'SESSION_NOT_FOUND', message: 'Session not found' } }, 404);
     }
 
-    // Refresh the access token
-    const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
-    const newTokens = await spotifyAuth.refreshAccessToken(session.refresh_token || '');
-
-    // Update session
-    const updatedSession = {
-      ...session,
-      access_token: newTokens.access_token,
-      refresh_token: newTokens.refresh_token || session.refresh_token,
-      expires_at: Date.now() + (newTokens.expires_in * 1000)
-    };
-
-    await c.env.SESSIONS_KV.put(sessionId, JSON.stringify(updatedSession), {
-      expirationTtl: SPOTIFY_SESSION_TTL_SECONDS
-    });
-
     const user = c.get('user');
     const jwtService = new JWTService(c.env.JWT_SECRET);
     const jwtToken = await jwtService.generateToken({
@@ -191,16 +183,22 @@ app.post('/spotify/refresh', authMiddleware, async (c) => {
       session_id: sessionId,
     });
 
+    const spotify_access_expires_in = Math.max(0, Math.floor((session.expires_at - Date.now()) / 1000));
+
     return c.json({
       data: {
         access_token: jwtToken,
         expires_in: SPOTIFY_SESSION_TTL_SECONDS,
         token_type: 'Bearer',
-        spotify_access_expires_in: newTokens.expires_in,
+        spotify_access_expires_in,
       }
     });
   } catch (error) {
-    console.error('Token refresh error:', error);
+    console.error(JSON.stringify({
+      event: 'TOKEN_REFRESH_ROUTE_FAILED',
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    }));
     return c.json({ error: { code: 'TOKEN_REFRESH_FAILED', message: 'Failed to refresh token' } }, 500);
   }
 });
@@ -210,10 +208,15 @@ app.post('/logout', authMiddleware, async (c) => {
   try {
     const sessionId = c.get('session_id');
     await c.env.SESSIONS_KV.delete(sessionId);
+    await c.env.SESSIONS_KV.delete(`REFRESH_FAILED:${sessionId}`);
 
     return c.json({ data: { message: 'Logged out successfully' } });
   } catch (err) {
-    console.error('Logout error:', err);
+    console.error(JSON.stringify({
+      event: 'LOGOUT_FAILED',
+      error: err instanceof Error ? err.message : String(err),
+      timestamp: new Date().toISOString(),
+    }));
     return c.json({ error: { code: 'LOGOUT_FAILED', message: 'Failed to logout' } }, 500);
   }
 });
@@ -224,7 +227,11 @@ app.get('/me', authMiddleware, async (c) => {
     const user = c.get('user');
     return c.json({ data: user });
   } catch (err) {
-    console.error('User info error:', err);
+    console.error(JSON.stringify({
+      event: 'USER_INFO_FAILED',
+      error: err instanceof Error ? err.message : String(err),
+      timestamp: new Date().toISOString(),
+    }));
     return c.json({ error: { code: 'USER_INFO_FAILED', message: 'Failed to get user info' } }, 500);
   }
 });

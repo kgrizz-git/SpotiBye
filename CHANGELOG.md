@@ -7,6 +7,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Automatic re-authentication prompt when Spotify refresh tokens expire (handles Spotify's June 2026 6-month refresh token expiration policy)
 - Added Zod request and boundary validation to the TypeScript backend: invalid inputs return the app's `{ error: { code, message } }` envelope. Existing route-specific codes are preserved where they already existed (`MISSING_REDIRECT_URI`, `INVALID_PLAYLISTS`); newly validated path and query parameters use `VALIDATION_ERROR`. KV sessions, queue messages, and Worker env bindings are schema-validated at boundaries.
 - Integrated OSV-Scanner for unified Python + Node.js dependency vulnerability scanning in CI and as a pre-push hook; Bandit now enforces the project `pyproject.toml` policy on pre-push (full tree) and in CI (blocking).
 - Bumped Dependabot version-update cadence from monthly to weekly for all ecosystems.
@@ -25,6 +26,11 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Refactored `services/export.ts` (1,186 lines) into focused modules: `export-types`, `export-cursor`, `export-job-state`, `export-assemble`, `export-collect`, `export-assembly`, `export-xlsx`, `export-xlsx-lite`, `export-csv`, `export-json`, `export-tracks`, `export-format-helpers`. The `ExportService` class is now a thin facade with static and instance delegating methods — no change to the public API, call sites, or output formats. Added unit tests for all extracted pure functions.
 
 ### Fixed
+- Backend now parses Spotify `invalid_grant` errors and responds with `AUTH_REQUIRED` instead of a generic 401
+- Stale KV sessions are deleted immediately on `invalid_grant` to prevent repeated auth failures
+- Queue analysis jobs now fail permanently on auth errors instead of retrying up to the retry limit
+- Frontend startup no longer accepts a locally valid JWT without verifying it against the backend
+- `handle_session_expired` now clears the persisted token file, preventing infinite auto-login loops on next launch
 - Fixed the "Cloudflare Dev" preset in the startup backend selector being a no-op and silently losing the saved preset choice across relaunches — both were caused by `BACKEND_PRESETS["Cloudflare Dev"]` aliasing the same URL as `"Localhost"` after FT-2's shipped-binary safety default change. Added a dedicated `DEV_BACKEND_URL` constant (override via `SPOTIBYE_DEV_BACKEND_URL`) so the two concepts are decoupled.
 - Bumped minimum dependency versions to clear OSV-Scanner findings: Python (`spotipy>=2.25.2`, `pillow>=12.2.0`, `idna>=3.15`, `pygments>=2.20.0`) and Node.js dev-toolchain overrides (`undici`, `ws`, `js-yaml`).
 - Fixed OSV-Scanner pre-push hook configuration: use the native `osv-scanner` hook (pre-commit bootstraps Go) instead of the unavailable `osv-scanner-docker` id at `v2.3.5`, and removed invalid `--skip-dirs` flags (OSV honours `.gitignore` by default).

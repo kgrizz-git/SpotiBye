@@ -4,6 +4,7 @@ import { SpotifyAuthService } from './spotify-auth';
 import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
 import type { AnalysisQueueMessage, AnalysisStatusRecord } from '../types/analysis-queue';
 import type { Env } from '../types/env';
+import { AuthRequiredException, NonRetryableError } from '../types/errors';
 
 interface SessionRecord {
   user_id: string;
@@ -84,6 +85,19 @@ export class AnalysisJobService {
 
       return { acknowledged: true, reason: 'completed' };
     } catch (error) {
+      if (error instanceof AuthRequiredException) {
+        await this.env.SESSIONS_KV.delete(message.session_id);
+        await this.writeStatus(statusKey, {
+          ...current,
+          status: 'failed',
+          progress: current.progress,
+          failed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          attempt: message.attempt,
+          error: 'Spotify session expired or revoked. Please sign in again.',
+        });
+        throw new NonRetryableError('Spotify session expired or revoked. Please sign in again.');
+      }
       await this.writeStatusMerged(statusKey, {
         status: 'retrying',
         retry_after: new Date(Date.now() + 60_000).toISOString(),
@@ -115,7 +129,7 @@ export class AnalysisJobService {
   private async getAccessToken(sessionId: string): Promise<string> {
     const raw = await this.env.SESSIONS_KV.get(sessionId);
     if (!raw) {
-      throw new Error('Analysis session not found');
+      throw new AuthRequiredException('Analysis session expired');
     }
 
     let session = JSON.parse(raw) as SessionRecord;
@@ -124,7 +138,7 @@ export class AnalysisJobService {
     }
 
     if (!session.refresh_token) {
-      throw new Error('Analysis session has no refresh token');
+      throw new AuthRequiredException('Analysis session expired');
     }
 
     const spotifyAuth = new SpotifyAuthService(

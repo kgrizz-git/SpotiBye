@@ -21,10 +21,16 @@ class BackendAPIError(Exception):
         message: str,
         status_code: Optional[int] = None,
         response_data: Optional[Dict[str, Any]] = None,
+        error_code: Optional[str] = None,
     ):
         super().__init__(message)
         self.status_code = status_code
         self.response_data = response_data or {}
+        if error_code is None and isinstance(self.response_data, dict):
+            error_payload = self.response_data.get("error", {})
+            if isinstance(error_payload, dict):
+                error_code = error_payload.get("code")
+        self.error_code = error_code
 
 
 class BackendClient:
@@ -131,10 +137,12 @@ class BackendClient:
                         "message",
                         error_payload.get("code", f"HTTP {response.status_code}"),
                     )
+                    error_code = error_payload.get("code")
                 else:
                     error_message = str(error_payload) or f"HTTP {response.status_code}"
+                    error_code = None
                 raise BackendAPIError(
-                    error_message, response.status_code, response_data
+                    error_message, response.status_code, response_data, error_code
                 )
 
             # Most backend routes return { data: ... }, where data can be dict or list.
@@ -456,12 +464,16 @@ class BackendClient:
                 else {}
             )
             message = f"{failure_prefix}: HTTP {response.status_code}"
+            error_code = None
             if isinstance(error_payload, dict):
                 message = error_payload.get(
                     "message", error_payload.get("code", message)
                 )
+                error_code = error_payload.get("code")
 
-            raise BackendAPIError(message, response.status_code, response_data)
+            raise BackendAPIError(
+                message, response.status_code, response_data, error_code
+            )
 
         return response.content
 
@@ -495,6 +507,23 @@ class BackendClient:
     def is_authenticated(self) -> bool:
         """Check if client has valid authentication token."""
         return self.auth_token is not None
+
+    def is_auth_required_error(self, exc: Exception) -> bool:
+        """Check if exception indicates re-authentication is required."""
+        return (
+            isinstance(exc, BackendAPIError)
+            and exc.status_code == 401
+            and exc.error_code == "AUTH_REQUIRED"
+        )
+
+    def get_me(self) -> Dict[str, Any]:
+        """Verify session validity against backend. Returns user dict on success.
+
+        Raises:
+            BackendAPIError(status_code=401, error_code='AUTH_REQUIRED'): session expired/revoked
+            BackendAPIError(status_code=None): transport error (backend offline, timeout)
+        """
+        return self._make_request("GET", "/auth/me")
 
 
 # Global backend client instance

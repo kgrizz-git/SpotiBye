@@ -376,6 +376,32 @@ class BackendAuthenticator:
 
         except BackendAPIError as e:
             logger.error(f"Token refresh failed: {e}")
+            if e.error_code == "AUTH_REQUIRED":
+                self.backend_client.clear_auth_token()
+                app = None
+                try:
+                    from kivy.app import App
+
+                    app = App.get_running_app()
+                except Exception:
+                    app = None
+
+                cache_manager = getattr(app, "cache_manager", None) if app else None
+                if cache_manager:
+                    cache_manager.clear_auth_token()
+                logger.warning(
+                    "AUTH_REQUIRED detected: wiping cache and redirecting to login",
+                    extra={"error_code": e.error_code, "status_code": e.status_code},
+                )
+                if app and hasattr(app, "prompt_reauthentication"):
+                    from kivy.clock import Clock
+
+                    Clock.schedule_once(
+                        lambda _: app.prompt_reauthentication(
+                            "Your Spotify session has expired. Please sign in again."
+                        ),
+                        0.2,
+                    )
             return False
         except Exception as e:
             logger.error(f"Token refresh error: {e}")

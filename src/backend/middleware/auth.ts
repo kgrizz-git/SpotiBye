@@ -7,6 +7,7 @@ import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
 import type { Variables } from '../types/variables';
 import type { AuthTokenResponse } from '../types/spotify-api';
 import { SessionDataSchema, type ParsedSessionData } from '../validation/schemas/session';
+import { AuthRequiredException } from '../types/errors';
 
 export type SessionData = ParsedSessionData;
 
@@ -16,12 +17,21 @@ export function safeParseSession(raw: string | null, logContext = 'unknown'): Se
     const parsed: unknown = JSON.parse(raw);
     const result = SessionDataSchema.safeParse(parsed);
     if (!result.success) {
-      console.error(`Session schema validation failed for session ${logContext.substring(0, 8)}`);
+      console.error(JSON.stringify({
+        event: 'SESSION_VALIDATION_FAILED',
+        session_id: logContext.substring(0, 8),
+        timestamp: new Date().toISOString(),
+      }));
       return null;
     }
     return result.data;
   } catch (err) {
-    console.error(`Session JSON parse failed for session ${logContext.substring(0, 8)}:`, err);
+    console.error(JSON.stringify({
+      event: 'SESSION_PARSE_FAILED',
+      session_id: logContext.substring(0, 8),
+      error: err instanceof Error ? err.message : String(err),
+      timestamp: new Date().toISOString(),
+    }));
     return null;
   }
 }
@@ -54,6 +64,13 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
         throw new HTTPException(401, { message: 'Token expired' });
       }
 
+      // Check negative cache first to prevent cascading failures across instances
+      const refreshFailedKey = `REFRESH_FAILED:${payload.session_id}`;
+      const refreshFailed = await c.env.SESSIONS_KV.get(refreshFailedKey);
+      if (refreshFailed) {
+        throw new AuthRequiredException();
+      }
+
       try {
         let refreshPromise = refreshPromises.get(payload.session_id);
         if (!refreshPromise) {
@@ -73,7 +90,26 @@ export const authMiddleware = async (c: Context<{ Bindings: Env; Variables: Vari
         await c.env.SESSIONS_KV.put(payload.session_id, JSON.stringify(session), {
           expirationTtl: SPOTIFY_SESSION_TTL_SECONDS,
         });
+        await c.env.SESSIONS_KV.delete(refreshFailedKey);
       } catch (refreshError) {
+        if (refreshError instanceof AuthRequiredException) {
+          await c.env.SESSIONS_KV.put(refreshFailedKey, '1', { expirationTtl: 60 });
+          await c.env.SESSIONS_KV.delete(payload.session_id);
+          console.error(JSON.stringify({
+            event: 'TOKEN_REFRESH_FAILED',
+            session_id: payload.session_id.substring(0, 8),
+            code: 'AUTH_REQUIRED',
+            spotify_error: 'invalid_grant',
+            timestamp: new Date().toISOString(),
+          }));
+          console.error(JSON.stringify({
+            event: 'SESSION_DELETED',
+            session_id: payload.session_id.substring(0, 8),
+            reason: 'AUTH_REQUIRED',
+            timestamp: new Date().toISOString(),
+          }));
+          throw refreshError;
+        }
         console.error('Failed to refresh Spotify access token:', refreshError);
         throw new HTTPException(401, { message: 'Token expired' });
       } finally {

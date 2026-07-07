@@ -268,6 +268,8 @@ class MainScreen(Screen):
             or "token expired" in lowered
             or "unauthorized" in lowered
             or "http 401" in lowered
+            or "auth_required" in lowered
+            or "code=auth_required" in lowered
         )
 
         if auth_related:

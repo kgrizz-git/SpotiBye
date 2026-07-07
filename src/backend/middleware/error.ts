@@ -2,6 +2,7 @@ import type { ErrorHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { HTTPException } from 'hono/http-exception';
 import type { ErrorResponse } from '../types/api';
+import { AuthRequiredException } from '../types/errors';
 
 /**
  * Discriminator check for 3rd-party errors whose `err.name` string might
@@ -21,7 +22,14 @@ function isValidationCode(value: unknown): boolean {
 }
 
 export const errorHandler: ErrorHandler = (err, c) => {
-  console.error('Error occurred:', err);
+  console.error(JSON.stringify({
+    event: 'ERROR_OCCURRED',
+    error: err.message,
+    name: err.name,
+    path: c.req.path,
+    method: c.req.method,
+    timestamp: new Date().toISOString(),
+  }));
   const requestId = crypto.randomUUID();
 
   // Default error response
@@ -33,13 +41,15 @@ export const errorHandler: ErrorHandler = (err, c) => {
   if (err instanceof HTTPException) {
     status = err.status;
     message = err.message || message;
-    code = status === 401
-      ? 'UNAUTHORIZED'
-      : status === 403
-        ? 'FORBIDDEN'
-        : status === 404
-          ? 'NOT_FOUND'
-          : 'HTTP_ERROR';
+    code = err instanceof AuthRequiredException
+      ? 'AUTH_REQUIRED'
+      : status === 401
+        ? 'UNAUTHORIZED'
+        : status === 403
+          ? 'FORBIDDEN'
+          : status === 404
+            ? 'NOT_FOUND'
+            : 'HTTP_ERROR';
   } else if (
     err.name === 'ValidationError' &&
     isValidationCode((err as { code?: unknown }).code)

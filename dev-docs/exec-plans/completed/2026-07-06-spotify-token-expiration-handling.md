@@ -28,7 +28,7 @@ When Spotify returns `invalid_grant` during token refresh:
 
 ### 1. Backend: Add `AUTH_REQUIRED` error code to `types/api.ts`
 
-- [ ] Add an exported `AUTH_REQUIRED` constant to `src/backend/types/api.ts`:
+- [x] Add an exported `AUTH_REQUIRED` constant to `src/backend/types/api.ts`:
   ```ts
   export const AUTH_REQUIRED = 'AUTH_REQUIRED' as const;
   ```
@@ -36,8 +36,8 @@ When Spotify returns `invalid_grant` during token refresh:
 
 ### 2. Backend: Create `src/backend/types/errors.ts` with custom exception classes
 
-- [ ] Create `src/backend/types/errors.ts` (currently missing) to house shared custom error definitions.
-- [ ] Define a custom type-safe `AuthRequiredException` subclassing Hono's `HTTPException` (from `'hono/http-exception'`):
+- [x] Create `src/backend/types/errors.ts` (currently missing) to house shared custom error definitions.
+- [x] Define a custom type-safe `AuthRequiredException` subclassing Hono's `HTTPException` (from `'hono/http-exception'`):
   ```ts
   import { HTTPException } from 'hono/http-exception';
 
@@ -49,7 +49,7 @@ When Spotify returns `invalid_grant` during token refresh:
     }
   }
   ```
-- [ ] Define a standard `NonRetryableError` class extending `Error` for background task queues:
+- [x] Define a standard `NonRetryableError` class extending `Error` for background task queues:
   ```ts
   export class NonRetryableError extends Error {
     readonly code = 'NON_RETRYABLE';
@@ -59,14 +59,14 @@ When Spotify returns `invalid_grant` during token refresh:
     }
   }
   ```
-- [ ] Do **not** introduce a custom `InvalidGrantError` class — if it escapes the middleware's inner catch block, `middleware/error.ts` would treat it as a 500. Throwing `AuthRequiredException` (which inherits from `HTTPException`) directly ensures it is caught by the middleware's `if (error instanceof HTTPException)` branch.
-- [ ] Prefer `err instanceof AuthRequiredException` over `(err as { code?: string }).code === 'AUTH_REQUIRED'` property checks wherever the import is available (e.g. in `middleware/error.ts` and `middleware/auth.ts`). The property-cast approach still works but is less type-safe.
+- [x] Do **not** introduce a custom `InvalidGrantError` class — if it escapes the middleware's inner catch block, `middleware/error.ts` would treat it as a 500. Throwing `AuthRequiredException` (which inherits from `HTTPException`) directly ensures it is caught by the middleware's `if (error instanceof HTTPException)` branch.
+- [x] Prefer `err instanceof AuthRequiredException` over `(err as { code?: string }).code === 'AUTH_REQUIRED'` property checks wherever the import is available (e.g. in `middleware/error.ts` and `middleware/auth.ts`). The property-cast approach still works but is less type-safe.
 
 ### 3. Backend: Fix `middleware/error.ts` to preserve `AUTH_REQUIRED` code
 
 > **Critical:** The error handler at line 36 of `src/backend/middleware/error.ts` unconditionally overwrites `code = 'UNAUTHORIZED'` for every 401, discarding any custom `code` set on the exception.
 
-- [ ] In `middleware/error.ts`, check for explicit error codes on `HTTPException` instances before applying status-based mapping defaults:
+- [x] In `middleware/error.ts`, check for explicit error codes on `HTTPException` instances before applying status-based mapping defaults:
   ```ts
   if (err instanceof HTTPException) {
     status = err.status;
@@ -80,12 +80,12 @@ When Spotify returns `invalid_grant` during token refresh:
       : 'HTTP_ERROR';
   }
   ```
-- [ ] Because Hono passes the exact runtime exception instance to `errorHandler(err, c)`, checking `errAny.code === 'AUTH_REQUIRED'` (or `err instanceof AuthRequiredException` if imported) reliably preserves the custom error code without being lost during error serialization.
-- [ ] **Cast note:** Hono's `HTTPException` TypeScript type does not declare a `code` property, even though our `AuthRequiredException` subclass adds one. The `(err as unknown as { code?: string })` cast in the snippet above is therefore required at the type level. As a cleaner alternative, import `AuthRequiredException` in `error.ts` and use `err instanceof AuthRequiredException` to avoid the cast entirely.
+- [x] Because Hono passes the exact runtime exception instance to `errorHandler(err, c)`, checking `errAny.code === 'AUTH_REQUIRED'` (or `err instanceof AuthRequiredException` if imported) reliably preserves the custom error code without being lost during error serialization.
+- [x] **Cast note:** Hono's `HTTPException` TypeScript type does not declare a `code` property, even though our `AuthRequiredException` subclass adds one. The `(err as unknown as { code?: string })` cast in the snippet above is therefore required at the type level. As a cleaner alternative, import `AuthRequiredException` in `error.ts` and use `err instanceof AuthRequiredException` to avoid the cast entirely.
 
 ### 4. Backend: Update `SpotifyAuthService` token methods to throw `AuthRequiredException`
 
-- [ ] Modify `services/spotify-auth.ts:refreshAccessToken` (line 122-125) with `AuthRequiredException` on `invalid_grant` and defensive JSON parsing. Apply the same **defensive JSON parsing** to `exchangeCodeForTokens` (lines 76-107), but **do not throw `AuthRequiredException`** there — `invalid_grant` from the authorization code exchange means the code was expired or already used, which is a caller error, not a Spotify session revocation. For `exchangeCodeForTokens`, parse the error body but throw a plain `Error` (not `AuthRequiredException`).
+- [x] Modify `services/spotify-auth.ts:refreshAccessToken` (line 122-125) with `AuthRequiredException` on `invalid_grant` and defensive JSON parsing. Apply the same **defensive JSON parsing** to `exchangeCodeForTokens` (lines 76-107), but **do not throw `AuthRequiredException`** there — `invalid_grant` from the authorization code exchange means the code was expired or already used, which is a caller error, not a Spotify session revocation. For `exchangeCodeForTokens`, parse the error body but throw a plain `Error` (not `AuthRequiredException`).
   - When `response.ok` is false, buffer the response body with `response.text()` **first**, then attempt to JSON-parse the buffered string. Do **not** call `response.text()` after `response.json()` — the Fetch body stream is already consumed and will return an empty string.
     ```ts
     // refreshAccessToken only:
@@ -119,9 +119,9 @@ When Spotify returns `invalid_grant` during token refresh:
 >
 > **Ordering:** The `REFRESH_FAILED` KV check must happen **before** the `refreshPromises` lookup. Once `REFRESH_FAILED` is set, all subsequent requests — including those that would have joined an in-flight promise via `refreshPromises` — must be rejected immediately without touching the Map. This prevents a race where a concurrently-awaiting request picks up the rejected promise and then re-enters the refresh path on retry before `REFRESH_FAILED` propagates.
 
-- [ ] At the top of the `if (Date.now() > session.expires_at)` block, **first** check if `REFRESH_FAILED:<session_id>` exists in `SESSIONS_KV`. If set, skip refresh and immediately throw `new AuthRequiredException()`. Do not check `refreshPromises` until after this KV check.
-- [ ] In the catch block at line 76, check if the error is `error instanceof AuthRequiredException` (preferred) or `(error as { code?: string }).code === AUTH_REQUIRED`.
-- [ ] If `AUTH_REQUIRED`, perform cleanup in the catch block **before** the `finally` block runs:
+- [x] At the top of the `if (Date.now() > session.expires_at)` block, **first** check if `REFRESH_FAILED:<session_id>` exists in `SESSIONS_KV`. If set, skip refresh and immediately throw `new AuthRequiredException()`. Do not check `refreshPromises` until after this KV check.
+- [x] In the catch block at line 76, check if the error is `error instanceof AuthRequiredException` (preferred) or `(error as { code?: string }).code === AUTH_REQUIRED`.
+- [x] If `AUTH_REQUIRED`, perform cleanup in the catch block **before** the `finally` block runs:
   - Set negative cache with explicit code location:
     ```ts
     await c.env.SESSIONS_KV.put(`REFRESH_FAILED:${payload.session_id}`, '1', { expirationTtl: 60 });
@@ -131,31 +131,32 @@ When Spotify returns `invalid_grant` during token refresh:
     ```ts
     await c.env.SESSIONS_KV.delete(payload.session_id);
     ```
-- [ ] Re-throw the `AuthRequiredException` as-is.
-- [ ] On **successful** refresh, explicitly delete any stale `REFRESH_FAILED` key immediately after writing the updated session to KV:
+- [x] Re-throw the `AuthRequiredException` as-is.
+- [x] On **successful** refresh, explicitly delete any stale `REFRESH_FAILED` key immediately after writing the updated session to KV:
   ```ts
   await c.env.SESSIONS_KV.put(payload.session_id, JSON.stringify(session), { expirationTtl: SPOTIFY_SESSION_TTL_SECONDS });
   await c.env.SESSIONS_KV.delete(`REFRESH_FAILED:${payload.session_id}`); // ← add this line
   ```
   This handles the edge case where a previous failure set `REFRESH_FAILED` but the session was somehow recovered (e.g., manual intervention).
-- [ ] **Dedup race note:** A concurrent request that enters the `refreshPromises` deduplication path (finding the in-flight promise) and awaits its rejection will exit the inner catch at line 76. Because it took the deduplication path, it bypassed the `REFRESH_FAILED` KV check at the top of the block. The next attempt from the same client will trigger the KV check and be rejected immediately. This transient one-extra-failure-per-concurrent-request is acceptable and self-correcting.
+- [x] **Dedup race note:** A concurrent request that enters the `refreshPromises` deduplication path (finding the in-flight promise) and awaits its rejection will exit the inner catch at line 76. Because it took the deduplication path, it bypassed the `REFRESH_FAILED` KV check at the top of the block. The next attempt from the same client will trigger the KV check and be rejected immediately. This transient one-extra-failure-per-concurrent-request is acceptable and self-correcting.
+- [x] **(Low-priority cleanup) `REFRESH_FAILED` orphan on logout/re-auth:** `POST /auth/logout` (`routes/auth.ts:212`) deletes the session KV record but does not delete `REFRESH_FAILED:<session_id>`. The OAuth callback (`routes/auth.ts:112`) creates a brand-new `sessionId = crypto.randomUUID()` on re-auth, so it has no reference to the old session ID either. Both cases produce an orphaned `REFRESH_FAILED` key that self-deletes after 60s TTL. **This is functionally inert:** after logout the session record no longer exists so `authMiddleware` fails at session lookup before ever reaching the `REFRESH_FAILED` check; after re-auth the user holds a JWT with a new `session_id` UUID that can never collide with the old one. For cleanliness, add `await c.env.SESSIONS_KV.delete(\`REFRESH_FAILED:${sessionId}\`)` to the logout handler alongside the existing session delete. No change is needed or possible in the callback (old session ID is not in scope there).
 
 ### 6. Backend: Clean up `/spotify/refresh` route
 
-- [ ] Keep `authMiddleware` on `POST /spotify/refresh` (`routes/auth.ts:159`) to guarantee JWT authentication and transparent Spotify token refreshing when needed.
-- [ ] Remove the redundant `spotifyAuth.refreshAccessToken(...)` call and database/KV update from the route handler body (lines 170-183) to prevent double-refreshes.
-- [ ] Retain only JWT access token generation and return (lines 185-201). Note that returning only `access_token`, `token_type`, `expires_in`, and `spotify_access_expires_in` is safe and backward compatible because `backend_client.py:refresh_token()` only reads `token` / `access_token`.
-- [ ] Compute `spotify_access_expires_in` dynamically using the session's **`expires_at` field** (the Spotify access-token expiry stored in milliseconds since epoch), converted to remaining seconds. Use a non-negative guard against clock skew:
+- [x] Keep `authMiddleware` on `POST /spotify/refresh` (`routes/auth.ts:159`) to guarantee JWT authentication and transparent Spotify token refreshing when needed.
+- [x] Remove the redundant `spotifyAuth.refreshAccessToken(...)` call and database/KV update from the route handler body (lines 170-183) to prevent double-refreshes.
+- [x] Retain only JWT access token generation and return (lines 185-201). Note that returning only `access_token`, `token_type`, `expires_in`, and `spotify_access_expires_in` is safe and backward compatible because `backend_client.py:refresh_token()` only reads `token` / `access_token`.
+- [x] Compute `spotify_access_expires_in` dynamically using the session's **`expires_at` field** (the Spotify access-token expiry stored in milliseconds since epoch), converted to remaining seconds. Use a non-negative guard against clock skew:
   `spotify_access_expires_in: Math.max(0, Math.floor((session.expires_at - Date.now()) / 1000))`
   > **Note:** `session.expires_at` (milliseconds) is distinct from `SPOTIFY_SESSION_TTL_SECONDS` (the KV record lifetime in seconds). These are equal at session creation but diverge over time — always derive `spotify_access_expires_in` from `expires_at`, never from the constant.
 
 ### 7. Backend: Prevent Queue Retries on Auth Failure
 
-- [ ] In `src/backend/services/analysis-job.ts:getAccessToken()`, ensure that missing sessions or missing refresh tokens throw `new AuthRequiredException('Analysis session expired')` rather than generic `Error`s.
-- [ ] In `src/backend/services/analysis-job.ts:process()`, wrap `getAccessToken()` and Spotify API calls. If an error is caught where `error instanceof AuthRequiredException` (or `code === 'AUTH_REQUIRED'`), delete the KV session, set job status to `'failed'`, and throw `new NonRetryableError('Spotify session expired or revoked. Please sign in again.')`.
-- [ ] Note that `jobService.markFailed(body, error)` (`analysis-job.ts:97`) persists the error message to cache (`status: 'failed'`), allowing frontend status polling (`GET /analysis/status`) to detect the failure and display the re-auth message.
-- [ ] **Import:** Add `import { NonRetryableError } from '../types/errors';` to `src/backend/index.ts` (the file does not currently import from `types/errors`, which doesn't exist yet — create it in Step 2 first).
-- [ ] In `src/backend/index.ts:queue()`, add the `NonRetryableError` / `AUTH_REQUIRED` check **before** the existing `message.attempts >= 3` guard — not inside it. If added after, the first two `AUTH_REQUIRED` failures will incorrectly call `message.retry()`. The corrected structure is:
+- [x] In `src/backend/services/analysis-job.ts:getAccessToken()`, ensure that missing sessions or missing refresh tokens throw `new AuthRequiredException('Analysis session expired')` rather than generic `Error`s.
+- [x] In `src/backend/services/analysis-job.ts:process()`, wrap `getAccessToken()` and Spotify API calls. If an error is caught where `error instanceof AuthRequiredException` (or `code === 'AUTH_REQUIRED'`), delete the KV session, set job status to `'failed'`, and throw `new NonRetryableError('Spotify session expired or revoked. Please sign in again.')`.
+- [x] Note that `jobService.markFailed(body, error)` (`analysis-job.ts:97`) persists the error message to cache (`status: 'failed'`), allowing frontend status polling (`GET /analysis/status`) to detect the failure and display the re-auth message.
+- [x] **Import:** Add `import { NonRetryableError } from '../types/errors';` to `src/backend/index.ts` (the file does not currently import from `types/errors`, which doesn't exist yet — create it in Step 2 first).
+- [x] In `src/backend/index.ts:queue()`, add the `NonRetryableError` / `AUTH_REQUIRED` check **before** the existing `message.attempts >= 3` guard — not inside it. If added after, the first two `AUTH_REQUIRED` failures will incorrectly call `message.retry()`. The corrected structure is:
   ```ts
   try {
     await jobService.process(body);
@@ -184,12 +185,12 @@ When Spotify returns `invalid_grant` during token refresh:
     message.retry();
   }
   ```
-- [ ] **Pre-existing Rule #5 violation:** `index.ts` line 97 contains a bare `console.log` for successful job processing. Replace it with a structured `console.error(JSON.stringify({...}))` call in the same PR (shown in the snippet above).
-- [ ] **Defense-in-depth note:** The queue consumer's `AUTH_REQUIRED` and `NON_RETRYABLE` code checks are a safety net. The primary path is `process()` wrapping all auth errors in `NonRetryableError` before they reach the consumer. The code checks catch any `AuthRequiredException` that escapes `process()` unexpectedly (e.g., from a code path not yet wrapped in the try/catch inside `process()`).
+- [x] **Pre-existing Rule #5 violation:** `index.ts` line 97 contains a bare `console.log` for successful job processing. Replace it with a structured `console.error(JSON.stringify({...}))` call in the same PR (shown in the snippet above).
+- [x] **Defense-in-depth note:** The queue consumer's `AUTH_REQUIRED` and `NON_RETRYABLE` code checks are a safety net. The primary path is `process()` wrapping all auth errors in `NonRetryableError` before they reach the consumer. The code checks catch any `AuthRequiredException` that escapes `process()` unexpectedly (e.g., from a code path not yet wrapped in the try/catch inside `process()`).
 
 ### 8. Frontend: Expose `error_code` in `BackendAPIError` safely
 
-- [ ] In `src/frontend/services/backend_client.py`, update `BackendAPIError.__init__` (line 19) to accept an optional `error_code: Optional[str] = None` parameter without breaking existing callers:
+- [x] In `src/frontend/services/backend_client.py`, update `BackendAPIError.__init__` (line 19) to accept an optional `error_code: Optional[str] = None` parameter without breaking existing callers:
   ```python
   def __init__(
       self,
@@ -207,13 +208,13 @@ When Spotify returns `invalid_grant` during token refresh:
               error_code = error_payload.get("code")
       self.error_code = error_code
   ```
-- [ ] In `_make_request` (`backend_client.py:136`), pass `error_code` cleanly into constructor invocation when raising `BackendAPIError`.
-- [ ] Also update `_download_file` (`backend_client.py:429`) to extract and pass `error_code` from the response payload when raising `BackendAPIError`. Download endpoints can also return `AUTH_REQUIRED`, and the current manual message-build in `_download_file` bypasses the new `error_code` extraction logic.
+- [x] In `_make_request` (`backend_client.py:136`), pass `error_code` cleanly into constructor invocation when raising `BackendAPIError`.
+- [x] Also update `_download_file` (`backend_client.py:429`) to extract and pass `error_code` from the response payload when raising `BackendAPIError`. Download endpoints can also return `AUTH_REQUIRED`, and the current manual message-build in `_download_file` bypasses the new `error_code` extraction logic.
 
 ### 9. Frontend: Add `AUTH_REQUIRED` detection and `get_me` in `BackendClient`
 
-- [ ] Create a helper method in `BackendClient` (e.g., `is_auth_required_error(exc)`) that returns `True` when `exc` is a `BackendAPIError` with `status_code == 401` and `error_code == 'AUTH_REQUIRED'`.
-- [ ] Add a method `get_me(self) -> Dict[str, Any]` to `BackendClient` (`src/frontend/services/backend_client.py`):
+- [x] Create a helper method in `BackendClient` (e.g., `is_auth_required_error(exc)`) that returns `True` when `exc` is a `BackendAPIError` with `status_code == 401` and `error_code == 'AUTH_REQUIRED'`.
+- [x] Add a method `get_me(self) -> Dict[str, Any]` to `BackendClient` (`src/frontend/services/backend_client.py`):
   ```python
   def get_me(self) -> Dict[str, Any]:
       """Verify session validity against backend. Returns user dict on success.
@@ -225,21 +226,21 @@ When Spotify returns `invalid_grant` during token refresh:
       return self._make_request("GET", "/auth/me")
   ```
   The backend `GET /auth/me` endpoint (routes/auth.ts:222) returns `{ data: { id, email, name, session_id } }`. The `_make_request` unwrap logic extracts `data` automatically, so callers receive the user dict directly.
-- [ ] The retry helper `_run_with_transient_retry` in `core.py` already excludes 401 from `retryable_statuses` — `AUTH_REQUIRED` errors will surface immediately without consuming retry budget. Add an inline comment to `retryable_statuses` explicitly noting that 401 is intentionally excluded so future maintainers do not add it.
+- [x] The retry helper `_run_with_transient_retry` in `core.py` already excludes 401 from `retryable_statuses` — `AUTH_REQUIRED` errors will surface immediately without consuming retry budget. Add an inline comment to `retryable_statuses` explicitly noting that 401 is intentionally excluded so future maintainers do not add it.
 
 ### 10. Frontend: Wire `AUTH_REQUIRED` to re-login and wipe persisted cache
 
 > **Reconciling Cache Clearing Policy:** When Spotify returns `invalid_grant` (`AUTH_REQUIRED`), the refresh token is permanently revoked or expired under Spotify's 6-month policy. Unlike transient network glitches, this state cannot recover silently. Therefore, we **must** clear both in-memory credentials and the persisted token file (`cache_manager.clear_auth_token()`) to prevent infinite auto-login loops on subsequent app launches.
 
-- [ ] In Kivy frontend's `src/frontend/screens/main_screen.py:_on_backend_error()`, add `"auth_required"` and `"code=auth_required"` to `auth_related` substrings (lines 265-271) that trigger `app.prompt_reauthentication()` (alias for `handle_session_expired`).
-- [ ] Verify that `_format_backend_api_error` in `src/frontend/screens/adapter_mixins/core.py` appends `code=AUTH_REQUIRED`, ensuring substring matching in `main_screen.py` functions reliably.
-- [ ] **Fix `handle_session_expired` in `backend_app.py` (line 305–332):** The existing implementation only clears the in-memory token (`self.backend_client.clear_auth_token()`). It must **also** wipe the persisted disk cache. Add:
+- [x] In Kivy frontend's `src/frontend/screens/main_screen.py:_on_backend_error()`, add `"auth_required"` and `"code=auth_required"` to `auth_related` substrings (lines 265-271) that trigger `app.prompt_reauthentication()` (alias for `handle_session_expired`).
+- [x] Verify that `_format_backend_api_error` in `src/frontend/screens/adapter_mixins/core.py` appends `code=AUTH_REQUIRED`, ensuring substring matching in `main_screen.py` functions reliably.
+- [x] **Fix `handle_session_expired` in `backend_app.py` (line 305–332):** The existing implementation only clears the in-memory token (`self.backend_client.clear_auth_token()`). It must **also** wipe the persisted disk cache. Add:
   ```python
   if self.cache_manager:
       self.cache_manager.clear_auth_token()
   ```
   > **Design reversal note:** The existing docstring for `handle_session_expired` (line 308) explicitly says *"without wiping the persisted token"* and explains that preserving the file avoids stale-token risk because it will be overwritten on next login. That rationale no longer holds under Spotify's 6-month expiration policy: the cached refresh token is **permanently** invalid and will cause an infinite auto-login loop on every subsequent startup until the file is replaced. This is a deliberate behavioral change from the original design, justified by the new policy. Update the docstring accordingly.
-- [ ] In `src/frontend/auth/backend_auth.py:BackendAuthenticator.refresh_token()` (line 343), when catching a `BackendAPIError`, inspect `exc.error_code == 'AUTH_REQUIRED'` directly (preferred over substring matching). If true:
+- [x] In `src/frontend/auth/backend_auth.py:BackendAuthenticator.refresh_token()` (line 343), when catching a `BackendAPIError`, inspect `exc.error_code == 'AUTH_REQUIRED'` directly (preferred over substring matching). If true:
   - Clear in-memory token (`self.backend_client.clear_auth_token()`).
   - Clear persisted disk cache if available via `cache_manager.clear_auth_token()`.
   - Trigger app-level re-login prompt if UI is running.
@@ -247,7 +248,7 @@ When Spotify returns `invalid_grant` during token refresh:
 
 ### 11. Frontend: Validate cached tokens on startup via `GET /auth/me`
 
-- [ ] In `src/frontend/app/backend_app.py:_try_auto_login`, after checking local `_is_jwt_expired`, call `self.backend_client.get_me()` to verify session validity against the backend.
+- [x] In `src/frontend/app/backend_app.py:_try_auto_login`, after checking local `_is_jwt_expired`, call `self.backend_client.get_me()` to verify session validity against the backend.
   - **Do not use `health_check()`**, as it is an unauthenticated endpoint.
   - **Threading — Kivy main thread must not block:** `get_me()` is a blocking network call. Use a background `threading.Thread` so the Kivy event loop is not blocked. Pseudocode:
     ```python
@@ -293,17 +294,17 @@ When Spotify returns `invalid_grant` during token refresh:
     ```
     Note: `Clock.schedule_once` is thread-safe in Kivy and is the correct way to schedule UI updates from background threads. The `@mainthread` decorator is an alternative but `Clock.schedule_once` is more explicit about the timing.
   - **Prevent UI Race Condition:** Do not call `self.switch_to_main()` before `get_me()` returns. Keep the user on the login screen showing the "Verifying session…" status until the thread callback fires.
-- [ ] If `GET /auth/me` returns 401 / `AUTH_REQUIRED`:
+- [x] If `GET /auth/me` returns 401 / `AUTH_REQUIRED`:
   - Wipe persisted cache (`self.cache_manager.clear_auth_token()`) and in-memory token.
   - Keep user on login screen with notice: `"Your Spotify session has expired. Please sign in again."`
-- [ ] If `GET /auth/me` raises a **transport error** (`status_code is None` — e.g. backend offline, timeout, DNS failure):
+- [x] If `GET /auth/me` raises a **transport error** (`status_code is None` — e.g. backend offline, timeout, DNS failure):
   - Do **not** wipe the cached token — the session may still be valid.
   - Log a warning and proceed to the main screen (graceful degradation matching current offline behavior).
-- [ ] If `GET /auth/me` succeeds, complete the transition to the main screen.
+- [x] If `GET /auth/me` succeeds, complete the transition to the main screen.
 
 ### 12. Tests
 
-- [ ] **Backend Unit/Integration Tests (`auth-flow.test.ts` & `auth-middleware.test.ts`)**:
+- [x] **Backend Unit/Integration Tests (`auth-flow.test.ts` & `auth-middleware.test.ts`)**:
   - Mock Spotify token endpoint returning `{ error: "invalid_grant" }` → verify middleware deletes KV session and returns `401` with `code: 'AUTH_REQUIRED'`.
   - Verify `errorHandler` preserves explicit `AUTH_REQUIRED` code without mapping to `UNAUTHORIZED`.
   - Verify `refreshPromises` Map and `REFRESH_FAILED` negative cache prevent concurrent refresh race conditions.
@@ -314,7 +315,7 @@ When Spotify returns `invalid_grant` during token refresh:
   - Verify `AnalysisJobService` and `queue()` consumer fail immediately on `AUTH_REQUIRED` without retrying.
   - Verify `safeParseSession` returns `null` for malformed JSON, missing required fields, and schema violations — and that the middleware throws 401 (not 500) in those cases.
   - Verify `GET /auth/me` returns shape `{ data: { id, email, name, session_id } }` for authenticated requests.
-- [ ] **Frontend Tests (`test_auth.py` & `test_main_screen_logout.py`)**:
+- [x] **Frontend Tests (`test_auth.py` & `test_main_screen_logout.py`)**:
   - Verify `BackendAPIError` correctly extracts and sets `error_code='AUTH_REQUIRED'`.
   - Verify `BackendAuthenticator.refresh_token()` wipes **both** in-memory and disk cache on `AUTH_REQUIRED` and returns `False`. Specific mock: `backend_client.refresh_token()` raises `BackendAPIError('Unauthorized', 401, {'error': {'code': 'AUTH_REQUIRED'}})` → assert `cache_manager.clear_auth_token()` called and return is `False`.
   - Verify `handle_session_expired` wipes the disk cache (design reversal from Step 10).
@@ -322,12 +323,12 @@ When Spotify returns `invalid_grant` during token refresh:
   - Verify `_download_file` 401 `AUTH_REQUIRED` responses surface `error_code='AUTH_REQUIRED'` on the raised `BackendAPIError`.
   - Verify `_try_auto_login` with a transport error (`BackendAPIError(status_code=None)`) proceeds to main screen without wiping cache.
   - Verify `_try_auto_login` with a 401 `AUTH_REQUIRED` wipes disk cache and keeps user on login screen.
-- [ ] **Structured Verification Procedure (Manual E2E)**:
+- [x] **Structured Verification Procedure (Manual E2E)**:
   - Document verification steps using `./scripts/verify-all.sh` and running local backend/frontend against simulated expired tokens to verify login UI redirection.
 
 ### 13. Backend & Frontend: Structured Logging & Observability
 
-- [ ] In accordance with `AGENTS.md` Rule #5 (*"No `console.log` in non-test backend code — use structured logging"*), use `console.error(JSON.stringify({...}))` for token-related events. Recommended log schema:
+- [x] In accordance with `AGENTS.md` Rule #5 (*"No `console.log` in non-test backend code — use structured logging"*), use `console.error(JSON.stringify({...}))` for token-related events. Recommended log schema:
   ```ts
   // Token refresh failure (middleware/auth.ts catch block)
   console.error(JSON.stringify({
@@ -346,15 +347,15 @@ When Spotify returns `invalid_grant` during token refresh:
     timestamp: new Date().toISOString(),
   }));
   ```
-- [ ] The pre-existing `console.log` at `index.ts:97` (successful queue job) must be converted to a structured `console.error(JSON.stringify({...}))` call in the same PR (see Step 7 snippet).
-- [ ] On the frontend, log detection of `AUTH_REQUIRED` events using standard Python structured logging:
+- [x] The pre-existing `console.log` at `index.ts:97` (successful queue job) must be converted to a structured `console.error(JSON.stringify({...}))` call in the same PR (see Step 7 snippet).
+- [x] On the frontend, log detection of `AUTH_REQUIRED` events using standard Python structured logging:
   ```python
   logger.warning('AUTH_REQUIRED detected: wiping cache and redirecting to login', extra={'error_code': exc.error_code, 'status_code': exc.status_code})
   ```
 
 ### 14. Documentation & Changelog
 
-- [ ] Update `CHANGELOG.md` under the unreleased section (in the same PR as required by project rules). Draft entry:
+- [x] Update `CHANGELOG.md` under the unreleased section (in the same PR as required by project rules). Draft entry:
   ```markdown
   ## [Unreleased]
 

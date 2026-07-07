@@ -116,6 +116,8 @@ class BackendMainScreenAdapterCore:
         base_delay: float = 1.0,
     ):
         """Run an operation with retry/backoff for transient backend failures."""
+        # 401 is intentionally excluded from retryable_statuses because auth errors (including AUTH_REQUIRED)
+        # should surface immediately without consuming retry budget
         retryable_statuses = {429, 500, 502, 503, 504}
         last_error: Optional[Exception] = None
         consecutive_503 = 0

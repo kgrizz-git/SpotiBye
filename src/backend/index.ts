@@ -11,6 +11,7 @@ import { AnalysisJobService } from './services/analysis-job';
 import type { AnalysisQueueMessage } from './types/analysis-queue';
 import type { Env } from './types/env';
 import { AnalysisQueueMessagePayloadSchema } from './validation/schemas/queue';
+import { NonRetryableError } from './types/errors';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -94,13 +95,22 @@ export default {
 
       try {
         await jobService.process(body);
-        console.log(`[Queue] Successfully processed job ${body.job_id}`);
+        console.error(JSON.stringify({ event: 'QUEUE_JOB_COMPLETED', job_id: body.job_id }));
         message.ack();
       } catch (error) {
-        console.error(`[Queue] Failed to process job ${body.job_id} on attempt ${message.attempts}:`, error);
+        const isNonRetryable =
+          error instanceof NonRetryableError ||
+          (error as { code?: string }).code === 'AUTH_REQUIRED' ||
+          (error as { code?: string }).code === 'NON_RETRYABLE';
+
+        if (isNonRetryable) {
+          try { await jobService.markFailed(body, error); } catch { /* swallow KV failure */ }
+          message.ack();
+          continue;
+        }
+
+        console.error(JSON.stringify({ event: 'QUEUE_JOB_FAILED', job_id: body.job_id, attempt: message.attempts }));
         if (message.attempts >= 3) {
-          // Wrap markFailed so a KV write failure can't leave the message
-          // un-acked (which would push it past max_retries indefinitely).
           try {
             await jobService.markFailed(body, error);
           } catch (markFailedError) {

@@ -19,7 +19,12 @@ from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import ScreenManager
 
 # Import backend components
-from ..services.backend_client import BackendClient, get_backend_client, set_backend_url
+from ..services.backend_client import (
+    BackendClient,
+    BackendAPIError,
+    get_backend_client,
+    set_backend_url,
+)
 from ..auth.backend_login_screen import create_backend_login_screen
 from ..caching.backend_cache import BackendCacheManager, set_cache_manager
 from ..config.backend_config import (
@@ -259,20 +264,51 @@ class BackendSpotifyExporterApp(MDApp):
             self.cache_manager.clear_auth_token()
             return
 
-        try:
-            if self.backend_client:
-                self.backend_client.set_auth_token(token)
+        # Set the token so get_me() can send the Authorization header
+        if self.backend_client:
+            self.backend_client.set_auth_token(token)
 
-            self.token_info = {"access_token": token}
-            self.username = cached_token.get("username", "User")
+        # Show verifying status BEFORE the thread starts
+        if hasattr(self, "login_screen") and self.login_screen:
+            status = getattr(self.login_screen, "status_label", None)
+            if status:
+                status.text = "Verifying session…"
 
-            original_logger.info(f"Auto-login successful for user: {self.username}")
-            self.switch_to_main()
+        def _validate_and_proceed() -> None:
+            try:
+                self.backend_client.get_me()
+                # Success — switch to main on the UI thread
+                Clock.schedule_once(lambda _: self.switch_to_main(), 0)
+            except BackendAPIError as exc:
+                if exc.status_code == 401:
+                    # Permanently invalid — wipe disk cache
+                    if self.cache_manager:
+                        self.cache_manager.clear_auth_token()
+                    if self.backend_client:
+                        self.backend_client.clear_auth_token()
+                    msg = "Your Spotify session has expired. Please sign in again."
+                    Clock.schedule_once(lambda _, m=msg: self._set_login_status(m), 0)
+                else:
+                    # Transport error — preserve token, proceed gracefully
+                    original_logger.warning(
+                        "Session validation offline, proceeding: %s", exc
+                    )
+                    Clock.schedule_once(lambda _: self.switch_to_main(), 0)
+            except Exception as exc:
+                original_logger.warning("Unexpected get_me error, proceeding: %s", exc)
+                Clock.schedule_once(lambda _: self.switch_to_main(), 0)
 
-        except Exception as e:
-            # Don't wipe the cached token for non-auth errors (e.g. UI init failures).
-            # The token will be replaced naturally when the user completes a new login.
-            original_logger.error(f"Auto-login failed during screen transition: {e}")
+        import threading
+
+        threading.Thread(target=_validate_and_proceed, daemon=True).start()
+
+    def _set_login_status(self, message: str) -> None:
+        """Set login screen status message."""
+        if hasattr(self, "login_screen") and self.login_screen:
+            status = getattr(self.login_screen, "status_label", None)
+            if status:
+                status.text = message
+                status.color = (1, 0.7, 0.3, 1)
 
     def logout(self) -> None:
         """Logout user and clear all authentication state."""
@@ -305,16 +341,18 @@ class BackendSpotifyExporterApp(MDApp):
     def handle_session_expired(
         self, message: str = "Session expired. Please login again."
     ) -> None:
-        """Handle a backend session expiry without wiping the persisted token.
+        """Handle a backend session expiry by wiping both in-memory and persisted tokens.
 
-        Called when the backend returns 401 mid-session. Unlike a full logout,
-        this only clears the in-memory credential so the cached token file is
-        preserved. The file will be overwritten when the user completes the next
-        OAuth flow, so there is no stale-token risk.
+        Called when the backend returns 401 mid-session. Under Spotify's 6-month
+        refresh token expiration policy, expired refresh tokens are permanently
+        invalid and cannot be recovered. We must wipe the persisted token file
+        to prevent infinite auto-login loops on subsequent app launches.
         """
         try:
             if self.backend_client:
                 self.backend_client.clear_auth_token()
+            if self.cache_manager:
+                self.cache_manager.clear_auth_token()
             self.token_info = None
             self.username = None
 
