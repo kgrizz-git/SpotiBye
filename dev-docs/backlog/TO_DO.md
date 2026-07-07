@@ -67,6 +67,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [x] Fix straightforward issues (all pyright errors resolved — verified `basedpyright src/frontend src/shared --level error` returns 0 errors)
   - [ ] Create follow-up backlog items or an execution plan for larger type-safety work
 - [ ] Track/remove `esbuild` and `uuid` npm overrides in `src/backend/package.json` once upstream ships patched releases
+- [ ] Add a pre-commit hook that checks for code files over 700 lines and doc files over 300 lines and gives a warning unless the file is in an exempted list ([plan](./exec-plans/active/2026-07-07-file-length-pre-commit-hook-plan.md))
 
 ## Repo Cleanup & DevOps
 
