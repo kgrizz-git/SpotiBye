@@ -35,7 +35,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Preserve existing Track D queue behavior
   - [ ] Split work into distributed batches for playlists with more than 40 artists per Worker invocation
   - [ ] Add backend tests for batch fan-out and aggregation
-- [ ] Close ReccoBeats enrichment gaps in playlist analysis popup
+- [ ] Close ReccoBeats enrichment gaps in playlist analysis popup ([plan](../exec-plans/active/2026-07-07-reccobeats-enrichment-integration.md))
   - [ ] Display missing audio features (instrumentalness, liveness, loudness, speechiness) and key/mode
   - [ ] Optionally fetch `GET /v1/track` for ISRC and ReccoBeats popularity metadata
   - [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations
