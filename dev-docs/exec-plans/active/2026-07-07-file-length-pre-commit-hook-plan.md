@@ -1,6 +1,6 @@
 # File Length Pre-Commit Hook Plan
 
-**Status:** NEEDS REVIEW
+**Status:** READY
 
 **Date:** 2026-07-07
 
@@ -8,7 +8,9 @@
 
 ## Goal
 
-Add a pre-commit hook that warns developers when code files exceed the line count limits (700 lines for code files, 300 lines for documentation files), but skips files on an exemptions list to avoid breaking existing workflows.
+Add a pre-commit hook that warns developers when code files exceed the line count limits (700 lines for code files, 300 lines for documentation files, 1000 lines for test files), but skips files on an exemptions list to avoid breaking existing workflows.
+
+Initial rollout uses `--warn` mode (warnings only, never blocks). After 14 days, the hook switches to enforcement mode where violations block the commit.
 
 ## Background
 
@@ -18,158 +20,230 @@ Large files can negatively impact:
 - Code review efficiency
 - IDE performance
 
-Current tracking (src/frontend/) includes several files over 700 lines:
-- `/Users/kevingrizzard/MyCode/SpotiBye/src/frontend/ui/backends_screen.py` - 728 lines
-- `/Users/kevingrizzard/MyCode/SpotiBye/src/frontend/ui/add_playlist_screen.py` - 763 lines
-- `/Users/kevingrizzard/MyCode/SpotiBye/src/frontend/ui/screens/main_screen.py` - 1038 lines
-
 ## Requirements
 
 ### Hook Logic
 
-- Check line count for each file staged for commit
-- Apply different limits based on file type:
-  - Code files: > 700 lines (warning)
-  - Documentation files: > 300 lines (warning)
-  - Other files: no limit
+- Check line count for each `.py` and `.md` file staged for commit
+- Apply limits based on **directory path** (deterministic, no heuristics):
+  - `**/tests/**`, `**/test_*.py`, `**/*_test.py` → test files (1000-line limit)
+  - `docs/**`, `dev-docs/**` → documentation (300-line limit)
+  - All other `.py` files → code (700-line limit)
+  - All `.md` files → documentation (300-line limit)
 - Skip files in exemption list (see exemptions below)
-- Fail pre-commit if non-exempt files exceed limits
+- **Initial behavior (`--warn` mode):** print warnings, exit 0 always
+- **Final behavior (enforcement):** fail pre-commit if non-exempt files exceed limits
+- Support `--ci` mode: exit 1 on any violation (for CI enforcement)
+- Only the hook entry flag changes between warn and enforcement; script supports both modes
 
-### Exemptions (by pattern)
+### Scope
 
-- `dev-docs/**` (development documentation)
-- `docs/**` (user documentation)
-- `src/frontend/tests/**` (test files)
-- `src/frontend/ui/ui_test_helpers.py` (test utilities)
-- Any file in the root (temporary placeholder for these specific files):
-  - `src/frontend/ui/backends_screen.py`
-  - `src/frontend/ui/add_playlist_screen.py`
-  - `src/frontend/ui/screens/main_screen.py`
+- **Python (`.py`):** fully checked with path-based classification
+- **Markdown (`.md`):** checked at 300-line doc limit
+- **First rollout targets `src/frontend/` only** (where the oversized file lives). Backend `.py` and `.md` files are also checked but all currently pass.
+- **TypeScript/JavaScript (`.ts`, `.js`, `.tsx`, `.jsx`):** out of scope — backend files are all under 700 lines (max is 621 in tests). Explicitly excluded; revisit if backend file lengths grow.
+- **All other file types:** skipped
+
+### Exemptions
+
+Exemptions are stored in `scripts/file-length-exemptions.json`. Each entry has a `pattern` (gitignore-style glob), a `reason`, and an optional `expires` field (ISO date) to prevent permanent exemptions.
+
+**Baseline exemptions:**
+
+| Pattern | Reason | Expires |
+|---|---|---|
+| `dev-docs/**` | Development documentation | — |
+| `docs/**` | User documentation | — |
+| `src/frontend/ui/backend_playlist_card.py` | 940 lines — needs refactoring | 2026-10-07 |
+
+Any future exemptions must include a `reason` field. Exemptions with an `expires` field are automatically flagged for review after that date.
+
+**Example exemption file:**
+
+```json
+{
+  "exemptions": [
+    {"pattern": "dev-docs/**", "reason": "Development documentation"},
+    {"pattern": "docs/**", "reason": "User documentation"},
+    {"pattern": "src/frontend/ui/backend_playlist_card.py", "reason": "940 lines — needs refactoring", "expires": "2026-10-07"}
+  ]
+}
+```
 
 ### Implementation Details
 
-**File Detection**
+**File Detection (path-based)**
 
-- Code files: `.py` extension with standard import patterns (has `import` statements)
-- Documentation files: `.py` files with fewer `import` statements and more verbose comments/docstrings, OR any `.md` files
+Classification is deterministic — no import-count or comment-density heuristics:
+
+- Documentation: any `.md` file, or any `.py` under `docs/` or `dev-docs/`
+- Test: any `.py` under a directory named `tests/` or matching `test_*.py` / `*_test.py`
+- Code: all other `.py` files
+- Skipped: all other file types
 
 **Integration**
 
-Add to `.pre-commit-config.yaml` with:
+Add to `.pre-commit-config.yaml` with a local hook:
+
 ```yaml
 - id: file-length-check
   name: File length check
-  entry: python scripts/check_file_lengths.py
+  entry: python scripts/check_file_lengths.py --exemptions scripts/file-length-exemptions.json
   language: system
-  files: \.py$
+  files: \.(py|md)$
   pass_filenames: true
+  stages: [pre-commit]
 ```
 
-**Script Implementation**
+**Script Implementation (`scripts/check_file_lengths.py`)**
 
-Create `scripts/check_file_lengths.py`:
-- Read staged files from stdin
-- Determine file type (code vs documentation)
-- Count lines
-- Check against appropriate limit
-- Output warnings or exit with error for violations
+Follow conventions from `scripts/check-dependencies.py`:
+- Shebang `#!/usr/bin/env python3`
+- Module docstring with description and usage
+- `argparse` for CLI arguments
+- `sys.exit(main())` pattern
+- CLI flags:
+  - `--exemptions PATH` (required) — path to exemptions JSON file
+  - `--warn` — print warnings, exit 0 regardless
+  - `--ci` — exit 1 on any violation (mutually exclusive with `--warn`)
+- Core logic:
+  - Read staged file paths from `sys.argv` (positional args — pre-commit with `pass_filenames: true` passes them this way, not stdin)
+  - Classify file type by directory path (code / doc / test / skip)
+  - Check glob exemption list before counting
+  - Count total lines (`wc -l` style — simple, fast, predictable)
+  - Compare against limit
+  - Output violations or pass silently
 
 **Development Workflow**
 
-Exemptions should be:
-- Configurable via `scripts/check_file_lengths.py`/`init-exemptions-list.sh`
-- Added via easy config mechanism
-- Reviewed with each exemption (validate rationale)
-- Progressively reduced over time
+Exemptions are:
+- Stored in version-controlled `scripts/file-length-exemptions.json`
+- Added by editing the JSON file with a `reason` field
+- Reviewed during PR review
+- Progressively reduced as files are refactored
+
+**Transition strategy:**
+
+1. **Phase A (`--warn` mode, days 0–14):** Hook prints warnings but exits 0. CI in `--ci` mode is the only enforcer. This lets developers see violations without being blocked.
+2. **Phase B (enforcement, day 14+):** Remove `--warn` flag from the hook entry. Hook now exits 1 on violations, blocking the commit. CI continues to use `--ci` mode (unchanged).
+3. **Rollback:** If enforcement causes developer friction, re-add `--warn` and address feedback before retrying.
 
 ## Implementation Plan
 
 ### Phase 0: Analysis & Specs
 
-- [ ] Define precise file type detection logic
-- [ ] Catalog all current exempt files and their reasons
-- [ ] Document line count thresholds with rationale
-- [ ] Create exemption management strategy
+- [x] Define precise file type detection logic
+- [x] Catalog all current exempt files and their reasons
+- [x] Document line count thresholds with rationale
+- [x] Create exemption management strategy
 
 ### Phase 1: Script Development
 
-- [ ] Create `scripts/check_file_lengths.py` with core logic
-- [ ] Implement file type detection based on pattern analysis
-- [ ] Add line counting with exclusions (empty lines, comments)
-- [ ] Create baseline exemption list from current exempt files
-- [ ] Add command line arguments and help text
-- [ ] Write unit tests for file detection logic
+- [ ] Create `scripts/file-length-exemptions.json` with current exempt files and reasons
+- [ ] Create `scripts/check_file_lengths.py` with:
+  - [ ] Shebang, docstring, `sys.exit(main())` pattern
+  - [ ] `argparse` with `--exemptions`, `--warn`, `--ci` flags
+  - [ ] Classify file type by directory path (code / doc / test / skip)
+  - [ ] Read filenames from `sys.argv` (positional args from pre-commit)
+  - [ ] Glob-matcher for exemption list (support `**` globs)
+  - [ ] Line counting via `wc -l` (simple total line count)
+  - [ ] Expiry-date warning for exemptions past their `expires` date
+  - [ ] Violation output with clear guidance
+- [ ] Write unit tests for:
+  - [ ] Path-based file classification (code / doc / test / skip)
+  - [ ] Glob exemption matching (including `**` wildcards)
+- [ ] Test against current codebase: script should report violations for `backend_playlist_card.py` (940 lines) and pass all others
+- [ ] Verify with `./scripts/verify-all.sh` that no existing checks break
 
 ### Phase 2: Pre-commit Integration
 
-- [ ] Update `.pre-commit-config.yaml` to include new hook
-- [ ] Test hook integration locally
-- [ ] Verify hooks run correctly on staged files
-- [ ] Add hook to CI configuration for enforcement
+- [ ] Update `.pre-commit-config.yaml` with the new hook (use `--warn` mode initially)
+- [ ] Install hook locally and confirm it fires on `.py` and `.md` changes
+- [ ] Test with a staged oversized file to confirm warning appears
+- [ ] Test with an exempted file to confirm it is skipped
+- [ ] Test with no changed files to confirm no-op
+- [ ] Update CHANGELOG.md under `## [Unreleased] > ### Added`
+- [ ] Verify `./scripts/verify-all.sh` still passes after config change
+
+### Phase 2b: CI Integration
+
+- [ ] Add a CI workflow step that runs `scripts/check_file_lengths.py --ci --exemptions ...` on all changed files in a PR
+- [ ] If no suitable existing job exists, add a new job to `.github/workflows/ci.yml`
+- [ ] Verify CI passes on a PR with no violations
+- [ ] Verify CI fails on a PR introducing a file over the limit
+- [ ] CI should use `--ci` mode (exit 1 on violation) regardless of the local `--warn` mode
 
 ### Phase 3: Documentation & Training
 
-- [ ] Update developer documentation
-- [ ] Add exemption request process
-- [ ] Document remediation steps for violations
-- [ ] Create guidance for file splitting
+- [ ] Add exemption request process to developer docs (edit JSON + add reason)
+- [ ] Document remediation steps for violations (refactoring guidance)
+- [ ] Create guidance for file splitting (when to split, how to preserve public API)
 
-### Phase 4: Monitoring & Maintenance
+### Phase 4: Rollout & Monitoring
 
+- [ ] **Phase A (days 0–14):** Ship with `--warn` flag. Monitor for false positives and developer feedback.
+- [ ] **Phase B (day 14+):** Remove `--warn` flag from `.pre-commit-config.yaml`. Hook now blocks commits with violations.
 - [ ] Monitor exemption requests and reasons
-- [ ] Review exemption list periodically
+- [ ] Review exemption list periodically (suggested quarterly)
 - [ ] Adjust thresholds if needed based on feedback
-- [ ] Ensure hook doesn't create friction
+- [ ] If enforcement causes friction, revert to Phase A and address feedback before retrying
 
 ### Phase 5: Enforcement Evolution
 
-- [ ] Expand hook to catch violations pre-commit (Phase 2 completed)
-- [ ] Consider refactoring files over limits
-- [ ] Review and remove unnecessary exemptions
+- [ ] Refactor `src/frontend/ui/backend_playlist_card.py` (940 lines) to remove its exemption
+- [ ] After refactoring, remove associated exemption entry
+- [ ] Consider expanding scope to TypeScript/JS if backend files grow over 700 lines
 
 ## Technical Details
 
 ### File Type Detection Logic
 
-**Code files pattern:**
-- Python extension (`.py`)
-- At least 3 import statements (import/, from/)
-- Less than 30% lines are comments (lines starting with `#`)
+Classification is based on directory path — no import-count or comment-density heuristics:
 
-**Documentation files pattern:**
-- Python extension (`.py`)
-- Fewer than 3 import statements OR high comment density (> 30% lines start with `#`)
-- AND/OR markdown files (`.md`)
+| Classification | Rule |
+|---|---|
+| Documentation | Any `.md` file, or `.py` under `docs/` or `dev-docs/` |
+| Test | `.py` under a directory named `tests/`, or matching `test_*.py` / `*_test.py` |
+| Code | All other `.py` files |
+| Skipped | Everything else (`.ts`, `.js`, `.json`, `.yaml`, `.sh`, etc.) |
 
-### Exemption Management
+### Exemption File Format
 
-Exemptions should be stored in an easy-to-edit format (e.g., JSON or YAML) for:
-- Quick visual browsing
-- Programmatic updates
-- Documentation of exemption rationale
-- Version control
+Path: `scripts/file-length-exemptions.json`
+
+```json
+{
+  "exemptions": [
+    {"pattern": "dev-docs/**", "reason": "Development documentation"},
+    {"pattern": "docs/**", "reason": "User documentation"},
+    {"pattern": "src/frontend/ui/backend_playlist_card.py", "reason": "940 lines — needs refactoring", "expires": "2026-10-07"}
+  ]
+}
+```
+
+Patterns use gitignore-style glob matching (`**` matches zero or more directories). Leading `./` is not required; paths are matched against the repo-relative path as passed by pre-commit. The `expires` field is optional; when present, the script logs a warning if the expiry date has passed.
 
 ### Line Count Calculation
 
-- Exclude shebang line (first line if it starts with `#!`)
-- Exclude empty lines
-- Count only non-whitespace content lines
-- Comments count toward limit for both types
+- Use total line count (`wc -l` equivalent — simple, fast, predictable)
+- No exclusions for shebang, blank lines, or comments
+- Rationale: `wc -l` is the industry standard, deterministic, and matches developer intuition. Complex exclusion heuristics create confusion and false negatives.
 
 ### Error Messages
 
 Provide clear guidance:
-- File exceeded limit (e.g., "File has 750 lines, exceeds 700 line limit for code files")
-- Suggest remediation (e.g., "Consider refactoring or splitting this file")
-- List exemption process for files that need exemptions
+- Violation: `ERROR: src/frontend/ui/backend_playlist_card.py has 940 lines, exceeds 700 line limit for code files`
+- Remediation: `Consider refactoring or splitting this file.`
+- Exemption: `To add an exemption, edit scripts/file-length-exemptions.json with a reason.`
+- In `--warn` mode, prefix with `WARNING:` instead of `ERROR:` and always exit 0.
 
 ## Quality Criteria
 
-- [ ] Hook runs without false positives
-- [ ] Exemptions are easy to add and track
+- [ ] Hook runs without false positives on current codebase
+- [ ] Exemptions are easy to add and track (edit JSON, add reason)
 - [ ] Error messages provide clear guidance
-- [ ] Hook integrates seamlessly with existing pre-commit
-- [ ] Performance impact is minimal
+- [ ] Hook integrates seamlessly with existing pre-commit (no conflicts)
+- [ ] Performance impact is minimal (sub-second for typical staged files)
 - [ ] Documentation is clear and comprehensive
 
 ## Cross-Talking Points
@@ -183,52 +257,51 @@ This plan interacts with:
 
 ## References
 
-- Current large file inventory (src/frontend/)
-- `.pre-commit-config.yaml` for existing hooks
-- Git history showing file size growth
-- Developer feedback on large file impact
-- Related projects with similar length checks
+- `.pre-commit-config.yaml` — existing hooks and conventions
+- `scripts/check-dependencies.py` — existing Python script conventions
+- `scripts/file-length-exemptions.json` — exemption config (to be created)
+- `dev-docs/backlog/TO_DO.md` — source backlog entry
 
 ## Removal Criteria
 
 This plan can be archived when:
 - Hook is fully integrated and operational for 30 days
-- No new exemption requests
-- Codebase has been cleaned up (most oversized files refactored)
-- All exemptions have been evaluated and justified
-- Developer satisfaction surveys are positive
-- Version control commit history shows compliance
+- No new exemption requests filed in the last 30 days
+- `backend_playlist_card.py` is refactored below 700 lines and its exemption removed
+- All exemptions have a documented reason
+- `./scripts/verify-all.sh` passes with the hook in enforcement mode
 
 **Risk Mitigation:**
-- Start with warning-only mode before strict enforcement
-- Build community support through documentation
-- Provide clear exemption request process
-- Monitor developer impact and adjust accordingly
+- Start with `--warn` mode for 14 days before switching to enforcement
+- Provide clear exemption entry process (edit JSON with reason)
+- If enforcement causes developer friction, revert to warn mode immediately
+- Monitor exemption growth as a leading indicator of threshold problems
 
 ## Notes
 
 **Current Over-sized Files (Exempt Placeholder):**
-- `src/frontend/ui/backends_screen.py` - 728 lines
-- `src/frontend/ui/add_playlist_screen.py` - 763 lines
-- `src/frontend/ui/screens/main_screen.py` - 1038 lines
+- `src/frontend/ui/backend_playlist_card.py` — 940 lines (code file, exceeds 700 limit)
 
-These are temporary exemptions pending full hook integration.
+This is the only file currently over 700 lines that isn't already covered by a glob-pattern exemption (tests, docs, dev-docs).
 
 **Alternative Approaches Considered:**
 - Per-directory limits instead of global (more precise but harder to manage)
-- Warnings only (less friction, more education)
+- Warnings only (less friction, less enforcement — used as transition)
 - Automated file splitting (complex, risky)
 - Team-based thresholds (customizable but inconsistent)
 
-**Decision:** Global file-length check with configurable exemptions provides the best balance between enforcement and flexibility.
+**Decision:** Global file-length check with configurable exemptions provides the best balance between enforcement and flexibility. Warning-only mode for the first 14 days mitigates rollout risk.
 
 ## Next Steps
 
-1. Implement the core script (Phase 1)
-2. Test against current codebase
-3. Create exemptions configuration
-4. Integrate into pre-commit
-5. Document and communicate to developers
-6. Begin with warning mode, transition to enforcement
+1. Create the exemptions JSON file
+2. Implement the core script (Phase 1)
+3. Test against current codebase
+4. Update CHANGELOG.md
+5. Integrate into pre-commit with `--warn` mode (Phase A)
+6. Add CI integration (Phase 2b — CI uses `--ci` immediately)
+7. Verify `./scripts/verify-all.sh` passes
+8. After 14 days, switch to enforcement mode (Phase B)
+9. Track `backend_playlist_card.py` refactoring to remove its exemption
 
-This plan represents a step toward code quality and maintainability, acknowledging that the current codebase has some large files that require temporary exemptions while working toward a more sustainable structure.
+This plan represents a step toward code quality and maintainability, acknowledging that the current codebase has one large file requiring a temporary exemption while working toward a more sustainable structure.
