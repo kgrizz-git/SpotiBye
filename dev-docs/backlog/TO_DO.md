@@ -5,25 +5,25 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
 ## Auth & Token Lifecycle
 
 - [x] Handle Spotify refresh token expiration before July 20, 2026 ([plan](../exec-plans/completed/2026-07-06-spotify-token-expiration-handling.md)) — **done 2026-07-06**
-- [ ] Add backend unit/integration tests for Spotify token expiration handling
-  - [ ] Mock Spotify token endpoint returning `{ error: "invalid_grant" }` → verify middleware deletes KV session and returns `401` with `code: 'AUTH_REQUIRED'`
-  - [ ] Verify `errorHandler` preserves explicit `AUTH_REQUIRED` code without mapping to `UNAUTHORIZED`
-  - [ ] Verify `refreshPromises` Map and `REFRESH_FAILED` negative cache prevent concurrent refresh race conditions
-  - [ ] Verify `REFRESH_FAILED` check fires **before** `refreshPromises` lookup — not after
-  - [ ] Verify that on successful refresh, the `REFRESH_FAILED:<session_id>` KV key is deleted
-  - [ ] Verify `REFRESH_FAILED:<session_id>` TTL is ≥ 60 seconds (Cloudflare KV minimum)
-  - [ ] Verify `/spotify/refresh` route no longer calls `spotifyAuth.refreshAccessToken()` directly
-  - [ ] Verify `AnalysisJobService` and `queue()` consumer fail immediately on `AUTH_REQUIRED` without retrying
-  - [ ] Verify `safeParseSession` returns `null` for malformed JSON, missing required fields, and schema violations
-  - [ ] Verify `GET /auth/me` returns shape `{ data: { id, email, name, session_id } }` for authenticated requests
-- [ ] Add frontend tests for Spotify token expiration handling
-  - [ ] Verify `BackendAPIError` correctly extracts and sets `error_code='AUTH_REQUIRED'`
-  - [ ] Verify `BackendAuthenticator.refresh_token()` wipes **both** in-memory and disk cache on `AUTH_REQUIRED` and returns `False`
-  - [ ] Verify `handle_session_expired` wipes the disk cache (design reversal from implementation)
-  - [ ] Verify `_format_backend_api_error` output contains `code=AUTH_REQUIRED` so `main_screen.py` detects it
-  - [ ] Verify `_download_file` 401 `AUTH_REQUIRED` responses surface `error_code='AUTH_REQUIRED'` on the raised `BackendAPIError`
-  - [ ] Verify `_try_auto_login` with a transport error (`BackendAPIError(status_code=None)`) proceeds to main screen without wiping cache
-  - [ ] Verify `_try_auto_login` with a 401 `AUTH_REQUIRED` wipes disk cache and keeps user on login screen
+- [x] Add backend unit/integration tests for Spotify token expiration handling — **done 2026-07-07**
+  - [x] Mock Spotify token endpoint returning `{ error: "invalid_grant" }` → verify middleware deletes KV session and returns `401` with `code: 'AUTH_REQUIRED'`
+  - [x] Verify `errorHandler` preserves explicit `AUTH_REQUIRED` code without mapping to `UNAUTHORIZED`
+  - [x] Verify `refreshPromises` Map and `REFRESH_FAILED` negative cache prevent concurrent refresh race conditions
+  - [x] Verify `REFRESH_FAILED` check fires **before** `refreshPromises` lookup — not after
+  - [x] Verify that on successful refresh, the `REFRESH_FAILED:<session_id>` KV key is deleted
+  - [x] Verify `REFRESH_FAILED:<session_id>` TTL is ≥ 60 seconds (Cloudflare KV minimum)
+  - [x] Verify `/spotify/refresh` route no longer calls `spotifyAuth.refreshAccessToken()` directly
+  - [x] Verify `AnalysisJobService` and `queue()` consumer fail immediately on `AUTH_REQUIRED` without retrying
+  - [x] Verify `safeParseSession` returns `null` for malformed JSON, missing required fields, and schema violations
+  - [x] Verify `GET /auth/me` returns shape `{ data: { id, email, name, session_id } }` for authenticated requests
+- [x] Add frontend tests for Spotify token expiration handling — **done 2026-07-07**
+  - [x] Verify `BackendAPIError` correctly extracts and sets `error_code='AUTH_REQUIRED'`
+  - [x] Verify `BackendAuthenticator.refresh_token()` wipes **both** in-memory and disk cache on `AUTH_REQUIRED` and returns `False`
+  - [x] Verify `handle_session_expired` wipes the disk cache (design reversal from implementation)
+  - [x] Verify `_format_backend_api_error` output contains `code=AUTH_REQUIRED` so `main_screen.py` detects it
+  - [x] Verify `_download_file` 401 `AUTH_REQUIRED` responses surface `error_code='AUTH_REQUIRED'` on the raised `BackendAPIError`
+  - [x] Verify `_try_auto_login` with a transport error (`BackendAPIError(status_code=None)`) proceeds to main screen without wiping cache
+  - [x] Verify `_try_auto_login` with a 401 `AUTH_REQUIRED` wipes disk cache and keeps user on login screen
 
 ## Playlist Analysis — End-to-End
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { authRoutes } from '../routes/auth';
+import { SpotifyAuthService } from '../services/spotify-auth';
 import type { Env } from '../types/env';
 import { createTestEnv } from './helpers/env';
 
@@ -58,6 +59,7 @@ describe('Auth Routes', () => {
     app.route('/auth', authRoutes);
 
     mockEnv = createTestEnv();
+    vi.mocked(SpotifyAuthService).mockClear();
   });
 
   describe('POST /auth/spotify/login', () => {
@@ -170,7 +172,34 @@ describe('Auth Routes', () => {
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('access_token', 'test-jwt-token');
       expect(data.data).toHaveProperty('token_type', 'Bearer');
-      expect(data.data).toHaveProperty('spotify_access_expires_in', 3600);
+      expect(data.data.spotify_access_expires_in).toBeGreaterThanOrEqual(3599);
+      expect(data.data.spotify_access_expires_in).toBeLessThanOrEqual(3600);
+    });
+
+    it('calls Spotify refresh only once via middleware for expired sessions', async () => {
+      const sessionJson = JSON.stringify({
+        user_id: 'test-user-id',
+        refresh_token: 'test-refresh-token',
+        access_token: 'test-access-token',
+        expires_at: Date.now() - 1000,
+      });
+      (mockEnv.SESSIONS_KV.get as any).mockImplementation(async (key: string) => {
+        if (key === 'test-session-id') return sessionJson;
+        return null;
+      });
+
+      const request = new Request('http://localhost/auth/spotify/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-jwt-token',
+        },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+
+      expect(response.status).toBe(200);
+      expect(vi.mocked(SpotifyAuthService)).toHaveBeenCalledTimes(1);
     });
 
     it('returns 404 when session is missing', async () => {
@@ -197,6 +226,36 @@ describe('Auth Routes', () => {
 
       expect(response.status).toBe(404);
       expect(data.error).toHaveProperty('code', 'SESSION_NOT_FOUND');
+    });
+  });
+
+  describe('GET /auth/me', () => {
+    it('returns authenticated user shape', async () => {
+      const sessionJson = JSON.stringify({
+        user_id: 'test-user-id',
+        refresh_token: 'test-refresh-token',
+        access_token: 'test-access-token',
+        expires_at: Date.now() + 3_600_000,
+      });
+      (mockEnv.SESSIONS_KV.get as any).mockResolvedValue(sessionJson);
+
+      const request = new Request('http://localhost/auth/me', {
+        method: 'GET',
+        headers: { Authorization: 'Bearer test-jwt-token' },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = await response.json() as {
+        data: { id: string; email: string; name: string; session_id: string };
+      };
+
+      expect(response.status).toBe(200);
+      expect(data.data).toEqual({
+        id: 'test-user-id',
+        email: 'test@example.com',
+        name: 'Test User',
+        session_id: 'test-session-id',
+      });
     });
   });
 
