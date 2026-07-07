@@ -40,7 +40,7 @@ Large files can negatively impact:
 
 - **Python (`.py`):** fully checked with path-based classification
 - **Markdown (`.md`):** checked at 300-line doc limit
-- **First rollout targets `src/frontend/` only** (where the oversized file lives). Backend `.py` and `.md` files are also checked but all currently pass.
+- **First rollout targets `src/frontend/` only** (where the oversized file lives). Backend has no `.py` files (it is TypeScript-only); all `.ts`/`.js`/`.tsx`/`.jsx` files are explicitly out of scope. Existing `.md` files in `dev-docs/` exceed the 300-line limit (see exemptions below), so `--warn` mode is essential to avoid blocking dev-docs work during Phase A.
 - **TypeScript/JavaScript (`.ts`, `.js`, `.tsx`, `.jsx`):** out of scope — backend files are all under 700 lines (max is 621 in tests). Explicitly excluded; revisit if backend file lengths grow.
 - **All other file types:** skipped
 
@@ -50,22 +50,20 @@ Exemptions are stored in `scripts/file-length-exemptions.json`. Each entry has a
 
 **Baseline exemptions:**
 
+> **Note:** `dev-docs/**` and `docs/**` are already classified as documentation (300-line limit) by file-type detection, so they do not need classification exemptions. Only files that would otherwise violate a limit need listing. **27 existing `dev-docs/` `.md` files exceed 300 lines** (ranging from 301–1220 lines). Rather than exempting each individually, a blanket `dev-docs/**/*.md` exemption covers all developer-internal docs. `docs/**/*.md` files are all under 300 lines (max 232) and need no exemption.
+
 | Pattern | Reason | Expires |
 |---|---|---|
-| `dev-docs/**` | Development documentation | — |
-| `docs/**` | User documentation | — |
 | `src/frontend/ui/backend_playlist_card.py` | 940 lines — needs refactoring | 2026-10-07 |
-
-Any future exemptions must include a `reason` field. Exemptions with an `expires` field are automatically flagged for review after that date.
+| `dev-docs/**/*.md` | 27 existing files over 300 lines — dev-internal docs, not user-facing | 2026-10-07 (reassess then) |
 
 **Example exemption file:**
 
 ```json
 {
   "exemptions": [
-    {"pattern": "dev-docs/**", "reason": "Development documentation"},
-    {"pattern": "docs/**", "reason": "User documentation"},
-    {"pattern": "src/frontend/ui/backend_playlist_card.py", "reason": "940 lines — needs refactoring", "expires": "2026-10-07"}
+    {"pattern": "src/frontend/ui/backend_playlist_card.py", "reason": "940 lines — needs refactoring", "expires": "2026-10-07"},
+    {"pattern": "dev-docs/**/*.md", "reason": "27 existing files over 300 lines — dev-internal docs, not user-facing", "expires": "2026-10-07"}
   ]
 }
 ```
@@ -139,20 +137,29 @@ Exemptions are:
 
 ### Phase 1: Script Development
 
+- [ ] Add `pathspec` to `pyproject.toml` under `[project.optional-dependencies.dev]` (currently available only transitively via `black`)
 - [ ] Create `scripts/file-length-exemptions.json` with current exempt files and reasons
 - [ ] Create `scripts/check_file_lengths.py` with:
   - [ ] Shebang, docstring, `sys.exit(main())` pattern
   - [ ] `argparse` with `--exemptions`, `--warn`, `--ci` flags
-  - [ ] Classify file type by directory path (code / doc / test / skip)
+  - [ ] Classify file type by directory path (code / doc / test / skip); validate `--ci` and `--warn` are mutually exclusive (exit 1 with helpful message if both passed)
   - [ ] Read filenames from `sys.argv` (positional args from pre-commit)
-  - [ ] Glob-matcher for exemption list (support `**` globs)
+  - [ ] Glob-matcher for exemption list using `pathspec` (supports `**` wildcards natively)
   - [ ] Line counting via `wc -l` (simple total line count)
-  - [ ] Expiry-date warning for exemptions past their `expires` date
+  - [ ] Expiry-date warning for exemptions past their `expires` date; in `--ci` mode, treat expired exemptions as violations (exit 1)
   - [ ] Violation output with clear guidance
-- [ ] Write unit tests for:
+  - [ ] Error handling: if exemptions JSON is missing or malformed, print error and exit 1 in `--ci` mode; print warning and continue (treating no files as exempt) in `--warn` mode
+  - [ ] Handle deleted files: skip paths that do not exist on disk (pre-commit passes deleted/renamed file paths); log at debug level
+- [ ] Write unit tests for (place in `scripts/tests/`):
   - [ ] Path-based file classification (code / doc / test / skip)
   - [ ] Glob exemption matching (including `**` wildcards)
-- [ ] Test against current codebase: script should report violations for `backend_playlist_card.py` (940 lines) and pass all others
+- [ ] Test against current codebase:
+  - [ ] `backend_playlist_card.py` (940 lines) → reported as violation for code files (700-line limit)
+  - [ ] All other staged `.py` files pass (under their respective limits)
+  - [ ] All staged `.md` files under `docs/` pass (under 300-line doc limit); `dev-docs/**/*.md` files are exempted so they do not trigger violations
+  - [ ] Exempted files are skipped even when over limit
+  - [ ] In `--warn` mode, exit code is 0 despite violations
+  - [ ] In `--ci` mode, exit code is 1 on any violation
 - [ ] Verify with `./scripts/verify-all.sh` that no existing checks break
 
 ### Phase 2: Pre-commit Integration
@@ -163,12 +170,19 @@ Exemptions are:
 - [ ] Test with an exempted file to confirm it is skipped
 - [ ] Test with no changed files to confirm no-op
 - [ ] Update CHANGELOG.md under `## [Unreleased] > ### Added`
-- [ ] Verify `./scripts/verify-all.sh` still passes after config change
+- [ ] Add file-length check to `scripts/verify-frontend.sh` (or add a new `verify-file-lengths.sh`) so `./scripts/verify-all.sh` covers it
+- [ ] Verify `./scripts/verify-all.sh` passes after config change
 
 ### Phase 2b: CI Integration
 
-- [ ] Add a CI workflow step that runs `scripts/check_file_lengths.py --ci --exemptions ...` on all changed files in a PR
-- [ ] If no suitable existing job exists, add a new job to `.github/workflows/ci.yml`
+The repository has `.github/workflows/ci.yml` with two jobs: `backend` (TypeScript) and `frontend` (Python). Add the file-length check to the `frontend` job, which already has Python available.
+
+- [ ] Add a step to the `frontend` job in `.github/workflows/ci.yml` (after `Install dependencies`, before `Test`):
+      ```yaml
+      - name: File length check
+        run: python scripts/check_file_lengths.py --ci --exemptions scripts/file-length-exemptions.json
+      ```
+      Alternately, add a standalone `file-length` or `code-quality` job if Python dependency overhead is a concern.
 - [ ] Verify CI passes on a PR with no violations
 - [ ] Verify CI fails on a PR introducing a file over the limit
 - [ ] CI should use `--ci` mode (exit 1 on violation) regardless of the local `--warn` mode
@@ -186,6 +200,7 @@ Exemptions are:
 - [ ] Monitor exemption requests and reasons
 - [ ] Review exemption list periodically (suggested quarterly)
 - [ ] Adjust thresholds if needed based on feedback
+- [ ] Define a quantitative rollback trigger: if 3+ developers report being blocked by false positives within the first week of Phase B enforcement, revert to `--warn` within 1 hour and address feedback before retrying
 - [ ] If enforcement causes friction, revert to Phase A and address feedback before retrying
 
 ### Phase 5: Enforcement Evolution
@@ -214,14 +229,13 @@ Path: `scripts/file-length-exemptions.json`
 ```json
 {
   "exemptions": [
-    {"pattern": "dev-docs/**", "reason": "Development documentation"},
-    {"pattern": "docs/**", "reason": "User documentation"},
-    {"pattern": "src/frontend/ui/backend_playlist_card.py", "reason": "940 lines — needs refactoring", "expires": "2026-10-07"}
+    {"pattern": "src/frontend/ui/backend_playlist_card.py", "reason": "940 lines — needs refactoring", "expires": "2026-10-07"},
+    {"pattern": "dev-docs/**/*.md", "reason": "27 existing files over 300 lines — dev-internal docs, not user-facing", "expires": "2026-10-07"}
   ]
 }
 ```
 
-Patterns use gitignore-style glob matching (`**` matches zero or more directories). Leading `./` is not required; paths are matched against the repo-relative path as passed by pre-commit. The `expires` field is optional; when present, the script logs a warning if the expiry date has passed.
+Patterns use gitignore-style glob matching (`**` matches zero or more directories). Leading `./` is not required; paths are matched against the repo-relative path as passed by pre-commit. The `expires` field is optional; when present, the script logs a warning if the expiry date has passed, and in `--ci` mode treats an expired exemption as a violation (exits 1).
 
 ### Line Count Calculation
 
@@ -258,8 +272,10 @@ This plan interacts with:
 ## References
 
 - `.pre-commit-config.yaml` — existing hooks and conventions
+- `.github/workflows/ci.yml` — existing CI with `frontend` and `backend` jobs
 - `scripts/check-dependencies.py` — existing Python script conventions
 - `scripts/file-length-exemptions.json` — exemption config (to be created)
+- `pyproject.toml` — project config where `pathspec` dependency is declared
 - `dev-docs/backlog/TO_DO.md` — source backlog entry
 
 ## Removal Criteria
@@ -282,7 +298,7 @@ This plan can be archived when:
 **Current Over-sized Files (Exempt Placeholder):**
 - `src/frontend/ui/backend_playlist_card.py` — 940 lines (code file, exceeds 700 limit)
 
-This is the only file currently over 700 lines that isn't already covered by a glob-pattern exemption (tests, docs, dev-docs).
+This is the only `.py` file currently over 700 lines that isn't already covered by a glob-pattern exemption (tests, docs, dev-docs). 27 `dev-docs/` `.md` files also exceed the 300-line doc limit and are exempted via `dev-docs/**/*.md`.
 
 **Alternative Approaches Considered:**
 - Per-directory limits instead of global (more precise but harder to manage)
