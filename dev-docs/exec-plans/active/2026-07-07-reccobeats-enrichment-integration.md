@@ -62,29 +62,147 @@ The key-to-name mapping already exists in `export-tracks.ts:26` as an inline `ke
 - [ ] Create `src/backend/utils/music-helpers.ts` with pure helper functions (no internal imports):
   - `keyName(key: number): string` — returns `'N/A'` for out-of-range values
   - `modeName(mode: number): string` — returns `'N/A'` for non-0/1 values
-- [ ] Create `src/backend/utils/http-retry.ts` with a shared `fetchWithRetry` function:
+- [ ] Create `src/backend/utils/http-retry.ts` with a generic retry factory function:
   ```typescript
-  export async function fetchWithRetry(
-    url: string,
-    options?: RequestInit,
-    config?: {
-      maxRetries?: number;
-      baseDelay?: number;
-      shouldRetry?: (status: number) => boolean;
-      timeoutMs?: number;
-      onRetry?: (attempt: number, status: number, delayMs: number) => void;
-    }
-  ): Promise<Response>;
+  export interface RetryConfig {
+    maxRetries?: number;
+    baseDelay?: number;
+    shouldRetry?: (status: number) => boolean;
+    timeoutMs?: number;
+    onRetry?: (attempt: number, status: number, delayMs: number) => void;
+  }
+
+  export function createFetchWithRetry(config: RetryConfig): (url: string, options?: RequestInit) => Promise<Response>;
   ```
-  - Supports 429 → read `Retry-After`, wait (cap at 15s), retry up to 3 times
-  - Supports 5xx → exponential backoff (1s, 2s, 4s) up to 3 times
-  - Supports 4xx (non-429) → fail immediately
-  - **Per-request timeout:** pass `AbortSignal.timeout(config.timeoutMs ?? 15000)` so a hung connection fails fast instead of stalling the async queue job. An aborted request is treated as a retryable network error (retried up to `maxRetries`).
-  - Response classification uses status code only; reading the body is deferred to the caller
-  - **Scope:** Used by `AnalysisService` only. Do not change `SpotifyService.fetchWithRetry` behavior (keep existing behavior to avoid blast radius).
-  - **Tech-debt follow-up (file a ticket):** unify `SpotifyService.fetchWithRetry` with this shared util in a later change so only one retry implementation exists; also plan broader adoption of the structured logger beyond `analysis.ts`. For now the duplication is intentional to avoid a behavior change.
+  - The factory supports 429 status reading `Retry-After` header and backing off.
+  - The factory supports 5xx and connection timeouts with exponential backoff.
+  - The factory aborts hung requests per `timeoutMs` (defaulting to 15000) using `AbortController`.
+- [ ] **Install OpenAPI validation dependencies:** Add `js-yaml` and `@types/js-yaml` to backend devDependencies:
+  ```bash
+  npm install --save-dev js-yaml @types/js-yaml
+  ```
 - [ ] Update `export-tracks.ts` to import from `utils/constants.ts` and `utils/music-helpers.ts`: rename the inline `keyMap` (line 26) → `MUSIC_KEYS` and `modeMap` (line 27) → `MODE_NAMES`, and update all three usage sites (lines 28-31) to call the imported `keyName`/`modeName` helpers instead of the inline logic.
 - [ ] Verify existing export tests still pass
+
+### Phase 0.5: Move and Refactor Analysis Types
+
+Extract inline types and interfaces from `src/backend/services/analysis.ts` to a new shared types file `src/backend/types/analysis.ts` to ensure consistency and type reusability.
+
+- [ ] **Create `src/backend/types/analysis.ts` and export the following interfaces:**
+  ```typescript
+  export interface AudioFeatureAverages {
+    acousticness: number;
+    danceability: number;
+    energy: number;
+    instrumentalness: number;
+    liveness: number;
+    loudness: number;
+    speechiness: number;
+    tempo: number;
+    valence: number;
+  }
+
+  export interface ReccoBeatsAudioFeature extends AudioFeatureAverages {
+    id: string;
+    href: string;
+    isrc?: string | null;
+    key?: number;
+    mode?: number;
+  }
+
+  export interface ReccoBeatsAudioFeaturesResponse {
+    content: ReccoBeatsAudioFeature[];
+  }
+
+  export interface KeyModeDistribution {
+    key_percentages: Record<string, number>;
+    dominant_key: string;
+    dominant_key_percentage: number;
+    mode_percentages: { major: number; minor: number };
+    dominant_mode: 'major' | 'minor';
+  }
+
+  export interface AudioFeatureSummary {
+    track_count: number;
+    averages: AudioFeatureAverages;
+    key_mode_distribution?: KeyModeDistribution;
+  }
+
+  export interface PlaylistInsights {
+    overview: {
+      total_tracks: number;
+      total_duration_ms: number;
+      average_duration_ms: number;
+      formatted_duration: string;
+    };
+    artists: {
+      unique_artists: number;
+      top_artists: Array<{ artist: string; count: number }>;
+      diversity: number;
+    };
+    genre_distribution: Record<string, { count: number; percentage: number }>;
+    audio_features?: AudioFeatureSummary;
+    insights: string[];
+    reccobeats_metadata?: {
+      isrc_available: number;
+      popularity_min?: number;
+      popularity_max?: number;
+      retrieved_at: string;
+    };
+    errors?: Array<{ source: string; message: string }>;
+  }
+
+  export interface AnalysisResult {
+    job_id: string;
+    playlist_id: string;
+    user_id: string;
+    status: string;
+    computed_at: string;
+    completed_at: string;
+    overview?: {
+      total_tracks: number;
+      total_duration_ms: number;
+      average_duration_ms: number;
+      formatted_duration: string;
+    };
+    artists?: {
+      unique_artists: number;
+      top_artists: Array<{ artist: string; count: number }>;
+      diversity: number;
+    };
+    genre_distribution?: Record<string, { count: number; percentage: number }>;
+    audio_features?: AudioFeatureSummary;
+    insights?: string[];
+    reccobeats_metadata?: {
+      isrc_available: number;
+      popularity_min?: number;
+      popularity_max?: number;
+      retrieved_at: string;
+    };
+    errors?: Array<{ source: string; message: string }>;
+    schema_version: string;
+  }
+
+  export interface CachedRawEnrichment {
+    audio_features: ReccoBeatsAudioFeature[];
+    track_metadata: ReccoBeatsTrackMetadata[];
+    schema_version: string;
+  }
+
+  export interface ReccoBeatsTrackMetadata {
+    id: string;
+    trackTitle: string;
+    artists: Array<{ id: string; name: string; href: string }>;
+    durationMs: number;
+    isrc: string;
+    popularity: number;
+  }
+
+  export interface ReccoBeatsTrackMetadataResponse {
+    content: ReccoBeatsTrackMetadata[];
+  }
+  ```
+- [ ] Import these types in `src/backend/services/analysis.ts`, `src/backend/routes/analysis.ts`, and test files. Verify imports are clean.
 
 ### Phase 1: Backend Changes — Key/Mode Aggregation + Error Handling
 
@@ -101,7 +219,7 @@ This phase operates on `src/backend/services/analysis.ts` unless otherwise noted
     dominant_mode: 'major' | 'minor';
   }
   ```
-- [ ] Extend `AudioFeatureSummary` (line 63-66) to include `key_mode_distribution?: KeyModeDistribution`
+- [ ] Extend `AudioFeatureSummary` interface (in `types/analysis.ts`) to include `key_mode_distribution?: KeyModeDistribution`
 - [ ] Update `aggregateReccoBeatsAudioFeatures` (line 304) to compute key/mode distributions:
   - Filter tracks to those with valid `key` (0-11) and `mode` (0 or 1) — use `typeof f.key === 'number'` (not truthy check, since `key: 0` is valid and falsy)
   - Handle `null` explicitly: `typeof null !== 'number'` so the same check covers both null and undefined
@@ -146,24 +264,20 @@ Adds `GET /v1/track` batch metadata fetching into `src/backend/services/analysis
 - [ ] Add `fetchReccoBeatsTrackMetadata` method for `GET /v1/track?ids=...` endpoint
   - Use same batch size (50) and concurrency (3) as audio features
   - Apply the same retry strategy via the shared `fetchWithRetry` utility
-  - **Map by position, not by parsing `href`.** ReccoBeats returns `content` in the same order as the requested `ids`, so zip the request Spotify IDs with the response `content` by index. This is deterministic and avoids a fragile `href`→Spotify-ID regex. Drop the `EXTRACT_SPOTIFY_TRACK_ID_REGEX`/`extractSpotifyTrackId` idea entirely (no longer needed). Add a lightweight safety check: assert the returned `content` length matches the requested batch size; if it doesn't, log a structured warning and **skip that batch entirely** — its tracks contribute nothing to ISRC/popularity aggregates (no silent array-length mismatch). The analysis still completes with whatever data the other batches returned.
-- [ ] Extend `AnalysisResult` interface (line 4-25) with **aggregates only** (do not store the full per-track array — only the displayed summaries are needed, which also keeps the 24h KV payload small and avoids leaking ReccoBeats internal UUIDs). Note that `reccobeats_metadata` will always be returned on new results (with `isrc_available: 0` if fetches fail or are empty):
-  ```typescript
-  reccobeats_metadata?: {
-    isrc_available: number;        // count of tracks with a non-empty ISRC (0 if none/failed)
-    popularity_min?: number;       // min across tracks with data; omit if none
-    popularity_max?: number;       // max across tracks with data; omit if none
-    retrieved_at: string;
-  };
-  ```
-- [ ] Add `errors?: Array<{ source: string; message: string }>` optional field to `AnalysisResult` (and `PlaylistInsights`). When either the audio features or track metadata fetch fails (rejected in `Promise.allSettled`), push an entry to the `errors` array (e.g., `{ source: 'ReccoBeats audio features', message: error.message }`), and include this array in the returned results.
+  - **Map by position, not by parsing `href`.** ReccoBeats returns `content` in the same order as the requested `ids`, so zip the request Spotify IDs with the response `content` by index. Add a lightweight safety check: assert the returned `content` length matches the requested batch size; if it doesn't, log a structured warning and **skip that batch entirely** — its tracks contribute nothing to popularity aggregates.
+- [ ] **Derive `isrc_available` from audio features:** In `generatePlaylistInsights` (in `src/backend/services/analysis.ts`), compute `isrc_available` by counting the number of items in the `reccoBeatsAudioFeatures` array that contain a non-empty `isrc` string. This removes the dependency on the track metadata endpoint for ISRC data, making it robust if the track metadata fetch fails.
+- [ ] **Track Metadata only for Popularity:** Use the resolved `reccoBeatsMetadata` purely to calculate `popularity_min` and `popularity_max` across tracks. If the track metadata fetch fails, default these fields to undefined.
+- [ ] **Success Errors initialization:** In `analyzePlaylist` (in `src/backend/services/analysis.ts`), if both parallel fetches succeed without error, return `errors: []` in the final `AnalysisResult` for consistent frontend parsing.
 - [ ] Add `schema_version: string` field to `AnalysisResult` (value: `ANALYSIS_SCHEMA_VERSION`, which is `'1.0'`) — enables cache invalidation when schema changes in the future. The constant already lives in `utils/constants.ts` (Phase 0). Treat a missing `schema_version` as "legacy / pre-1.0".
-- [ ] Set `schema_version: ANALYSIS_SCHEMA_VERSION` in the `analyzePlaylist` return literal (around lines 163-171 in `src/backend/services/analysis.ts`).
-- [ ] **Cache Stale Check in GET Handler:** In `src/backend/routes/analysis.ts` `GET /playlist/:id/results` handler, import `ANALYSIS_SCHEMA_VERSION`, retrieve the cached `results`, and validate `results.schema_version`. If `schema_version` is missing or below `ANALYSIS_SCHEMA_VERSION`, treat it as a cache miss: delete `resultsKey`, delete the status key `statusKey`, and return a `404` error (`ANALYSIS_RESULTS_NOT_FOUND`) so the client re-triggers analysis.
+- [ ] Set `schema_version: ANALYSIS_SCHEMA_VERSION` in the `analyzePlaylist` return literal in `src/backend/services/analysis.ts`.
+- [ ] **Component-wise version comparison helper:** Create `src/backend/utils/version.ts` and define a utility function `compareVersions(v1: string, v2: string): number` that splits version strings on `.` and compares them component-wise as numbers from left to right.
+- [ ] **Cache Stale Check in GET Handler:** In `src/backend/routes/analysis.ts` `GET /playlist/:id/results` handler, import `ANALYSIS_SCHEMA_VERSION` and `compareVersions` from `../utils/version`, retrieve the cached `results`, and validate `results.schema_version`. If `schema_version` is missing or below `ANALYSIS_SCHEMA_VERSION` (using `compareVersions`), treat it as a cache miss: delete `resultsKey`, delete the status key `statusKey`, and return a `404` error (`ANALYSIS_RESULTS_NOT_FOUND`) so the client re-triggers analysis.
 - [ ] **Lower TTL for deployment:** Add an env-overridable results TTL constant (e.g. `ANALYSIS_RESULTS_TTL_SECONDS` defaulting to 86400) in `src/backend/services/analysis-job.ts` (replacing the hardcoded 86400). Set to 3600 (1 hour) via Wrangler secrets/env for the first 24h post-deploy, then revert.
 - [ ] **Verify queue consumer** (`src/backend/services/analysis-job.ts`) calls `AnalysisService.analyzePlaylist` and does not have independent ReccoBeats fetch logic. The queue consumer is the only caller of `analyzePlaylist`, so changes to `analyzePlaylist` are automatically used by queue processing.
-- [ ] Wire track metadata fetch into `analyzePlaylist` (line 88-176):
-  - After collecting all track IDs (after line 115), initiate both ReccoBeats fetches in parallel using `Promise.allSettled()`:
+- [ ] **Remove legacy progress and error boundaries (Transition Step):** Delete the old try/catch block around audio-features fetch in `analyzePlaylist` (legacy `src/backend/services/analysis.ts`) and remove the `await onProgress?.(75)` and `await onProgress?.(90)` calls to make room for parallel `Promise.allSettled` orchestrations.
+- [ ] **Pin progress emissions to instance boolean:** Add an instance field `emittedWarmKeepalive = false` on `AnalysisService` to track whether the 70% progress keep-alive has been emitted for the current run, avoiding state leakage between concurrent jobs.
+- [ ] Wire track metadata fetch into `analyzePlaylist`:
+  - After collecting all track IDs, initiate both ReccoBeats fetches in parallel using `Promise.allSettled()`:
   ```typescript
   const [audioFeaturesResult, metadataResult] = await Promise.allSettled([
     this.fetchReccoBeatsAudioFeatures(trackIds),
@@ -171,20 +285,22 @@ Adds `GET /v1/track` batch metadata fetching into `src/backend/services/analysis
   ]);
   ```
   - Extract values from fulfilled promises, default to `[]` for rejected ones
-  - For each rejected promise, log a structured warning including the endpoint name, error message, and attempt count: `service: 'analysis', source: 'ReccoBeats', endpoint: 'audio-features' | 'track-metadata', error: string`
-  - Pass `reccoBeatsMetadata` to `generatePlaylistInsights`
-- [ ] Move the `generatePlaylistInsights` call (currently ~line 157 in `analyzePlaylist`) to **after** the `Promise.allSettled` resolves — search for `this.generatePlaylistInsights(` to locate it regardless of line-number drift from prior phases
-- [ ] Add `reccobeats_metadata` field to `PlaylistInsights` interface (line 34-49) using the **aggregate** shape defined above (`isrc_available`, `popularity_min?`, `popularity_max?`, `retrieved_at`) — this is the internal return type of `generatePlaylistInsights`, and its values are spread into `AnalysisResult` at `analyzePlaylist:163-171`; without this field the metadata never reaches the response
-- [ ] Update `generatePlaylistInsights` signature (currently ~line 240 in `analysis.ts`) to accept `reccoBeatsMetadata: ReccoBeatsTrackMetadata[]` as a 4th parameter; compute the aggregates (`isrc_available`, `popularity_min/max`) inside it and return them in the `reccobeats_metadata` field. Update the call site in `analyzePlaylist` to pass the fulfilled metadata result
-- [ ] Make `generatePlaylistInsights` `private` — it's only called from `analyzePlaylist` and no external code depends on it. Confirm with `rg` that no test or subclass references it directly (current `analysis.test.ts` calls the public `analyzePlaylist` only) before changing visibility.
-- [ ] **Thread `onProgress` into the batch fetchers (required for the 70% warm-keep emit):** Update `fetchReccoBeatsAudioFeatures` and `fetchReccoBeatsTrackMetadata` to accept an optional `onProgress?: (p: number) => Promise<void>` callback, and pass `onProgress` down from `analyzePlaylist` (or a wrapper that emits `70`). Emit `70` once after the first batch-group completes successfully (guarded so it fires at most once even across retries). Without this step the 70% emit below cannot happen.
+  - For each rejected promise, push a `{ source: string, message: string }` object into a local `errors` array, and log a structured warning including the endpoint name, error message, and attempt count.
+  - Pass the local `errors` array and the fetched metadata/features down to `generatePlaylistInsights`.
+  - Spread the collected `errors` array (if non-empty) into the final returned `AnalysisResult` literal.
+- [ ] Move the `generatePlaylistInsights` call to **after** the `Promise.allSettled` resolves — locate it by searching for `this.generatePlaylistInsights(`.
+- [ ] Add `reccobeats_metadata` field to `PlaylistInsights` interface using the **aggregate** shape defined above.
+- [ ] Update `generatePlaylistInsights` signature to accept `reccoBeatsMetadata: ReccoBeatsTrackMetadata[]` as a 4th parameter; compute the aggregates (`isrc_available` from audio features, `popularity_min/max` from track metadata) inside it and return them in the `reccobeats_metadata` field. Update the call site in `analyzePlaylist` to pass the fulfilled metadata result.
+- [ ] Make `generatePlaylistInsights` `private` — confirm with `rg` that no test or subclass references it directly before changing visibility.
+- [ ] **Thread `onProgress` into the batch fetchers:** Update `fetchReccoBeatsAudioFeatures` and `fetchReccoBeatsTrackMetadata` to accept an optional `onProgress?: (p: number) => Promise<void>` callback, and pass `onProgress` down from `analyzePlaylist` (or a wrapper that emits `70`). Emit `70` once after the first batch-group completes successfully (using `this.emittedWarmKeepalive` to guard so it fires at most once even across retries).
 - [ ] Update progress callback positions in `analyzePlaylist` for the parallel fetch structure:
   - 20% → tracks fetched
   - 50% → artists fetched
   - 65% → before parallel ReccoBeats fetches begin
-  - 70% → once, after the first batch-group completes successfully (keep-alive signal; guarded so it fires at most once, even across retries)
+  - 70% → once, after the first batch-group completes successfully (keep-alive signal)
   - 85% → parallel fetches complete
   - 95% → insights generated
+- [ ] **Cache Raw Enrichment in Analysis:** In `AnalysisService.analyzePlaylist` (in `src/backend/services/analysis.ts`), check for cached raw enrichment at `analysis:playlist:${playlistId}:raw-enrichment`. If it exists and has a valid `schema_version`, use it directly to bypass ReccoBeats fetches. Otherwise, after fetching features and metadata, store them in the `raw-enrichment` cache with a 24h TTL.
 
   **Rationale for intermediate progress (70%):** If retries occur, the job status record may look stalled. Emitting `70%` after a successful (possibly retried) batch keeps the status warm. If no retries are needed, this is a no-op.
 - [ ] Add backend unit tests:
@@ -261,10 +377,8 @@ The `AnalysisResponse` schema in `src/backend/docs/openapi.yaml` is entirely dis
     - `errors` (array of `{ source: string, message: string }`, optional)
   - Keep existing top-level under `data`: `playlist_id`, `job_id`, `user_id`, `status`, `computed_at`, `completed_at`. Note: `total_tracks` is nested inside `overview`, not a top-level field — do not promote it.
   - Remove entirely: `recommendations.similar_playlists` sub-schema, `SimilarPlaylist` schema
-- [ ] Handle `AnalysisRequest` — route doesn't read the request body, so:
-  - Simplify `AnalysisRequest` to an empty schema with a description: "Request body is optional and currently ignored. The endpoint uses empty POST for HTTP semantics only."
-  - Remove `include_recommendations` and `include_audio_features` properties
-  - Remove the example `requestBody` content that shows the old `include_audio_features` and `include_recommendations` fields (they are misleading now)
+- [ ] Handle `AnalysisRequest` — simplify to an empty schema; remove `include_recommendations` and `include_audio_features`.
+- [ ] **Document Route Ignored Body:** Add a comment in `src/backend/routes/analysis.ts` POST handler explaining that the route uses an empty POST and ignores any body input for strict HTTP semantics.
 - [ ] Update the analysis example response in `openapi.yaml` (lines 378-413) to match the new schema:
   - **Remove the `analysis` wrapper** — the actual response is `data: { job_id, playlist_id, … }`, not `data: { analysis: { … } }`
   - The example response should use `data` with flat top-level fields matching `AnalysisResult`
@@ -273,7 +387,13 @@ The `AnalysisResponse` schema in `src/backend/docs/openapi.yaml` is entirely dis
   - Remove the entire "Analyze Playlist (with Recommendations)" section (lines 271-308)
   - **Clarify `include_recommendations` removal (doc-only):** Remove the `include_recommendations` field from the code sample in `src/backend/docs/api-examples.md` (lines 543-563).
   - Remove `include_recommendations: true` from the code sample in "Complete Examples" in `api-examples.md` (line 649).
-- [ ] **Add automated OpenAPI validation test:** Create `src/backend/tests/openapi-schema.test.ts`. Since POST/GET is asynchronous via the queue, stand up a test harness that drives `AnalysisJobService.process` directly with a mocked `Env` (auth + KV + queue) to complete the job. Then assert that the live POST status and GET results response shapes (obtained via the test Hono app with mocked auth context) are structurally supersets of the spec's example shapes. This catches real-world drift between spec and implementation, validates both the POST/GET split and the `data` envelope.
+- [ ] **Add automated OpenAPI validation test:** Create `src/backend/tests/openapi-schema.test.ts`. Since POST/GET is asynchronous via the queue, stand up a test harness that drives `AnalysisJobService.process` directly with a mocked `Env` (auth + KV + queue) to complete the job.
+  - **Verification steps:**
+    - Load and parse `src/backend/docs/openapi.yaml` using the `js-yaml` library.
+    - Extract the response examples for both `POST /analysis/playlist/{id}` and `GET /analysis/playlist/{id}/results`.
+    - Perform a recursive assertion checking that every key-path present in the OpenAPI examples exists on the live response returned by Hono endpoints.
+    - Globally mock `fetch` to return ReccoBeats mock payloads mapped from `dev-docs/reccobeats-api-contract.md`.
+- [ ] **End-to-End Analysis Pipeline Integration Test:** Add a test in `src/backend/tests/analysis-pipeline.test.ts` that mocks a playlist with 5 tracks, enqueues an analysis job, runs `AnalysisJobService.process()`, mocks both ReccoBeats endpoints with contract response structures, and asserts that the resulting KV record is successfully populated with the correct `AnalysisResult` properties.
 
 ### Phase 5: ReccoBeats Recommendations — Deferred
 
@@ -299,9 +419,12 @@ When the `AnalysisResult` schema changes, existing cached results in KV (`analys
 
 - Phase 2 adds `schema_version: string` to `AnalysisResult` (value: `"1.0"`)
 - The frontend checks `schema_version` defensively (Phase 3) — if the field is missing or doesn't match, the new sections are omitted gracefully. If `schema_version` is present but **higher than expected** (e.g., `2.0`), the frontend still renders known fields (forward compatibility)
-- **Version bump policy:** increment `ANALYSIS_SCHEMA_VERSION` only for *breaking* changes to the cached `AnalysisResult` shape (a required, renamed, or removed field). Additive optional fields do not require a bump — the frontend already tolerates missing optional fields, and the stale check only triggers on a lower/invalid version.
-- Results KV key (`analysis:{playlist_id}:{user_id}:results`) has a **24-hour TTL** (`analysis-job.ts:78`), so stale-format results persist for up to 24h after deployment
-- **Backend-side stale check:** `GET /analysis/playlist/{id}/results` should validate `schema_version` on the cached result; if it is missing or below `ANALYSIS_SCHEMA_VERSION`, treat it as a cache miss (delete the key and return 404 so the client re-triggers analysis) rather than serving an old-format payload. This bounds the blast radius of a version bump beyond the TTL window.
+- **Deployment sequence:**
+  1. Deploy backend Phase 1 changes (adds aggregates to analysis results).
+  2. Deploy backend Phase 2 changes (adds `schema_version`, stale-checking, and `errors[]` schema structure).
+  3. Deploy frontend Phase 3 changes (adds UI widgets and defensive `schema_version`/`errors[]` parsing).
+- Results KV key (`analysis:{playlist_id}:{user_id}:results`) has a **24-hour TTL** (configured in `analysis-job.ts`), so stale-format results persist for up to 24h after deployment
+- **Backend-side stale check:** `GET /analysis/playlist/:id/results` should validate `schema_version` on the cached result; if it is missing or below `ANALYSIS_SCHEMA_VERSION` (compare by parsing both versions using component-wise comparison to avoid lexicographical string comparison issues), treat it as a cache miss (delete the key and return 404 so the client re-triggers analysis) rather than serving an old-format payload. This bounds the blast radius of a version bump beyond the TTL window.
 - **Deployment checklist:** Consider temporarily lowering the results KV TTL to **1 hour** for the first 24h after deployment to reduce the stale cache window. Revert TTL after the rollout stabilizes.
 - **Deployment ordering:** Phase 1 deploys first (adds `key_mode_distribution` without `schema_version`). Phase 2 adds `schema_version` and the backend stale check. Phase 3 frontend must tolerate **both** states: `schema_version` present (`'1.0'`) and absent (legacy). The backend stale check is only active after Phase 2 is deployed — between Phase 1 and Phase 2, old KV results serve the Phase 1 shape without `schema_version` and the frontend gracefully omits new sections.
 
