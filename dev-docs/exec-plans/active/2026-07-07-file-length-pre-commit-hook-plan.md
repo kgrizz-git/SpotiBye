@@ -148,18 +148,18 @@ Exemptions are:
   - [ ] `argparse` with `--exemptions`, `--warn`, `--ci` flags
   - [ ] Enforce `--ci` and `--warn` mutual exclusivity via `argparse.add_mutually_exclusive_group()` (built-in; prints error and exits 1 automatically if both passed); note the default error message is terse ("not allowed with argument") — consider a custom error via manual check for clarity
   - [ ] Read filenames from `sys.argv` (positional args from pre-commit with `pass_filenames: true`)
-  - [ ] **Scan-mode fallback:** when no positional filenames are given (e.g., CI invocation without pre-commit), walk `src/` and `docs/`/`dev-docs/` for all `.py` and `.md` files. Hardcode the exclusion list (don't parse YAML — overengineered): `.venv/`, `venv/`, `node_modules/`, `build/`, `dist/`, `backups/`, `backend-backup/`, `__pycache__/`, and any path matching `.pre-commit-config.yaml`'s `exclude` regex pattern. Accept an optional `--exclude` CLI flag for ad-hoc overrides.
-  - [ ] Glob-matcher for exemption list using `pathspec` (chosen over stdlib `fnmatch`/`pathlib` because exemptions use gitignore-style `**` patterns that `pathspec` matches correctly out of the box; `fnmatch` has edge cases with recursive wildcards and leading `./`)
+  - [ ] **Scan-mode fallback:** when no positional filenames are given (e.g., CI invocation without pre-commit), walk the **repo root** for all `.py` and `.md` files (matching the local hook's repo-wide `files: \.(py|md)$` scope — walking only `src/`+docs would silently miss violations outside those trees). Hardcode the exclusion list (don't parse YAML — overengineered): `.venv/`, `venv/`, `node_modules/`, `build/`, `dist/`, `backups/`, `backend-backup/`, `__pycache__/`, and any path matching `.pre-commit-config.yaml`'s `exclude` regex pattern. Accept an optional `--exclude` CLI flag for ad-hoc overrides.
+  - [ ] Glob-matcher for exemption list using `pathspec` (chosen over stdlib `fnmatch`/`pathlib` because exemptions use gitignore-style `**` patterns that `pathspec` matches correctly out of the box; `fnmatch` has edge cases with recursive wildcards and leading `./`); wrap the import in `try/except ImportError` and emit a clear message ("install with: pip install -e '.[development]'") before exiting 1 (enforcement/`--ci`) or printing a warning and continuing (`--warn`) — this prevents `ModuleNotFoundError` on a fresh clone where only `setup-hooks.sh` (which installs `pre-commit` but not Python development extras) has been run
   - [ ] Line counting via Python `sum(1 for _ in f)` (deterministic, matches `wc -l` for normal files, handles missing trailing newline correctly; avoids subprocess call)
   - [ ] Expiry-date warning for exemptions past their `expires` date; in enforcement modes (both default and `--ci`), treat expired exemptions as violations (exit 1); in `--warn` mode, print warning but continue
   - [ ] Violation output with clear guidance
   - [ ] Error handling: if exemptions JSON is missing or malformed, print error and exit 1 in enforcement modes (both default and `--ci`); print warning and continue (treating no files as exempt) in `--warn` mode
-  - [ ] Handle deleted files: skip paths that do not exist on disk (pre-commit passes deleted/renamed file paths); log at debug level
-  - [ ] Handle renamed files: pre-commit passes both old and new paths for renames; match exemptions against the **final (post-rename) path only**, skip the old path (it no longer exists on disk)
+- [ ] Handle deleted/renamed files: skip paths that do not exist on disk (pre-commit passes deleted/renamed file paths; the "skip non-existent" rule handles both cases uniformly — process only files on disk, log skipped missing paths at debug level)
 - [ ] Write unit tests (place in `scripts/tests/` — not `src/frontend/tests/`, since these test a non-Kivy tool):
   - [ ] Path-based file classification (code / doc / test / skip)
   - [ ] Glob exemption matching (including `**` wildcards)
-  - [ ] Scan-mode fallback walks the expected directories and respects the exclusion list (`.venv/`, `node_modules/`, `build/`, `__pycache__/`, etc. — set up a mock `.venv/` with an oversized `.py` and verify it is not reported)
+  - [ ] Glob exemption matching (including `**` wildcards) — explicitly assert both a file directly under `dev-docs/` and a file in a nested subdirectory match `dev-docs/**/*.md` (paths with `**` are zero-or-more-directories; verifying zero-dir matching is critical since ~27 files depend on it)
+- [ ] Scan-mode fallback walks the expected directories and respects the exclusion list (`.venv/`, `node_modules/`, `build/`, `__pycache__/`, etc. — set up a mock `.venv/` with an oversized `.py` and verify it is not reported)
   - [ ] Expired exemption detection in enforcement vs warn mode
   - [ ] Mutual exclusivity of `--warn` and `--ci`
 - [ ] Test against current codebase:
@@ -180,8 +180,10 @@ Exemptions are:
 - [ ] Test with no changed files to confirm no-op
 - [ ] Update CHANGELOG.md under `## [Unreleased] > ### Added`
 - [ ] Add file-length check to `scripts/verify-frontend.sh` (or add a new `verify-file-lengths.sh`) so `./scripts/verify-all.sh` covers it
-- [ ] Add a pytest step for script tests to `verify-frontend.sh`: `KIVY_WINDOW=headless .venv/bin/pytest scripts/tests/ -q` — this is required because `scripts/tests/` is outside `src/frontend/tests/` and won't be discovered otherwise
+- [ ] Add a pytest step for script tests to `verify-frontend.sh`: `KIVY_WINDOW=headless .venv/bin/pytest scripts/tests/ -q` — this is required because `scripts/tests/` is outside `src/frontend/tests/` and won't be discovered otherwise; the Kivy env vars are harmless for non-Kivy tests and keep the invocation uniform with the rest of `verify-frontend.sh`
 - [ ] Verify `./scripts/verify-all.sh` passes after config change
+- [ ] Confirm `scripts/setup-hooks.sh` installs the `[development]` extras (or add it if missing) so the `pathspec` dependency is present after a fresh clone — without this, the local hook fails with `ModuleNotFoundError`
+- [ ] Verify `pip show pathspec` (or `python -c "import pathspec"`) succeeds in the dev/CI environment before relying on the hook
 
 ### Phase 2b: CI Integration
 
@@ -212,7 +214,7 @@ The repository has `.github/workflows/ci.yml` with two jobs: `backend` (TypeScri
 - [ ] **Phase A (days 0–14):** Ship with `--warn` flag. Monitor for false positives and developer feedback.
 - [ ] **Phase B (day 14+):** Remove `--warn` flag from `.pre-commit-config.yaml`. Hook now blocks commits with violations.
 - [ ] Monitor exemption requests and reasons
-- [ ] Track exemption count automatically: add a CI step that runs `check_file_lengths.py --ci --exemptions scripts/file-length-exemptions.json --count-only` (the `--count-only` flag is defined in Phase 1 argparse; it prints active, expired, and soon-to-expire exemption counts and exits 0 without reporting violations)
+- [ ] Track exemption count automatically: add a CI step that runs `check_file_lengths.py --exemptions scripts/file-length-exemptions.json --count-only` (the `--count-only` flag is defined in Phase 1 argparse; it prints active, expired, and soon-to-expire exemption counts and exits 0 without reporting violations — `--ci` is not needed since `--count-only` suppresses violation enforcement)
 - [ ] Add a scheduled (weekly) CI job or manual check that warns when any exemption is within 7 days of its `expires` date, so the team can review and decide to extend or drop before enforcement kicks in
 - [ ] Review exemption list periodically (suggested quarterly)
 - [ ] Adjust thresholds if needed based on feedback
