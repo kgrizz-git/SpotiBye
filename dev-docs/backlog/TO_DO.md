@@ -41,6 +41,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [x] Reconcile unimplemented `recommendations` / `energy_score` fields out of the OpenAPI spec and docs
   - [x] Translate "Mood (Valence)" into human-readable labels (Melancholic/Somber/Neutral/Cheerful/Euphoric)
   - **Investigation:** [2026-07-05-reccobeats-enrichment-gaps.md](../investigations/2026-07-05-reccobeats-enrichment-gaps.md) — original audit; all gaps it identified are closed except the recommendation endpoint (tracked separately below).
+- [ ] **Investigate ReccoBeats enrichment returning empty / failing on playlist analysis** — user saw `audio features unavailable` + `track metadata unavailable` banners with no Audio Features section. Integration code is correct & deployed; live API returns data for *some* tracks (no key needed) but catalog coverage looks near-zero, and the banners indicate the **Worker-side fetch is rejecting** (likely Cloudflare datacenter egress blocked). See [`../investigations/2026-07-09-reccobeats-enrichment-failure.md`](../investigations/2026-07-09-reccobeats-enrichment-failure.md). If egress is truly blocked, design a frontend-side fetch + dual-cache workaround (raw enrichment fetched from the user's machine, cached locally and in backend KV).
 - [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations — deferred from the enrichment integration plan above; needs separate UI/caching design (Phase 5 in that plan).
 - [ ] Migrate `export-tracks.ts` off dead Spotify `/audio-features` endpoints to ReccoBeats; remove `SpotifyService.getAudioFeatures`/`getMultipleAudioFeatures` and deprecate the `GET /spotify/tracks/:id/audio-features` proxy route once nothing calls it. Deferred from the enrichment integration plan above (analysis already migrated; export did not).
 - [ ] Consolidate `SpotifyService.fetchWithRetry` with `utils/http-retry.ts`'s `createFetchWithRetry` (added for ReccoBeats fetches) so there is one retry/backoff implementation instead of two. Deferred from the enrichment integration plan above.
@@ -68,8 +69,10 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
     - [`dev-docs/assessments/pyright-root.md`](../assessments/pyright-root.md) — `src/frontend/` root files (0 errors)
   - [x] Fix straightforward issues (all pyright errors resolved — verified `basedpyright src/frontend src/shared --level error` returns 0 errors)
   - [ ] Create follow-up backlog items or an execution plan for larger type-safety work
+- [ ] Split the dependabot dev-dependency bundle in PR #20 into safe, individually-mergeable bumps, easiest/highest-priority first ([plan](../exec-plans/active/2026-07-09-split-dependabot-dev-deps-pr20.md)) — **NEEDS REVIEW**
 - [ ] Track/remove `esbuild` and `uuid` npm overrides in `src/backend/package.json` once upstream ships patched releases
 - [ ] Add a pre-commit hook that checks for code files over 700 lines and doc files over 300 lines and gives a warning unless the file is in an exempted list ([plan](./exec-plans/active/2026-07-07-file-length-pre-commit-hook-plan.md))
+- [ ] Refactor `src/frontend/ui/backend_playlist_card.py` to split it under 600 lines and remove from exemption list ([plan](./exec-plans/active/2026-07-09-refactor-backend-playlist-card.md))
 
 ## Repo Cleanup & DevOps
 

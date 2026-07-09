@@ -290,7 +290,7 @@ export class AnalysisService {
     try {
       response = await this.fetchWithRetry(url.toString());
     } catch (error) {
-      throw new Error(`ReccoBeats API error: ${errorMessage(error)}`);
+      throw new Error(`ReccoBeats API error: ${errorMessage(error)}`, { cause: error });
     }
 
     if (!response.ok) {
@@ -341,7 +341,7 @@ export class AnalysisService {
     try {
       response = await this.fetchWithRetry(url.toString());
     } catch (error) {
-      throw new Error(`ReccoBeats API error: ${errorMessage(error)}`);
+      throw new Error(`ReccoBeats API error: ${errorMessage(error)}`, { cause: error });
     }
 
     if (!response.ok) {

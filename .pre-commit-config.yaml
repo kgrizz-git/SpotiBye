@@ -6,10 +6,6 @@ exclude: |
     build/|
     dist/|
     backups/|
-    backend-backup/|
-    SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY/|
-    docs/old-docs-backup/|
-    srcamas/
   )
 
 repos:
@@ -80,18 +76,15 @@ repos:
         stages: [pre-commit]
 
   # Node.js linting (ESLint) - only on JS/TS files
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v9.4.0
+  - repo: local
     hooks:
       - id: eslint
         name: ESLint
-        files: \.[jt]sx?$
+        entry: bash -c 'npx eslint -c src/backend/eslint.config.mjs "$@"' --
+        language: system
+        files: ^src/backend/.*\.[jt]sx?$
         types: [file]
         stages: [pre-commit]
-        additional_dependencies:
-          - eslint@8.57.1
-          - "@typescript-eslint/eslint-plugin@8.61.0"
-          - "@typescript-eslint/parser@8.61.0"
 
   # Repo structure guardrails (pre-commit)
   - repo: local
@@ -182,16 +175,10 @@ repos:
         always_run: true
         stages: [pre-push]
 
-      - id: security-scan
-        name: Full Security Scan
-        description: Run comprehensive security checks before push
-        entry: python scripts/check-dependencies.py --security --ci
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
   # Dependency vulnerability scan (OSV-Scanner) before push.
+  # This is the canonical local dependency vulnerability check. Keep dependency
+  # CVE scanning here to avoid duplicating pip-audit/npm-audit hooks alongside
+  # OSV, while still preserving scripts/check-dependencies.py for ad hoc use.
   # Uses the native (Go) hook: pre-commit (>=3.0) bootstraps Go automatically,
   # so no local Docker or Go install is required. OSV-Scanner honours .gitignore
   # by default, so .venv/, node_modules/, backups/, etc. are skipped already.

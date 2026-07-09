@@ -1,42 +1,36 @@
-name: Dependency Review
+name: OSV PR Scan
 
 on:
   pull_request:
     branches: [main, develop, WIP]
     paths:
       - 'requirements.txt'
+      - 'pyproject.toml'
       - 'package*.json'
+      - 'package-lock.json'
       - 'src/backend/package*.json'
       - '.github/workflows/dependency-review.yml'
 
+  merge_group:
+    branches: [main, develop, WIP]
+
 permissions:
+  actions: read
   contents: read
-  pull-requests: write
+  security-events: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Streamlined dependency review using GitHub's built-in action
-  # This provides license compliance and vulnerability checks without duplicating security.yml
-  dependency-review:
-    name: Dependency Review
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48
-        with:
-          # Fail on moderate or higher severity vulnerabilities
-          fail-on-severity: moderate
-          # Show all vulnerabilities, not just those in the PR
-          allow-ghsas: true
-          # Comment on PR with results
-          comment-summary-in-pr: always
-          # Check for license issues
-          deny-licenses: ''
-          # Fail on scoped packages
-          fail-on-scopes: runtime, development
+  # Private personal repos cannot use actions/dependency-review-action.
+  # Use OSV's PR-diff workflow instead so dependency PRs still get a blocking
+  # "new vulnerabilities introduced by this branch" check.
+  scan-pr:
+    name: Dependency Vulnerabilities (OSV PR)
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@8dc09193bb540e09b23da07ad7e30bd33bf87018
+    with:
+      # Private personal repos here do not have GitHub Code Scanning enabled,
+      # so uploading SARIF via github/codeql-action/upload-sarif will fail.
+      upload-sarif: false

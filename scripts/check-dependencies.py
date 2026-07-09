@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-Local dependency security and update checker.
+Local ad hoc dependency security and update checker.
 
 This script checks for:
 1. Security vulnerabilities (pip-audit, npm audit)
 2. Outdated packages (pip-review, npm outdated)
+
+This script is intended for manual use. Automated pre-push and PR dependency
+vulnerability enforcement is handled by OSV-Scanner in pre-commit and GitHub
+Actions to avoid maintaining multiple blocking scanners with overlapping output.
 
 Usage:
     python scripts/check-dependencies.py [--security] [--outdated]

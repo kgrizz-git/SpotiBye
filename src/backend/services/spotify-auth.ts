@@ -132,7 +132,9 @@ export class SpotifyAuthService {
         throw new Error(`Failed to refresh token: ${body.error || response.statusText}`);
       } catch (parseError) {
         if (parseError instanceof AuthRequiredException) throw parseError;
-        throw new Error(`Failed to refresh token: ${raw || response.statusText}`);
+        throw new Error(`Failed to refresh token: ${raw || response.statusText}`, {
+          cause: parseError,
+        });
       }
     }
 

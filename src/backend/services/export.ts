@@ -136,12 +136,13 @@ export class ExportService {
     const allTracks = [];
     let offset = 0;
     const limit = 100;
-    let hasMore = true;
-    while (hasMore) {
+    while (true) {
       const tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
       allTracks.push(...tracksData.items);
       // Advance by the raw page size — see export-cursor.ts comments.
-      if (tracksData.rawCount < limit) { hasMore = false; break; }
+      if (tracksData.rawCount < limit) {
+        break;
+      }
       offset += limit;
     }
 
