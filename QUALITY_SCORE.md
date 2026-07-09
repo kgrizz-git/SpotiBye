@@ -24,9 +24,9 @@
 | Auth / JWT | B | B | B | **B** | Hand-rolled JWT; clock-skew edge cases untested |
 | Spotify API client | C | C | B | **C** | No retry on 429; response validation incomplete |
 | Export / Cursor | B | B | A | **B** | Resumable cursor design solid; assembly edge cases need more tests |
-| Analysis | C | C | C | **C** | Logic correct but sparse test coverage |
+| Analysis | B | B | B | **C+** | Full ReccoBeats audio-features + track-metadata enrichment, key/mode aggregation, best-effort `errors[]`, schema-version staleness handling; retry consolidation with `SpotifyService.fetchWithRetry` still pending |
 | Caching (KV) | B | B | B | **B** | Key namespacing enforced; `any` type in `set()` |
-| ReccoBeats integration | D | D | D | **D** | Appears to be a stub/mock — unclear if real integration exists |
+| ReccoBeats integration | C | C | C | **C** | Real integration (audio-features + track metadata, retry/timeout, raw-enrichment cache); export path still uses dead Spotify `/audio-features` (tracked separately) |
 
 ---
 
@@ -58,7 +58,6 @@
 ## Priority Gaps (for next agent cleanup pass)
 
 1. Add CI workflow — `F` grade in CI blocks everything else
-2. Replace `console.log` with structured logging throughout backend
+2. Replace `console.log` with structured logging throughout backend (done in `services/analysis.ts` via `utils/logger.ts`; remaining files tracked in `TO_DO.md`)
 3. Add retry logic for Spotify 429 responses in `services/spotify.ts`
-4. Clarify or remove ReccoBeats stub
-5. Increase screen-level test coverage in frontend
+4. Increase screen-level test coverage in frontend

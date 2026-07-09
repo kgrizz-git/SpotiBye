@@ -35,13 +35,15 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Preserve existing Track D queue behavior
   - [ ] Split work into distributed batches for playlists with more than 40 artists per Worker invocation
   - [ ] Add backend tests for batch fan-out and aggregation
-- [ ] Close ReccoBeats enrichment gaps in playlist analysis popup ([plan](../exec-plans/active/2026-07-07-reccobeats-enrichment-integration.md))
-  - [ ] Display missing audio features (instrumentalness, liveness, loudness, speechiness) and key/mode
-  - [ ] Optionally fetch `GET /v1/track` for ISRC and ReccoBeats popularity metadata
-  - [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations
-  - [ ] Reconcile or remove unimplemented `recommendations` / `energy_score` fields from OpenAPI spec and docs
-  - [ ] Translate "Mood (Valence)" into human-readable labels (e.g., "Melancholic", "Cheerful") or add a scale explanation, because a raw percentage (e.g., "45%") does not communicate that lower = sadder and higher = happier
-  - **Investigation:** [2026-07-05-reccobeats-enrichment-gaps.md](../investigations/2026-07-05-reccobeats-enrichment-gaps.md) — we retrieve 9 audio features but only display 5, ignore key/mode, skip the track-metadata endpoint entirely, and do not use the ReccoBeats track-recommendation endpoint; our OpenAPI spec also documents a `recommendations` feature that is not implemented in the backend.
+- [x] Close ReccoBeats enrichment gaps in playlist analysis popup ([plan](../exec-plans/completed/2026-07-07-reccobeats-enrichment-integration.md)) — **done 2026-07-09**
+  - [x] Display missing audio features (instrumentalness, liveness, loudness, speechiness) and key/mode
+  - [x] Fetch `GET /v1/track` for ISRC and ReccoBeats popularity metadata
+  - [x] Reconcile unimplemented `recommendations` / `energy_score` fields out of the OpenAPI spec and docs
+  - [x] Translate "Mood (Valence)" into human-readable labels (Melancholic/Somber/Neutral/Cheerful/Euphoric)
+  - **Investigation:** [2026-07-05-reccobeats-enrichment-gaps.md](../investigations/2026-07-05-reccobeats-enrichment-gaps.md) — original audit; all gaps it identified are closed except the recommendation endpoint (tracked separately below).
+- [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations — deferred from the enrichment integration plan above; needs separate UI/caching design (Phase 5 in that plan).
+- [ ] Migrate `export-tracks.ts` off dead Spotify `/audio-features` endpoints to ReccoBeats; remove `SpotifyService.getAudioFeatures`/`getMultipleAudioFeatures` and deprecate the `GET /spotify/tracks/:id/audio-features` proxy route once nothing calls it. Deferred from the enrichment integration plan above (analysis already migrated; export did not).
+- [ ] Consolidate `SpotifyService.fetchWithRetry` with `utils/http-retry.ts`'s `createFetchWithRetry` (added for ReccoBeats fetches) so there is one retry/backoff implementation instead of two. Deferred from the enrichment integration plan above.
 
 **Related notes:** [API enrichment](spotify-api-enrichment.md) · [ReccoBeats contract](reccobeats-api-contract.md) · [ReccoBeats enrichment gaps](../investigations/2026-07-05-reccobeats-enrichment-gaps.md)
 

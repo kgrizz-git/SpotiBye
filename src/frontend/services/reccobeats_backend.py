@@ -7,6 +7,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from .backend_client import BackendClient, BackendAPIError
+from ..caching.backend_cache import get_cache_manager
 from ..utils.network_utils import (
     NetworkTimeoutError,
     handle_network_errors,
@@ -33,6 +34,9 @@ class ReccoBeatsBackendService:
             backend_client: Backend client instance
         """
         self.backend_client = backend_client or BackendClient()
+        # Guards against re-posting more than once per top-level
+        # `analyze_playlist` call when polling discovers stale results.
+        self._reposted_on_stale = False
 
     @handle_network_errors
     @retry_on_network_error(max_retries=3, backoff_factor=1.0)
@@ -53,6 +57,7 @@ class ReccoBeatsBackendService:
             if analysis_task and analysis_task.is_cancelled():
                 return {}
 
+            self._reposted_on_stale = False
             logger.info(f"Starting playlist analysis for {playlist_id}")
 
             # Start analysis job
@@ -115,7 +120,33 @@ class ReccoBeatsBackendService:
 
             if status == "completed":
                 logger.info("Analysis completed successfully")
-                return self.backend_client.get_analysis_results(playlist_id)
+                try:
+                    return self.backend_client.get_analysis_results(playlist_id)
+                except BackendAPIError as e:
+                    if (
+                        e.error_code != "ANALYSIS_RESULTS_NOT_FOUND"
+                        or self._reposted_on_stale
+                    ):
+                        raise
+                    # The backend purges stale (pre-schema-bump) results on GET,
+                    # so a "completed" status with no results means the cached
+                    # analysis is stale. Invalidate the local cache and
+                    # re-trigger analysis once — the backend's POST stale-check
+                    # will enqueue a fresh job since the KV status/results were
+                    # already deleted by the GET above.
+                    logger.warning(
+                        f"Analysis results for {playlist_id} are stale or missing; "
+                        "invalidating cache and re-triggering analysis once"
+                    )
+                    self._reposted_on_stale = True
+                    get_cache_manager().clear_file(f"analysis_{playlist_id}.json")
+                    new_response = self.backend_client.analyze_playlist(playlist_id)
+                    new_job_id = new_response.get("job_id")
+                    if not new_job_id:
+                        raise BackendAPIError("No job ID received from backend") from e
+                    return self._poll_analysis_completion(
+                        new_job_id, playlist_id, analysis_task, max_wait_time
+                    )
             elif status == "failed":
                 # Terminal failure — stop polling immediately and propagate.
                 error_msg = status_response.get("error", "Analysis failed")

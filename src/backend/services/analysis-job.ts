@@ -1,8 +1,10 @@
-import { AnalysisService, type AnalysisResult } from './analysis';
+import { AnalysisService } from './analysis';
 import { CacheService } from './cache';
 import { SpotifyAuthService } from './spotify-auth';
 import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
+import { ANALYSIS_RESULTS_TTL_SECONDS } from '../utils/constants';
 import type { AnalysisQueueMessage, AnalysisStatusRecord } from '../types/analysis-queue';
+import type { AnalysisResult } from '../types/analysis';
 import type { Env } from '../types/env';
 import { AuthRequiredException, NonRetryableError } from '../types/errors';
 
@@ -61,7 +63,7 @@ export class AnalysisJobService {
 
     try {
       const accessToken = await this.getAccessToken(message.session_id);
-      const analysis = new AnalysisService(accessToken);
+      const analysis = new AnalysisService(accessToken, this.cache);
       const result = await analysis.analyzePlaylist(
         message.playlist_id,
         message.user_id,
@@ -75,7 +77,7 @@ export class AnalysisJobService {
         }
       );
 
-      await this.cache.set(resultsKey, result satisfies AnalysisResult, 86400);
+      await this.cache.set(resultsKey, result satisfies AnalysisResult, this.resultsTtlSeconds());
       await this.writeStatusMerged(statusKey, {
         status: 'completed',
         progress: 100,
@@ -183,5 +185,11 @@ export class AnalysisJobService {
 
   private resultsKey(message: AnalysisQueueMessage): string {
     return `analysis:${message.playlist_id}:${message.user_id}:results`;
+  }
+
+  private resultsTtlSeconds(): number {
+    const override = this.env.ANALYSIS_RESULTS_TTL_SECONDS;
+    const parsed = override ? Number(override) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : ANALYSIS_RESULTS_TTL_SECONDS;
   }
 }

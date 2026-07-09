@@ -2,6 +2,7 @@ import type { ExportTrack, ExportData } from './export-types';
 import type { SpotifyPlaylist, SpotifyTrack, SpotifyPlaylistTrackItem, SpotifyAudioFeatures } from '../types/spotify';
 import { formatDuration } from './export-format-helpers';
 import { SpotifyService } from './spotify';
+import { keyName, modeName } from '../utils/music-helpers';
 
 export function buildPlaylistMetadata(playlist: SpotifyPlaylist | undefined, fallbackTrackCount: number): ExportData['playlist'] {
   return {
@@ -23,13 +24,9 @@ export function calculateTotalDurationMs(items: SpotifyPlaylistTrackItem[]): num
 }
 
 export function mapTrackForExport(track: SpotifyTrack, audioFeatures: SpotifyAudioFeatures | null | undefined): ExportTrack {
-  const keyMap = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-  const modeMap: Record<number, string> = { 0: 'minor', 1: 'major' };
-  const keyName = typeof audioFeatures?.key === 'number' && audioFeatures.key >= 0 && audioFeatures.key < keyMap.length
-    ? keyMap[audioFeatures.key]
-    : null;
-  const modeName = typeof audioFeatures?.mode === 'number' ? modeMap[audioFeatures.mode] : null;
-  const keyValue = keyName ? `${keyName}${modeName ? ` ${modeName}` : ''}` : 'N/A';
+  const key = keyName(audioFeatures?.key);
+  const mode = modeName(audioFeatures?.mode);
+  const keyValue = key ? `${key}${mode ? ` ${mode}` : ''}` : 'N/A';
 
   return {
     Artist: track.artists.map((artist) => artist.name).join(', '),

@@ -6,6 +6,12 @@ from typing import Any, Callable, Dict, Optional
 
 from ....shared.logging_config import logger
 
+# Kept in sync manually with `ANALYSIS_SCHEMA_VERSION` in
+# `src/backend/utils/constants.ts`. A single frontend build only ever talks to
+# one backend schema, so an exact-match comparison (not numeric `>=`) is
+# sufficient and avoids needing a shared config module.
+EXPECTED_ANALYSIS_SCHEMA_VERSION = "1.0"
+
 
 class AnalysisMixin:
     """Backend playlist analysis orchestration."""
@@ -26,10 +32,19 @@ class AnalysisMixin:
         try:
             # Check cache first
             if self.cache_manager.is_analysis_cache_valid(playlist_id):
-                logger.info(f"Loading analysis for {playlist_id} from cache")
                 cached_analysis = self.cache_manager.get_cached_analysis(playlist_id)
                 if cached_analysis:
-                    return cached_analysis
+                    if (
+                        cached_analysis.get("schema_version")
+                        == EXPECTED_ANALYSIS_SCHEMA_VERSION
+                    ):
+                        logger.info(f"Loading analysis for {playlist_id} from cache")
+                        return cached_analysis
+                    logger.info(
+                        f"Cached analysis for {playlist_id} has a stale or missing "
+                        "schema_version; discarding cache and re-analyzing"
+                    )
+                    self.cache_manager.clear_file(f"analysis_{playlist_id}.json")
 
             # Start analysis
             if progress_callback:

@@ -21,7 +21,8 @@ const analysisResult = {
   status: 'completed' as const,
   computed_at: '2026-06-19T00:00:00.000Z',
   completed_at: '2026-06-19T00:00:01.000Z',
-  tracks: [],
+  errors: [],
+  schema_version: '1.0',
 };
 
 const statusPutsFor = (cacheKv: KVNamespace, key: string): AnalysisStatusRecord[] => {
