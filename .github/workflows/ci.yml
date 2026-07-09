@@ -55,6 +55,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[development]"
 
+      - name: File length check
+        run: python scripts/check_file_lengths.py --ci --exemptions scripts/file-length-exemptions.json
+
+      - name: File length exemptions monitoring
+        run: python scripts/check_file_lengths.py --exemptions scripts/file-length-exemptions.json --count-only
+
       - name: Test
         env:
           # Prevent kivy from trying to initialize SDL2/OpenGL on this headless runner.

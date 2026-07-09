@@ -17,6 +17,15 @@ if ! command -v pre-commit &> /dev/null; then
     pip install pre-commit
 fi
 
+# Install development extras so hook dependencies like pathspec are present
+echo ""
+echo "📦 Installing Python development dependencies..."
+if [ -f "$REPO_ROOT/.venv/bin/pip" ]; then
+    "$REPO_ROOT/.venv/bin/pip" install -e ".[development]"
+else
+    pip install -e ".[development]"
+fi
+
 # Install the hooks
 echo ""
 echo "📦 Installing pre-commit hooks..."

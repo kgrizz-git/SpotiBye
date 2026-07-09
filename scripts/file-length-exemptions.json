@@ -1,0 +1,24 @@
+{
+  "exemptions": [
+    {
+      "pattern": "src/frontend/ui/backend_playlist_card.py",
+      "reason": "940 lines — needs refactoring",
+      "expires": "2026-10-07"
+    },
+    {
+      "pattern": "dev-docs/**/*.md",
+      "reason": "27 existing files over 300 lines — dev-internal docs, not user-facing",
+      "expires": "2026-10-07"
+    },
+    {
+      "pattern": "src/backend/docs/**/*.md",
+      "reason": "6 existing files over 300 lines — backend docs, not end-user docs",
+      "expires": "2026-10-07"
+    },
+    {
+      "pattern": ".github/instructions/**/*.md",
+      "reason": "1 existing file over 300 lines — internal agent instructions",
+      "expires": "2026-10-07"
+    }
+  ]
+}

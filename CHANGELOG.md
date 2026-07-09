@@ -7,6 +7,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Added a file-length pre-commit hook (`scripts/check_file_lengths.py`) to warn when Python or Markdown files exceed line count thresholds (700 lines for code, 1000 lines for tests, 300 lines for docs), with configurable glob exemptions in `scripts/file-length-exemptions.json`. Initially runs in `--warn` mode for a 14-day transition period before enforcement.
 - Automatic re-authentication prompt when Spotify refresh tokens expire (handles Spotify's June 2026 6-month refresh token expiration policy)
 - Added Zod request and boundary validation to the TypeScript backend: invalid inputs return the app's `{ error: { code, message } }` envelope. Existing route-specific codes are preserved where they already existed (`MISSING_REDIRECT_URI`, `INVALID_PLAYLISTS`); newly validated path and query parameters use `VALIDATION_ERROR`. KV sessions, queue messages, and Worker env bindings are schema-validated at boundaries.
 - Integrated OSV-Scanner for unified Python + Node.js dependency vulnerability scanning in CI and as a pre-push hook; Bandit now enforces the project `pyproject.toml` policy on pre-push (full tree) and in CI (blocking).
