@@ -10,7 +10,7 @@ SpotiBye is a two-tier application:
 
 ```
 [User Desktop]
-  Python CustomTkinter GUI (src/frontend/)
+  Python Kivy/KivyMD GUI (src/frontend/)
       ↕ HTTPS REST
 [Cloudflare Edge]
   Cloudflare Worker — Hono framework (src/backend/)
@@ -93,6 +93,18 @@ utils/           ← Pure utility functions (no imports from other app layers)
 - `ui/` must not import from `screens/` or `services/`
 - `utils/` must not import from any other app layer
 - `auth/` may import from `config/` and `utils/` only
+
+### UI Component Split: `BackendPlaylistCard`
+
+`src/frontend/ui/backend_playlist_card.py` is a thin orchestrator that preserves the public `BackendPlaylistCard` API while delegating implementation details to focused helper modules:
+
+- `backend_playlist_card_utils.py` — pure helpers such as `_mood_label`
+- `backend_playlist_card_ui.py` — card layout, checkbox wiring, graphics updates
+- `backend_playlist_card_interaction.py` — touch, single-click, double-click, long-press handling
+- `backend_playlist_card_analysis_popup.py` — analysis popup construction and async analysis updates
+- `backend_playlist_card_tracks_popup.py` — track-list popup construction and async track loading
+
+The runtime class uses mixin inheritance with `BoxLayout` last in the MRO so Kivy event dispatch stays intact while each concern remains under the file-length target.
 
 ---
 
@@ -186,5 +198,5 @@ Sessions are stored separately in `SESSIONS_KV` (not `CACHE_KV`) with a 30-day T
 | Cloudflare KV (`CACHE_KV`) | Cache for playlists, tracks, analysis, export data | Eventual consistency — don't use for counters or mutex state |
 | Cloudflare KV (`SESSIONS_KV`) | Session storage — access/refresh tokens keyed by session_id | 30-day TTL; auth middleware reads this on every authenticated request |
 | Cloudflare Workers | Edge serverless runtime | CPU time limit applies; export steps are bounded to 1–3 playlists to stay within budget |
-| CustomTkinter | Python GUI toolkit | Limited agent training data; keep UI layer thin |
+| Kivy/KivyMD | Python GUI toolkit | Dynamic widget/event system; keep UI layer thin and boundary-validated |
 | Spotify Web API | Music data source | See `dev-docs/references/spotify-api-reference.md` and `dev-docs/investigations/february-2026-spotify-migration-findings.md` |

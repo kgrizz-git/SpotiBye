@@ -2,7 +2,7 @@
 
 > Definitive file map generated from actual imports starting at `run_frontend_backend.py`.
 > Use this to orient quickly in the codebase without reading every file.
-> Last updated: 2026-06 (v2 standalone app removed; Mermaid diagram below is stale for the v2 subgraph — see File Index for current frontend layout).
+> Last updated: 2026-07 (v2 standalone app removed; Mermaid diagram below omits the new `backend_playlist_card_*` helper modules — see File Index for the current frontend layout).
 
 ---
 
@@ -224,7 +224,12 @@ graph TD
 | [screens/cache_explorer_adapter.py](../src/frontend/screens/cache_explorer_adapter.py) | Bridges `CacheExplorer` widget to backend-aware version |
 | [ui/backend_selector_popup.py](../src/frontend/ui/backend_selector_popup.py) | `BackendSelectorPopup` — startup URL picker |
 | [ui/backend_cache_explorer.py](../src/frontend/ui/backend_cache_explorer.py) | `BackendCacheExplorer` — enhanced cache browser |
-| [ui/backend_playlist_card.py](../src/frontend/ui/backend_playlist_card.py) | `BackendPlaylistCard` — playlist card widget (no v2/cache deps) |
+| [ui/backend_playlist_card.py](../src/frontend/ui/backend_playlist_card.py) | `BackendPlaylistCard` — thin orchestrator that composes the playlist-card mixins |
+| [ui/backend_playlist_card_utils.py](../src/frontend/ui/backend_playlist_card_utils.py) | Playlist-card helper functions and constants (`_mood_label`, `_describe_error_source`) |
+| [ui/backend_playlist_card_ui.py](../src/frontend/ui/backend_playlist_card_ui.py) | `PlaylistCardUIMixin` — card layout, image selection, graphics background updates |
+| [ui/backend_playlist_card_interaction.py](../src/frontend/ui/backend_playlist_card_interaction.py) | `PlaylistCardInteractionMixin` — single/double-click and long-press handling |
+| [ui/backend_playlist_card_analysis_popup.py](../src/frontend/ui/backend_playlist_card_analysis_popup.py) | `PlaylistCardAnalysisPopupMixin` — analysis popup UI and async analysis worker |
+| [ui/backend_playlist_card_tracks_popup.py](../src/frontend/ui/backend_playlist_card_tracks_popup.py) | `PlaylistCardTracksPopupMixin` — track-list popup UI and async track loader |
 | [ui/cache_explorer.py](../src/frontend/ui/cache_explorer.py) | `CacheExplorerPopup` — cache browser popup (data-injection based) |
 | [ui/layouts.py](../src/frontend/ui/layouts.py) | `ResponsiveGridLayout` — adaptive grid for playlist cards |
 | [state.py](../src/frontend/state.py) | `current_export_job` — global export job state |

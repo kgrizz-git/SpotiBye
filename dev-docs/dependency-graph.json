@@ -2,7 +2,7 @@
   "_meta": {
     "description": "Internal import graph for SpotiBye. Keys are source files; values are the internal project files they import. Third-party packages are excluded. Generated from actual import statements.",
     "entrypoint": "run_frontend_backend.py",
-    "last_updated": "2026-05",
+    "last_updated": "2026-07",
     "notes": {
       "dead_code": ["src/backend/services/reccobeats.ts — test stub, never imported by any route"],
       "http_boundary": "src/frontend/services/backend_client.py is the only file that crosses the Python→Cloudflare HTTP boundary",
@@ -144,6 +144,23 @@
     "src/shared/logging_config.py"
   ],
   "src/frontend/ui/backend_playlist_card.py": [
+    "src/frontend/ui/backend_playlist_card_analysis_popup.py",
+    "src/frontend/ui/backend_playlist_card_interaction.py",
+    "src/frontend/ui/backend_playlist_card_tracks_popup.py",
+    "src/frontend/ui/backend_playlist_card_ui.py",
+    "src/frontend/ui/backend_playlist_card_utils.py"
+  ],
+  "src/frontend/ui/backend_playlist_card_utils.py": [],
+  "src/frontend/ui/backend_playlist_card_ui.py": [
+    "src/shared/logging_config.py"
+  ],
+  "src/frontend/ui/backend_playlist_card_interaction.py": [],
+  "src/frontend/ui/backend_playlist_card_analysis_popup.py": [
+    "src/shared/logging_config.py",
+    "src/frontend/screens/adapter_mixins/analysis.py",
+    "src/frontend/ui/backend_playlist_card_utils.py"
+  ],
+  "src/frontend/ui/backend_playlist_card_tracks_popup.py": [
     "src/shared/logging_config.py"
   ],
   "src/frontend/ui/cache_explorer.py": [

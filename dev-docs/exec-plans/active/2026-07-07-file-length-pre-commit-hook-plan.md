@@ -230,8 +230,8 @@ The repository has `.github/workflows/ci.yml` with two jobs: `backend` (TypeScri
 
 ### Phase 5: Enforcement Evolution
 
-- [ ] Refactor `src/frontend/ui/backend_playlist_card.py` (940 lines) to remove its exemption
-- [ ] After refactoring, remove associated exemption entry
+- [x] Refactor `src/frontend/ui/backend_playlist_card.py` (was 940+ lines at assessment time; split completed 2026-07-09) to remove its exemption
+- [x] After refactoring, remove associated exemption entry
 - [ ] Consider expanding scope to TypeScript/JS if backend files grow over 700 lines
 
 ## Technical Details

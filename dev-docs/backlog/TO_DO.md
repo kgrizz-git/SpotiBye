@@ -72,7 +72,6 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
 - [ ] Split the dependabot dev-dependency bundle in PR #20 into safe, individually-mergeable bumps, easiest/highest-priority first ([plan](../exec-plans/active/2026-07-09-split-dependabot-dev-deps-pr20.md)) — **NEEDS REVIEW**
 - [ ] Track/remove `esbuild` and `uuid` npm overrides in `src/backend/package.json` once upstream ships patched releases
 - [ ] Add a pre-commit hook that checks for code files over 700 lines and doc files over 300 lines and gives a warning unless the file is in an exempted list ([plan](./exec-plans/active/2026-07-07-file-length-pre-commit-hook-plan.md))
-- [ ] Refactor `src/frontend/ui/backend_playlist_card.py` to split it under 600 lines and remove from exemption list ([plan](./exec-plans/active/2026-07-09-refactor-backend-playlist-card.md))
 
 ## Repo Cleanup & DevOps
 
@@ -92,5 +91,17 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Complete repository cleanup prerequisites
   - [ ] Decide what history, issues, and release artifacts must be retained
   - [ ] Document the migration decision before creating a new repository
+
+- [ ] Consider releasing as public open-source with instructions on how users can set up their own backend
+  - [ ] Document Cloudflare account setup and Workers deployment
+  - [ ] Document Spotify Developer application registration and API credentials
+  - [ ] Create setup guide for backend configuration (environment variables, secrets)
+  - [ ] Create frontend configuration guide (pointing to user's own backend)
+  - [ ] Evaluate if a hosted backend option should be offered for users who don't want to self-host
+  - [ ] Write and package an interactive setup script that walks users through:
+    - Opening URLs in browser for Cloudflare and Spotify developer portals
+    - Pasting API keys/tokens into local environment file
+    - Validating credentials before proceeding to deployment
+    - Generating wrangler.toml configuration automatically
 
 See also: agent-first-retrofit, quality review/assessment
