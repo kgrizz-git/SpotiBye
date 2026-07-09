@@ -3,9 +3,11 @@ import { Hono } from 'hono';
 import { analysisRoutes } from '../routes/analysis';
 import { AnalysisService } from '../services/analysis';
 import { SpotifyService } from '../services/spotify';
+import { CacheService } from '../services/cache';
 import type { Env } from '../types/env';
 import type { SpotifyTrack } from '../types/spotify';
 import { createTestEnv } from './helpers/env';
+import { kvNamespace } from './helpers/kv';
 
 vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation((c, next) => {
@@ -154,9 +156,16 @@ describe('AnalysisService', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       expect(url.origin).toBe('https://api.reccobeats.com');
-      expect(url.pathname).toBe('/v1/audio-features');
       expect(url.searchParams.getAll('ids')).toEqual(['track1', 'track2']);
 
+      if (url.pathname === '/v1/track') {
+        return new Response(JSON.stringify({ content: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      expect(url.pathname).toBe('/v1/audio-features');
       return new Response(JSON.stringify({
         content: [
           {
@@ -202,7 +211,7 @@ describe('AnalysisService', () => {
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect((result as any).audio_features).toEqual({
       track_count: 2,
       averages: {
@@ -262,10 +271,17 @@ describe('AnalysisService', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       expect(url.origin).toBe('https://api.reccobeats.com');
-      expect(url.pathname).toBe('/v1/audio-features');
       const ids = url.searchParams.getAll('ids');
       expect(ids.length).toBeLessThanOrEqual(50);
 
+      if (url.pathname === '/v1/track') {
+        return new Response(JSON.stringify({ content: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      expect(url.pathname).toBe('/v1/audio-features');
       const content = ids.map((id) => ({
         id: `recco-${id}`,
         href: `https://open.spotify.com/track/${id}`,
@@ -297,12 +313,15 @@ describe('AnalysisService', () => {
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const audioFeatureCalls = fetchMock.mock.calls.filter(
+      ([input]) => new URL(String(input)).pathname === '/v1/audio-features'
+    );
+    expect(audioFeatureCalls).toHaveLength(2);
 
-    const firstBatchCallUrl = new URL(String(fetchMock.mock.calls[0][0]));
+    const firstBatchCallUrl = new URL(String(audioFeatureCalls[0][0]));
     expect(firstBatchCallUrl.searchParams.getAll('ids').length).toBe(50);
 
-    const secondBatchCallUrl = new URL(String(fetchMock.mock.calls[1][0]));
+    const secondBatchCallUrl = new URL(String(audioFeatureCalls[1][0]));
     expect(secondBatchCallUrl.searchParams.getAll('ids').length).toBe(10);
 
     expect((result as any).audio_features).toEqual({
@@ -319,6 +338,276 @@ describe('AnalysisService', () => {
         valence: 0.5,
       },
     });
+  });
+
+  it('aggregates key/mode distribution when at least 2 tracks have valid key and mode', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/v1/track') {
+        return new Response(JSON.stringify({ content: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      const feature = (id: string, key?: number, mode?: number) => ({
+        id: `recco-${id}`,
+        href: `https://open.spotify.com/track/${id}`,
+        acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+        liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+        ...(key !== undefined ? { key } : {}),
+        ...(mode !== undefined ? { mode } : {}),
+      });
+      return new Response(JSON.stringify({
+        content: [
+          feature('track1', 0, 1),
+          feature('track2', 0, 1),
+          feature('track3'),
+        ],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 3,
+      rawCount: 3,
+      items: [
+        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
+        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
+        { added_by: null, track: spotifyTrack('track3', 'artist3', 'Artist 3', 120000) },
+      ],
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const service = new AnalysisService('access-token');
+    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect((result as any).audio_features.key_mode_distribution).toEqual({
+      key_percentages: { C: 100 },
+      dominant_key: 'C',
+      dominant_key_percentage: 100,
+      mode_percentages: { major: 100, minor: 0 },
+      dominant_mode: 'major',
+    });
+  });
+
+  it('omits key_mode_distribution when fewer than 2 tracks have a valid key/mode pair', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/v1/track') {
+        return new Response(JSON.stringify({ content: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({
+        content: [
+          {
+            id: 'recco-1', href: 'https://open.spotify.com/track/track1',
+            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+            key: 0, mode: 1,
+          },
+          {
+            id: 'recco-2', href: 'https://open.spotify.com/track/track2',
+            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+          },
+        ],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 2,
+      rawCount: 2,
+      items: [
+        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
+        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
+      ],
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const service = new AnalysisService('access-token');
+    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect((result as any).audio_features.key_mode_distribution).toBeUndefined();
+  });
+
+  it('aggregates ReccoBeats track metadata into reccobeats_metadata (ISRC count, popularity range)', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/v1/track') {
+        return new Response(JSON.stringify({
+          content: [
+            {
+              id: 'm1', trackTitle: 'Track 1',
+              artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/a1' }],
+              durationMs: 120000, isrc: 'ISRC1', popularity: 40,
+            },
+            {
+              id: 'm2', trackTitle: 'Track 2',
+              artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/a2' }],
+              durationMs: 120000, popularity: 80,
+            },
+          ],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        content: [
+          {
+            id: 'r1', href: 'https://open.spotify.com/track/track1',
+            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+            isrc: 'ISRC1',
+          },
+          {
+            id: 'r2', href: 'https://open.spotify.com/track/track2',
+            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+            isrc: null,
+          },
+        ],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 2,
+      rawCount: 2,
+      items: [
+        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
+        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
+      ],
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const service = new AnalysisService('access-token');
+    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect((result as any).reccobeats_metadata).toMatchObject({
+      isrc_available: 1,
+      popularity_min: 40,
+      popularity_max: 80,
+    });
+    expect((result as any).reccobeats_metadata.retrieved_at).toEqual(expect.any(String));
+  });
+
+  it('records a partial error when ReccoBeats track metadata fails but audio features succeed', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/v1/track') {
+        return new Response('boom', { status: 500, statusText: 'Internal Server Error' });
+      }
+      return new Response(JSON.stringify({
+        content: [
+          {
+            id: 'r1', href: 'https://open.spotify.com/track/track1',
+            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+          },
+        ],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 1,
+      rawCount: 1,
+      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const service = new AnalysisService('access-token');
+    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect((result as any).audio_features).toBeDefined();
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: 'reccobeats:track-metadata' })])
+    );
+    expect(result.schema_version).toBe('1.0');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed to fetch ReccoBeats track metadata; continuing without metadata aggregates',
+      expect.objectContaining({ playlistId: 'playlist1' })
+    );
+  });
+
+  it('serves ReccoBeats enrichment from the raw-enrichment cache without fetching', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 1,
+      rawCount: 1,
+      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const cacheKv = kvNamespace({
+      'analysis:playlist:playlist1:raw-enrichment': {
+        audio_features: [
+          {
+            id: 'r1', href: 'https://open.spotify.com/track/track1',
+            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+            isrc: 'ISRC1',
+          },
+        ],
+        track_metadata: [
+          {
+            id: 'm1', trackTitle: 'Track 1',
+            artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/a1' }],
+            durationMs: 120000, isrc: 'ISRC1', popularity: 50,
+          },
+        ],
+        schema_version: '1.0',
+        cached_at: '2026-07-01T00:00:00.000Z',
+        track_count: 1,
+      },
+    });
+    const cache = new CacheService(cacheKv);
+
+    const service = new AnalysisService('access-token', cache);
+    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((result as any).audio_features.track_count).toBe(1);
+    expect((result as any).reccobeats_metadata.isrc_available).toBe(1);
+  });
+
+  it('writes fetched ReccoBeats enrichment to the raw-enrichment cache', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/v1/track') {
+        return new Response(JSON.stringify({ content: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({
+        content: [
+          {
+            id: 'r1', href: 'https://open.spotify.com/track/track1',
+            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+          },
+        ],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 1,
+      rawCount: 1,
+      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const cacheKv = kvNamespace();
+    const cache = new CacheService(cacheKv);
+
+    const service = new AnalysisService('access-token', cache);
+    await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect(cacheKv.put).toHaveBeenCalledWith(
+      'analysis:playlist:playlist1:raw-enrichment',
+      expect.stringContaining('"track_count":1'),
+      { expirationTtl: 86400 }
+    );
   });
 });
 
@@ -433,6 +722,73 @@ describe('Analysis Routes', () => {
       expect(mockEnv.ANALYSIS_QUEUE.send).not.toHaveBeenCalled();
     });
 
+    it('re-enqueues a fresh job when completed status has no matching results (stale)', async () => {
+      (mockEnv.CACHE_KV.get as any)
+        .mockResolvedValueOnce(JSON.stringify({
+          job_id: 'job-old',
+          playlist_id: 'playlist1',
+          user_id: 'test-user-id',
+          status: 'completed',
+          progress: 100,
+        }))
+        .mockResolvedValueOnce(null);
+      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('queued');
+      expect(data.data.job_id).not.toBe('job-old');
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:status');
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
+      expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalled();
+    });
+
+    it('re-enqueues a fresh job when completed results are missing schema_version (stale)', async () => {
+      (mockEnv.CACHE_KV.get as any)
+        .mockResolvedValueOnce(JSON.stringify({
+          job_id: 'job-old',
+          playlist_id: 'playlist1',
+          user_id: 'test-user-id',
+          status: 'completed',
+          progress: 100,
+        }))
+        .mockResolvedValueOnce(JSON.stringify({
+          job_id: 'job-old',
+          playlist_id: 'playlist1',
+          user_id: 'test-user-id',
+          status: 'completed',
+          computed_at: '2026-01-01T00:00:00.000Z',
+          completed_at: '2026-01-01T00:00:01.000Z',
+          overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
+          artists: { unique_artists: 0, top_artists: [], diversity: 0 },
+          genre_distribution: {},
+          insights: [],
+          errors: [],
+        }));
+      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('queued');
+      expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalled();
+    });
+
     it('should return 400 for invalid playlist ID', async () => {
       const request = new Request('http://localhost/analysis/playlist/', {
         method: 'POST',
@@ -543,6 +899,8 @@ describe('Analysis Routes', () => {
           },
         },
         insights: [],
+        errors: [],
+        schema_version: '1.0',
       }));
 
       const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
@@ -563,6 +921,38 @@ describe('Analysis Routes', () => {
       expect(data.data).toHaveProperty('genre_distribution');
       expect(data.data).toHaveProperty('audio_features.averages.energy', 0.4);
       expect(data.data).not.toHaveProperty('results');
+    });
+
+    it('deletes both KV keys and returns 404 when cached results are missing schema_version (stale)', async () => {
+      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
+        job_id: 'test-job-id',
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        status: 'completed',
+        computed_at: '2026-01-01T00:00:00.000Z',
+        completed_at: '2026-01-01T00:00:01.000Z',
+        overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
+        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
+        genre_distribution: {},
+        insights: [],
+        errors: [],
+      }));
+
+      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(404);
+      expect(data.error).toHaveProperty('code', 'ANALYSIS_RESULTS_NOT_FOUND');
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:status');
     });
   });
 });

@@ -20,6 +20,10 @@ export interface Env {
   // (fail-closed). Format: "https://app.example.com,http://localhost:3000".
   ALLOWED_REDIRECT_URIS: string;
 
+  // Optional override for cached analysis-results TTL (seconds). Falls back
+  // to `ANALYSIS_RESULTS_TTL_SECONDS` in utils/constants.ts when unset.
+  ANALYSIS_RESULTS_TTL_SECONDS?: string;
+
   // KV namespaces
   CACHE_KV: KVNamespace;
   SESSIONS_KV: KVNamespace;

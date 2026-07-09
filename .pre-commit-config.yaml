@@ -114,6 +114,17 @@ repos:
         always_run: true
         stages: [pre-commit]
 
+      # File length check (Phase A: warn-only; switches to enforcement after 14 days)
+      - id: file-length-check
+        name: File length check
+        description: Warn when .py/.md files exceed line limits (700 code / 1000 test / 300 doc)
+        entry: .venv/bin/python scripts/check_file_lengths.py --exemptions scripts/file-length-exemptions.json --warn
+        language: system
+        files: \.(py|md)$
+        types: [file]
+        pass_filenames: true
+        stages: [pre-commit]
+
   # Pre-push hooks - longer running checks
   # These run before git push, not on every commit
 
@@ -165,7 +176,7 @@ repos:
       - id: bandit-full
         name: Bandit Python Security (pre-push)
         description: Full-tree Bandit scan before push; uses project policy in pyproject.toml
-        entry: bandit -r src/ -c pyproject.toml
+        entry: bandit -r src/ scripts/ -c pyproject.toml
         language: system
         pass_filenames: false
         always_run: true
@@ -203,8 +214,8 @@ repos:
     hooks:
       - id: basedpyright
         name: basedpyright type check
-        description: Run basedpyright type checker on frontend and shared code before push
-        entry: basedpyright src/frontend src/shared --level error
+        description: Run basedpyright type checker on frontend, shared, and scripts code before push
+        entry: basedpyright src/frontend src/shared scripts --level error
         language: system
         pass_filenames: false
         always_run: true

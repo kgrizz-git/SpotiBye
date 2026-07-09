@@ -343,8 +343,16 @@ paths:
     post:
       tags:
         - Analysis
-      summary: Analyze playlist
-      description: Performs detailed analysis on a playlist including audio features and statistics
+      summary: Start (or resume) playlist analysis
+      description: >-
+        Starts an asynchronous ReccoBeats + Spotify playlist analysis job and
+        returns its status record. The request body is currently ignored —
+        analysis always runs with default settings. If a job for this
+        playlist is already queued, actively processing, or completed with
+        results matching the current schema_version, that existing status is
+        returned instead of enqueuing a duplicate job. A completed status
+        whose results are missing or predate the current schema_version is
+        treated as stale: it is purged and a fresh job is enqueued.
       operationId: analyzePlaylist
       security:
         - bearerAuth: []
@@ -361,56 +369,26 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AnalysisRequest'
-            examples:
-              standard:
-                summary: Standard analysis request
-                value:
-                  include_audio_features: true
-                  include_recommendations: false
       responses:
         '200':
-          description: Analysis completed successfully
+          description: Current or newly-queued job status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AnalysisResponse'
+                $ref: '#/components/schemas/AnalysisStartResponse'
               examples:
-                success:
-                  summary: Successful analysis
+                queued:
+                  summary: Newly queued job
                   value:
                     data:
-                      analysis:
-                        playlist_id: "playlist-123"
-                        total_tracks: 100
-                        duration_minutes: 360
-                        average_bpm: 128.5
-                        energy_score: 0.75
-                        danceability: 0.82
-                        valence: 0.68
-                        acousticness: 0.25
-                        instrumentalness: 0.15
-                        genres:
-                          - "Pop"
-                          - "Electronic"
-                          - "Rock"
-                        top_artists:
-                          - name: "Artist One"
-                            count: 8
-                          - name: "Artist Two"
-                            count: 5
-                        audio_features:
-                          bpm_distribution:
-                            "60-80": 10
-                            "80-100": 20
-                            "100-120": 30
-                            "120-140": 25
-                            "140-160": 10
-                            "160+": 5
-                        recommendations:
-                          similar_playlists:
-                            - id: "similar-123"
-                              name: "Similar Vibes"
-                              similarity_score: 0.85
+                      job_id: "job-123"
+                      playlist_id: "playlist-123"
+                      user_id: "user-123"
+                      status: queued
+                      queued_at: "2026-07-07T12:00:00.000Z"
+                      progress: 0
+                    meta:
+                      timestamp: "2026-07-07T12:00:00.000Z"
         '401':
           description: Unauthorized
           content:
@@ -424,7 +402,172 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Analysis failed
+          description: Failed to start analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analysis/playlist/{id}/status:
+    get:
+      tags:
+        - Analysis
+      summary: Get analysis job status
+      description: Returns the current status record for the most recent analysis job on this playlist for the authenticated user.
+      operationId: getAnalysisStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist ID
+      responses:
+        '200':
+          description: Current job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisStartResponse'
+              examples:
+                processing:
+                  summary: Job in progress
+                  value:
+                    data:
+                      job_id: "job-123"
+                      playlist_id: "playlist-123"
+                      user_id: "user-123"
+                      status: processing
+                      progress: 65
+                    meta:
+                      timestamp: "2026-07-07T12:00:05.000Z"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No analysis found for this playlist (ANALYSIS_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to get analysis status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analysis/playlist/{id}/results:
+    get:
+      tags:
+        - Analysis
+      summary: Get analysis results
+      description: >-
+        Returns the completed analysis result for this playlist. Results
+        missing `schema_version`, or whose `schema_version` predates the
+        server's current version, are purged (both the results and job
+        status KV entries) and reported as ANALYSIS_RESULTS_NOT_FOUND so the
+        client re-triggers a fresh analysis via POST.
+      operationId: getAnalysisResults
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Spotify playlist ID
+      responses:
+        '200':
+          description: Completed analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResultsResponse'
+              examples:
+                success:
+                  summary: Completed analysis with ReccoBeats enrichment
+                  value:
+                    data:
+                      job_id: "job-123"
+                      playlist_id: "playlist-123"
+                      user_id: "user-123"
+                      status: completed
+                      computed_at: "2026-07-07T12:00:00.000Z"
+                      completed_at: "2026-07-07T12:00:10.000Z"
+                      overview:
+                        total_tracks: 100
+                        total_duration_ms: 21600000
+                        average_duration_ms: 216000
+                        formatted_duration: "6h 0m 0s"
+                      artists:
+                        unique_artists: 42
+                        top_artists:
+                          - artist: "Artist One"
+                            count: 8
+                          - artist: "Artist Two"
+                            count: 5
+                        diversity: 0.42
+                      genre_distribution:
+                        Pop:
+                          count: 30
+                          percentage: 30.0
+                        Electronic:
+                          count: 20
+                          percentage: 20.0
+                      audio_features:
+                        track_count: 100
+                        averages:
+                          acousticness: 0.25
+                          danceability: 0.82
+                          energy: 0.75
+                          instrumentalness: 0.15
+                          liveness: 0.2
+                          loudness: -6.0
+                          speechiness: 0.05
+                          tempo: 128.5
+                          valence: 0.68
+                        key_mode_distribution:
+                          key_percentages:
+                            C: 42.0
+                            G: 30.0
+                          dominant_key: "C"
+                          dominant_key_percentage: 42.0
+                          mode_percentages:
+                            major: 70.0
+                            minor: 30.0
+                          dominant_mode: major
+                      insights:
+                        - "Top genres: Pop, Electronic."
+                      reccobeats_metadata:
+                        isrc_available: 95
+                        popularity_min: 20
+                        popularity_max: 90
+                        retrieved_at: "2026-07-07T12:00:09.000Z"
+                      errors: []
+                      schema_version: "1.0"
+                    meta:
+                      timestamp: "2026-07-07T12:00:11.000Z"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No results found, or cached results are stale (ANALYSIS_RESULTS_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to get analysis results
           content:
             application/json:
               schema:
@@ -871,114 +1014,307 @@ components:
         - id
         - name
 
-    AnalysisRequest:
+    ApiEnvelope:
       type: object
-      properties:
-        include_audio_features:
-          type: boolean
-          default: true
-          description: Whether to include audio features analysis
-        include_recommendations:
-          type: boolean
-          default: false
-          description: Whether to include playlist recommendations
-
-    AnalysisResponse:
-      type: object
+      description: >-
+        Shared success-response shape used across the API: `data` holds the
+        endpoint-specific payload and `meta.timestamp` is always an ISO-8601
+        string. Endpoint-specific response schemas (e.g.
+        AnalysisStartResponse, AnalysisResultsResponse) follow this same
+        envelope with a concrete `data` schema instead of `type: object`.
       properties:
         data:
           type: object
+        meta:
+          type: object
           properties:
-            analysis:
-              type: object
-              properties:
-                playlist_id:
-                  type: string
-                  description: Analyzed playlist ID
-                total_tracks:
-                  type: integer
-                  description: Total number of tracks
-                duration_minutes:
-                  type: number
-                  description: Total playlist duration in minutes
-                average_bpm:
-                  type: number
-                  description: Average BPM across tracks
-                energy_score:
-                  type: number
-                  description: Average energy score (0-1)
-                danceability:
-                  type: number
-                  description: Average danceability score (0-1)
-                valence:
-                  type: number
-                  description: Average valence score (0-1)
-                acousticness:
-                  type: number
-                  description: Average acousticness score (0-1)
-                instrumentalness:
-                  type: number
-                  description: Average instrumentalness score (0-1)
-                genres:
-                  type: array
-                  items:
-                    type: string
-                  description: Detected genres in playlist
-                top_artists:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/TopArtist'
-                  description: Most frequent artists
-                audio_features:
-                  type: object
-                  properties:
-                    bpm_distribution:
-                      type: object
-                      description: BPM distribution across ranges
-                recommendations:
-                  type: object
-                  properties:
-                    similar_playlists:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/SimilarPlaylist'
-                  description: Playlist recommendations
-              required:
-                - playlist_id
-                - total_tracks
-                - duration_minutes
+            timestamp:
+              type: string
+              format: date-time
+      required:
+        - data
+
+    AnalysisRequest:
+      type: object
+      description: >-
+        Currently ignored — POST /analysis/playlist/{id} always starts (or
+        returns the status of) an analysis job with default settings. Kept
+        as an empty schema so the request body remains documented as
+        optional JSON rather than implying unused fields exist.
+      properties: {}
+
+    AnalysisStatusRecord:
+      type: object
+      description: Job status record shared by POST /analysis/playlist/{id} and GET /analysis/playlist/{id}/status.
+      properties:
+        job_id:
+          type: string
+        playlist_id:
+          type: string
+        user_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, retrying, completed, failed]
+        progress:
+          type: number
+        queued_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        failed_at:
+          type: string
+          format: date-time
+        retry_after:
+          type: string
+          format: date-time
+        attempt:
+          type: integer
+        error:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - job_id
+        - playlist_id
+        - user_id
+        - status
+        - progress
+
+    AnalysisStartResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AnalysisStatusRecord'
+        meta:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+      required:
+        - data
+
+    AudioFeatureAverages:
+      type: object
+      properties:
+        acousticness:
+          type: number
+        danceability:
+          type: number
+        energy:
+          type: number
+        instrumentalness:
+          type: number
+        liveness:
+          type: number
+        loudness:
+          type: number
+          description: Loudness in decibels (typically negative)
+        speechiness:
+          type: number
+        tempo:
+          type: number
+          description: Tempo in BPM
+        valence:
+          type: number
+          description: Musical positivity (0 = melancholic, 1 = euphoric)
+      required:
+        - acousticness
+        - danceability
+        - energy
+        - instrumentalness
+        - liveness
+        - loudness
+        - speechiness
+        - tempo
+        - valence
+
+    KeyModeDistribution:
+      type: object
+      description: Omitted entirely when fewer than 2 tracks have a valid key/mode pair.
+      properties:
+        key_percentages:
+          type: object
+          additionalProperties:
+            type: number
+          description: Bare pitch-class labels ("C", "C#", … "B") to percentage of tracks — not display-ready ("C major") on their own.
+        dominant_key:
+          type: string
+        dominant_key_percentage:
+          type: number
+        mode_percentages:
+          type: object
+          properties:
+            major:
+              type: number
+            minor:
+              type: number
+          required:
+            - major
+            - minor
+        dominant_mode:
+          type: string
+          enum: [major, minor]
+      required:
+        - key_percentages
+        - dominant_key
+        - dominant_key_percentage
+        - mode_percentages
+        - dominant_mode
+
+    AudioFeatureSummary:
+      type: object
+      properties:
+        track_count:
+          type: integer
+        averages:
+          $ref: '#/components/schemas/AudioFeatureAverages'
+        key_mode_distribution:
+          $ref: '#/components/schemas/KeyModeDistribution'
+      required:
+        - track_count
+        - averages
+
+    ReccoBeatsAnalysisMetadata:
+      type: object
+      description: >-
+        Aggregates from the ReccoBeats track-metadata endpoint.
+        `popularity_min`/`popularity_max` are omitted entirely when no track
+        has a numeric `popularity`.
+      properties:
+        isrc_available:
+          type: integer
+          description: Count of tracks with a non-empty ISRC from ReccoBeats audio features.
+        popularity_min:
+          type: integer
+        popularity_max:
+          type: integer
+        retrieved_at:
+          type: string
+          format: date-time
+      required:
+        - isrc_available
+        - retrieved_at
+
+    AnalysisErrorEntry:
+      type: object
+      properties:
+        source:
+          type: string
+          description: 'e.g. "spotify:artists", "reccobeats:audio-features", "reccobeats:track-metadata"'
+        message:
+          type: string
+      required:
+        - source
+        - message
+
+    AnalysisResult:
+      type: object
+      description: ReccoBeats enrichment is always best-effort — `errors` is always present (empty array on full success) rather than failing the whole analysis.
+      properties:
+        job_id:
+          type: string
+        playlist_id:
+          type: string
+        user_id:
+          type: string
+        status:
+          type: string
+        computed_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        overview:
+          type: object
+          properties:
+            total_tracks:
+              type: integer
+            total_duration_ms:
+              type: integer
+            average_duration_ms:
+              type: number
+            formatted_duration:
+              type: string
+        artists:
+          type: object
+          properties:
+            unique_artists:
+              type: integer
+            top_artists:
+              type: array
+              items:
+                $ref: '#/components/schemas/TopArtist'
+            diversity:
+              type: number
+        genre_distribution:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              count:
+                type: integer
+              percentage:
+                type: number
+        audio_features:
+          $ref: '#/components/schemas/AudioFeatureSummary'
+        insights:
+          type: array
+          items:
+            type: string
+        reccobeats_metadata:
+          $ref: '#/components/schemas/ReccoBeatsAnalysisMetadata'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalysisErrorEntry'
+        schema_version:
+          type: string
+          description: Bumped whenever the result shape changes in a way stale cached results can't satisfy; current value "1.0".
+      required:
+        - job_id
+        - playlist_id
+        - user_id
+        - status
+        - computed_at
+        - completed_at
+        - errors
+        - schema_version
+
+    AnalysisResultsResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AnalysisResult'
+        meta:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
       required:
         - data
 
     TopArtist:
       type: object
       properties:
-        name:
+        artist:
           type: string
           description: Artist name
         count:
           type: integer
           description: Number of tracks by this artist
       required:
-        - name
+        - artist
         - count
-
-    SimilarPlaylist:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Playlist ID
-        name:
-          type: string
-          description: Playlist name
-        similarity_score:
-          type: number
-          description: Similarity score (0-1)
-      required:
-        - id
-        - name
-        - similarity_score
 
     ExportRequest:
       type: object

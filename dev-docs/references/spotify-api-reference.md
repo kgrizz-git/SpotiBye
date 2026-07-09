@@ -29,8 +29,8 @@ All requests require `Authorization: Bearer <access_token>`.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/tracks/{id}` | Get a single track. |
-| `GET` | `/audio-features/{id}` | Get audio features for a track (tempo, key, danceability, etc.). |
-| `GET` | `/audio-features?ids=...` | Batch audio features (up to 100 track IDs). |
+| `GET` | `/audio-features/{id}` | **Removed/restricted** in the Feb 2026 Dev Mode migration. Still called by `SpotifyService.getAudioFeatures` / the export path (dead code — see `TO_DO.md`'s export migration item); do not add new callers. Playlist analysis uses ReccoBeats instead (`services/analysis.ts`). |
+| `GET` | `/audio-features?ids=...` | Same removal status as above; still called by `SpotifyService.getMultipleAudioFeatures` (dead export path only). |
 
 ### Auth
 
@@ -72,14 +72,14 @@ Fetch subsequent pages by incrementing `offset` or following `next`.
 ## February 2026 Migration Notes
 
 > **Critical — agents must read this before touching playlist endpoints.**
-> Full details: [`docs/february-2026-spotify-migration-findings.md`](../february-2026-spotify-migration-findings.md)
+> Full details: [`february-2026-spotify-migration-findings.md`](../investigations/february-2026-spotify-migration-findings.md)
 
 Key breaking changes for apps in **Development Mode**:
 
 1. **Endpoint rename:** `/playlists/{id}/tracks` → `/playlists/{id}/items`
 2. **Response shape change:** Nested field renamed from `.track` to `.item` in playlist item responses
 3. **`popularity` field removed** from Track objects in Development Mode
-4. **`audio_features` endpoint** behavior may change — do not assume all fields are present
+4. **`/audio-features` endpoints removed/restricted.** Playlist analysis (`services/analysis.ts`) uses ReccoBeats (`api.reccobeats.com/v1/audio-features`, `/v1/track`) instead. `SpotifyService.getAudioFeatures`/`getMultipleAudioFeatures` remain only for the export path's dead `include_audio_features` flag — see [`february-2026-spotify-migration-findings.md`](../investigations/february-2026-spotify-migration-findings.md) and `TO_DO.md`'s export-migration backlog item.
 
 **Current status (as of May 2026):** Some changes were paused or partially reversed. A possible "developer tier" is under discussion. Treat all playlist endpoint code as potentially requiring updates. The `SpotifyPlaylistTrackItem` type in `types/spotify.ts` should normalize both old and new shapes.
 

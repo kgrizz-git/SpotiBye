@@ -30,6 +30,12 @@
 | [`2026-07-05-backend-url-defaulting-fix.md`](2026-07-05-backend-url-defaulting-fix.md) | Fixed the "Cloudflare Dev" preset in the startup backend selector being a no-op and silently losing the saved preset choice across relaunches — both caused by `BACKEND_PRESETS["Cloudflare Dev"]` aliasing the same URL as `"Localhost"` after FT-2's shipped-binary safety default change. Added a dedicated `DEV_BACKEND_URL` constant (override via `SPOTIBYE_DEV_BACKEND_URL`) so the two concepts are decoupled. | 2026-07-06 |
 | [`2026-07-06-spotify-token-expiration-handling.md`](2026-07-06-spotify-token-expiration-handling.md) | Handle Spotify refresh token expiration by parsing `invalid_grant` errors, responding with `AUTH_REQUIRED` code, cleaning up stale KV sessions, preventing queue retries on auth failure, validating cached tokens on startup via `GET /auth/me`, and wiping persisted cache when tokens expire permanently. | 2026-07-06 |
 
+## Feature Plans
+
+| Plan | Description | Completed |
+|------|-------------|-----------|
+| [`2026-07-07-reccobeats-enrichment-integration.md`](2026-07-07-reccobeats-enrichment-integration.md) | Full ReccoBeats enrichment for playlist analysis: all 9 audio features + key/mode aggregation, ReccoBeats track-metadata fetch (ISRC/popularity), best-effort `errors[]` + `schema_version` with stale-result purge/re-enqueue, a shared 24h raw-enrichment KV cache, an expanded analysis popup UI (mood labels, key/mode, partial-failure banner), and OpenAPI/docs reconciliation (removed unimplemented recommendation/BPM fields, documented the status/results endpoints). | 2026-07-09 |
+
 ## Refactor Plans
 
 | Plan | Description | Completed |

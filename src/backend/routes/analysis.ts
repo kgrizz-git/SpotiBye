@@ -2,11 +2,22 @@ import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { authMiddleware } from '../middleware/auth';
 import { CacheService } from '../services/cache';
+import { ANALYSIS_SCHEMA_VERSION } from '../utils/constants';
+import { compareVersions } from '../utils/version';
 import type { AnalysisStatusRecord } from '../types/analysis-queue';
+import type { AnalysisResult } from '../types/analysis';
 import type { Env } from '../types/env';
 import type { Variables } from '../types/variables';
 import { zValidator } from '../validation/z-validator';
 import { IdParamSchema } from '../validation/schemas/common';
+
+function isStaleAnalysisResult(results: AnalysisResult | null): boolean {
+  return (
+    !results ||
+    typeof results.schema_version !== 'string' ||
+    compareVersions(results.schema_version, ANALYSIS_SCHEMA_VERSION) < 0
+  );
+}
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -14,6 +25,8 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', authMiddleware);
 
 // POST /analysis/playlist/:id - Analyze playlist
+// NOTE: the request body (see openapi.yaml AnalysisRequest) is intentionally
+// ignored — analysis always runs with default settings. Never parsed here.
 app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
     const { id: playlistId } = c.req.valid('param');
@@ -22,10 +35,13 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
 
     // Check if analysis is already in progress or completed
     const statusKey = `analysis:${playlistId}:${userId}:status`;
+    const resultsKey = `analysis:${playlistId}:${userId}:results`;
     const existingStatus = await cacheService.get<AnalysisStatusRecord>(statusKey);
 
     if (existingStatus) {
-      // completed: always return cached result
+      // completed: return cached result, unless the results are stale (missing
+      // or from an older schema_version), in which case fall through and
+      // enqueue a fresh job instead of serving data the frontend can't render.
       // queued: return while waiting for the queue consumer
       // processing/retrying: return if started within last 5 minutes (still running)
       // failed/anything else: restart
@@ -36,7 +52,20 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
         (!existingStatus.started_at ||
           Date.now() - new Date(existingStatus.started_at).getTime() < 300_000);
 
-      if (isCompleted || isQueued || isActivelyProcessing) {
+      if (isCompleted) {
+        const results = await cacheService.get<AnalysisResult>(resultsKey);
+        if (!isStaleAnalysisResult(results)) {
+          return c.json({
+            data: existingStatus,
+            meta: { timestamp: new Date().toISOString() }
+          });
+        }
+        await Promise.all([
+          cacheService.delete(statusKey),
+          cacheService.delete(resultsKey),
+        ]);
+        // Falls through to enqueue a fresh job below.
+      } else if (isQueued || isActivelyProcessing) {
         return c.json({
           data: existingStatus,
           meta: { timestamp: new Date().toISOString() }
@@ -105,9 +134,18 @@ app.get('/playlist/:id/results', zValidator('param', IdParamSchema), async (c) =
     const cacheService = new CacheService(c.env.CACHE_KV);
 
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
-    const results = await cacheService.get(resultsKey);
+    const results = await cacheService.get<AnalysisResult>(resultsKey);
 
     if (!results) {
+      return c.json({ error: { code: 'ANALYSIS_RESULTS_NOT_FOUND', message: 'Analysis results not found' } }, { status: 404 as ContentfulStatusCode });
+    }
+
+    if (isStaleAnalysisResult(results)) {
+      const statusKey = `analysis:${playlistId}:${userId}:status`;
+      await Promise.all([
+        cacheService.delete(resultsKey),
+        cacheService.delete(statusKey),
+      ]);
       return c.json({ error: { code: 'ANALYSIS_RESULTS_NOT_FOUND', message: 'Analysis results not found' } }, { status: 404 as ContentfulStatusCode });
     }
 

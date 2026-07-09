@@ -213,7 +213,9 @@ const response = await fetch(
 
 ## Playlist Analysis
 
-### Analyze Playlist (Basic)
+Analysis is asynchronous: POST starts (or resumes) a job and returns a status record; poll `GET .../status` until `status` is `completed`, then fetch `GET .../results`. The request body is currently ignored.
+
+### Step 1: Start Analysis
 
 ```javascript
 const playlistId = 'playlist-123';
@@ -222,90 +224,115 @@ const response = await fetch(`https://spotibye-api.workers.dev/analysis/playlist
   headers: {
     'Authorization': `Bearer ${accessToken}`,
     'Content-Type': 'application/json'
+  }
+});
+
+// Response (200 OK) — job just queued, or the status of an existing job
+{
+  "data": {
+    "job_id": "job-123",
+    "playlist_id": "playlist-123",
+    "user_id": "user-123",
+    "status": "queued",
+    "queued_at": "2026-07-07T12:00:00.000Z",
+    "progress": 0
   },
-  body: JSON.stringify({
-    include_audio_features: true,
-    include_recommendations: false
-  })
+  "meta": { "timestamp": "2026-07-07T12:00:00.000Z" }
+}
+```
+
+### Step 2: Poll Status
+
+```javascript
+const statusResponse = await fetch(`https://spotibye-api.workers.dev/analysis/playlist/${playlistId}/status`, {
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+
+// Response (200 OK) while running
+{
+  "data": {
+    "job_id": "job-123",
+    "playlist_id": "playlist-123",
+    "user_id": "user-123",
+    "status": "processing",
+    "progress": 65
+  },
+  "meta": { "timestamp": "2026-07-07T12:00:05.000Z" }
+}
+```
+
+`status` progresses through `queued` → `processing` (possibly `retrying`) → `completed` or `failed`. `progress` moves 20 → 50 → 65 → 70 → 85 → 95 → 100.
+
+### Step 3: Fetch Results
+
+```javascript
+const resultsResponse = await fetch(`https://spotibye-api.workers.dev/analysis/playlist/${playlistId}/results`, {
+  headers: { 'Authorization': `Bearer ${accessToken}` }
 });
 
 // Response (200 OK)
 {
   "data": {
-    "analysis": {
-      "playlist_id": "playlist-123",
+    "job_id": "job-123",
+    "playlist_id": "playlist-123",
+    "user_id": "user-123",
+    "status": "completed",
+    "computed_at": "2026-07-07T12:00:00.000Z",
+    "completed_at": "2026-07-07T12:00:10.000Z",
+    "overview": {
       "total_tracks": 100,
-      "duration_minutes": 360,
-      "average_bpm": 128.5,
-      "energy_score": 0.75,
-      "danceability": 0.82,
-      "valence": 0.68,
-      "acousticness": 0.25,
-      "instrumentalness": 0.15,
-      "genres": ["Pop", "Electronic", "Rock"],
+      "total_duration_ms": 21600000,
+      "average_duration_ms": 216000,
+      "formatted_duration": "6h 0m 0s"
+    },
+    "artists": {
+      "unique_artists": 42,
       "top_artists": [
-        {
-          "name": "Artist One",
-          "count": 8
-        },
-        {
-          "name": "Artist Two",
-          "count": 5
-        }
+        { "artist": "Artist One", "count": 8 },
+        { "artist": "Artist Two", "count": 5 }
       ],
-      "audio_features": {
-        "bpm_distribution": {
-          "60-80": 10,
-          "80-100": 20,
-          "100-120": 30,
-          "120-140": 25,
-          "140-160": 10,
-          "160+": 5
-        }
+      "diversity": 0.42
+    },
+    "genre_distribution": {
+      "Pop": { "count": 30, "percentage": 30.0 },
+      "Electronic": { "count": 20, "percentage": 20.0 }
+    },
+    "audio_features": {
+      "track_count": 100,
+      "averages": {
+        "acousticness": 0.25,
+        "danceability": 0.82,
+        "energy": 0.75,
+        "instrumentalness": 0.15,
+        "liveness": 0.2,
+        "loudness": -6.0,
+        "speechiness": 0.05,
+        "tempo": 128.5,
+        "valence": 0.68
+      },
+      "key_mode_distribution": {
+        "key_percentages": { "C": 42.0, "G": 30.0 },
+        "dominant_key": "C",
+        "dominant_key_percentage": 42.0,
+        "mode_percentages": { "major": 70.0, "minor": 30.0 },
+        "dominant_mode": "major"
       }
-    }
-  }
-}
-```
-
-### Analyze Playlist (with Recommendations)
-
-```javascript
-const response = await fetch(`https://spotibye-api.workers.dev/analysis/playlist/${playlistId}`, {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${accessToken}`,
-    'Content-Type': 'application/json'
+    },
+    "insights": ["Top genres: Pop, Electronic."],
+    "reccobeats_metadata": {
+      "isrc_available": 95,
+      "popularity_min": 20,
+      "popularity_max": 90,
+      "retrieved_at": "2026-07-07T12:00:09.000Z"
+    },
+    "errors": [],
+    "schema_version": "1.0"
   },
-  body: JSON.stringify({
-    include_audio_features: true,
-    include_recommendations: true
-  })
-});
-
-// Response (200 OK) - includes recommendations
-{
-  "data": {
-    "analysis": {
-      // ... basic analysis data ...
-      "recommendations": {
-        "similar_playlists": [
-          {
-            "id": "similar-123",
-            "name": "Similar Vibes",
-            "similarity_score": 0.85
-          },
-          {
-            "id": "similar-456",
-            "name": "Energy Boost",
-            "similarity_score": 0.78
-          }
-        ]
-      }
-    }
-  }
+  "meta": { "timestamp": "2026-07-07T12:00:11.000Z" }
 }
 ```
+
+`audio_features` and `reccobeats_metadata` come from ReccoBeats and are best-effort: `errors` is always present (empty on full success) and lists any partial failures (e.g. `{"source": "reccobeats:track-metadata", "message": "..."}"`) instead of failing the whole analysis. If cached results predate the current `schema_version`, `GET .../results` returns `404 ANALYSIS_RESULTS_NOT_FOUND` and a subsequent POST enqueues a fresh job.
 
 ## Export Functionality
 
@@ -539,27 +566,47 @@ class SpotiByeAPI {
     return data.playlists;
   }
 
-  // Analyze playlist
-  async analyzePlaylist(playlistId, options = {}) {
-    const response = await fetch(`${this.baseURL}/analysis/playlist/${playlistId}`, {
+  // Analyze playlist: start (or resume) the job, poll status, return results.
+  // The request body is ignored by the backend.
+  async analyzePlaylist(playlistId, { pollIntervalMs = 2000, maxWaitMs = 120000 } = {}) {
+    const start = await fetch(`${this.baseURL}/analysis/playlist/${playlistId}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.token}`,
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        include_audio_features: true,
-        include_recommendations: false,
-        ...options
-      })
+      }
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to analyze playlist: ${response.status}`);
+    if (!start.ok) {
+      throw new Error(`Failed to start playlist analysis: ${start.status}`);
     }
 
-    const { data } = await response.json();
-    return data.analysis;
+    const deadline = Date.now() + maxWaitMs;
+    while (Date.now() < deadline) {
+      const statusResponse = await fetch(`${this.baseURL}/analysis/playlist/${playlistId}/status`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      if (!statusResponse.ok) {
+        throw new Error(`Failed to get analysis status: ${statusResponse.status}`);
+      }
+      const { data: status } = await statusResponse.json();
+
+      if (status.status === 'completed') {
+        const resultsResponse = await fetch(`${this.baseURL}/analysis/playlist/${playlistId}/results`, {
+          headers: { 'Authorization': `Bearer ${this.token}` }
+        });
+        if (!resultsResponse.ok) {
+          throw new Error(`Failed to get analysis results: ${resultsResponse.status}`);
+        }
+        const { data: results } = await resultsResponse.json();
+        return results;
+      }
+      if (status.status === 'failed') {
+        throw new Error(`Analysis failed: ${status.error ?? 'unknown error'}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+    throw new Error('Analysis timed out');
   }
 
   // Export playlist
@@ -644,10 +691,8 @@ if (!api.isAuthenticated()) {
     if (playlists.length > 0) {
       const firstPlaylist = playlists[0];
 
-      // Analyze the first playlist
-      const analysis = await api.analyzePlaylist(firstPlaylist.id, {
-        include_recommendations: true
-      });
+      // Analyze the first playlist (starts the job, polls, returns results)
+      const analysis = await api.analyzePlaylist(firstPlaylist.id);
       console.log('Playlist analysis:', analysis);
 
       // Export the playlist
@@ -891,11 +936,14 @@ class MockSpotiByeAPI extends SpotiByeAPI {
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     return {
+      job_id: 'mock-job-1',
       playlist_id: playlistId,
-      total_tracks: 25,
-      average_bpm: 120,
-      energy_score: 0.75,
-      genres: ['Pop', 'Rock']
+      status: 'completed',
+      overview: { total_tracks: 25 },
+      audio_features: { track_count: 25, averages: { tempo: 120, energy: 0.75 } },
+      genre_distribution: { Pop: { count: 15, percentage: 60 }, Rock: { count: 10, percentage: 40 } },
+      errors: [],
+      schema_version: '1.0'
     };
   }
 }

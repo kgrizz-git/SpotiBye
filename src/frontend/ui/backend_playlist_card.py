@@ -22,6 +22,36 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
 from ...shared.logging_config import logger
+from ..screens.adapter_mixins.analysis import EXPECTED_ANALYSIS_SCHEMA_VERSION
+
+_MOOD_BANDS = (
+    (0.20, "Melancholic"),
+    (0.40, "Somber"),
+    (0.60, "Neutral"),
+    (0.80, "Cheerful"),
+)
+
+_ERROR_SOURCE_LABELS = {
+    "spotify:artists": "artist genres unavailable",
+    "reccobeats:audio-features": "audio features unavailable",
+    "reccobeats:track-metadata": "track metadata unavailable",
+}
+
+
+def _mood_label(valence: float) -> str:
+    """Map a 0.0-1.0 valence score to a human-readable mood band.
+
+    Upper bound exclusive except the last band ([0.80, 1.00]), which is
+    inclusive since valence is normalized to a 0.0-1.0 range.
+    """
+    for upper_bound, label in _MOOD_BANDS:
+        if valence < upper_bound:
+            return label
+    return "Euphoric"
+
+
+def _describe_error_source(source: str) -> str:
+    return _ERROR_SOURCE_LABELS.get(source, source)
 
 
 class BackendPlaylistCard(BoxLayout):
@@ -581,6 +611,29 @@ class BackendPlaylistCard(BoxLayout):
         # Normalise nested result wrapper
         results = analysis.get("results", analysis)
 
+        # Results from a pre-schema-versioned (Phase 1) backend lack
+        # `schema_version`, `errors`, `key_mode_distribution`, and
+        # `reccobeats_metadata` entirely. Gate every Phase-2-and-later section
+        # on schema_version matching so the popup renders identically to
+        # today for those results instead of guessing at partial data.
+        has_current_schema = (
+            results.get("schema_version") == EXPECTED_ANALYSIS_SCHEMA_VERSION
+        )
+
+        # Partial-failure banner — shown first so a user scanning top-down
+        # learns the analysis may be incomplete before reading the numbers.
+        if has_current_schema:
+            for err in results.get("errors") or []:
+                source = (
+                    err.get("source", "unknown") if isinstance(err, dict) else "unknown"
+                )
+                analysis_container.add_widget(
+                    _small_label(
+                        f"Partial data: {_describe_error_source(source)}",
+                        color=(0.65, 0.4, 0.4, 1),
+                    )
+                )
+
         # Duration
         overview = results.get("overview") or {}
         duration_str = overview.get("formatted_duration", "")
@@ -650,21 +703,65 @@ class BackendPlaylistCard(BoxLayout):
         averages = audio_features.get("averages") or {}
         if averages:
             analysis_container.add_widget(_section_header("Audio Features:"))
-            feature_labels = [
-                ("Danceability", averages.get("danceability")),
-                ("Energy", averages.get("energy")),
-                ("Mood (Valence)", averages.get("valence")),
-                ("Acousticness", averages.get("acousticness")),
+
+            def _pct(label: str, key: str) -> Optional[str]:
+                val = averages.get(key)
+                return f"{label}: {val * 100:.0f}%" if val is not None else None
+
+            row1 = [
+                p
+                for p in (
+                    _pct("Danceability", "danceability"),
+                    _pct("Energy", "energy"),
+                    _pct("Acousticness", "acousticness"),
+                )
+                if p
             ]
-            parts = []
-            for label, val in feature_labels:
-                if val is not None:
-                    parts.append(f"{label}: {val * 100:.0f}%")
+            if row1:
+                analysis_container.add_widget(_small_label(" · ".join(row1)))
+
+            row2 = [
+                p
+                for p in (
+                    _pct("Instrumentalness", "instrumentalness"),
+                    _pct("Liveness", "liveness"),
+                    _pct("Speechiness", "speechiness"),
+                )
+                if p
+            ]
+            if row2:
+                analysis_container.add_widget(_small_label(" · ".join(row2)))
+
+            row3 = []
             tempo = averages.get("tempo")
             if tempo is not None:
-                parts.append(f"Tempo: {int(tempo)} BPM")
-            if parts:
-                analysis_container.add_widget(_small_label(" · ".join(parts)))
+                row3.append(f"Tempo: {int(tempo)} BPM")
+            loudness = averages.get("loudness")
+            if loudness is not None:
+                row3.append(f"Loudness: {loudness:.1f} dB")
+            if row3:
+                analysis_container.add_widget(_small_label(" · ".join(row3)))
+
+            valence = averages.get("valence")
+            if valence is not None:
+                analysis_container.add_widget(
+                    _small_label(
+                        f"Mood: {_mood_label(valence)} (valence {valence * 100:.0f}%)"
+                    )
+                )
+
+            if has_current_schema:
+                key_mode = audio_features.get("key_mode_distribution") or {}
+                dominant_key = key_mode.get("dominant_key")
+                dominant_mode = key_mode.get("dominant_mode")
+                if dominant_key and dominant_mode:
+                    key_pct = key_mode.get("dominant_key_percentage", 0)
+                    analysis_container.add_widget(
+                        _small_label(
+                            f"Key: {dominant_key} {dominant_mode} ({key_pct:.0f}% of tracks)"
+                        )
+                    )
+
             track_count = audio_features.get("track_count", 0)
             if track_count:
                 analysis_container.add_widget(
@@ -673,6 +770,25 @@ class BackendPlaylistCard(BoxLayout):
                         color=(0.55, 0.55, 0.55, 1),
                     )
                 )
+
+        # ReccoBeats metadata aggregates (ISRC coverage, popularity range)
+        if has_current_schema:
+            reccobeats_metadata = results.get("reccobeats_metadata") or {}
+            if reccobeats_metadata:
+                analysis_container.add_widget(_section_header("ReccoBeats Metadata:"))
+                isrc_available = reccobeats_metadata.get("isrc_available", 0)
+                total_tracks = (self.playlist_data.get("tracks") or {}).get("total", 0)
+                analysis_container.add_widget(
+                    _small_label(
+                        f"ISRC available for {isrc_available} of {total_tracks} tracks"
+                    )
+                )
+                pop_min = reccobeats_metadata.get("popularity_min")
+                pop_max = reccobeats_metadata.get("popularity_max")
+                if pop_min is not None and pop_max is not None:
+                    analysis_container.add_widget(
+                        _small_label(f"Popularity range: {pop_min}–{pop_max}")
+                    )
 
     # ------------------------------------------------------------------
     # Tracks window  (opened via "Show Tracks" button)

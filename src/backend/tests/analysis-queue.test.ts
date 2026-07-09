@@ -24,6 +24,8 @@ const analysisResult = {
   },
   genre_distribution: {},
   insights: [],
+  errors: [],
+  schema_version: '1.0',
 };
 
 const analysisMessage = {

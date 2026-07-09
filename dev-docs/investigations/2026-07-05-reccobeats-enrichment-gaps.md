@@ -1,6 +1,7 @@
 # ReccoBeats Enrichment Gaps — Playlist Analysis Popup
 
 **Date:** 2026-07-05
+**Resolved:** 2026-07-09 — see [`2026-07-07-reccobeats-enrichment-integration.md`](../exec-plans/completed/2026-07-07-reccobeats-enrichment-integration.md). Every gap below is closed except the ReccoBeats track-recommendation endpoint, which remains a separate deferred `TO_DO.md` item. Kept for historical context.
 **Context:** Audit of ReccoBeats API endpoints versus what SpotiBye retrieves and displays in the backend-mode playlist analysis popup (`src/frontend/ui/backend_playlist_card.py`).
 
 ## What We Currently Display

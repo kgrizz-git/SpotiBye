@@ -57,6 +57,7 @@ Update an existing page when it already covers the same topic.
 | [`guides/testing-strategy.md`](guides/testing-strategy.md) | Test approach and guidelines |
 | [`guides/debugging.md`](guides/debugging.md) | Debugging tips |
 | [`guides/export-formats-implementation.md`](guides/export-formats-implementation.md) | Export format implementation notes |
+| [`guides/file-length-policy.md`](guides/file-length-policy.md) | File length limits, refactoring, and exemptions guide |
 
 ## References
 
