@@ -29,6 +29,9 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Refactored `services/export.ts` (1,186 lines) into focused modules: `export-types`, `export-cursor`, `export-job-state`, `export-assemble`, `export-collect`, `export-assembly`, `export-xlsx`, `export-xlsx-lite`, `export-csv`, `export-json`, `export-tracks`, `export-format-helpers`. The `ExportService` class is now a thin facade with static and instance delegating methods — no change to the public API, call sites, or output formats. Added unit tests for all extracted pure functions.
 
 ### Fixed
+- Playlist analysis now forces a fresh backend analysis when cached results contain ReccoBeats partial-failure errors, so playlists analyzed before an enrichment fix can retry instead of permanently showing stale missing-data banners.
+- Reduced ReccoBeats playlist-analysis request batches below the upstream 40-ID cap so larger playlists no longer lose enrichment because 50-ID batches are rejected.
+- Playlist analysis partial-data banners now include the backend's diagnostic error message, making ReccoBeats failures such as rate limits, timeouts, and invalid response shapes visible in the popup.
 - Backend now parses Spotify `invalid_grant` errors and responds with `AUTH_REQUIRED` instead of a generic 401
 - Stale KV sessions are deleted immediately on `invalid_grant` to prevent repeated auth failures
 - Queue analysis jobs now fail permanently on auth errors instead of retrying up to the retry limit

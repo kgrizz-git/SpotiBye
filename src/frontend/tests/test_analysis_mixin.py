@@ -35,6 +35,39 @@ class TestAnalyzePlaylistCacheStaleness:
         harness.reccobeats_service.analyze_playlist.assert_not_called()
         harness.cache_manager.clear_file.assert_not_called()
 
+    def test_forces_reanalysis_when_cached_current_schema_has_reccobeats_errors(
+        self,
+    ) -> None:
+        harness = _Harness()
+        harness.cache_manager.is_analysis_cache_valid.return_value = True
+        harness.cache_manager.get_cached_analysis.return_value = {
+            "schema_version": EXPECTED_ANALYSIS_SCHEMA_VERSION,
+            "status": "completed",
+            "errors": [
+                {
+                    "source": "reccobeats:audio-features",
+                    "message": "HTTP 400",
+                }
+            ],
+        }
+        fresh = {
+            "schema_version": EXPECTED_ANALYSIS_SCHEMA_VERSION,
+            "status": "completed",
+            "errors": [],
+        }
+        harness.reccobeats_service.force_reanalyze_playlist.return_value = fresh
+
+        result = harness.analyze_playlist("playlist-1")
+
+        assert result == fresh
+        harness.cache_manager.clear_file.assert_called_once_with(
+            "analysis_playlist-1.json"
+        )
+        harness.reccobeats_service.force_reanalyze_playlist.assert_called_once_with(
+            "playlist-1"
+        )
+        harness.reccobeats_service.analyze_playlist.assert_not_called()
+
     def test_discards_cache_and_reanalyzes_when_schema_version_missing(self) -> None:
         harness = _Harness()
         harness.cache_manager.is_analysis_cache_valid.return_value = True

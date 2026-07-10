@@ -105,6 +105,83 @@ class TestStaleResultsRecovery:
         assert backend_client.analyze_playlist.call_count == 2
         assert backend_client.get_analysis_results.call_count == 2
 
+    def test_deletes_and_reposts_once_when_completed_results_have_reccobeats_errors(
+        self,
+    ) -> None:
+        backend_client = MagicMock()
+        backend_client.analyze_playlist.side_effect = [
+            {"job_id": "job-old"},
+            {"job_id": "job-new"},
+        ]
+        backend_client.get_analysis_status.return_value = {
+            "status": "completed",
+            "progress": 100,
+        }
+        stale_results = {
+            "schema_version": "1.0",
+            "status": "completed",
+            "errors": [
+                {
+                    "source": "reccobeats:audio-features",
+                    "message": "HTTP 400",
+                }
+            ],
+        }
+        fresh_results = {
+            "schema_version": "1.0",
+            "status": "completed",
+            "errors": [],
+        }
+        backend_client.get_analysis_results.side_effect = [
+            stale_results,
+            fresh_results,
+        ]
+
+        with patch(
+            "src.frontend.services.reccobeats_backend.get_cache_manager"
+        ) as get_cm:
+            cache_manager = MagicMock()
+            get_cm.return_value = cache_manager
+
+            service = self._service(backend_client)
+            result = service.analyze_playlist("playlist-1")
+
+        assert result == fresh_results
+        backend_client.delete_analysis.assert_called_once_with("playlist-1")
+        cache_manager.clear_file.assert_called_once_with("analysis_playlist-1.json")
+        assert backend_client.analyze_playlist.call_count == 2
+        assert backend_client.get_analysis_results.call_count == 2
+
+    def test_force_reanalyze_deletes_backend_and_local_cache_before_analyzing(
+        self,
+    ) -> None:
+        backend_client = MagicMock()
+        backend_client.analyze_playlist.return_value = {"job_id": "job-new"}
+        backend_client.get_analysis_status.return_value = {
+            "status": "completed",
+            "progress": 100,
+        }
+        fresh_results = {
+            "schema_version": "1.0",
+            "status": "completed",
+            "errors": [],
+        }
+        backend_client.get_analysis_results.return_value = fresh_results
+
+        with patch(
+            "src.frontend.services.reccobeats_backend.get_cache_manager"
+        ) as get_cm:
+            cache_manager = MagicMock()
+            get_cm.return_value = cache_manager
+
+            service = self._service(backend_client)
+            result = service.force_reanalyze_playlist("playlist-1")
+
+        assert result == fresh_results
+        backend_client.delete_analysis.assert_called_once_with("playlist-1")
+        cache_manager.clear_file.assert_called_once_with("analysis_playlist-1.json")
+        backend_client.analyze_playlist.assert_called_once_with("playlist-1")
+
     def test_does_not_repost_more_than_once_per_analyze_call(self) -> None:
         backend_client = MagicMock()
         backend_client.analyze_playlist.side_effect = [

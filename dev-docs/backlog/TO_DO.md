@@ -41,7 +41,15 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [x] Reconcile unimplemented `recommendations` / `energy_score` fields out of the OpenAPI spec and docs
   - [x] Translate "Mood (Valence)" into human-readable labels (Melancholic/Somber/Neutral/Cheerful/Euphoric)
   - **Investigation:** [2026-07-05-reccobeats-enrichment-gaps.md](../investigations/2026-07-05-reccobeats-enrichment-gaps.md) — original audit; all gaps it identified are closed except the recommendation endpoint (tracked separately below).
-- [ ] **Investigate ReccoBeats enrichment returning empty / failing on playlist analysis** — user saw `audio features unavailable` + `track metadata unavailable` banners with no Audio Features section. Integration code is correct & deployed; live API returns data for *some* tracks (no key needed) but catalog coverage looks near-zero, and the banners indicate the **Worker-side fetch is rejecting** (likely Cloudflare datacenter egress blocked). See [`../investigations/2026-07-09-reccobeats-enrichment-failure.md`](../investigations/2026-07-09-reccobeats-enrichment-failure.md). If egress is truly blocked, design a frontend-side fetch + dual-cache workaround (raw enrichment fetched from the user's machine, cached locally and in backend KV).
+- [x] Make ReccoBeats batches smaller than 40 to avoid errors — **done 2026-07-10**
+  - [x] Lower the per-batch track/artist count below 40 in the ReccoBeats enrichment fetch path
+  - [x] Add backend tests covering batch splitting at the new threshold
+- [ ] Explore optional user-choice client-side ReccoBeats fetch
+  - [ ] Treat as a future enhancement, not a blocker for the current ReccoBeats failure fix
+  - [ ] Make it opt-in: a visible "Retry enrichment from this device" action only when backend enrichment is still incomplete
+  - [ ] Add a per-session privacy notice because direct fetch sends the user's IP to ReccoBeats
+  - [ ] Gate behind `SPOTIBYE_ENABLE_CLIENT_RECCOBEATS` / `FeatureFlags.ENABLE_CLIENT_RECCOBEATS`
+  - [ ] Reuse the deferred frontend-fetch design notes in [`../exec-plans/completed/2026-07-09-reccobeats-egress-diagnosis-and-frontend-fetch.md`](../exec-plans/completed/2026-07-09-reccobeats-egress-diagnosis-and-frontend-fetch.md)
 - [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations — deferred from the enrichment integration plan above; needs separate UI/caching design (Phase 5 in that plan).
 - [ ] Migrate `export-tracks.ts` off dead Spotify `/audio-features` endpoints to ReccoBeats; remove `SpotifyService.getAudioFeatures`/`getMultipleAudioFeatures` and deprecate the `GET /spotify/tracks/:id/audio-features` proxy route once nothing calls it. Deferred from the enrichment integration plan above (analysis already migrated; export did not).
 - [ ] Consolidate `SpotifyService.fetchWithRetry` with `utils/http-retry.ts`'s `createFetchWithRetry` (added for ReccoBeats fetches) so there is one retry/backoff implementation instead of two. Deferred from the enrichment integration plan above.

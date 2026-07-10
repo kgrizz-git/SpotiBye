@@ -28,5 +28,8 @@ def _mood_label(valence: float) -> str:
     return "Euphoric"
 
 
-def _describe_error_source(source: str) -> str:
-    return _ERROR_SOURCE_LABELS.get(source, source)
+def _describe_error_source(source: str, message: str | None = None) -> str:
+    label = _ERROR_SOURCE_LABELS.get(source, source)
+    if message:
+        return f"{label} ({message})"
+    return label

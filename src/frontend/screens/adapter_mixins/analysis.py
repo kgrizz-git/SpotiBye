@@ -13,6 +13,18 @@ from ....shared.logging_config import logger
 EXPECTED_ANALYSIS_SCHEMA_VERSION = "1.0"
 
 
+def _has_reccobeats_errors(analysis: Dict[str, Any]) -> bool:
+    errors = analysis.get("errors")
+    if not isinstance(errors, list):
+        return False
+    return any(
+        isinstance(error, dict)
+        and isinstance(error.get("source"), str)
+        and error["source"].startswith("reccobeats:")
+        for error in errors
+    )
+
+
 class AnalysisMixin:
     """Backend playlist analysis orchestration."""
 
@@ -38,6 +50,17 @@ class AnalysisMixin:
                         cached_analysis.get("schema_version")
                         == EXPECTED_ANALYSIS_SCHEMA_VERSION
                     ):
+                        if _has_reccobeats_errors(cached_analysis):
+                            logger.info(
+                                f"Cached analysis for {playlist_id} has "
+                                "ReccoBeats errors; forcing re-analysis"
+                            )
+                            self.cache_manager.clear_file(
+                                f"analysis_{playlist_id}.json"
+                            )
+                            return self.reccobeats_service.force_reanalyze_playlist(
+                                playlist_id
+                            )
                         logger.info(f"Loading analysis for {playlist_id} from cache")
                         return cached_analysis
                     logger.info(

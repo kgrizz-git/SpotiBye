@@ -378,9 +378,10 @@ class PlaylistCardAnalysisPopupMixin:
                 source = (
                     err.get("source", "unknown") if isinstance(err, dict) else "unknown"
                 )
+                message = err.get("message") if isinstance(err, dict) else None
                 analysis_container.add_widget(
                     _small_label(
-                        f"Partial data: {_describe_error_source(source)}",
+                        f"Partial data: {_describe_error_source(source, message)}",
                         color=(0.65, 0.4, 0.4, 1),
                     )
                 )

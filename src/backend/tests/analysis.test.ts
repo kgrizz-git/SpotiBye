@@ -262,8 +262,114 @@ describe('AnalysisService', () => {
     );
   });
 
-  it('chunks track IDs into batches of 50 and aggregates correct averages across batches', async () => {
-    const tracksList = Array.from({ length: 60 }, (_, i) => ({
+  it('logs a body preview when ReccoBeats returns invalid JSON', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', vi.fn(async () => (
+      new Response('<html>blocked</html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      })
+    )));
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 1,
+      rawCount: 1,
+      items: [
+        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
+      ],
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const service = new AnalysisService('access-token');
+    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect(result.status).toBe('completed');
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'reccobeats:audio-features',
+          message: 'Invalid ReccoBeats audio-features response JSON',
+        }),
+        expect.objectContaining({
+          source: 'reccobeats:track-metadata',
+          message: 'Invalid ReccoBeats track response JSON',
+        }),
+      ])
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Invalid ReccoBeats JSON response',
+      expect.objectContaining({
+        endpoint: 'audio-features',
+        status: 200,
+        batchSize: 1,
+        bodyPreview: '<html>blocked</html>',
+      })
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Invalid ReccoBeats JSON response',
+      expect.objectContaining({
+        endpoint: 'track',
+        status: 200,
+        batchSize: 1,
+        bodyPreview: '<html>blocked</html>',
+      })
+    );
+  });
+
+  it('logs a body preview when ReccoBeats JSON has an invalid response shape', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal('fetch', vi.fn(async () => (
+      new Response(JSON.stringify({ error: 'blocked' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    )));
+    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+      total: 1,
+      rawCount: 1,
+      items: [
+        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
+      ],
+    });
+    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+
+    const service = new AnalysisService('access-token');
+    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+
+    expect(result.status).toBe('completed');
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'reccobeats:audio-features',
+          message: 'Invalid ReccoBeats audio features response shape',
+        }),
+        expect.objectContaining({
+          source: 'reccobeats:track-metadata',
+          message: 'Invalid ReccoBeats track metadata response shape',
+        }),
+      ])
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Invalid ReccoBeats audio features response shape',
+      expect.objectContaining({
+        endpoint: 'audio-features',
+        status: 200,
+        batchSize: 1,
+        bodyPreview: '{"error":"blocked"}',
+      })
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Invalid ReccoBeats track metadata response shape',
+      expect.objectContaining({
+        endpoint: 'track',
+        status: 200,
+        batchSize: 1,
+        bodyPreview: '{"error":"blocked"}',
+      })
+    );
+  });
+
+  it('chunks track IDs into batches of 30 and aggregates correct averages across batches', async () => {
+    const tracksList = Array.from({ length: 75 }, (_, i) => ({
       added_by: null,
       track: spotifyTrack(`track${i + 1}`, `artist${i + 1}`, `Artist ${i + 1}`, 120000),
     }));
@@ -272,7 +378,7 @@ describe('AnalysisService', () => {
       const url = new URL(String(input));
       expect(url.origin).toBe('https://api.reccobeats.com');
       const ids = url.searchParams.getAll('ids');
-      expect(ids.length).toBeLessThanOrEqual(50);
+      expect(ids.length).toBeLessThanOrEqual(30);
 
       if (url.pathname === '/v1/track') {
         return new Response(JSON.stringify({ content: [] }), {
@@ -304,8 +410,8 @@ describe('AnalysisService', () => {
 
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 60,
-      rawCount: 60,
+      total: 75,
+      rawCount: 75,
       items: tracksList,
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -316,16 +422,27 @@ describe('AnalysisService', () => {
     const audioFeatureCalls = fetchMock.mock.calls.filter(
       ([input]) => new URL(String(input)).pathname === '/v1/audio-features'
     );
-    expect(audioFeatureCalls).toHaveLength(2);
+    expect(audioFeatureCalls).toHaveLength(3);
 
     const firstBatchCallUrl = new URL(String(audioFeatureCalls[0][0]));
-    expect(firstBatchCallUrl.searchParams.getAll('ids').length).toBe(50);
+    expect(firstBatchCallUrl.searchParams.getAll('ids').length).toBe(30);
 
     const secondBatchCallUrl = new URL(String(audioFeatureCalls[1][0]));
-    expect(secondBatchCallUrl.searchParams.getAll('ids').length).toBe(10);
+    expect(secondBatchCallUrl.searchParams.getAll('ids').length).toBe(30);
+
+    const thirdBatchCallUrl = new URL(String(audioFeatureCalls[2][0]));
+    expect(thirdBatchCallUrl.searchParams.getAll('ids').length).toBe(15);
+
+    const trackMetadataCalls = fetchMock.mock.calls.filter(
+      ([input]) => new URL(String(input)).pathname === '/v1/track'
+    );
+    expect(trackMetadataCalls).toHaveLength(3);
+    expect(
+      trackMetadataCalls.map(([input]) => new URL(String(input)).searchParams.getAll('ids').length)
+    ).toEqual([30, 30, 15]);
 
     expect((result as any).audio_features).toEqual({
-      track_count: 60,
+      track_count: 75,
       averages: {
         acousticness: 0.2,
         danceability: 0.4,

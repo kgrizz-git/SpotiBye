@@ -75,7 +75,11 @@ _STUB_MODULES = {
 _original_modules = {name: sys.modules.get(name) for name in _STUB_MODULES}
 sys.modules.update(_STUB_MODULES)
 try:
-    from ..ui.backend_playlist_card import BackendPlaylistCard, _mood_label
+    from ..ui.backend_playlist_card import (
+        BackendPlaylistCard,
+        _describe_error_source,
+        _mood_label,
+    )
 finally:
     for _name, _orig in _original_modules.items():
         if _orig is None:
@@ -138,6 +142,33 @@ class TestMoodLabelBoundaries:
 
     def test_upper_edge_is_euphoric_inclusive(self) -> None:
         assert _mood_label(1.0) == "Euphoric"
+
+
+class TestDescribeErrorSource:
+    def test_describes_known_source_without_message(self) -> None:
+        assert (
+            _describe_error_source("reccobeats:audio-features")
+            == "audio features unavailable"
+        )
+
+    def test_includes_http_429_message(self) -> None:
+        assert _describe_error_source(
+            "reccobeats:audio-features", "HTTP 429: rate limited"
+        ) == "audio features unavailable (HTTP 429: rate limited)"
+
+    def test_includes_timeout_message(self) -> None:
+        assert _describe_error_source(
+            "reccobeats:track-metadata", "Request timed out after 15000ms"
+        ) == "track metadata unavailable (Request timed out after 15000ms)"
+
+    def test_includes_invalid_shape_message(self) -> None:
+        assert _describe_error_source(
+            "reccobeats:audio-features",
+            "Invalid ReccoBeats audio features response shape",
+        ) == (
+            "audio features unavailable "
+            "(Invalid ReccoBeats audio features response shape)"
+        )
 
 
 class TestAnalysisPopupRendering:
@@ -243,8 +274,11 @@ class TestAnalysisPopupRendering:
         analysis = {
             "schema_version": "1.0",
             "errors": [
-                {"source": "spotify:artists", "message": "boom"},
-                {"source": "reccobeats:track-metadata", "message": "boom"},
+                {"source": "spotify:artists", "message": "HTTP 429: rate limited"},
+                {
+                    "source": "reccobeats:track-metadata",
+                    "message": "Request timed out after 15000ms",
+                },
             ],
             "overview": {},
             "genre_distribution": {},
@@ -254,8 +288,14 @@ class TestAnalysisPopupRendering:
         texts, _ = _render(card, analysis)
         joined = "\n".join(texts)
 
-        assert "Partial data: artist genres unavailable" in joined
-        assert "Partial data: track metadata unavailable" in joined
+        assert (
+            "Partial data: artist genres unavailable (HTTP 429: rate limited)"
+            in joined
+        )
+        assert (
+            "Partial data: track metadata unavailable "
+            "(Request timed out after 15000ms)" in joined
+        )
 
     def test_no_crash_without_audio_features(self) -> None:
         card = _card()

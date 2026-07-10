@@ -305,6 +305,11 @@ class BackendClient:
         )
         return response
 
+    def delete_analysis(self, playlist_id: str) -> Dict[str, Any]:
+        """Delete cached analysis status/results for a playlist."""
+        response = self._make_request("DELETE", f"/analysis/playlist/{playlist_id}")
+        return response
+
     # Export endpoints
     def generate_export(self, playlist_id: str, format: str = "xlsx") -> Dict[str, Any]:
         """Generate export for a playlist."""

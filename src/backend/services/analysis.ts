@@ -21,7 +21,7 @@ import type {
 // 24h, keyed by playlist only (see `rawEnrichmentCacheKey`).
 const RAW_ENRICHMENT_CACHE_TTL_SECONDS = 86400;
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 30;
 const CONCURRENCY = 3;
 
 function sleep(ms: number): Promise<void> {
@@ -34,6 +34,10 @@ function chunk<T>(items: T[], size: number): T[][] {
     result.push(items.slice(i, i + size));
   }
   return result;
+}
+
+function truncateResponseBody(body: string, maxLength = 500): string {
+  return body.length > maxLength ? `${body.slice(0, maxLength)}...` : body;
 }
 
 export class AnalysisService {
@@ -297,8 +301,15 @@ export class AnalysisService {
       throw new Error(`ReccoBeats API error: HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const rawData = await response.json();
+    const parsed = await this.parseReccoBeatsResponse(response, 'audio-features', batchIds.length);
+    const rawData = parsed.data;
     if (!this.isReccoBeatsAudioFeaturesResponse(rawData)) {
+      logger.warn('Invalid ReccoBeats audio features response shape', {
+        endpoint: 'audio-features',
+        status: response.status,
+        batchSize: batchIds.length,
+        bodyPreview: parsed.bodyPreview,
+      });
       throw new Error('Invalid ReccoBeats audio features response shape');
     }
 
@@ -348,12 +359,41 @@ export class AnalysisService {
       throw new Error(`ReccoBeats API error: HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const rawData = await response.json();
+    const parsed = await this.parseReccoBeatsResponse(response, 'track', batchIds.length);
+    const rawData = parsed.data;
     if (!this.isReccoBeatsTrackMetadataResponse(rawData)) {
+      logger.warn('Invalid ReccoBeats track metadata response shape', {
+        endpoint: 'track',
+        status: response.status,
+        batchSize: batchIds.length,
+        bodyPreview: parsed.bodyPreview,
+      });
       throw new Error('Invalid ReccoBeats track metadata response shape');
     }
 
     return rawData.content;
+  }
+
+  private async parseReccoBeatsResponse(
+    response: Response,
+    endpoint: 'audio-features' | 'track',
+    batchSize: number
+  ): Promise<{ data: unknown; bodyPreview: string }> {
+    const bodyText = await response.text();
+    const bodyPreview = truncateResponseBody(bodyText);
+
+    try {
+      return { data: JSON.parse(bodyText), bodyPreview };
+    } catch (error) {
+      logger.warn('Invalid ReccoBeats JSON response', {
+        endpoint,
+        status: response.status,
+        batchSize,
+        bodyPreview,
+        error: errorMessage(error),
+      });
+      throw new Error(`Invalid ReccoBeats ${endpoint} response JSON`, { cause: error });
+    }
   }
 
   private async generatePlaylistInsights(

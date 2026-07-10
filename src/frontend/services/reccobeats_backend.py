@@ -17,6 +17,18 @@ from ..utils.network_utils import (
 logger = logging.getLogger(__name__)
 
 
+def _has_reccobeats_errors(analysis: Dict[str, Any]) -> bool:
+    errors = analysis.get("errors")
+    if not isinstance(errors, list):
+        return False
+    return any(
+        isinstance(error, dict)
+        and isinstance(error.get("source"), str)
+        and error["source"].startswith("reccobeats:")
+        for error in errors
+    )
+
+
 class ReccoBeatsBackendService:
     """
     ReccoBeats service using Cloudflare Worker backend.
@@ -37,6 +49,7 @@ class ReccoBeatsBackendService:
         # Guards against re-posting more than once per top-level
         # `analyze_playlist` call when polling discovers stale results.
         self._reposted_on_stale = False
+        self._reposted_on_reccobeats_error = False
 
     @handle_network_errors
     @retry_on_network_error(max_retries=3, backoff_factor=1.0)
@@ -58,6 +71,7 @@ class ReccoBeatsBackendService:
                 return {}
 
             self._reposted_on_stale = False
+            self._reposted_on_reccobeats_error = False
             logger.info(f"Starting playlist analysis for {playlist_id}")
 
             # Start analysis job
@@ -75,6 +89,14 @@ class ReccoBeatsBackendService:
         except Exception as e:
             logger.error(f"Playlist analysis failed: {e}")
             raise
+
+    def force_reanalyze_playlist(
+        self, playlist_id: str, analysis_task: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """Delete cached backend analysis and enqueue a fresh analysis job."""
+        self.backend_client.delete_analysis(playlist_id)
+        get_cache_manager().clear_file(f"analysis_{playlist_id}.json")
+        return self.analyze_playlist(playlist_id, analysis_task)
 
     def _poll_analysis_completion(
         self,
@@ -121,7 +143,30 @@ class ReccoBeatsBackendService:
             if status == "completed":
                 logger.info("Analysis completed successfully")
                 try:
-                    return self.backend_client.get_analysis_results(playlist_id)
+                    results = self.backend_client.get_analysis_results(playlist_id)
+                    if (
+                        _has_reccobeats_errors(results)
+                        and not self._reposted_on_reccobeats_error
+                    ):
+                        logger.info(
+                            "Cached analysis has ReccoBeats errors; "
+                            "clearing backend/local caches and re-analyzing once"
+                        )
+                        self._reposted_on_reccobeats_error = True
+                        self.backend_client.delete_analysis(playlist_id)
+                        get_cache_manager().clear_file(f"analysis_{playlist_id}.json")
+                        new_response = self.backend_client.analyze_playlist(
+                            playlist_id
+                        )
+                        new_job_id = new_response.get("job_id")
+                        if not new_job_id:
+                            raise BackendAPIError(
+                                "No job ID received from backend"
+                            )
+                        return self._poll_analysis_completion(
+                            new_job_id, playlist_id, analysis_task, max_wait_time
+                        )
+                    return results
                 except BackendAPIError as e:
                     if (
                         e.error_code != "ANALYSIS_RESULTS_NOT_FOUND"
