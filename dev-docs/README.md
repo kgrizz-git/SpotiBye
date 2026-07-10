@@ -58,6 +58,7 @@ Update an existing page when it already covers the same topic.
 | [`guides/debugging.md`](guides/debugging.md) | Debugging tips |
 | [`guides/export-formats-implementation.md`](guides/export-formats-implementation.md) | Export format implementation notes |
 | [`guides/file-length-policy.md`](guides/file-length-policy.md) | File length limits, refactoring, and exemptions guide |
+| [`guides/sonarqube-local.md`](guides/sonarqube-local.md) | Run SonarQube Community locally for static-analysis reports |
 
 ## References
 

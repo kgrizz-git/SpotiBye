@@ -41,3 +41,10 @@ tmp/
 .windsurf/
 .qwen/
 memory/
+
+# SonarQube local analysis artifacts
+.scannerwork/
+coverage-python.xml
+src/backend/coverage/
+# Local SonarQube scanner token (git-ignored; see dev-docs/sonarqube-local.md)
+.sonar_token
