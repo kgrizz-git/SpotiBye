@@ -7,6 +7,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from .backend_client import BackendClient, BackendAPIError
+from .enrichment_errors import has_retriable_reccobeats_errors
 from ..caching.backend_cache import get_cache_manager
 from ..utils.network_utils import (
     NetworkTimeoutError,
@@ -17,18 +18,6 @@ from ..utils.network_utils import (
 logger = logging.getLogger(__name__)
 
 SYNTHETIC_PROGRESS_STALE_AFTER_SECONDS = 5.0
-
-
-def _has_reccobeats_errors(analysis: Dict[str, Any]) -> bool:
-    errors = analysis.get("errors")
-    if not isinstance(errors, list):
-        return False
-    return any(
-        isinstance(error, dict)
-        and isinstance(error.get("source"), str)
-        and error["source"].startswith("reccobeats:")
-        for error in errors
-    )
 
 
 class ReccoBeatsBackendService:
@@ -151,7 +140,7 @@ class ReccoBeatsBackendService:
                 try:
                     results = self.backend_client.get_analysis_results(playlist_id)
                     if (
-                        _has_reccobeats_errors(results)
+                        has_retriable_reccobeats_errors(results)
                         and not self._reposted_on_reccobeats_error
                     ):
                         logger.info(

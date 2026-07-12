@@ -108,6 +108,30 @@ class TestAnalyzePlaylistCacheStaleness:
         )
         harness.reccobeats_service.analyze_playlist.assert_not_called()
 
+    def test_returns_cached_analysis_when_only_reccobeats_coverage_warning(
+        self,
+    ) -> None:
+        harness = _Harness()
+        cached = {
+            "schema_version": EXPECTED_ANALYSIS_SCHEMA_VERSION,
+            "status": "completed",
+            "errors": [
+                {
+                    "source": "reccobeats:coverage",
+                    "message": "Audio features available for 1 of 2 tracks.",
+                }
+            ],
+        }
+        harness.cache_manager.is_analysis_cache_valid.return_value = True
+        harness.cache_manager.get_cached_analysis.return_value = cached
+
+        result = harness.analyze_playlist("playlist-1")
+
+        assert result == cached
+        harness.cache_manager.clear_file.assert_not_called()
+        harness.reccobeats_service.force_reanalyze_playlist.assert_not_called()
+        harness.reccobeats_service.analyze_playlist.assert_not_called()
+
     def test_discards_cache_and_reanalyzes_when_schema_version_missing(self) -> None:
         harness = _Harness()
         harness.cache_manager.is_analysis_cache_valid.return_value = True

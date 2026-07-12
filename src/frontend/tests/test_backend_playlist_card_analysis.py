@@ -26,6 +26,7 @@ class _FakeWidget:
         for key, value in kwargs.items():
             setattr(self, key, value)
         self.children: list[Any] = []
+        self.bound_events: dict[str, Any] = {}
 
     def add_widget(self, widget: Any) -> None:
         self.children.append(widget)
@@ -34,7 +35,7 @@ class _FakeWidget:
         self.children = []
 
     def bind(self, **_kwargs: Any) -> None:
-        pass
+        self.bound_events.update(_kwargs)
 
     def setter(self, _name: str):
         return lambda *_a, **_k: None
@@ -202,6 +203,16 @@ class TestAnalysisPopupRendering:
         assert hasattr(content, "_analysis_status_label")
         assert content._analysis_status_label.text == "Analyzing playlist..."
 
+    def test_retry_enrichment_button_is_available_and_bound(self) -> None:
+        card = _card()
+
+        content = card._build_analysis_popup_content()
+
+        assert hasattr(content, "_retry_enrichment_button")
+        retry_button = content._retry_enrichment_button
+        assert retry_button.text == "Retry enrichment"
+        assert retry_button.bound_events["on_release"] == card._retry_enrichment_analysis
+
     def test_worker_passes_analysis_task_to_adapter(self, monkeypatch) -> None:
         card = _card()
         adapter = _FakeWidget()
@@ -236,6 +247,46 @@ class TestAnalysisPopupRendering:
             cast("Label", cast(Any, duration_label)),
             cast(Any, progress_bar),
             cast(Any, status_label),
+        )
+
+        assert captured["playlist_id"] == "playlist-1"
+        assert captured["analysis_task"] is not None
+
+    def test_worker_force_reanalyze_uses_force_adapter_method(self, monkeypatch) -> None:
+        card = _card()
+        adapter = _FakeWidget()
+        app = _FakeWidget(backend_adapter=adapter)
+        monkeypatch.setattr(
+            analysis_popup_module.App,
+            "get_running_app",
+            lambda: app,
+            raising=False,
+        )
+        captured: dict[str, Any] = {}
+
+        def force_reanalyze_playlist(
+            playlist_id: str, analysis_task: Any = None
+        ) -> dict[str, Any]:
+            captured["playlist_id"] = playlist_id
+            captured["analysis_task"] = analysis_task
+            return {"status": "completed"}
+
+        adapter.force_reanalyze_playlist = force_reanalyze_playlist
+        adapter.analyze_playlist = cast(
+            Any, lambda *_args, **_kwargs: {"status": "unexpected"}
+        )
+        container = _FakeWidget()
+        duration_label = _FakeWidget(text="")
+        progress_bar = _FakeWidget()
+        status_label = _FakeWidget(text="")
+
+        card._load_analysis_worker(
+            "playlist-1",
+            cast("BoxLayout", cast(Any, container)),
+            cast("Label", cast(Any, duration_label)),
+            cast(Any, progress_bar),
+            cast(Any, status_label),
+            True,
         )
 
         assert captured["playlist_id"] == "playlist-1"

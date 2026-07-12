@@ -166,10 +166,12 @@ app.delete('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
     const statusStore = new AnalysisStatusStore(c.env.ANALYSIS_STATUS);
 
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
+    const rawEnrichmentKey = `analysis:playlist:${playlistId}:raw-enrichment`;
 
     await Promise.all([
       statusStore.deleteStatus(userId, playlistId),
-      cacheService.delete(resultsKey)
+      cacheService.delete(resultsKey),
+      cacheService.delete(rawEnrichmentKey),
     ]);
 
     return c.json({ data: { message: 'Analysis deleted successfully' } });

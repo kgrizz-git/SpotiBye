@@ -80,6 +80,7 @@ class PlaylistCardAnalysisPopupMixin:
                     content._duration_label,
                     content._analysis_progress_bar,
                     content._analysis_status_label,
+                    False,
                 ),
                 daemon=True,
             ).start()
@@ -292,6 +293,16 @@ class PlaylistCardAnalysisPopupMixin:
 
         btn_row = BoxLayout(size_hint_y=None, height=dp(42))
         btn_row.add_widget(Widget())  # pushes button to the right
+        retry_btn = Button(
+            text="Retry enrichment",
+            size_hint=(None, 1),
+            width=dp(150),
+            background_color=(0.46, 0.34, 0.16, 1),
+            color=(1, 1, 1, 1),
+        )
+        retry_btn.bind(on_release=self._retry_enrichment_analysis)
+        btn_row.add_widget(retry_btn)
+
         show_tracks_btn = Button(
             text="Show Tracks",
             size_hint=(None, 1),
@@ -312,7 +323,49 @@ class PlaylistCardAnalysisPopupMixin:
         root._duration_label = duration_label
         root._analysis_progress_bar = progress_bar
         root._analysis_status_label = status_label
+        root._retry_enrichment_button = retry_btn
         return root
+
+    def _retry_enrichment_analysis(self, *_args: Any) -> None:
+        playlist_id = self.playlist_data.get("id")
+        popup = self._detailed_popup
+        content = getattr(popup, "content", None)
+        if not playlist_id or content is None:
+            return
+
+        progress_bar = content._analysis_progress_bar
+        status_label = content._analysis_status_label
+        analysis_container = content._analysis_container
+        duration_label = content._duration_label
+
+        progress_bar.height = dp(10)
+        progress_bar.value = 0
+        status_label.text = "Retrying enrichment..."
+        analysis_container.clear_widgets()
+        analysis_container.add_widget(
+            Label(
+                text="Retrying enrichment...",
+                font_size=dp(11),
+                color=(0.75, 0.55, 0.15, 1),
+                halign="left",
+                text_size=(dp(420), None),
+                size_hint_y=None,
+                height=dp(18),
+            )
+        )
+
+        threading.Thread(
+            target=self._load_analysis_worker,
+            args=(
+                playlist_id,
+                analysis_container,
+                duration_label,
+                progress_bar,
+                status_label,
+                True,
+            ),
+            daemon=True,
+        ).start()
 
     def _load_analysis_worker(
         self,
@@ -321,6 +374,7 @@ class PlaylistCardAnalysisPopupMixin:
         duration_label: Label,
         progress_bar: ProgressBar,
         status_label: Label,
+        force_reanalyze: bool = False,
     ) -> None:
         try:
             app = App.get_running_app()
@@ -337,7 +391,14 @@ class PlaylistCardAnalysisPopupMixin:
                 return
 
             analysis_task = AnalysisTask(progress_bar, status_label)
-            analysis = adapter.analyze_playlist(playlist_id, analysis_task=analysis_task)
+            if force_reanalyze and hasattr(adapter, "force_reanalyze_playlist"):
+                analysis = adapter.force_reanalyze_playlist(
+                    playlist_id, analysis_task=analysis_task
+                )
+            else:
+                analysis = adapter.analyze_playlist(
+                    playlist_id, analysis_task=analysis_task
+                )
             self._update_analysis_ui(
                 analysis_container,
                 duration_label,

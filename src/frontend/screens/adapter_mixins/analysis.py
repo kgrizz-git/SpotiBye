@@ -5,24 +5,13 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional
 
 from ....shared.logging_config import logger
+from ...services.enrichment_errors import has_retriable_reccobeats_errors
 
 # Kept in sync manually with `ANALYSIS_SCHEMA_VERSION` in
 # `src/backend/utils/constants.ts`. A single frontend build only ever talks to
 # one backend schema, so an exact-match comparison (not numeric `>=`) is
 # sufficient and avoids needing a shared config module.
 EXPECTED_ANALYSIS_SCHEMA_VERSION = "1.0"
-
-
-def _has_reccobeats_errors(analysis: Dict[str, Any]) -> bool:
-    errors = analysis.get("errors")
-    if not isinstance(errors, list):
-        return False
-    return any(
-        isinstance(error, dict)
-        and isinstance(error.get("source"), str)
-        and error["source"].startswith("reccobeats:")
-        for error in errors
-    )
 
 
 class AnalysisMixin:
@@ -54,7 +43,7 @@ class AnalysisMixin:
                         cached_analysis.get("schema_version")
                         == EXPECTED_ANALYSIS_SCHEMA_VERSION
                     ):
-                        if _has_reccobeats_errors(cached_analysis):
+                        if has_retriable_reccobeats_errors(cached_analysis):
                             logger.info(
                                 f"Cached analysis for {playlist_id} has "
                                 "ReccoBeats errors; forcing re-analysis"
@@ -122,3 +111,21 @@ class AnalysisMixin:
         except Exception as e:
             logger.error(f"Error getting analysis status: {e}")
             return {"status": "error", "error": str(e)}
+
+    def force_reanalyze_playlist(
+        self,
+        playlist_id: str,
+        analysis_task: Optional[Any] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Force backend/local analysis invalidation before re-running analysis."""
+        try:
+            if analysis_task is not None:
+                return self.reccobeats_service.force_reanalyze_playlist(
+                    playlist_id, analysis_task
+                )
+            return self.reccobeats_service.force_reanalyze_playlist(playlist_id)
+        except Exception as e:
+            logger.error(f"Error force re-analyzing playlist: {e}")
+            if self.error_callback:
+                self.error_callback(f"Analysis retry failed: {str(e)}")
+            return None

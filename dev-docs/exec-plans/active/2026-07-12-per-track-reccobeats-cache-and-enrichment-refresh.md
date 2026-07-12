@@ -83,8 +83,8 @@ Document this exception in `dev-docs/guides/golden-principles.md` when B1 lands.
 
 ## Track A — Hotfix PR (ship first)
 
-- [ ] **A1.** Add `cacheService.delete` for `analysis:playlist:{id}:raw-enrichment` on `DELETE /analysis/playlist/:id` (stopgap for claim E). Today that handler only clears status + results — this is a **new** deletion, not extending an existing one. Becomes a harmless no-op after B1.3 removes the blob.
-- [ ] **A2.** Soften coverage UX and fix completeness semantics (do **not** use `coverageRatio < 1.0` as a red-banner / auto-retry gate):
+- [x] **A1.** Add `cacheService.delete` for `analysis:playlist:{id}:raw-enrichment` on `DELETE /analysis/playlist/:id` (stopgap for claim E). Today that handler only clears status + results — this is a **new** deletion, not extending an existing one. Becomes a harmless no-op after B1.3 removes the blob.
+- [x] **A2.** Soften coverage UX and fix completeness semantics (do **not** use `coverageRatio < 1.0` as a red-banner / auto-retry gate):
   - Keep backend `reccobeats:coverage` **error** threshold meaningful (e.g. current `< 0.5` floor, or hard fetch failures only).
   - **Hotfix only:** do **not** depend on endpoint-specific resolved counts (those fields land in B1.2b + schema bump). Approximate incompleteness with existing signals: hard `reccobeats:*` errors and/or meaningful coverage floor — **never** `audio_features.track_count === playlist.track_count` (false incomplete forever when ReccoBeats omits tracks).
   - Decide and encode helper semantics explicitly: rename the frontend helper to `has_retriable_reccobeats_errors()` if it drives auto-retry. `reccobeats:coverage` may be retry-worthy only when the retry path can target known unresolved IDs. If Track A cannot compute missing IDs without B1/B2 fields, keep coverage as informational/manual-retry only until targeted miss-fill lands.
@@ -92,10 +92,10 @@ Document this exception in `dev-docs/guides/golden-principles.md` when B1 lands.
   - Full completeness gate (endpoint-specific resolved counts vs **unique** playlist track IDs) ships with B1/B2 after schema bump.
   - Partial coverage (e.g. 70–99% hits before absents are known) should schedule targeted missing-track fetch once B1/B2 can identify unresolved IDs; after absents are recorded, the same hit ratio may be complete and should be informational via B3.1 `N/M` status line.
   - **Known limitation (CHANGELOG):** permanent ReccoBeats omissions that are not hard errors may stay silent until B1/B2 ship endpoint-specific resolved counts / targeted missing-track retry — call this out in A6.
-- [ ] **A3.** Consolidate `_has_reccobeats_errors` into **`src/frontend/services/enrichment_errors.py`** (canonical; under `services/`, not `adapter_mixins/`). Prefer the explicit name `has_retriable_reccobeats_errors` if the helper is used for retry decisions. Import from both consumers, e.g. `from ...services.enrichment_errors import has_retriable_reccobeats_errors` in `adapter_mixins/analysis.py` and `from .enrichment_errors import has_retriable_reccobeats_errors` in `reccobeats_backend.py`; delete the two duplicate local defs.
-- [ ] **A4.** Add **Retry enrichment** button on analysis popup → `force_reanalyze_playlist()` with progress bar.
-- [ ] **A5.** Tests: raw-enrichment cleared on delete; retry button calls force reanalyze; consolidated helper used in both paths; coverage warnings do **not** cause full-playlist auto-retry when missing IDs are unknown. Do **not** add resolved/absent-sentinel completeness tests in Track A; those fields do not exist until B1/B2.
-- [ ] **A6.** `CHANGELOG.md` (Unreleased): incomplete-analysis retry UX fixes + known limitation that full omission/completeness status arrives with per-track cache follow-up.
+- [x] **A3.** Consolidate `_has_reccobeats_errors` into **`src/frontend/services/enrichment_errors.py`** (canonical; under `services/`, not `adapter_mixins/`). Prefer the explicit name `has_retriable_reccobeats_errors` if the helper is used for retry decisions. Import from both consumers, e.g. `from ...services.enrichment_errors import has_retriable_reccobeats_errors` in `adapter_mixins/analysis.py` and `from .enrichment_errors import has_retriable_reccobeats_errors` in `reccobeats_backend.py`; delete the two duplicate local defs.
+- [x] **A4.** Add **Retry enrichment** button on analysis popup → `force_reanalyze_playlist()` with progress bar.
+- [x] **A5.** Tests: raw-enrichment cleared on delete; retry button calls force reanalyze; consolidated helper used in both paths; coverage warnings do **not** cause full-playlist auto-retry when missing IDs are unknown. Do **not** add resolved/absent-sentinel completeness tests in Track A; those fields do not exist until B1/B2.
+- [x] **A6.** `CHANGELOG.md` (Unreleased): incomplete-analysis retry UX fixes + known limitation that full omission/completeness status arrives with per-track cache follow-up.
 
 ---
 

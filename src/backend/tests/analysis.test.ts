@@ -1231,4 +1231,28 @@ describe('Analysis Routes', () => {
       expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:status');
     });
   });
+
+  describe('DELETE /analysis/playlist/:id', () => {
+    it('deletes user analysis results and shared raw ReccoBeats enrichment', async () => {
+      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data).toEqual({ message: 'Analysis deleted successfully' });
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith(
+        'analysis:playlist1:test-user-id:results',
+      );
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith(
+        'analysis:playlist:playlist1:raw-enrichment',
+      );
+    });
+  });
 });
