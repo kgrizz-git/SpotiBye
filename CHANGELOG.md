@@ -7,6 +7,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Global per-track ReccoBeats cache on the backend (`global:reccobeats:*` KV keys, 6-month positive TTL and 7-day per-endpoint absent sentinels) so the same Spotify track is enriched once and reused across playlists/users. Analysis results now include enrichment completeness counts (`unique_track_count`, `audio_features_resolved_count`, `track_metadata_resolved_count`, `enrichment_resolved_track_count`) and bump `schema_version` to `1.1` (existing local/KV analysis caches are invalidated once and re-fetched).
 - Playlist analysis popups now show live progress with a progress bar and status text while backend analysis runs, including bounded activity feedback when Cloudflare KV status reads are stale.
 - Backend playlist analysis status now uses a Durable Object for live progress reads, while completed analysis results remain in KV.
 - Added a file-length pre-commit hook (`scripts/check_file_lengths.py`) to warn when Python or Markdown files exceed line count thresholds (700 lines for code, 1000 lines for tests, 300 lines for docs), with configurable glob exemptions in `scripts/file-length-exemptions.json`. Initially runs in `--warn` mode for a 14-day transition period before enforcement.

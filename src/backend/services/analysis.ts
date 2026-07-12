@@ -1,49 +1,22 @@
 import { SpotifyService } from './spotify';
 import { CacheService } from './cache';
-import { createFetchWithRetry } from '../utils/http-retry';
+import { ReccoBeatsTrackCacheService } from './reccobeats-track-cache';
 import { logger } from '../utils/logger';
-import { ANALYSIS_SCHEMA_VERSION, MUSIC_KEYS, RECCOBEATS_JITTER_DELAY_MS } from '../utils/constants';
+import { ANALYSIS_SCHEMA_VERSION, MUSIC_KEYS } from '../utils/constants';
 import type { SpotifyArtistFull, SpotifyTrack, SpotifyPlaylistTrackItem } from '../types/spotify';
 import type {
   AnalysisResult,
   AudioFeatureAverages,
   AudioFeatureSummary,
-  CachedRawEnrichment,
   KeyModeDistribution,
   PlaylistInsights,
   ReccoBeatsAudioFeature,
-  ReccoBeatsAudioFeaturesResponse,
+  ReccoBeatsResolveCounters,
   ReccoBeatsTrackMetadata,
-  ReccoBeatsTrackMetadataResponse,
 } from '../types/analysis';
-
-// Raw ReccoBeats enrichment (audio features + track metadata) is cached for
-// 24h, keyed by playlist only (see `rawEnrichmentCacheKey`).
-const RAW_ENRICHMENT_CACHE_TTL_SECONDS = 86400;
-
-const BATCH_SIZE = 30;
-const CONCURRENCY = 3;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    result.push(items.slice(i, i + size));
-  }
-  return result;
-}
-
-function truncateResponseBody(body: string, maxLength = 500): string {
-  return body.length > maxLength ? `${body.slice(0, maxLength)}...` : body;
-}
 
 export class AnalysisService {
   private accessToken: string;
-  private reccoBeatsUrl = 'https://api.reccobeats.com/v1';
-  private fetchWithRetry = createFetchWithRetry();
   private cache?: CacheService;
 
   constructor(accessToken: string, cache?: CacheService) {
@@ -55,7 +28,8 @@ export class AnalysisService {
     playlistId: string,
     userId: string,
     jobId: string,
-    onProgress?: (progress: number) => Promise<void>
+    onProgress?: (progress: number) => Promise<void>,
+    options: { forceEnrichment?: boolean } = {}
   ): Promise<AnalysisResult> {
     const errors: Array<{ source: string; message: string }> = [];
     try {
@@ -98,11 +72,12 @@ export class AnalysisService {
       // ReccoBeats audio features + track metadata are best-effort enrichment;
       // core insights use Spotify track metadata and artist genres.
       const trackIds = tracks.map((track) => track.id);
-      const { audioFeatures, trackMetadata } = await this.fetchReccoBeatsEnrichment(
+      const enrichment = await this.fetchReccoBeatsEnrichment(
         playlistId,
         trackIds,
         errors,
-        onProgress
+        onProgress,
+        options.forceEnrichment === true
       );
 
       logger.info('Generating insights from metadata', { playlistId });
@@ -110,8 +85,8 @@ export class AnalysisService {
       const spotifyInsights = await this.generatePlaylistInsights(
         tracks,
         artistData,
-        audioFeatures,
-        trackMetadata
+        enrichment.audioFeatures,
+        enrichment.trackMetadata
       );
 
       return {
@@ -121,6 +96,10 @@ export class AnalysisService {
         status: 'completed',
         computed_at: new Date().toISOString(),
         ...spotifyInsights,
+        unique_track_count: enrichment.uniqueTrackCount,
+        audio_features_resolved_count: enrichment.audioFeaturesResolvedCount,
+        track_metadata_resolved_count: enrichment.trackMetadataResolvedCount,
+        enrichment_resolved_track_count: enrichment.enrichmentResolvedTrackCount,
         completed_at: new Date().toISOString(),
         errors,
         schema_version: ANALYSIS_SCHEMA_VERSION,
@@ -135,123 +114,142 @@ export class AnalysisService {
   }
 
   /**
-   * Fetches ReccoBeats audio features + track metadata in parallel
-   * (best-effort — failures are recorded in `errors` rather than thrown),
-   * using a shared 24h raw-enrichment cache keyed by playlist only.
+   * Resolves ReccoBeats audio features + track metadata via the global
+   * per-track cache (best-effort — failures are recorded in `errors`).
+   * Endpoint writes are independent: metadata failure must not discard
+   * successful audio-feature cache writes.
    */
   private async fetchReccoBeatsEnrichment(
     playlistId: string,
     trackIds: string[],
     errors: Array<{ source: string; message: string }>,
-    onProgress?: (progress: number) => Promise<void>
-  ): Promise<{ audioFeatures: ReccoBeatsAudioFeature[]; trackMetadata: ReccoBeatsTrackMetadata[] }> {
-    if (trackIds.length === 0) {
+    onProgress?: (progress: number) => Promise<void>,
+    forceEnrichment = false
+  ): Promise<{
+    audioFeatures: ReccoBeatsAudioFeature[];
+    trackMetadata: ReccoBeatsTrackMetadata[];
+    uniqueTrackCount: number;
+    audioFeaturesResolvedCount: number;
+    trackMetadataResolvedCount: number;
+    enrichmentResolvedTrackCount: number;
+  }> {
+    const uniqueTrackIds = [...new Set(trackIds.filter(Boolean))];
+    const uniqueTrackCount = uniqueTrackIds.length;
+
+    if (uniqueTrackCount === 0) {
       await onProgress?.(85);
-      return { audioFeatures: [], trackMetadata: [] };
-    }
-
-    const rawKey = this.rawEnrichmentCacheKey(playlistId);
-    const cached = this.cache ? await this.cache.get<CachedRawEnrichment>(rawKey) : null;
-    const cacheValid =
-      !!cached &&
-      cached.schema_version === ANALYSIS_SCHEMA_VERSION &&
-      cached.track_count === trackIds.length;
-
-    let audioFeatures: ReccoBeatsAudioFeature[] =
-      cacheValid && cached!.audio_features.length > 0 ? cached!.audio_features : [];
-    let trackMetadata: ReccoBeatsTrackMetadata[] =
-      cacheValid && cached!.track_metadata.length > 0 ? cached!.track_metadata : [];
-
-    const needsAudioFeatures = audioFeatures.length === 0;
-    const needsTrackMetadata = trackMetadata.length === 0;
-
-    if (needsAudioFeatures || needsTrackMetadata) {
-      logger.info('Fetching ReccoBeats enrichment', {
-        playlistId,
-        trackCount: trackIds.length,
-        needsAudioFeatures,
-        needsTrackMetadata,
-      });
-
-      const uniqueTrackIds = [...new Set(trackIds.filter(Boolean))];
-      const audioBatches = needsAudioFeatures ? chunk(uniqueTrackIds, BATCH_SIZE) : [];
-      const metadataBatches = needsTrackMetadata ? chunk(uniqueTrackIds, BATCH_SIZE) : [];
-      const audioGroups = needsAudioFeatures ? Math.ceil(audioBatches.length / CONCURRENCY) : 0;
-      const metadataGroups = needsTrackMetadata ? Math.ceil(metadataBatches.length / CONCURRENCY) : 0;
-      const totalGroups = audioGroups + metadataGroups;
-      let completedGroups = 0;
-      let lastEmitted = 65;
-
-      const emitEnrichmentProgress = async (): Promise<void> => {
-        if (!onProgress || totalGroups === 0) return;
-        completedGroups += 1;
-        const calculated = 65 + Math.floor((completedGroups / totalGroups) * 20);
-        const next = Math.min(85, Math.max(lastEmitted + 1, calculated));
-        if (next > lastEmitted) {
-          lastEmitted = next;
-          await onProgress(next);
-        }
+      return {
+        audioFeatures: [],
+        trackMetadata: [],
+        uniqueTrackCount: 0,
+        audioFeaturesResolvedCount: 0,
+        trackMetadataResolvedCount: 0,
+        enrichmentResolvedTrackCount: 0,
       };
-
-      if (totalGroups > 0) {
-        lastEmitted = 75;
-        await onProgress?.(75);
-      }
-
-      const [audioFeaturesResult, trackMetadataResult] = await Promise.allSettled([
-        needsAudioFeatures
-          ? this.fetchReccoBeatsAudioFeatures(uniqueTrackIds, emitEnrichmentProgress)
-          : Promise.resolve(audioFeatures),
-        needsTrackMetadata
-          ? this.fetchReccoBeatsTrackMetadata(uniqueTrackIds, emitEnrichmentProgress)
-          : Promise.resolve(trackMetadata),
-      ]);
-
-      if (audioFeaturesResult.status === 'fulfilled') {
-        audioFeatures = audioFeaturesResult.value;
-      } else {
-        const message = errorMessage(audioFeaturesResult.reason);
-        logger.warn('Failed to fetch ReccoBeats audio features; continuing with Spotify-only analysis', {
-          playlistId,
-          trackCount: trackIds.length,
-          error: message,
-        });
-        errors.push({ source: 'reccobeats:audio-features', message });
-        audioFeatures = [];
-      }
-
-      if (trackMetadataResult.status === 'fulfilled') {
-        trackMetadata = trackMetadataResult.value;
-      } else {
-        const message = errorMessage(trackMetadataResult.reason);
-        logger.warn('Failed to fetch ReccoBeats track metadata; continuing without metadata aggregates', {
-          playlistId,
-          trackCount: trackIds.length,
-          error: message,
-        });
-        errors.push({ source: 'reccobeats:track-metadata', message });
-        trackMetadata = [];
-      }
-
-      if (this.cache) {
-        await this.cache.set(
-          rawKey,
-          {
-            audio_features: audioFeatures,
-            track_metadata: trackMetadata,
-            schema_version: ANALYSIS_SCHEMA_VERSION,
-            cached_at: new Date().toISOString(),
-            track_count: trackIds.length,
-          } satisfies CachedRawEnrichment,
-          RAW_ENRICHMENT_CACHE_TTL_SECONDS
-        );
-      }
     }
 
-    this.recordReccoBeatsCoverageWarning(trackIds, audioFeatures, errors);
+    logger.info('Resolving ReccoBeats enrichment via per-track cache', {
+      playlistId,
+      trackCount: uniqueTrackCount,
+      forceEnrichment,
+    });
+
+    const trackCache = new ReccoBeatsTrackCacheService(this.cache);
+    let lastEmitted = 65;
+    let completedGroups = 0;
+    // Approximate group count for progress: AF batches + metadata batches.
+    const batchCount = Math.ceil(uniqueTrackCount / 30);
+    const totalGroups = batchCount * 2;
+    const emitEnrichmentProgress = async (): Promise<void> => {
+      if (!onProgress || totalGroups === 0) return;
+      completedGroups += 1;
+      const calculated = 65 + Math.floor((completedGroups / totalGroups) * 20);
+      const next = Math.min(85, Math.max(lastEmitted + 1, calculated));
+      if (next > lastEmitted) {
+        lastEmitted = next;
+        await onProgress(next);
+      }
+    };
+
+    lastEmitted = 75;
+    await onProgress?.(75);
+
+    const resolveOpts = {
+      force: forceEnrichment,
+      onGroupComplete: emitEnrichmentProgress,
+    };
+
+    const [audioFeaturesResult, trackMetadataResult] = await Promise.allSettled([
+      trackCache.resolveAudioFeatures(uniqueTrackIds, resolveOpts),
+      trackCache.resolveTrackMetadata(uniqueTrackIds, resolveOpts),
+    ]);
+
+    let audioFeatures: ReccoBeatsAudioFeature[] = [];
+    let audioCounters: ReccoBeatsResolveCounters = {
+      fetchedCount: 0,
+      negativeSkipped: 0,
+      unparseableCount: 0,
+      resolvedCount: 0,
+      resolvedIds: [],
+      absentIds: [],
+      unresolvedIds: [...uniqueTrackIds],
+    };
+
+    if (audioFeaturesResult.status === 'fulfilled') {
+      audioFeatures = [...audioFeaturesResult.value.bySpotifyId.values()];
+      audioCounters = audioFeaturesResult.value.counters;
+    } else {
+      const message = errorMessage(audioFeaturesResult.reason);
+      logger.warn('Failed to fetch ReccoBeats audio features; continuing with Spotify-only analysis', {
+        playlistId,
+        trackCount: uniqueTrackCount,
+        error: message,
+      });
+      errors.push({ source: 'reccobeats:audio-features', message });
+    }
+
+    let trackMetadata: ReccoBeatsTrackMetadata[] = [];
+    let metadataCounters: ReccoBeatsResolveCounters = {
+      fetchedCount: 0,
+      negativeSkipped: 0,
+      unparseableCount: 0,
+      resolvedCount: 0,
+      resolvedIds: [],
+      absentIds: [],
+      unresolvedIds: [...uniqueTrackIds],
+    };
+
+    if (trackMetadataResult.status === 'fulfilled') {
+      trackMetadata = [...trackMetadataResult.value.bySpotifyId.values()];
+      metadataCounters = trackMetadataResult.value.counters;
+    } else {
+      const message = errorMessage(trackMetadataResult.reason);
+      logger.warn('Failed to fetch ReccoBeats track metadata; continuing without metadata aggregates', {
+        playlistId,
+        trackCount: uniqueTrackCount,
+        error: message,
+      });
+      errors.push({ source: 'reccobeats:track-metadata', message });
+    }
+
+    this.recordReccoBeatsCoverageWarning(uniqueTrackCount, audioFeatures, errors);
+
+    const audioFeaturesResolvedCount = audioCounters.resolvedCount;
+    const trackMetadataResolvedCount = metadataCounters.resolvedCount;
+    const enrichmentResolvedTrackCount = Math.min(
+      audioFeaturesResolvedCount,
+      trackMetadataResolvedCount
+    );
 
     await onProgress?.(85);
-    return { audioFeatures, trackMetadata };
+    return {
+      audioFeatures,
+      trackMetadata,
+      uniqueTrackCount,
+      audioFeaturesResolvedCount,
+      trackMetadataResolvedCount,
+      enrichmentResolvedTrackCount,
+    };
   }
 
   private async fetchSpotifyArtistsForGenres(
@@ -320,7 +318,7 @@ export class AnalysisService {
   }
 
   private recordReccoBeatsCoverageWarning(
-    trackIds: string[],
+    uniqueTrackCount: number,
     audioFeatures: ReccoBeatsAudioFeature[],
     errors: Array<{ source: string; message: string }>
   ): void {
@@ -328,168 +326,16 @@ export class AnalysisService {
       return;
     }
 
-    const totalTrackCount = new Set(trackIds.filter(Boolean)).size;
-    if (totalTrackCount === 0) {
+    if (uniqueTrackCount === 0) {
       return;
     }
 
-    const coverageRatio = audioFeatures.length / totalTrackCount;
+    const coverageRatio = audioFeatures.length / uniqueTrackCount;
     if (coverageRatio === 0 || coverageRatio < 0.5) {
       errors.push({
         source: 'reccobeats:coverage',
-        message: `Audio features available for ${audioFeatures.length} of ${totalTrackCount} tracks.`,
+        message: `Audio features available for ${audioFeatures.length} of ${uniqueTrackCount} tracks.`,
       });
-    }
-  }
-
-  private rawEnrichmentCacheKey(playlistId: string): string {
-    // Deliberately omits `userId`: raw ReccoBeats data is derived from the
-    // playlist's tracks alone, not from anything user-specific, so sharing it
-    // across users for the same playlist is safe and avoids duplicate
-    // fetches. This differs from the `analysis:{playlistId}:{userId}:*`
-    // namespacing used by the job status/results keys.
-    return `analysis:playlist:${playlistId}:raw-enrichment`;
-  }
-
-  private async fetchReccoBeatsAudioFeatures(
-    trackIds: string[],
-    onGroupComplete?: () => Promise<void>
-  ): Promise<ReccoBeatsAudioFeature[]> {
-    const uniqueIds = [...new Set(trackIds.filter(Boolean))];
-    if (uniqueIds.length === 0) return [];
-
-    const batches = chunk(uniqueIds, BATCH_SIZE);
-    const allFeatures: ReccoBeatsAudioFeature[] = [];
-
-    // Process batches with bounded concurrency
-    for (let i = 0; i < batches.length; i += CONCURRENCY) {
-      const group = batches.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(
-        group.map((batch) => this.fetchReccoBeatsAudioFeaturesBatch(batch))
-      );
-      for (const features of results) {
-        allFeatures.push(...features);
-      }
-      await onGroupComplete?.();
-      if (i + CONCURRENCY < batches.length) {
-        await sleep(RECCOBEATS_JITTER_DELAY_MS);
-      }
-    }
-
-    return allFeatures;
-  }
-
-  private async fetchReccoBeatsAudioFeaturesBatch(
-    batchIds: string[]
-  ): Promise<ReccoBeatsAudioFeature[]> {
-    const url = new URL(`${this.reccoBeatsUrl}/audio-features`);
-    for (const trackId of batchIds) {
-      url.searchParams.append('ids', trackId);
-    }
-
-    let response: Response;
-    try {
-      response = await this.fetchWithRetry(url.toString());
-    } catch (error) {
-      throw new Error(`ReccoBeats API error: ${errorMessage(error)}`, { cause: error });
-    }
-
-    if (!response.ok) {
-      throw new Error(`ReccoBeats API error: HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const parsed = await this.parseReccoBeatsResponse(response, 'audio-features', batchIds.length);
-    const rawData = parsed.data;
-    if (!this.isReccoBeatsAudioFeaturesResponse(rawData)) {
-      logger.warn('Invalid ReccoBeats audio features response shape', {
-        endpoint: 'audio-features',
-        status: response.status,
-        batchSize: batchIds.length,
-        bodyPreview: parsed.bodyPreview,
-      });
-      throw new Error('Invalid ReccoBeats audio features response shape');
-    }
-
-    return rawData.content;
-  }
-
-  private async fetchReccoBeatsTrackMetadata(
-    trackIds: string[],
-    onGroupComplete?: () => Promise<void>
-  ): Promise<ReccoBeatsTrackMetadata[]> {
-    const uniqueIds = [...new Set(trackIds.filter(Boolean))];
-    if (uniqueIds.length === 0) return [];
-
-    const batches = chunk(uniqueIds, BATCH_SIZE);
-    const allMetadata: ReccoBeatsTrackMetadata[] = [];
-
-    for (let i = 0; i < batches.length; i += CONCURRENCY) {
-      const group = batches.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(
-        group.map((batch) => this.fetchReccoBeatsTrackMetadataBatch(batch))
-      );
-      for (const metadata of results) {
-        allMetadata.push(...metadata);
-      }
-      await onGroupComplete?.();
-    }
-
-    return allMetadata;
-  }
-
-  private async fetchReccoBeatsTrackMetadataBatch(
-    batchIds: string[]
-  ): Promise<ReccoBeatsTrackMetadata[]> {
-    const url = new URL(`${this.reccoBeatsUrl}/track`);
-    for (const trackId of batchIds) {
-      url.searchParams.append('ids', trackId);
-    }
-
-    let response: Response;
-    try {
-      response = await this.fetchWithRetry(url.toString());
-    } catch (error) {
-      throw new Error(`ReccoBeats API error: ${errorMessage(error)}`, { cause: error });
-    }
-
-    if (!response.ok) {
-      throw new Error(`ReccoBeats API error: HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const parsed = await this.parseReccoBeatsResponse(response, 'track', batchIds.length);
-    const rawData = parsed.data;
-    if (!this.isReccoBeatsTrackMetadataResponse(rawData)) {
-      logger.warn('Invalid ReccoBeats track metadata response shape', {
-        endpoint: 'track',
-        status: response.status,
-        batchSize: batchIds.length,
-        bodyPreview: parsed.bodyPreview,
-      });
-      throw new Error('Invalid ReccoBeats track metadata response shape');
-    }
-
-    return rawData.content;
-  }
-
-  private async parseReccoBeatsResponse(
-    response: Response,
-    endpoint: 'audio-features' | 'track',
-    batchSize: number
-  ): Promise<{ data: unknown; bodyPreview: string }> {
-    const bodyText = await response.text();
-    const bodyPreview = truncateResponseBody(bodyText);
-
-    try {
-      return { data: JSON.parse(bodyText), bodyPreview };
-    } catch (error) {
-      logger.warn('Invalid ReccoBeats JSON response', {
-        endpoint,
-        status: response.status,
-        batchSize,
-        bodyPreview,
-        error: errorMessage(error),
-      });
-      throw new Error(`Invalid ReccoBeats ${endpoint} response JSON`, { cause: error });
     }
   }
 
@@ -663,75 +509,6 @@ export class AnalysisService {
     }
 
     return summary;
-  }
-
-  private isReccoBeatsAudioFeaturesResponse(data: unknown): data is ReccoBeatsAudioFeaturesResponse {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const content = (data as { content?: unknown }).content;
-    return Array.isArray(content) && content.every((item) => this.isReccoBeatsAudioFeature(item));
-  }
-
-  private isReccoBeatsAudioFeature(data: unknown): data is ReccoBeatsAudioFeature {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    return typeof record.id === 'string'
-      && typeof record.href === 'string'
-      && typeof record.acousticness === 'number'
-      && typeof record.danceability === 'number'
-      && typeof record.energy === 'number'
-      && typeof record.instrumentalness === 'number'
-      && typeof record.liveness === 'number'
-      && typeof record.loudness === 'number'
-      && typeof record.speechiness === 'number'
-      && typeof record.tempo === 'number'
-      && typeof record.valence === 'number';
-  }
-
-  private isReccoBeatsTrackMetadataResponse(data: unknown): data is ReccoBeatsTrackMetadataResponse {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const content = (data as { content?: unknown }).content;
-    return Array.isArray(content) && content.every((item) => this.isReccoBeatsTrackMetadata(item));
-  }
-
-  private isReccoBeatsTrackMetadata(data: unknown): data is ReccoBeatsTrackMetadata {
-    if (!data || typeof data !== 'object') {
-      return false;
-    }
-
-    const record = data as Record<string, unknown>;
-    if (typeof record.id !== 'string' || typeof record.trackTitle !== 'string') {
-      return false;
-    }
-    if (typeof record.durationMs !== 'number') {
-      return false;
-    }
-    if (!Array.isArray(record.artists)) {
-      return false;
-    }
-    const artistsValid = record.artists.every((artist) => {
-      if (!artist || typeof artist !== 'object') return false;
-      const a = artist as Record<string, unknown>;
-      return typeof a.id === 'string' && typeof a.name === 'string' && typeof a.href === 'string';
-    });
-    if (!artistsValid) {
-      return false;
-    }
-    if (record.isrc !== undefined && typeof record.isrc !== 'string') {
-      return false;
-    }
-    if (record.popularity !== undefined && typeof record.popularity !== 'number') {
-      return false;
-    }
-    return true;
   }
 
   private countArtists(tracks: SpotifyTrack[]): Record<string, number> {

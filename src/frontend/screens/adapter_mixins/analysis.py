@@ -11,7 +11,7 @@ from ...services.enrichment_errors import has_retriable_reccobeats_errors
 # `src/backend/utils/constants.ts`. A single frontend build only ever talks to
 # one backend schema, so an exact-match comparison (not numeric `>=`) is
 # sufficient and avoids needing a shared config module.
-EXPECTED_ANALYSIS_SCHEMA_VERSION = "1.0"
+EXPECTED_ANALYSIS_SCHEMA_VERSION = "1.1"
 
 
 class AnalysisMixin:

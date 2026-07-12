@@ -42,7 +42,20 @@
 - `abc123:tracks:playlist_456`
 - `abc123:analysis:playlist_456`
 
-**Why:** Flat key names collide across users. Namespacing allows safe, targeted invalidation of a single user's data without affecting others.
+**Exception — global derived data:** Non-user-specific derived enrichment may use
+`global:<resource_type>:<identifier>` (and nested segments as needed). ReccoBeats
+per-track audio features / track metadata / per-endpoint absent sentinels are
+shared across users because they depend only on the Spotify track ID:
+
+- `global:reccobeats:audio-features:{spotifyTrackId}`
+- `global:reccobeats:track-metadata:{spotifyTrackId}`
+- `global:reccobeats:absent:audio-features:{spotifyTrackId}`
+- `global:reccobeats:absent:track-metadata:{spotifyTrackId}`
+
+Do **not** “fix” these into `<user_id>:…` form. User analysis status/results
+remain user-namespaced (`analysis:{playlistId}:{userId}:*`).
+
+**Why:** Flat key names collide across users. Namespacing allows safe, targeted invalidation of a single user's data without affecting others. The `global:` prefix makes the intentional share-across-users exception explicit for agents and reviewers.
 
 ---
 

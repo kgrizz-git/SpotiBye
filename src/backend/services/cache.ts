@@ -36,6 +36,11 @@ export class CacheService {
     }
   }
 
+  /**
+   * Delete keys matching `prefix` from a **single** `list()` page (≤1000 keys).
+   * Prefer {@link clearPrefixPaginated} for large prefixes such as
+   * `global:reccobeats:` — this method can miss keys past the first page.
+   */
   async clear(prefix: string): Promise<boolean> {
     try {
       const list = await this.kv.list({ prefix });
@@ -44,6 +49,27 @@ export class CacheService {
       return true;
     } catch (error) {
       console.error('Cache clear error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Paginated prefix delete using `kv.list({ prefix, cursor })` until
+   * `list_complete`. Required for large prefixes (especially `global:reccobeats:`).
+   */
+  async clearPrefixPaginated(prefix: string): Promise<boolean> {
+    try {
+      let cursor: string | undefined;
+      do {
+        const list = await this.kv.list(
+          cursor ? { prefix, cursor } : { prefix }
+        );
+        await Promise.all(list.keys.map((key) => this.kv.delete(key.name)));
+        cursor = list.list_complete ? undefined : list.cursor;
+      } while (cursor);
+      return true;
+    } catch (error) {
+      console.error('Cache clearPrefixPaginated error:', error);
       return false;
     }
   }

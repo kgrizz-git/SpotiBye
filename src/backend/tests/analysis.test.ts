@@ -568,7 +568,7 @@ describe('AnalysisService', () => {
         return new Response(JSON.stringify({
           content: ids.map((id) => ({
             id: `metadata-${id}`,
-            trackTitle: `Track ${id}`,
+            href: `https://open.spotify.com/track/${id}`, trackTitle: `Track ${id}`,
             artists: [],
             durationMs: 120000,
             popularity: 50,
@@ -715,12 +715,12 @@ describe('AnalysisService', () => {
         return new Response(JSON.stringify({
           content: [
             {
-              id: 'm1', trackTitle: 'Track 1',
+              id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
               artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/a1' }],
               durationMs: 120000, isrc: 'ISRC1', popularity: 40,
             },
             {
-              id: 'm2', trackTitle: 'Track 2',
+              id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
               artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/a2' }],
               durationMs: 120000, popularity: 80,
             },
@@ -798,14 +798,14 @@ describe('AnalysisService', () => {
     expect(result.errors).toEqual(
       expect.arrayContaining([expect.objectContaining({ source: 'reccobeats:track-metadata' })])
     );
-    expect(result.schema_version).toBe('1.0');
+    expect(result.schema_version).toBe('1.1');
     expect(warnSpy).toHaveBeenCalledWith(
       'Failed to fetch ReccoBeats track metadata; continuing without metadata aggregates',
       expect.objectContaining({ playlistId: 'playlist1' })
     );
   });
 
-  it('serves ReccoBeats enrichment from the raw-enrichment cache without fetching', async () => {
+  it('serves ReccoBeats enrichment from the global per-track cache without fetching', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
@@ -816,25 +816,18 @@ describe('AnalysisService', () => {
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
 
     const cacheKv = kvNamespace({
-      'analysis:playlist:playlist1:raw-enrichment': {
-        audio_features: [
-          {
-            id: 'r1', href: 'https://open.spotify.com/track/track1',
-            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
-            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
-            isrc: 'ISRC1',
-          },
-        ],
-        track_metadata: [
-          {
-            id: 'm1', trackTitle: 'Track 1',
-            artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/a1' }],
-            durationMs: 120000, isrc: 'ISRC1', popularity: 50,
-          },
-        ],
-        schema_version: '1.0',
-        cached_at: '2026-07-01T00:00:00.000Z',
-        track_count: 1,
+      'global:reccobeats:audio-features:track1': {
+        id: 'r1', href: 'https://open.spotify.com/track/track1',
+        acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+        liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+        isrc: 'ISRC1',
+      },
+      'global:reccobeats:track-metadata:track1': {
+        id: 'm1',
+        href: 'https://open.spotify.com/track/track1',
+        trackTitle: 'Track 1',
+        artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/a1' }],
+        durationMs: 120000, isrc: 'ISRC1', popularity: 50,
       },
     });
     const cache = new CacheService(cacheKv);
@@ -845,9 +838,13 @@ describe('AnalysisService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect((result as any).audio_features.track_count).toBe(1);
     expect((result as any).reccobeats_metadata.isrc_available).toBe(1);
+    expect(result.unique_track_count).toBe(1);
+    expect(result.audio_features_resolved_count).toBe(1);
+    expect(result.track_metadata_resolved_count).toBe(1);
+    expect(result.enrichment_resolved_track_count).toBe(1);
   });
 
-  it('writes fetched ReccoBeats enrichment to the raw-enrichment cache', async () => {
+  it('writes fetched ReccoBeats enrichment to the global per-track cache', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       if (url.pathname === '/v1/track') {
@@ -881,9 +878,14 @@ describe('AnalysisService', () => {
     await service.analyzePlaylist('playlist1', 'user1', 'job1');
 
     expect(cacheKv.put).toHaveBeenCalledWith(
-      'analysis:playlist:playlist1:raw-enrichment',
-      expect.stringContaining('"track_count":1'),
-      { expirationTtl: 86400 }
+      'global:reccobeats:audio-features:track1',
+      expect.stringContaining('"href":"https://open.spotify.com/track/track1"'),
+      { expirationTtl: 15_552_000 }
+    );
+    expect(cacheKv.put).toHaveBeenCalledWith(
+      'global:reccobeats:absent:track-metadata:track1',
+      expect.stringContaining('"absent":true'),
+      { expirationTtl: 604_800 }
     );
   });
 });
@@ -1175,8 +1177,12 @@ describe('Analysis Routes', () => {
           },
         },
         insights: [],
+        unique_track_count: 2,
+        audio_features_resolved_count: 2,
+        track_metadata_resolved_count: 2,
+        enrichment_resolved_track_count: 2,
         errors: [],
-        schema_version: '1.0',
+        schema_version: '1.1',
       }));
 
       const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
@@ -1230,10 +1236,43 @@ describe('Analysis Routes', () => {
       expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
       expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:status');
     });
+
+    it('deletes both KV keys and returns 404 when cached results use schema_version 1.0 (stale after 1.1 bump)', async () => {
+      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
+        job_id: 'test-job-id',
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        status: 'completed',
+        computed_at: '2026-01-01T00:00:00.000Z',
+        completed_at: '2026-01-01T00:00:01.000Z',
+        overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
+        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
+        genre_distribution: {},
+        insights: [],
+        errors: [],
+        schema_version: '1.0',
+      }));
+
+      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(404);
+      expect(data.error).toHaveProperty('code', 'ANALYSIS_RESULTS_NOT_FOUND');
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:status');
+    });
   });
 
   describe('DELETE /analysis/playlist/:id', () => {
-    it('deletes user analysis results and shared raw ReccoBeats enrichment', async () => {
+    it('deletes user analysis results and legacy raw-enrichment key, not global per-track keys', async () => {
       const request = new Request('http://localhost/analysis/playlist/playlist1', {
         method: 'DELETE',
         headers: {

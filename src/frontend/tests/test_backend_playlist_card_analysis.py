@@ -295,7 +295,7 @@ class TestAnalysisPopupRendering:
     def test_renders_all_nine_audio_features_key_mode_and_metadata(self) -> None:
         card = _card(total_tracks=10)
         analysis = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "errors": [],
             "overview": {"formatted_duration": "30m 0s"},
             "genre_distribution": {},
@@ -392,7 +392,7 @@ class TestAnalysisPopupRendering:
     def test_renders_partial_failure_banner_from_errors(self) -> None:
         card = _card()
         analysis = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "errors": [
                 {"source": "spotify:artists", "message": "HTTP 429: rate limited"},
                 {
@@ -428,7 +428,7 @@ class TestAnalysisPopupRendering:
     def test_no_crash_without_audio_features(self) -> None:
         card = _card()
         analysis = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "errors": [],
             "overview": {},
             "genre_distribution": {},
@@ -446,7 +446,7 @@ class TestAnalysisPopupRendering:
     def test_na_style_missing_averages_render_no_audio_features_section(self) -> None:
         card = _card()
         analysis = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "errors": [],
             "overview": {},
             "genre_distribution": {},

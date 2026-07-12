@@ -114,12 +114,12 @@ describe('openapi.yaml AnalysisResultsResponse reconciliation', () => {
           JSON.stringify({
             content: [
               {
-                id: 'm1', trackTitle: 'Track 1',
+                id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
                 artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/artist-track1' }],
                 durationMs: 200000, isrc: 'ISRC1', popularity: 55,
               },
               {
-                id: 'm2', trackTitle: 'Track 2',
+                id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
                 artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/artist-track2' }],
                 durationMs: 200000, popularity: 75,
               },

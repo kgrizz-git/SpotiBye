@@ -21,8 +21,12 @@ const analysisResult = {
   status: 'completed' as const,
   computed_at: '2026-06-19T00:00:00.000Z',
   completed_at: '2026-06-19T00:00:01.000Z',
+  unique_track_count: 0,
+  audio_features_resolved_count: 0,
+  track_metadata_resolved_count: 0,
+  enrichment_resolved_track_count: 0,
   errors: [],
-  schema_version: '1.0',
+  schema_version: '1.1',
 };
 
 afterEach(() => {

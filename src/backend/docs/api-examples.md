@@ -326,13 +326,17 @@ const resultsResponse = await fetch(`https://spotibye-api.workers.dev/analysis/p
       "retrieved_at": "2026-07-07T12:00:09.000Z"
     },
     "errors": [],
-    "schema_version": "1.0"
+    "unique_track_count": 100,
+    "audio_features_resolved_count": 100,
+    "track_metadata_resolved_count": 98,
+    "enrichment_resolved_track_count": 98,
+    "schema_version": "1.1"
   },
   "meta": { "timestamp": "2026-07-07T12:00:11.000Z" }
 }
 ```
 
-`audio_features` and `reccobeats_metadata` come from ReccoBeats and are best-effort: `errors` is always present (empty on full success) and lists any partial failures (e.g. `{"source": "reccobeats:track-metadata", "message": "..."}"`) instead of failing the whole analysis. If cached results predate the current `schema_version`, `GET .../results` returns `404 ANALYSIS_RESULTS_NOT_FOUND` and a subsequent POST enqueues a fresh job.
+`audio_features` and `reccobeats_metadata` come from ReccoBeats and are best-effort: `errors` is always present (empty on full success) and lists any partial failures (e.g. `{"source": "reccobeats:track-metadata", "message": "..."}"`) instead of failing the whole analysis. Completeness counts compare unique playlist track IDs to hits plus per-endpoint absent sentinels (not `audio_features.track_count` alone). If cached results predate the current `schema_version`, `GET .../results` returns `404 ANALYSIS_RESULTS_NOT_FOUND` and a subsequent POST enqueues a fresh job.
 
 ## Export Functionality
 
@@ -943,7 +947,11 @@ class MockSpotiByeAPI extends SpotiByeAPI {
       audio_features: { track_count: 25, averages: { tempo: 120, energy: 0.75 } },
       genre_distribution: { Pop: { count: 15, percentage: 60 }, Rock: { count: 10, percentage: 40 } },
       errors: [],
-      schema_version: '1.0'
+      unique_track_count: 25,
+      audio_features_resolved_count: 25,
+      track_metadata_resolved_count: 25,
+      enrichment_resolved_track_count: 25,
+      schema_version: '1.1'
     };
   }
 }

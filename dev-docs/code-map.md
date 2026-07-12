@@ -274,8 +274,10 @@ graph TD
 | [services/spotify.ts](../src/backend/services/spotify.ts) | **Only** caller of `api.spotify.com` — playlists, tracks, audio features |
 | [services/spotify-auth.ts](../src/backend/services/spotify-auth.ts) | OAuth code exchange, token refresh |
 | [services/jwt.ts](../src/backend/services/jwt.ts) | HMAC-SHA256 JWT sign/verify (no external library) |
-| [services/cache.ts](../src/backend/services/cache.ts) | KV wrapper with namespaced keys |
+| [services/cache.ts](../src/backend/services/cache.ts) | KV wrapper with namespaced keys + paginated `clearPrefixPaginated` |
 | [services/analysis.ts](../src/backend/services/analysis.ts) | Computes playlist analysis from Spotify track metadata and best-effort artist metadata |
+| [services/reccobeats-track-cache.ts](../src/backend/services/reccobeats-track-cache.ts) | Global per-track ReccoBeats resolve/cache (`global:reccobeats:*`) |
+| [utils/reccobeats-helpers.ts](../src/backend/utils/reccobeats-helpers.ts) | `parseSpotifyTrackIdFromHref`, row validators, content→Map mapping |
 | [services/analysis-job.ts](../src/backend/services/analysis-job.ts) | Queue job runner — loads/refreshes session token, enforces idempotency, persists live status/results |
 | [services/analysis-status-object.ts](../src/backend/services/analysis-status-object.ts) | Durable Object status store for live playlist-analysis progress |
 | [services/export.ts](../src/backend/services/export.ts) | CSV/XLSX/JSON generation, cursor persistence in KV |
@@ -291,17 +293,18 @@ graph TD
 
 ## Known Dead / Stub Code
 
-None currently. `services/reccobeats.ts` (previously a test stub) has been removed. Analysis is now performed locally by `services/analysis.ts` using Spotify track metadata only.
+None currently. `services/reccobeats.ts` (previously a test stub) has been removed. Playlist analysis uses `services/analysis.ts` plus `services/reccobeats-track-cache.ts` for ReccoBeats enrichment.
 
 ---
 
-## Analysis: Local Computation (no external API)
+## Analysis: Spotify + ReccoBeats enrichment
 
-`services/analysis.ts` fetches all tracks for a playlist via `services/spotify.ts` and computes stats locally, with best-effort ReccoBeats audio feature enrichment:
+`services/analysis.ts` fetches all tracks for a playlist via `services/spotify.ts` and computes stats locally, with best-effort ReccoBeats enrichment through `services/reccobeats-track-cache.ts` (global per-track KV, not playlist-scoped blobs):
 - Overview: track count, total duration, average duration
 - Artists: unique artist count, top artists by frequency, diversity score
 - Genres: best-effort distribution across Spotify artist genre tags
 - Audio features: best-effort average ReccoBeats acousticness, danceability, energy, tempo, valence, and related fields
+- Completeness: `unique_track_count` vs endpoint-specific resolved counts (hits + absents)
 - Insights: generated text summaries
 
 Artist metadata is fetched through individual Spotify `GET /artists/{id}` requests. Do not reintroduce the removed batch endpoint `GET /artists?ids=...`.

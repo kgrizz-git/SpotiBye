@@ -103,20 +103,20 @@ Document this exception in `dev-docs/guides/golden-principles.md` when B1 lands.
 
 ### Phase B0 — Types, parser, contract (prerequisite)
 
-- [ ] **B0.1.** Add optional `href?: string` to `ReccoBeatsTrackMetadata`; optional `ean`, `upc`, `availableCountries` as optional boundary fields.
-- [ ] **B0.2.** Make `href` **optional** in **both** row-level validators (`isReccoBeatsAudioFeature` and `isReccoBeatsTrackMetadata`). Today `ReccoBeatsAudioFeature.href` is required — that defeats per-row batch resilience if any AF row omits it. At cache-write / map time: skip + log rows with missing/unparseable `href`; treat as fetch miss for that request; **do not** write negative sentinel for href-parse failures. Never treat ReccoBeats UUID `id` as a Spotify track ID.
-- [ ] **B0.3.** Add `parseSpotifyTrackIdFromHref()` in `src/backend/utils/reccobeats-helpers.ts` (unit tests: `https://open.spotify.com/track/{id}`, query/hash strip; also accept `spotify:track:{id}` defensively). Mirror behavior of `extract_spotify_id_from_href` in `scripts/test_reccobeats_coverage.py` (cross-reference in a comment; do not share runtime with the script).
-- [ ] **B0.4.** Refactor batch fetch helpers to return `Map<spotifyTrackId, row>` using href parser:
+- [x] **B0.1.** Add optional `href?: string` to `ReccoBeatsTrackMetadata`; optional `ean`, `upc`, `availableCountries` as optional boundary fields.
+- [x] **B0.2.** Make `href` **optional** in **both** row-level validators (`isReccoBeatsAudioFeature` and `isReccoBeatsTrackMetadata`). Today `ReccoBeatsAudioFeature.href` is required — that defeats per-row batch resilience if any AF row omits it. At cache-write / map time: skip + log rows with missing/unparseable `href`; treat as fetch miss for that request; **do not** write negative sentinel for href-parse failures. Never treat ReccoBeats UUID `id` as a Spotify track ID.
+- [x] **B0.3.** Add `parseSpotifyTrackIdFromHref()` in `src/backend/utils/reccobeats-helpers.ts` (unit tests: `https://open.spotify.com/track/{id}`, query/hash strip; also accept `spotify:track:{id}` defensively). Mirror behavior of `extract_spotify_id_from_href` in `scripts/test_reccobeats_coverage.py` (cross-reference in a comment; do not share runtime with the script).
+- [x] **B0.4.** Refactor batch fetch helpers to return `Map<spotifyTrackId, row>` using href parser:
   - **Do not** reject the whole batch via `content.every(...)` if one row is malformed.
   - Iterate `content`, accept rows that pass row-level guards + parseable `href`, skip/log the rest.
 - [x] **B0.5.** Update `dev-docs/reccobeats-api-contract.md` — **done 2026-07-12**. Before coding B0, **re-probe** `4cOdK2wGLETKBW3PvgPWoT` on both `/audio-features` and `/track` (expect `content: []`) — negative-cache model depends on this still holding.
-- [ ] **B0.6.** Backend tests: batch with known + missing ID → correct miss set; href parsing; one malformed / href-less AF or metadata row does not fail the batch.
+- [x] **B0.6.** Backend tests: batch with known + missing ID → correct miss set; href parsing; one malformed / href-less AF or metadata row does not fail the batch.
 
 ### Phase B1 — Global per-track backend cache service
 
-- [ ] **B1.1.** Add constants: `RECCOBEATS_TRACK_ENRICHMENT_TTL_SECONDS = 15_552_000` (6 mo), `RECCOBEATS_NEGATIVE_CACHE_TTL_SECONDS = 604_800` (7 d). Note: `popularity` **is** consumed (analysis `popularity_min`/`max` UI) and shares the 6 mo metadata TTL as an intentional freshness tradeoff; **Refresh track info** is the escape hatch.
-- [ ] **B1.1b.** Update `dev-docs/guides/golden-principles.md` §4: allow `global:<resource_type>:<identifier>` for non-user-specific derived data (ReccoBeats per-track enrichment).
-- [ ] **B1.2.** Create `src/backend/services/reccobeats-track-cache.ts`:
+- [x] **B1.1.** Add constants: `RECCOBEATS_TRACK_ENRICHMENT_TTL_SECONDS = 15_552_000` (6 mo), `RECCOBEATS_NEGATIVE_CACHE_TTL_SECONDS = 604_800` (7 d). Note: `popularity` **is** consumed (analysis `popularity_min`/`max` UI) and shares the 6 mo metadata TTL as an intentional freshness tradeoff; **Refresh track info** is the escape hatch.
+- [x] **B1.1b.** Update `dev-docs/guides/golden-principles.md` §4: allow `global:<resource_type>:<identifier>` for non-user-specific derived data (ReccoBeats per-track enrichment).
+- [x] **B1.2.** Create `src/backend/services/reccobeats-track-cache.ts`:
   - Preserve existing **batch size ≤ 30** and concurrency bounds (do not unbounded-fetch).
   - `resolveAudioFeatures(trackIds, { force? })` and `resolveTrackMetadata(trackIds, { force? })`:
     - **Fetch misses internally**; return a **merged complete** `Map<spotifyTrackId, row>` (hits + newly fetched).
@@ -128,8 +128,8 @@ Document this exception in `dev-docs/guides/golden-principles.md` when B1 lands.
   - **Write resilience:** each endpoint resolver writes its own successful positive/absent cache entries independently. Do not let a track-metadata write/fetch failure discard already-successful audio-feature cache writes.
   - **In-flight dedup:** module-level `Map<string, Promise>` keyed by `` `${endpoint}:${force ? 'force:' : ''}${hash(sortedIds)}` ``; remove entry on settle. Use a Worker-compatible stable hash/key (global `crypto.subtle` or deterministic join for ≤30 IDs), not Node-only `crypto` APIs. Force and non-force do **not** share a key. **Limitation:** coalesce is **per Worker isolate only** — concurrent requests on different isolates can still duplicate ReccoBeats HTTP (blast radius bounded by batch ≤30); do not rely on this Map to cap global QPS under a thundering herd.
   - **`force: true`**: delete that endpoint’s positive **and** absent keys for every requested ID **before** refetching (chunked deletes of known keys).
-- [ ] **B1.2a.** Add `clearPrefixPaginated(prefix)` (on `CacheService` or track-cache helpers) using `kv.list({ prefix, cursor })` until `list_complete`. Keep existing `clear()` for small prefixes if desired, but **document** that large prefixes (especially `global:reccobeats:`) must use the paginated helper. Optional ops script: `scripts/flush-reccobeats-cache.ts`.
-- [ ] **B1.2b.** Schema + aggregation for completeness fields:
+- [x] **B1.2a.** Add `clearPrefixPaginated(prefix)` (on `CacheService` or track-cache helpers) using `kv.list({ prefix, cursor })` until `list_complete`. Keep existing `clear()` for small prefixes if desired, but **document** that large prefixes (especially `global:reccobeats:`) must use the paginated helper. Optional ops script: `scripts/flush-reccobeats-cache.ts`.
+- [x] **B1.2b.** Schema + aggregation for completeness fields:
   - Add endpoint-specific completeness counts to `AnalysisResult` / `PlaylistInsights` / `reccobeats_metadata` as appropriate:
     - `unique_track_count`: unique Spotify track IDs in the playlist.
     - `audio_features_resolved_count`: unique IDs that are ReccoBeats audio-feature hits **or** endpoint-specific absents.
@@ -140,9 +140,9 @@ Document this exception in `dev-docs/guides/golden-principles.md` when B1 lands.
   - Update `generatePlaylistInsights` (or equivalent) to populate these fields from the **unique** ID set and the `resolve*` endpoint counters/sets (duplicates in a playlist do not inflate either side of the completeness comparison).
   - Bump `ANALYSIS_SCHEMA_VERSION` (backend `constants.ts`) and `EXPECTED_ANALYSIS_SCHEMA_VERSION` (frontend `analysis.py`) in lockstep (e.g. `"1.0"` → `"1.1"`). Ship backend + frontend together when possible; existing mismatch logic clears stale `"1.0"` caches — document one-time re-fetch in CHANGELOG.
   - Update OpenAPI / openapi-schema tests and any result-shape assertions.
-- [ ] **B1.3.** Wire `AnalysisService.fetchReccoBeatsEnrichment` to track-cache service; **remove** playlist `raw-enrichment` blob read/write (A1 delete of that key becomes a harmless no-op). Accept `force_enrichment` from the job path (see B3.5). Analysis/export callers should resolve audio features first or tolerate metadata failure independently; metadata failure must not block successful audio-feature analysis/export data.
-- [ ] **B1.4.** `DELETE /analysis/playlist/:id` clears user status/results and optional playlist manifest/raw-enrichment stopgap only — **not** global per-track keys.
-- [ ] **B1.5.** Tests: cache hit skips HTTP and skips absent get; cross-user reuse; per-endpoint absent; force clears correct keys; concurrent force coalesces; chunked KV; batch size respected; one bad content row does not fail batch; schema bump invalidates old results.
+- [x] **B1.3.** Wire `AnalysisService.fetchReccoBeatsEnrichment` to track-cache service; **remove** playlist `raw-enrichment` blob read/write (A1 delete of that key becomes a harmless no-op). Accept `force_enrichment` from the job path (see B3.5). Analysis/export callers should resolve audio features first or tolerate metadata failure independently; metadata failure must not block successful audio-feature analysis/export data.
+- [x] **B1.4.** `DELETE /analysis/playlist/:id` clears user status/results and optional playlist manifest/raw-enrichment stopgap only — **not** global per-track keys.
+- [x] **B1.5.** Tests: cache hit skips HTTP and skips absent get; cross-user reuse; per-endpoint absent; force clears correct keys; concurrent force coalesces; chunked KV; batch size respected; one bad content row does not fail batch; schema bump invalidates old results.
 
 ### Phase B2 — Playlist composition & offline-aware frontend
 

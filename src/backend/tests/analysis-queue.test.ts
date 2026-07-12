@@ -25,8 +25,12 @@ const analysisResult = {
   },
   genre_distribution: {},
   insights: [],
+  unique_track_count: 1,
+  audio_features_resolved_count: 0,
+  track_metadata_resolved_count: 0,
+  enrichment_resolved_track_count: 0,
   errors: [],
-  schema_version: '1.0',
+  schema_version: '1.1',
 };
 
 const analysisMessage = {

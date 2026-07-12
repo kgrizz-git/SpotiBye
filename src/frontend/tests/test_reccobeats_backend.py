@@ -16,7 +16,7 @@ from src.frontend.utils.network_utils import NetworkError, ServerError
 # ---------------------------------------------------------------------------
 
 COMPLETED_RESULTS: dict[str, Any] = {
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "status": "completed",
     "errors": [],
 }
@@ -162,7 +162,7 @@ class TestStaleResultsRecovery:
             "status": "completed",
             "progress": 100,
         }
-        fresh_results = {"schema_version": "1.0", "status": "completed"}
+        fresh_results = {"schema_version": "1.1", "status": "completed"}
         backend_client.get_analysis_results.side_effect = [
             BackendAPIError(
                 "Analysis results not found",
@@ -195,7 +195,7 @@ class TestStaleResultsRecovery:
             "progress": 100,
         }
         stale_results = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "status": "completed",
             "errors": [
                 {
@@ -223,7 +223,7 @@ class TestStaleResultsRecovery:
     ) -> None:
         backend_client = make_backend_client()
         backend_client.get_analysis_results.return_value = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "status": "completed",
             "errors": [
                 {

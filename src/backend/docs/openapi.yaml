@@ -551,7 +551,11 @@ paths:
                         popularity_max: 90
                         retrieved_at: "2026-07-07T12:00:09.000Z"
                       errors: []
-                      schema_version: "1.0"
+                      schema_version: "1.1"
+                      unique_track_count: 100
+                      audio_features_resolved_count: 100
+                      track_metadata_resolved_count: 98
+                      enrichment_resolved_track_count: 98
                     meta:
                       timestamp: "2026-07-07T12:00:11.000Z"
         '401':
@@ -1272,13 +1276,25 @@ components:
             type: string
         reccobeats_metadata:
           $ref: '#/components/schemas/ReccoBeatsAnalysisMetadata'
+        unique_track_count:
+          type: integer
+          description: Unique Spotify track IDs in the playlist (duplicates do not inflate this).
+        audio_features_resolved_count:
+          type: integer
+          description: Unique IDs with a ReccoBeats audio-feature hit or endpoint-specific absent sentinel.
+        track_metadata_resolved_count:
+          type: integer
+          description: Unique IDs with a ReccoBeats track-metadata hit or endpoint-specific absent sentinel.
+        enrichment_resolved_track_count:
+          type: integer
+          description: min(audio_features_resolved_count, track_metadata_resolved_count) for display.
         errors:
           type: array
           items:
             $ref: '#/components/schemas/AnalysisErrorEntry'
         schema_version:
           type: string
-          description: Bumped whenever the result shape changes in a way stale cached results can't satisfy; current value "1.0".
+          description: Bumped whenever the result shape changes in a way stale cached results can't satisfy; current value "1.1".
       required:
         - job_id
         - playlist_id
@@ -1286,6 +1302,10 @@ components:
         - status
         - computed_at
         - completed_at
+        - unique_track_count
+        - audio_features_resolved_count
+        - track_metadata_resolved_count
+        - enrichment_resolved_track_count
         - errors
         - schema_version
 

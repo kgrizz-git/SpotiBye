@@ -72,12 +72,12 @@ describe('AnalysisJobService end-to-end pipeline', () => {
           JSON.stringify({
             content: [
               {
-                id: 'm1', trackTitle: 'Track 1',
+                id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
                 artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/artist1' }],
                 durationMs: 200000, isrc: 'ISRC1', popularity: 55,
               },
               {
-                id: 'm2', trackTitle: 'Track 2',
+                id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
                 artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/artist2' }],
                 durationMs: 200000, popularity: 75,
               },
@@ -146,7 +146,7 @@ describe('AnalysisJobService end-to-end pipeline', () => {
     expect(resultsRaw).not.toBeNull();
     const result = JSON.parse(resultsRaw as string) as AnalysisResult;
 
-    expect(result.schema_version).toBe('1.0');
+    expect(result.schema_version).toBe('1.1');
     expect(result.errors).toEqual([]);
     expect(result.overview?.total_tracks).toBe(2);
     expect(result.audio_features?.track_count).toBe(2);

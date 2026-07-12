@@ -166,6 +166,8 @@ app.delete('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
     const statusStore = new AnalysisStatusStore(c.env.ANALYSIS_STATUS);
 
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
+    // Stopgap: clears legacy playlist-scoped raw-enrichment blob if present.
+    // Global per-track keys (`global:reccobeats:*`) are intentionally NOT cleared.
     const rawEnrichmentKey = `analysis:playlist:${playlistId}:raw-enrichment`;
 
     await Promise.all([
