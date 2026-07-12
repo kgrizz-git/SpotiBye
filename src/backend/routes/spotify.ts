@@ -7,9 +7,14 @@ import type { Env } from '../types/env';
 import type { SpotifyPlaylist } from '../types/spotify';
 import type { Variables } from '../types/variables';
 import { zValidator } from '../validation/z-validator';
-import { IdParamSchema, PaginationQuerySchema } from '../validation/schemas/common';
+import { IdParamSchema, PlaylistDetailsQuerySchema, PlaylistItemsQuerySchema } from '../validation/schemas/common';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+function isForceRefreshRequested(c: Context<{ Bindings: Env; Variables: Variables }>): boolean {
+  const raw = c.req.query('force_refresh');
+  return raw === 'true' || raw === '1';
+}
 
 function extractUpstreamStatus(error: unknown): number | null {
   const message = error instanceof Error ? error.message : String(error);
@@ -103,9 +108,15 @@ app.get('/playlists', async (c) => {
 });
 
 // GET /spotify/playlists/:id - Get playlist details
-app.get('/playlists/:id', zValidator('param', IdParamSchema), async (c) => {
+app.get(
+  '/playlists/:id',
+  zValidator('param', IdParamSchema),
+  zValidator('query', PlaylistDetailsQuerySchema),
+  async (c) => {
   try {
     const { id: playlistId } = c.req.valid('param');
+    c.req.valid('query');
+    const forceRefresh = isForceRefreshRequested(c);
     const accessToken = c.get('access_token');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
@@ -114,9 +125,11 @@ app.get('/playlists/:id', zValidator('param', IdParamSchema), async (c) => {
     // Scope to user: private/collaborative playlists must not be served from
     // another user's warmed cache.
     const cacheKey = `user:${userId}:playlist:${playlistId}`;
-    const cached = await cacheService.get(cacheKey);
-    if (cached) {
-      return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
+    if (!forceRefresh) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
+      }
     }
 
     const playlist = await spotifyService.getPlaylist(playlistId);
@@ -124,7 +137,7 @@ app.get('/playlists/:id', zValidator('param', IdParamSchema), async (c) => {
     // Cache for 10 minutes
     await cacheService.set(cacheKey, playlist, 600);
 
-    return c.json({ data: playlist, meta: { timestamp: new Date().toISOString() } });
+    return c.json({ data: playlist, meta: { timestamp: new Date().toISOString(), cached: false } });
   } catch (error) {
     console.error('Failed to get playlist:', error);
     return c.json({ error: { code: 'PLAYLIST_FETCH_FAILED', message: 'Failed to fetch playlist' } }, { status: 500 as ContentfulStatusCode });
@@ -136,6 +149,7 @@ const handleGetPlaylistItems = async (
   playlistId: string,
   limit: number = 50,
   offset: number = 0,
+  forceRefresh: boolean = false,
 ) => {
   try {
     const accessToken = c.get('access_token');
@@ -147,9 +161,11 @@ const handleGetPlaylistItems = async (
     // Scope to user: private/collaborative playlist items must not be served
     // from another user's warmed cache.
     const cacheKey = `user:${userId}:playlist:${playlistId}:tracks:${limit}:${offset}`;
-    const cached = await cacheService.get(cacheKey);
-    if (cached) {
-      return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
+    if (!forceRefresh) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
+      }
     }
 
     const tracks = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
@@ -157,7 +173,7 @@ const handleGetPlaylistItems = async (
     // Cache for 5 minutes
     await cacheService.set(cacheKey, tracks, 300);
 
-    return c.json({ data: tracks, meta: { timestamp: new Date().toISOString() } });
+    return c.json({ data: tracks, meta: { timestamp: new Date().toISOString(), cached: false } });
   } catch (error) {
     console.error('Failed to get playlist tracks:', error);
     return c.json({ error: { code: 'PLAYLIST_TRACKS_FETCH_FAILED', message: 'Failed to fetch playlist tracks' } }, { status: 500 as ContentfulStatusCode });
@@ -168,11 +184,12 @@ const handleGetPlaylistItems = async (
 app.get(
   '/playlists/:id/items',
   zValidator('param', IdParamSchema),
-  zValidator('query', PaginationQuerySchema),
+  zValidator('query', PlaylistItemsQuerySchema),
   async (c) => {
     const { id } = c.req.valid('param');
     const { limit, offset } = c.req.valid('query');
-    return handleGetPlaylistItems(c, id, limit, offset);
+    const forceRefresh = isForceRefreshRequested(c);
+    return handleGetPlaylistItems(c, id, limit, offset, forceRefresh);
   },
 );
 
@@ -180,11 +197,12 @@ app.get(
 app.get(
   '/playlists/:id/tracks',
   zValidator('param', IdParamSchema),
-  zValidator('query', PaginationQuerySchema),
+  zValidator('query', PlaylistItemsQuerySchema),
   async (c) => {
     const { id } = c.req.valid('param');
     const { limit, offset } = c.req.valid('query');
-    return handleGetPlaylistItems(c, id, limit, offset);
+    const forceRefresh = isForceRefreshRequested(c);
+    return handleGetPlaylistItems(c, id, limit, offset, forceRefresh);
   },
 );
 

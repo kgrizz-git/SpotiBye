@@ -1,12 +1,10 @@
 exclude: |
-  (?x)^(
-    \.venv/|
-    venv/|
-    node_modules/|
-    build/|
-    dist/|
-    backups/|
-  )
+  (?x)^(?:\.venv/|
+         venv/|
+         node_modules/|
+         build/|
+         dist/|
+         backups/)
 
 repos:
   # Secret scanning - prevent secrets from being committed
@@ -39,28 +37,17 @@ repos:
         description: Detect hardcoded secrets using Gitleaks
         stages: [pre-commit]
 
-  # Semgrep - secrets only on commit (fast, no network); full SAST scan deferred to pre-push and CI
+  # Semgrep - secrets on staged files at commit; full SAST scan deferred to pre-push and CI
   - repo: local
     hooks:
       - id: semgrep-secrets
         name: Semgrep Secrets (pre-commit)
-        description: Fast secrets-only scan on commit; full SAST runs pre-push and in CI
+        description: Secrets scan on staged files only; full SAST runs pre-push and in CI
         entry: semgrep --config=p/secrets --error --skip-unknown-extensions
         language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-
-  # Python security (Bandit) - only on Python files
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.8
-    hooks:
-      - id: bandit
-        name: Bandit Python Security
-        description: Security linter for Python code
-        args: ['-c', 'pyproject.toml']
-        additional_dependencies: ['bandit[toml]']
-        files: ".+\\.py$"
+        files: \.(py|ts|tsx|js|jsx|json|ya?ml|toml|md|sh|env|ini|cfg|conf)$
+        types: [file]
+        pass_filenames: true
         stages: [pre-commit]
 
   # Python linting (Ruff)

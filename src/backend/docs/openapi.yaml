@@ -225,6 +225,12 @@ paths:
           schema:
             type: string
           description: Spotify playlist ID
+        - name: force_refresh
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: When true, skip backend KV cache and refetch from Spotify
       responses:
         '200':
           description: Playlist details retrieved successfully
@@ -239,6 +245,7 @@ paths:
                     data:
                       playlist:
                         id: "playlist-123"
+                        snapshot_id: "abc123snapshot"
                         name: "My Favorite Songs"
                         description: "My favorite tracks"
                         tracks_count: 100
@@ -296,6 +303,12 @@ paths:
             default: 0
             minimum: 0
           description: Offset for pagination
+        - name: force_refresh
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: When true, skip backend KV cache and refetch from Spotify
       responses:
         '200':
           description: Playlist items retrieved successfully
@@ -861,6 +874,9 @@ components:
         id:
           type: string
           description: Spotify playlist ID
+        snapshot_id:
+          type: string
+          description: Spotify playlist revision id; changes when track membership changes
         name:
           type: string
           description: Playlist name

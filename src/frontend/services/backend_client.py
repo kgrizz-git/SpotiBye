@@ -251,29 +251,84 @@ class BackendClient:
             return response.get("playlists", response.get("items", []))
         return []
 
-    def get_playlist_details(self, playlist_id: str) -> Dict[str, Any]:
+    def get_playlist_details(
+        self, playlist_id: str, *, force_refresh: bool = False
+    ) -> Dict[str, Any]:
         """Get detailed information about a playlist."""
-        response = self._make_request("GET", f"/spotify/playlists/{playlist_id}")
+        params = {"force_refresh": "true"} if force_refresh else None
+        response = self._make_request(
+            "GET", f"/spotify/playlists/{playlist_id}", params=params
+        )
         return response
 
-    def get_playlist_tracks(self, playlist_id: str) -> List[Dict[str, Any]]:
-        """Get tracks from a playlist.
-
-        Handles three legitimate response shapes from `_make_request`:
-          - A bare list of items (when the backend returns the items array
-            directly inside `{"data": [...]}` and `_make_request` unwraps
-            it).
-          - A dict with an `items` or `tracks` key (the documented
-            `NormalizedPlaylistItemsResponse` shape).
-          - Anything else (None, unexpected type) — returns `[]` defensively
-            instead of raising `AttributeError` on `.get()`.
-        """
-        response = self._make_request("GET", f"/spotify/playlists/{playlist_id}/items")
+    def _extract_playlist_items_page(self, response: Any) -> tuple[List[Dict[str, Any]], int, int]:
+        """Parse one playlist items page: (items, raw_count, total)."""
         if isinstance(response, list):
-            return response
+            items = response
+            return items, len(items), len(items)
         if isinstance(response, dict):
-            return response.get("items", response.get("tracks", []))
-        return []
+            items = response.get("items", response.get("tracks", []))
+            if not isinstance(items, list):
+                items = []
+            raw_count = response.get("rawCount", len(items))
+            total = response.get("total", len(items))
+            if not isinstance(raw_count, int):
+                raw_count = len(items)
+            if not isinstance(total, int):
+                total = len(items)
+            return items, raw_count, total
+        return [], 0, 0
+
+    def get_playlist_tracks_page(
+        self,
+        playlist_id: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        force_refresh: bool = False,
+    ) -> tuple[List[Dict[str, Any]], int, int]:
+        """Fetch a single page of playlist track items from the backend."""
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if force_refresh:
+            params["force_refresh"] = "true"
+        response = self._make_request(
+            "GET",
+            f"/spotify/playlists/{playlist_id}/items",
+            params=params,
+        )
+        return self._extract_playlist_items_page(response)
+
+    def get_playlist_tracks(
+        self, playlist_id: str, *, force_refresh: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Get all tracks from a playlist, paginating until the full list is loaded.
+
+        Loops `limit`/`offset` until `rawCount < limit` or `offset >= total`.
+        """
+        limit = 50
+        offset = 0
+        all_items: List[Dict[str, Any]] = []
+        total = 0
+
+        while True:
+            items, raw_count, page_total = self.get_playlist_tracks_page(
+                playlist_id,
+                limit=limit,
+                offset=offset,
+                force_refresh=force_refresh,
+            )
+            if page_total > 0:
+                total = page_total
+            all_items.extend(items)
+            if raw_count < limit:
+                break
+            offset += limit
+            if total > 0 and offset >= total:
+                break
+            if raw_count == 0:
+                break
+
+        return all_items
 
     def get_track_details(self, track_id: str) -> Dict[str, Any]:
         """Get detailed information about a track."""

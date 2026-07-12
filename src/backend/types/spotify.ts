@@ -16,6 +16,8 @@ export interface SpotifyPlaylist {
   id: string;
   name: string;
   description: string | null;
+  /** Spotify playlist revision id; changes when track membership changes. */
+  snapshot_id?: string;
   public: boolean;
   collaborative: boolean;
   owner: SpotifyUser;

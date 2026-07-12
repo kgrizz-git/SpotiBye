@@ -1067,6 +1067,92 @@ describe('Analysis Routes', () => {
       expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalled();
     });
 
+    it('re-enqueues when completed results have incomplete enrichment coverage', async () => {
+      await statusStore.writeStatus('test-user-id', 'playlist1', {
+        job_id: 'job-old',
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        status: 'completed',
+        progress: 100,
+      });
+      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
+        job_id: 'job-old',
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        status: 'completed',
+        computed_at: '2026-01-01T00:00:00.000Z',
+        completed_at: '2026-01-01T00:00:01.000Z',
+        overview: { total_tracks: 2, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
+        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
+        genre_distribution: {},
+        insights: [],
+        errors: [],
+        schema_version: '1.1',
+        unique_track_count: 2,
+        audio_features_resolved_count: 1,
+        track_metadata_resolved_count: 2,
+        enrichment_resolved_track_count: 1,
+      }));
+      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('queued');
+      expect(data.data.job_id).not.toBe('job-old');
+      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
+      expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalled();
+    });
+
+    it('returns existing completed status when enrichment coverage is complete', async () => {
+      await statusStore.writeStatus('test-user-id', 'playlist1', {
+        job_id: 'job-complete',
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        status: 'completed',
+        progress: 100,
+      });
+      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
+        job_id: 'job-complete',
+        playlist_id: 'playlist1',
+        user_id: 'test-user-id',
+        status: 'completed',
+        computed_at: '2026-01-01T00:00:00.000Z',
+        completed_at: '2026-01-01T00:00:01.000Z',
+        overview: { total_tracks: 2, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
+        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
+        genre_distribution: {},
+        insights: [],
+        errors: [],
+        schema_version: '1.1',
+        unique_track_count: 2,
+        audio_features_resolved_count: 2,
+        track_metadata_resolved_count: 2,
+        enrichment_resolved_track_count: 2,
+      }));
+      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data).toMatchObject({ job_id: 'job-complete', status: 'completed' });
+      expect(mockEnv.ANALYSIS_QUEUE.send).not.toHaveBeenCalled();
+    });
+
     it('should return 400 for invalid playlist ID', async () => {
       const request = new Request('http://localhost/analysis/playlist/', {
         method: 'POST',

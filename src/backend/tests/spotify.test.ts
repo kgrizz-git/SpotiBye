@@ -207,6 +207,29 @@ describe('Spotify Routes', () => {
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('id', 'playlist1');
     });
+
+    it('bypasses backend KV when force_refresh=true', async () => {
+      const kvGet = mockEnv.CACHE_KV.get as ReturnType<typeof vi.fn>;
+      kvGet.mockClear();
+
+      const request = new Request(
+        'http://localhost/spotify/playlists/playlist1?force_refresh=true',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: 'Bearer test-jwt-token',
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(kvGet).not.toHaveBeenCalled();
+      expect(data.meta.cached).toBe(false);
+    });
   });
 
   describe('GET /spotify/playlists/:id/tracks', () => {
@@ -227,6 +250,40 @@ describe('Spotify Routes', () => {
       expect(Array.isArray(data.data.items)).toBe(true);
       expect(data.data.items[0]).toHaveProperty('track');
       expect(data.data.items[0].track).toHaveProperty('id');
+    });
+
+    it('bypasses backend KV and refetches Spotify when force_refresh=true', async () => {
+      const kvGet = mockEnv.CACHE_KV.get as ReturnType<typeof vi.fn>;
+      kvGet.mockClear();
+
+      const warmRequest = new Request('http://localhost/spotify/playlists/playlist1/tracks', {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer test-jwt-token',
+          'Content-Type': 'application/json',
+        },
+      });
+      await app.request(warmRequest, undefined, mockEnv);
+      expect(kvGet).toHaveBeenCalled();
+
+      kvGet.mockClear();
+      const request = new Request(
+        'http://localhost/spotify/playlists/playlist1/tracks?force_refresh=true',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: 'Bearer test-jwt-token',
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const response = await app.request(request, undefined, mockEnv);
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(kvGet).not.toHaveBeenCalled();
+      expect(data.meta.cached).toBe(false);
     });
   });
 

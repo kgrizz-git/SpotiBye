@@ -28,6 +28,7 @@ export interface SpotifyPlaylistsResponse {
     id: string;
     name: string;
     description: string | null;
+    snapshot_id?: string;
     public: boolean | null;
     collaborative: boolean;
     owner: { id: string; display_name?: string };
@@ -47,6 +48,7 @@ export interface SpotifyPlaylistResponse {
   id: string;
   name: string;
   description: string | null;
+  snapshot_id?: string;
   public: boolean | null;
   collaborative: boolean;
   owner: { id: string; display_name?: string };

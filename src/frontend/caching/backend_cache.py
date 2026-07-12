@@ -12,6 +12,10 @@ import os
 
 from ..config.backend_config import CACHE_DIR, FeatureFlags
 from ..services.backend_client import BackendClient
+from ..services.playlist_composition import normalize_tracks_cache_entry
+
+# Default playlist tracks cache TTL — 24h (B2); refresh buttons bypass earlier.
+DEFAULT_TRACKS_CACHE_TTL_SECONDS = 86_400
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +140,17 @@ class BackendCacheManager:
         return self._is_cache_valid("playlists.json")
 
     # Track caching
+    def get_cached_tracks_entry(self, playlist_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get cached tracks entry including composition fingerprint metadata.
+
+        Returns:
+            Dict with keys `tracks`, `snapshot_id`, `track_id_hash`,
+            `unique_track_count`, or None if not cached.
+        """
+        raw = self._load_cache_file(f"tracks_{playlist_id}.json")
+        return normalize_tracks_cache_entry(raw)
+
     def get_cached_tracks(self, playlist_id: str) -> Optional[List[Dict[str, Any]]]:
         """
         Get cached tracks for a playlist.
@@ -146,20 +161,36 @@ class BackendCacheManager:
         Returns:
             List of tracks or None if not cached
         """
-        return self._load_cache_file(f"tracks_{playlist_id}.json")
+        entry = self.get_cached_tracks_entry(playlist_id)
+        if entry is None:
+            return None
+        tracks = entry.get("tracks")
+        return tracks if isinstance(tracks, list) else None
 
     def cache_tracks(
-        self, playlist_id: str, tracks: List[Dict[str, Any]], ttl: int = 7200
+        self,
+        playlist_id: str,
+        tracks: List[Dict[str, Any]],
+        ttl: int = DEFAULT_TRACKS_CACHE_TTL_SECONDS,
+        *,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
-        Cache tracks for a playlist with TTL.
+        Cache tracks for a playlist with TTL and optional composition metadata.
 
         Args:
             playlist_id: Spotify playlist ID
-            tracks: List of tracks to cache
-            ttl: Time to live in seconds
+            tracks: List of playlist track items to cache
+            ttl: Time to live in seconds (default 24 hours)
+            metadata: Optional pre-built metadata dict from build_tracks_cache_metadata
         """
-        cache_data = {"data": tracks, "timestamp": time.time(), "ttl": ttl}
+        if metadata is not None:
+            payload = {**metadata, "tracks": tracks}
+        else:
+            from ..services.playlist_composition import build_tracks_cache_metadata
+
+            payload = build_tracks_cache_metadata(tracks)
+        cache_data = {"data": payload, "timestamp": time.time(), "ttl": ttl}
         self._save_cache_file(f"tracks_{playlist_id}.json", cache_data)
 
     def is_tracks_cache_valid(self, playlist_id: str) -> bool:

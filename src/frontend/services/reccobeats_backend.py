@@ -89,6 +89,13 @@ class ReccoBeatsBackendService:
         get_cache_manager().clear_file(f"analysis_{playlist_id}.json")
         return self.analyze_playlist(playlist_id, analysis_task)
 
+    def run_enrichment_miss_fill(
+        self, playlist_id: str, analysis_task: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """Re-run analysis so the backend per-track cache miss-fills unresolved IDs only."""
+        get_cache_manager().clear_file(f"analysis_{playlist_id}.json")
+        return self.analyze_playlist(playlist_id, analysis_task)
+
     def _poll_analysis_completion(
         self,
         job_id: str,

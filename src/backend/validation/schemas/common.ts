@@ -16,4 +16,19 @@ export const PaginationQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
+/** Skip backend CACHE_KV reads and overwrite after a fresh Spotify fetch. */
+export const ForceRefreshQuerySchema = z.object({
+  force_refresh: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((value) => value === 'true' || value === '1'),
+});
+
+export const PlaylistDetailsQuerySchema = ForceRefreshQuerySchema;
+
+export const PlaylistItemsQuerySchema = PaginationQuerySchema.extend({
+  force_refresh: ForceRefreshQuerySchema.shape.force_refresh,
+});
+
 export const ExportFormatSchema = z.enum(['csv', 'json', 'xlsx']);

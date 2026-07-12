@@ -146,28 +146,28 @@ Document this exception in `dev-docs/guides/golden-principles.md` when B1 lands.
 
 ### Phase B2 — Playlist composition & offline-aware frontend
 
-- [ ] **B2.1.** `snapshot_id` end-to-end (today backend `SpotifyPlaylist` **omits** it; frontend only reads raw `playlist_data.get("snapshot_id")`):
+- [x] **B2.1.** `snapshot_id` end-to-end (today backend `SpotifyPlaylist` **omits** it; frontend only reads raw `playlist_data.get("snapshot_id")`):
   - Add `snapshot_id?: string` to `SpotifyPlaylist`, `SpotifyPlaylistsResponse.items[]`, `SpotifyPlaylistResponse`, and OpenAPI/examples for list/details responses.
   - Verify `/spotify/playlists` (and details if used) actually returns it — Spotify simplified playlist objects include it; if our route or parser strips unknown fields, add explicit passthrough.
   - Prefer list `snapshot_id` when present; details/tracks fetch remains the composition-change path when online.
-- [ ] **B2.1b.** Make playlist track refresh/fingerprint code operate on **all** playlist items, not the first route page:
+- [x] **B2.1b.** Make playlist track refresh/fingerprint code operate on **all** playlist items, not the first route page:
   - Backend route `/spotify/playlists/:id/items` is paginated and currently defaults/maxes to 50 via `PaginationQuerySchema`; `BackendClient.get_playlist_tracks()` calls it once and discards `rawCount`/`total`.
   - Add a paginated frontend helper (or update `BackendClient.get_playlist_tracks`) that loops `limit`/`offset` until `rawCount < limit` or `offset >= total`, preserving only track items for existing callers.
   - Keep a page-level helper if the tracks popup needs lazy display later, but composition fingerprinting and local cache completeness must use the full unique ID set.
-- [ ] **B2.1c.** Add real force-refresh passthrough for playlist details/items:
+- [x] **B2.1c.** Add real force-refresh passthrough for playlist details/items:
   - Extend backend query schemas/routes (`/spotify/playlists/:id`, `/spotify/playlists/:id/items`, and `/tracks` alias if kept) with `force_refresh=true` to skip backend `CACHE_KV` reads and overwrite the cached value after fetching Spotify.
   - Extend `BackendClient.get_playlist_details(..., force_refresh=False)` / `get_playlist_tracks(..., force_refresh=False)` and `TracksMixin` to pass the flag through; today `force_refresh=True` bypasses only the local disk cache.
   - Tests must prove refresh buttons bypass both local `tracks_{id}.json` and backend playlist-items KV cache.
-- [ ] **B2.2.** Extend track-cache storage to keep composition fingerprint (`snapshot_id` and/or sorted track-ID hash) + default TTL **86400** (bump from 7200).
+- [x] **B2.2.** Extend track-cache storage to keep composition fingerprint (`snapshot_id` and/or sorted track-ID hash) + default TTL **86400** (bump from 7200).
   - Preserve `get_cached_tracks()` returning `List[Dict[str, Any]]` for existing callers, or update all callers/tests in the same PR. Prefer adding `get_cached_tracks_entry()` / `cache_tracks(..., metadata=...)` so old callers still receive a list while B2 gates can read `{ tracks, snapshot_id, track_id_hash, unique_track_count, cached_at }`.
   - **UX tradeoff (intentional):** playlist membership can be stale for up to 24h vs today’s 2h. Rely on discoverable **Refresh playlist tracks** (B3.2 / B3.4) for sooner updates — do not silently revert to 2h.
-- [ ] **B2.3.** Split analysis-cache gates:
+- [x] **B2.3.** Split analysis-cache gates:
   - **Offline completeness:** valid when endpoint-specific resolved counts (hits + absents) cover the playlist’s **unique** track-ID count (and schema ok) — **not** when `audio_features.track_count` equals playlist row count, and **not** comparing unique resolved count to duplicate-inflated row totals. No network required.
   - **Targeted coverage retry:** when schema is current but one or more required endpoint counts are `< unique_track_count`, call backend miss-resolution for only the endpoint-specific `unresolvedIds`. Before calling, check the per-session auto-retry ledger; if the same playlist composition + endpoint + unresolved-ID set was already attempted in this frontend app session, return the cached result with informational status instead of retrying again. Do not delete/recompute successful aggregate data unless new rows arrive; merge new hits/absents, recompute affected aggregate fields, and persist the updated analysis result.
   - **Composition check (when online):** if current `snapshot_id` / track-ID set differs from fingerprint → invalidate analysis; load current tracks; delta-enrich **new** IDs only. If Spotify check times out, fall back to cached tracks + completeness gate.
-- [ ] **B2.4.** `analyze_playlist`: if offline-complete → return local cache; if incomplete / coverage `< 1.0` → backend miss-resolution for unresolved IDs only; if composition changed → delta path above.
-- [ ] **B2.5.** Optional backend manifest: `analysis:playlist:{id}:manifest` @ 24h with `{ track_ids, snapshot_id }` (`track_ids` unique). Not required for B2.3/B2.4 — if missing when online, fall back to a normal tracks/details fetch (safe, possibly slower).
-- [ ] **B2.6.** Tests: complete cache → no backend call; incomplete / coverage `< 1.0` → miss fetch for unresolved IDs only; same unresolved set is not auto-retried twice in one frontend session; verified absents are not retried; composition change or a different unresolved set can retry; manual force refresh bypasses the session guard; offline path never requires Spotify; playlist with duplicate track IDs still counts as complete when unique set is resolved.
+- [x] **B2.4.** `analyze_playlist`: if offline-complete → return local cache; if incomplete / coverage `< 1.0` → backend miss-resolution for unresolved IDs only; if composition changed → delta path above.
+- [ ] **B2.5.** Optional backend manifest: `analysis:playlist:{id}:manifest` @ 24h with `{ track_ids, snapshot_id }` (`track_ids` unique). Not required for B2.3/B2.4 — if missing when online, fall back to a normal tracks/details fetch (safe, possibly slower). **Skipped for B2 PR** — tracked in [`dev-docs/backlog/TO_DO.md`](../../backlog/TO_DO.md); online tracks/details fallback is implemented.
+- [x] **B2.6.** Tests: complete cache → no backend call; incomplete / coverage `< 1.0` → miss fetch for unresolved IDs only; same unresolved set is not auto-retried twice in one frontend session; verified absents are not retried; composition change or a different unresolved set can retry; manual force refresh bypasses the session guard; offline path never requires Spotify; playlist with duplicate track IDs still counts as complete when unique set is resolved.
 
 ### Phase B3 — Auto miss-fetch on open + refresh buttons
 

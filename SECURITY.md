@@ -135,8 +135,7 @@ Fast checks that run on staged files:
 | `detect-aws-credentials` | Blocks AWS credentials |
 | `check-added-large-files` | Prevents committing files >500KB |
 | `gitleaks` | Comprehensive secret scanning |
-| `semgrep` | Lightweight SAST security scan |
-| `bandit` | Python security linting |
+| `semgrep-secrets` | Secrets scan on staged files only |
 | `ruff` | Python linting and formatting |
 | `eslint` | JavaScript/TypeScript linting |
 | `check-repo-structure` | Enforces repo structure/placement conventions |
@@ -150,7 +149,7 @@ Longer-running checks that ensure code quality:
 |------|---------|
 | `python-tests` | Runs Python test suite |
 | `node-tests` | Runs Node.js test suite |
-| `semgrep` | Full SAST scan (OWASP Top 10, CWE Top 25) |
+| `semgrep-sast` | Full SAST scan (OWASP Top 10, CWE Top 25) |
 | `bandit-full` | Full-tree Python SAST scan (project `pyproject.toml` policy) |
 | `osv-scanner` | Dependency vulnerability scan (OSV-Scanner; pre-commit bootstraps Go, no Docker needed) |
 | `security-scan` | Dependency security check (`check-dependencies.py --security --ci`) |
@@ -166,7 +165,7 @@ pre-commit run --all-files
 pre-commit run --hook-stage pre-push --all-files
 
 # Run specific hook
-pre-commit run bandit --all-files
+pre-commit run bandit-full --hook-stage pre-push --all-files
 
 # Skip hooks temporarily (emergency only)
 git commit --no-verify -m "emergency fix"

@@ -20,6 +20,17 @@ function isStaleAnalysisResult(results: AnalysisResult | null): boolean {
   );
 }
 
+/** True when completed results still have unresolved ReccoBeats endpoint coverage. */
+function isEnrichmentIncomplete(results: AnalysisResult): boolean {
+  const unique = results.unique_track_count ?? 0;
+  if (unique <= 0) {
+    return false;
+  }
+  const audioResolved = results.audio_features_resolved_count ?? 0;
+  const metadataResolved = results.track_metadata_resolved_count ?? 0;
+  return audioResolved < unique || metadataResolved < unique;
+}
+
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware to all routes
@@ -55,7 +66,7 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
 
       if (isCompleted) {
         const results = await cacheService.get<AnalysisResult>(resultsKey);
-        if (!isStaleAnalysisResult(results)) {
+        if (!isStaleAnalysisResult(results) && results && !isEnrichmentIncomplete(results)) {
           return c.json({
             data: existingStatus,
             meta: { timestamp: new Date().toISOString() }
