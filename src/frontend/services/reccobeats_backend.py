@@ -84,10 +84,21 @@ class ReccoBeatsBackendService:
     def force_reanalyze_playlist(
         self, playlist_id: str, analysis_task: Optional[Any] = None
     ) -> Dict[str, Any]:
-        """Delete cached backend analysis and enqueue a fresh analysis job."""
-        self.backend_client.delete_analysis(playlist_id)
+        """Enqueue a fresh analysis job with per-track ReccoBeats force refresh."""
         get_cache_manager().clear_file(f"analysis_{playlist_id}.json")
-        return self.analyze_playlist(playlist_id, analysis_task)
+        self._reposted_on_stale = False
+        self._reposted_on_reccobeats_error = False
+        logger.info(f"Force re-analyzing playlist {playlist_id} (force_enrichment)")
+
+        response = self.backend_client.analyze_playlist(
+            playlist_id, force_enrichment=True
+        )
+        job_id = response.get("job_id")
+
+        if not job_id:
+            raise BackendAPIError("No job ID received from backend")
+
+        return self._poll_analysis_completion(job_id, playlist_id, analysis_task)
 
     def run_enrichment_miss_fill(
         self, playlist_id: str, analysis_task: Optional[Any] = None
@@ -157,14 +168,10 @@ class ReccoBeatsBackendService:
                         self._reposted_on_reccobeats_error = True
                         self.backend_client.delete_analysis(playlist_id)
                         get_cache_manager().clear_file(f"analysis_{playlist_id}.json")
-                        new_response = self.backend_client.analyze_playlist(
-                            playlist_id
-                        )
+                        new_response = self.backend_client.analyze_playlist(playlist_id)
                         new_job_id = new_response.get("job_id")
                         if not new_job_id:
-                            raise BackendAPIError(
-                                "No job ID received from backend"
-                            )
+                            raise BackendAPIError("No job ID received from backend")
                         return self._poll_analysis_completion(
                             new_job_id, playlist_id, analysis_task, max_wait_time
                         )
@@ -206,7 +213,8 @@ class ReccoBeatsBackendService:
                         and progress <= last_reported_progress
                         and hasattr(analysis_task, "update_synthetic_progress")
                         and stale_progress_since is not None
-                        and now - stale_progress_since >= SYNTHETIC_PROGRESS_STALE_AFTER_SECONDS
+                        and now - stale_progress_since
+                        >= SYNTHETIC_PROGRESS_STALE_AFTER_SECONDS
                     ):
                         elapsed = now - start_time
                         logger.debug(
@@ -228,7 +236,10 @@ class ReccoBeatsBackendService:
                             stale_progress_since = now
                         elif stale_progress_since is None:
                             stale_progress_since = now
-                    if last_reported_progress is None or progress > last_reported_progress:
+                    if (
+                        last_reported_progress is None
+                        or progress > last_reported_progress
+                    ):
                         last_reported_progress = progress
                 # Exponential backoff for polling
                 time.sleep(min(poll_interval, max_poll_interval))

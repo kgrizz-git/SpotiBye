@@ -11,6 +11,10 @@ import type { Env } from '../types/env';
 import type { Variables } from '../types/variables';
 import { zValidator } from '../validation/z-validator';
 import { IdParamSchema } from '../validation/schemas/common';
+import {
+  AnalysisRequestSchema,
+  ForceEnrichmentQuerySchema,
+} from '../validation/schemas/analysis';
 
 function isStaleAnalysisResult(results: AnalysisResult | null): boolean {
   return (
@@ -31,32 +35,50 @@ function isEnrichmentIncomplete(results: AnalysisResult): boolean {
   return audioResolved < unique || metadataResolved < unique;
 }
 
+async function resolveForceEnrichment(
+  c: { req: { valid: (target: 'query' | 'json') => { force_enrichment: boolean }; json: () => Promise<unknown> } },
+  queryForce: boolean,
+): Promise<boolean> {
+  if (queryForce) {
+    return true;
+  }
+  try {
+    const raw = await c.req.json();
+    const parsed = AnalysisRequestSchema.safeParse(raw);
+    if (parsed.success) {
+      return parsed.data.force_enrichment;
+    }
+  } catch {
+    // Empty or non-JSON body — treat as default (no force).
+  }
+  return false;
+}
+
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
 
 // POST /analysis/playlist/:id - Analyze playlist
-// NOTE: the request body (see openapi.yaml AnalysisRequest) is intentionally
-// ignored — analysis always runs with default settings. Never parsed here.
-app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
+// Optional `force_enrichment` (JSON body or query) bypasses idempotent
+// completed/queued short-circuit and clears user status/results before enqueue.
+app.post(
+  '/playlist/:id',
+  zValidator('param', IdParamSchema),
+  zValidator('query', ForceEnrichmentQuerySchema),
+  async (c) => {
   try {
     const { id: playlistId } = c.req.valid('param');
+    const queryForce = c.req.valid('query').force_enrichment;
+    const forceEnrichment = await resolveForceEnrichment(c, queryForce);
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
     const statusStore = new AnalysisStatusStore(c.env.ANALYSIS_STATUS);
 
-    // Check if analysis is already in progress or completed
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
     const existingStatus = await statusStore.getStatus(userId, playlistId);
 
-    if (existingStatus) {
-      // completed: return cached result, unless the results are stale (missing
-      // or from an older schema_version), in which case fall through and
-      // enqueue a fresh job instead of serving data the frontend can't render.
-      // queued: return while waiting for the queue consumer
-      // processing/retrying: return if started within last 5 minutes (still running)
-      // failed/anything else: restart
+    if (existingStatus && !forceEnrichment) {
       const isQueued = existingStatus.status === 'queued';
       const isCompleted = existingStatus.status === 'completed';
       const isActivelyProcessing =
@@ -76,13 +98,17 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
           statusStore.deleteStatus(userId, playlistId),
           cacheService.delete(resultsKey),
         ]);
-        // Falls through to enqueue a fresh job below.
       } else if (isQueued || isActivelyProcessing) {
         return c.json({
           data: existingStatus,
           meta: { timestamp: new Date().toISOString() }
         });
       }
+    } else if (existingStatus && forceEnrichment) {
+      await Promise.all([
+        statusStore.deleteStatus(userId, playlistId),
+        cacheService.delete(resultsKey),
+      ]);
     }
 
     const jobId = crypto.randomUUID();
@@ -98,14 +124,27 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
 
     await statusStore.writeStatus(userId, playlistId, status);
 
-    await c.env.ANALYSIS_QUEUE.send({
+    const queuePayload: {
+      job_id: string;
+      playlist_id: string;
+      user_id: string;
+      session_id: string;
+      enqueued_at: string;
+      attempt: number;
+      force_enrichment?: boolean;
+    } = {
       job_id: jobId,
       playlist_id: playlistId,
       user_id: userId,
       session_id: c.get('session_id'),
       enqueued_at: now,
       attempt: 0,
-    });
+    };
+    if (forceEnrichment) {
+      queuePayload.force_enrichment = true;
+    }
+
+    await c.env.ANALYSIS_QUEUE.send(queuePayload);
 
     return c.json({
       data: status,
@@ -115,7 +154,8 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
     console.error('Failed to start analysis:', error);
     return c.json({ error: { code: 'ANALYSIS_START_FAILED', message: 'Failed to start analysis' } }, { status: 500 as ContentfulStatusCode });
   }
-});
+},
+);
 
 // GET /analysis/playlist/:id/status - Get analysis status
 app.get('/playlist/:id/status', zValidator('param', IdParamSchema), async (c) => {

@@ -1057,11 +1057,17 @@ components:
     AnalysisRequest:
       type: object
       description: >-
-        Currently ignored — POST /analysis/playlist/{id} always starts (or
-        returns the status of) an analysis job with default settings. Kept
-        as an empty schema so the request body remains documented as
-        optional JSON rather than implying unused fields exist.
-      properties: {}
+        Optional analysis controls. When `force_enrichment` is true, bypasses
+        idempotent completed/queued short-circuit, clears user status/results,
+        and clears per-track ReccoBeats positive + absent cache keys for
+        playlist track IDs before refetch.
+      properties:
+        force_enrichment:
+          type: boolean
+          default: false
+          description: >-
+            Force-refresh ReccoBeats per-track enrichment for all playlist tracks.
+      additionalProperties: false
 
     AnalysisStatusRecord:
       type: object

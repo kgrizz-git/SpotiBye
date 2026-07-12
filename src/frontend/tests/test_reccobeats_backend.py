@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -42,9 +42,7 @@ def analysis_task() -> MagicMock:
 
 @pytest.fixture
 def patched_cache_manager():
-    with patch(
-        "src.frontend.services.reccobeats_backend.get_cache_manager"
-    ) as get_cm:
+    with patch("src.frontend.services.reccobeats_backend.get_cache_manager") as get_cm:
         cache_manager = MagicMock()
         get_cm.return_value = cache_manager
         yield cache_manager
@@ -66,7 +64,9 @@ STALE_THEN_COMPLETE_SIDE_EFFECT = [
 def _run_stale_progress_scenario(analysis_task: MagicMock):
     """Arrange and act the stale-progress scenario; return (result, logger_mock)."""
     backend_client = make_backend_client()
-    backend_client.get_analysis_status.side_effect = list(STALE_THEN_COMPLETE_SIDE_EFFECT)
+    backend_client.get_analysis_status.side_effect = list(
+        STALE_THEN_COMPLETE_SIDE_EFFECT
+    )
 
     current_time = [0.0]
 
@@ -242,7 +242,7 @@ class TestStaleResultsRecovery:
         backend_client.analyze_playlist.assert_called_once_with("playlist-1")
         backend_client.get_analysis_results.assert_called_once()
 
-    def test_force_reanalyze_deletes_backend_and_local_cache_before_analyzing(
+    def test_force_reanalyze_uses_force_enrichment_without_delete(
         self, patched_cache_manager: MagicMock
     ) -> None:
         backend_client = make_backend_client()
@@ -252,11 +252,13 @@ class TestStaleResultsRecovery:
         result = service.force_reanalyze_playlist("playlist-1")
 
         assert result == COMPLETED_RESULTS
-        backend_client.delete_analysis.assert_called_once_with("playlist-1")
+        backend_client.delete_analysis.assert_not_called()
         patched_cache_manager.clear_file.assert_called_once_with(
             "analysis_playlist-1.json"
         )
-        backend_client.analyze_playlist.assert_called_once_with("playlist-1")
+        backend_client.analyze_playlist.assert_called_once_with(
+            "playlist-1", force_enrichment=True
+        )
 
     def test_updates_analysis_task_to_complete_before_returning_results(
         self, analysis_task: MagicMock
@@ -301,8 +303,7 @@ class TestStaleResultsRecovery:
             5.0, "Analyzing playlist..."
         )
         synthetic_elapsed_values = [
-            c.args[0]
-            for c in analysis_task.update_synthetic_progress.call_args_list
+            c.args[0] for c in analysis_task.update_synthetic_progress.call_args_list
         ]
         assert synthetic_elapsed_values
         assert min(synthetic_elapsed_values) >= 5.0
@@ -313,9 +314,7 @@ class TestStaleResultsRecovery:
     ) -> None:
         _, logger_mock = _run_stale_progress_scenario(analysis_task)
 
-        debug_messages = [
-            c.args[0] for c in logger_mock.debug.call_args_list if c.args
-        ]
+        debug_messages = [c.args[0] for c in logger_mock.debug.call_args_list if c.args]
         assert any("Synthetic analysis progress" in msg for msg in debug_messages)
 
     def test_does_not_repost_more_than_once_per_analyze_call(

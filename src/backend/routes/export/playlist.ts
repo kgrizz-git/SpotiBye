@@ -6,6 +6,7 @@ import type { Env } from '../../types/env';
 import type { Variables } from '../../types/variables';
 import {
   buildSingleExportKey,
+  buildSingleExportPrefix,
   buildSingleExportDataKey,
   buildSingleExportFileKey,
 } from './helpers/cache-keys';
@@ -234,20 +235,19 @@ app.get('/:id/download', zValidator('param', IdParamSchema), async (c) => {
   }
 });
 
-// DELETE /export/playlist/:id - Delete export
+// DELETE /export/playlist/:id - Delete cached single-export artifacts.
+// Clears `export:{playlistId}:{userId}*` (base, :data, :file, format variants).
+// In-flight resumable job/batch keys (`export:job:*`, `export:batch:*`) are
+// intentionally NOT cleared — users must recreate in-flight exports after refresh.
 app.delete('/:id', zValidator('param', IdParamSchema), async (c) => {
   try {
     const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 
-    const exportKey = buildSingleExportKey(playlistId, userId);
-
-    await Promise.all([
-      cacheService.delete(exportKey),
-      cacheService.delete(buildSingleExportDataKey(playlistId, userId)),
-      cacheService.delete(buildSingleExportFileKey(playlistId, userId))
-    ]);
+    await cacheService.clearPrefixPaginated(
+      buildSingleExportPrefix(playlistId, userId),
+    );
 
     return c.json({ data: { message: 'Export deleted successfully' } });
   } catch (error) {

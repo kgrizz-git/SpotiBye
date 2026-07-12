@@ -117,3 +117,26 @@ class TracksMixin:
             if self.error_callback:
                 self.error_callback(f"Failed to load tracks: {str(e)}")
             return None
+
+    def refresh_playlist_tracks_only(
+        self, playlist_id: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Force-refresh tracks from Spotify and invalidate cached exports."""
+        try:
+            tracks = self.get_playlist_tracks(playlist_id, force_refresh=True)
+            if tracks is None:
+                return None
+            try:
+                self.backend_client.delete_export(playlist_id)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to invalidate export cache after track refresh for %s: %s",
+                    playlist_id,
+                    exc,
+                )
+            return tracks
+        except Exception as e:
+            logger.error(f"Error refreshing playlist tracks only: {e}")
+            if self.error_callback:
+                self.error_callback(f"Track refresh failed: {str(e)}")
+            return None

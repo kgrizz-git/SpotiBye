@@ -143,6 +143,39 @@ describe('AnalysisJobService stale-snapshot prevention', () => {
     expect(finalStatus?.retry_after).toBeDefined();
     expect(finalStatus?.error).toBe('Spotify API Error');
   });
+
+  it('passes forceEnrichment to analyzePlaylist and clears single-export prefix on success', async () => {
+    const cacheKv = kvNamespace();
+    const sessionsKv = kvNamespace({
+      'session-1': {
+        user_id: 'user-1',
+        access_token: 'fresh-token',
+        refresh_token: 'refresh-token',
+        expires_at: Date.now() + 3_600_000,
+      },
+    });
+
+    const analyzeSpy = vi
+      .spyOn(AnalysisService.prototype, 'analyzePlaylist')
+      .mockResolvedValue(analysisResult);
+
+    const env = envWithKv(cacheKv, sessionsKv);
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
+    const service = new AnalysisJobService(env);
+    const clearSpy = vi.spyOn(service['cache'], 'clearPrefixPaginated');
+
+    await service.process({ ...analysisMessage, force_enrichment: true });
+
+    expect(analyzeSpy).toHaveBeenCalledWith(
+      'playlist-1',
+      'user-1',
+      'job-1',
+      expect.any(Function),
+      { forceEnrichment: true },
+    );
+    expect(clearSpy).toHaveBeenCalledWith('export:playlist-1:user-1');
+  });
 });
 
 function queuedStatus(): AnalysisStatusRecord {

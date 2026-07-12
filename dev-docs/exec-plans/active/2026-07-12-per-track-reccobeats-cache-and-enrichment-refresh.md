@@ -1,8 +1,8 @@
 # Plan: Per-Track ReccoBeats Cache, Auto Enrichment & Refresh Controls
 
-**Date:** 2026-07-12  
-**Status:** Active  
-**Contract:** [`dev-docs/reccobeats-api-contract.md`](../../reccobeats-api-contract.md)  
+**Date:** 2026-07-12
+**Status:** Active
+**Contract:** [`dev-docs/reccobeats-api-contract.md`](../../reccobeats-api-contract.md)
 **Backlog:** `dev-docs/backlog/TO_DO.md` → enrichment refresh, export ReccoBeats migration, optional client-side fetch (Phase B5)
 
 ## Problem
@@ -171,20 +171,20 @@ Document this exception in `dev-docs/guides/golden-principles.md` when B1 lands.
 
 ### Phase B3 — Auto miss-fetch on open + refresh buttons
 
-- [ ] **B3.1.** Analysis popup: informational status line *"Enrichment: N/M tracks"* + last refreshed times. If `N < M` and unresolved IDs remain, show neutral/progress copy while the targeted missing-track fetch runs; if all unresolved IDs are verified absent, show complete-with-omissions status rather than a red banner.
-- [ ] **B3.2.** **Refresh playlist tracks** → `get_playlist_tracks(force_refresh=True)` with backend force passthrough from B2.1c; then auto-enrich **new** IDs only. Place the button where users can find it (analysis + tracks popups) so the 24h tracks TTL does not feel like a silent regression.
-- [ ] **B3.3.** **Refresh track info** → `POST` analysis with `force_enrichment=true` (clears positive + per-endpoint absent keys for playlist track IDs, then refetch — see B1.2).
+- [x] **B3.1.** Analysis popup: informational status line *"Enrichment: N/M tracks"* + last refreshed times. If `N < M` and unresolved IDs remain, show neutral/progress copy while the targeted missing-track fetch runs; if all unresolved IDs are verified absent, show complete-with-omissions status rather than a red banner.
+- [x] **B3.2.** **Refresh playlist tracks** → `get_playlist_tracks(force_refresh=True)` with backend force passthrough from B2.1c; then auto-enrich **new** IDs only. Place the button where users can find it (analysis + tracks popups) so the 24h tracks TTL does not feel like a silent regression.
+- [x] **B3.3.** **Refresh track info** → `POST` analysis with `force_enrichment=true` (clears positive + per-endpoint absent keys for playlist track IDs, then refetch — see B1.2).
   - **Export cache invalidation (after enrichment succeeds, not before):** clear the single-export prefix `export:${playlistId}:${userId}`; it catches base, `:data`, and `:file` keys (`cache-keys.ts`). Prefer post-success clear so a mid-flight export is not emptied into an empty/unenriched race (accept user-initiated race only if they export *during* the job).
   - **In-flight job/batch keys** (`export:job:{jobId}:{userId}:*`, `export:batch:{jobId}:{userId}:*`) and resumable render variants (`:file:rich|lite|csv`) are **not** cleared by that prefix. Decision: **accept staleness for in-flight jobs** (user must recreate / restart the job after refresh). Document in route comments; do not invent a user-wide `export:job:*` wipe unless product asks.
-- [ ] **B3.4.** Tracks popup: **Refresh playlist tracks** button only. On force track refresh, invalidate the same **single-export** prefix after tracks are refreshed (composition may have changed). Same job/batch caveat as B3.3.
-- [ ] **B3.5.** Wire `force_enrichment` end-to-end:
+- [x] **B3.4.** Tracks popup: **Refresh playlist tracks** button only. On force track refresh, invalidate the same **single-export** prefix after tracks are refreshed (composition may have changed). Same job/batch caveat as B3.3.
+- [x] **B3.5.** Wire `force_enrichment` end-to-end:
   - Analysis POST accepts query/body `force_enrichment?: boolean` and the route comment/openapi schema must stop saying the body is ignored for this field.
   - If `force_enrichment=true`, bypass the current completed/queued short-circuit: delete user results/status, enqueue a new job, and let any older in-flight queue message become stale via job-id mismatch. Otherwise keep existing idempotent status behavior.
   - Extend `AnalysisQueueMessage`, `AnalysisQueueMessagePayloadSchema`, and `AnalysisQueueMessageSchema` with `force_enrichment?: boolean`; Zod currently strips unknown fields, so the schema change is required.
   - Route enqueues the flag; `AnalysisJobService.process` passes it into `AnalysisService.analyzePlaylist` / `fetchReccoBeatsEnrichment` → track-cache `resolve*(…, { force })`.
   - Extend `BackendClient.analyze_playlist(..., force_enrichment=False)` and `ReccoBeatsBackendService.force_reanalyze_playlist()` so the frontend can send the flag instead of relying only on DELETE + POST.
   - Tests: queued message includes flag; queue schema preserves it; force POST bypasses cached completed status; force path reaches resolve with `force: true`; non-force still returns existing queued/processing/completed status.
-- [ ] **B3.6.** Frontend tests: buttons call correct adapter methods; coverage `< 1.0` with unresolved IDs triggers backend miss-fill only for those IDs; the same unresolved set does not retrigger automatically in the same app session; verified absents do not retrigger; force path clears absents and bypasses the session auto-retry ledger; single-export cache cleared **after** successful force enrichment / track refresh.
+- [x] **B3.6.** Frontend tests: buttons call correct adapter methods; coverage `< 1.0` with unresolved IDs triggers backend miss-fill only for those IDs; the same unresolved set does not retrigger automatically in the same app session; verified absents do not retrigger; force path clears absents and bypasses the session auto-retry ledger; single-export cache cleared **after** successful force enrichment / track refresh.
 
 ### Phase B4 — Export uses per-track cache
 

@@ -41,6 +41,11 @@ export function buildSingleExportKey(playlistId: string, userId: string): string
   return `export:${playlistId}:${userId}`;
 }
 
+/** Prefix for single-export KV keys (`:data`, `:file`, format variants). */
+export function buildSingleExportPrefix(playlistId: string, userId: string): string {
+  return buildSingleExportKey(playlistId, userId);
+}
+
 export function buildSingleExportDataKey(playlistId: string, userId: string): string {
   return `${buildSingleExportKey(playlistId, userId)}:data`;
 }

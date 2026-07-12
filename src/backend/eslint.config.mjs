@@ -40,7 +40,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['routes/**/*.ts'],
+    files: ['routes/**/*.ts', 'src/backend/routes/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -57,7 +57,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['tests/**/*.test.ts'],
+    files: ['tests/**/*.test.ts', 'src/backend/tests/**/*.test.ts'],
     rules: {
       'no-restricted-imports': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',

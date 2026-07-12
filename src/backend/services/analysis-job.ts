@@ -68,7 +68,8 @@ export class AnalysisJobService {
             progress: progressPercentage,
             attempt: message.attempt,
           });
-        }
+        },
+        { forceEnrichment: message.force_enrichment === true },
       );
 
       await this.cache.set(resultsKey, result satisfies AnalysisResult, this.resultsTtlSeconds());
@@ -78,6 +79,16 @@ export class AnalysisJobService {
         completed_at: new Date().toISOString(),
         attempt: message.attempt,
       });
+
+      // Invalidate single-export cache after successful force enrichment so
+      // the next export reflects refreshed ReccoBeats data. In-flight job/batch
+      // export keys are not cleared (see export DELETE route comments).
+      if (message.force_enrichment) {
+        // Matches `buildSingleExportPrefix` in routes/export/helpers/cache-keys.ts
+        await this.cache.clearPrefixPaginated(
+          `export:${message.playlist_id}:${message.user_id}`,
+        );
+      }
 
       return { acknowledged: true, reason: 'completed' };
     } catch (error) {

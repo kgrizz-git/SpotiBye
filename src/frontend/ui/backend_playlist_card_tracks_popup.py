@@ -75,7 +75,7 @@ class PlaylistCardTracksPopupMixin:
         if playlist_id and hasattr(content, "_tracks_layout"):
             threading.Thread(
                 target=self._load_tracks_worker,
-                args=(playlist_id, content._tracks_layout),
+                args=(playlist_id, content._tracks_layout, False),
                 daemon=True,
             ).start()
 
@@ -137,21 +137,53 @@ class PlaylistCardTracksPopupMixin:
         scroll.add_widget(tracks_layout)
         root.add_widget(scroll)
 
-        # Close button
+        action_row = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
+        refresh_btn = Button(
+            text="Refresh playlist tracks",
+            size_hint=(0.7, 1),
+            background_color=(0.28, 0.38, 0.22, 1),
+            color=(1, 1, 1, 1),
+        )
+        refresh_btn.bind(on_release=self._refresh_tracks_popup)
+        action_row.add_widget(refresh_btn)
         close_btn = Button(
             text="Close",
-            size_hint=(1, None),
-            height=dp(44),
+            size_hint=(0.3, 1),
             background_color=(0.22, 0.22, 0.22, 1),
             color=(1, 1, 1, 1),
         )
         close_btn.bind(
             on_release=lambda _: self._tracks_popup and self._tracks_popup.dismiss()
         )
-        root.add_widget(close_btn)
+        action_row.add_widget(close_btn)
+        root.add_widget(action_row)
 
         root._tracks_layout = tracks_layout
         return root
+
+    def _refresh_tracks_popup(self, _btn) -> None:
+        playlist_id = self.playlist_data.get("id")
+        popup = self._tracks_popup
+        content = getattr(popup, "content", None)
+        if not playlist_id or content is None or not hasattr(content, "_tracks_layout"):
+            return
+
+        tracks_layout = content._tracks_layout
+        tracks_layout.clear_widgets()
+        tracks_layout.add_widget(
+            Label(
+                text="Refreshing tracks\u2026",
+                font_size=dp(12),
+                color=(0.5, 0.5, 0.5, 1),
+                size_hint_y=None,
+                height=dp(32),
+            )
+        )
+        threading.Thread(
+            target=self._load_tracks_worker,
+            args=(playlist_id, tracks_layout, True),
+            daemon=True,
+        ).start()
 
     def _make_track_row(
         self,
@@ -203,7 +235,9 @@ class PlaylistCardTracksPopupMixin:
         row.add_widget(cell(album, size_hint_x=self._COL_ALB))
         return row
 
-    def _load_tracks_worker(self, playlist_id: str, tracks_layout: BoxLayout) -> None:
+    def _load_tracks_worker(
+        self, playlist_id: str, tracks_layout: BoxLayout, force_refresh: bool = False
+    ) -> None:
         try:
             app = App.get_running_app()
             adapter = getattr(app, "backend_adapter", None)
@@ -216,7 +250,10 @@ class PlaylistCardTracksPopupMixin:
                 )
                 return
 
-            tracks = adapter.get_playlist_tracks(playlist_id)
+            if force_refresh and hasattr(adapter, "refresh_playlist_tracks_only"):
+                tracks = adapter.refresh_playlist_tracks_only(playlist_id)
+            else:
+                tracks = adapter.get_playlist_tracks(playlist_id)
             Clock.schedule_once(
                 lambda _dt: self._populate_tracks(tracks_layout, tracks), 0
             )

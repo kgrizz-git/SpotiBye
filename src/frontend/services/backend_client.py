@@ -261,7 +261,9 @@ class BackendClient:
         )
         return response
 
-    def _extract_playlist_items_page(self, response: Any) -> tuple[List[Dict[str, Any]], int, int]:
+    def _extract_playlist_items_page(
+        self, response: Any
+    ) -> tuple[List[Dict[str, Any]], int, int]:
         """Parse one playlist items page: (items, raw_count, total)."""
         if isinstance(response, list):
             items = response
@@ -343,9 +345,21 @@ class BackendClient:
         return response
 
     # Analysis endpoints
-    def analyze_playlist(self, playlist_id: str) -> Dict[str, Any]:
+    def analyze_playlist(
+        self, playlist_id: str, *, force_enrichment: bool = False
+    ) -> Dict[str, Any]:
         """Start playlist analysis."""
-        response = self._make_request("POST", f"/analysis/playlist/{playlist_id}")
+        payload = {"force_enrichment": True} if force_enrichment else {}
+        response = self._make_request(
+            "POST",
+            f"/analysis/playlist/{playlist_id}",
+            json=payload,
+        )
+        return response
+
+    def delete_export(self, playlist_id: str) -> Dict[str, Any]:
+        """Delete cached single-export artifacts for a playlist."""
+        response = self._make_request("DELETE", f"/export/playlist/{playlist_id}")
         return response
 
     def get_analysis_status(self, playlist_id: str) -> Dict[str, Any]:

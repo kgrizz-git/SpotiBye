@@ -56,4 +56,19 @@ describe('AnalysisQueueMessagePayloadSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('preserves force_enrichment when present', () => {
+    const result = AnalysisQueueMessagePayloadSchema.safeParse({
+      job_id: '11111111-1111-4111-8111-111111111111',
+      playlist_id: 'playlist1',
+      user_id: 'user-1',
+      session_id: 'session-1',
+      enqueued_at: new Date().toISOString(),
+      force_enrichment: true,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.force_enrichment).toBe(true);
+    }
+  });
 });

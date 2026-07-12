@@ -98,7 +98,9 @@ class AnalysisMixin:
             )
             return False
 
-    def _should_auto_miss_fill(self, cached_analysis: Dict[str, Any], playlist_id: str) -> bool:
+    def _should_auto_miss_fill(
+        self, cached_analysis: Dict[str, Any], playlist_id: str
+    ) -> bool:
         incomplete_endpoints = enrichment_incompleteness_endpoints(cached_analysis)
         if not incomplete_endpoints:
             return False
@@ -108,7 +110,9 @@ class AnalysisMixin:
         metadata_resolved = cached_analysis.get("track_metadata_resolved_count")
         if not isinstance(unique_count, int):
             return False
-        if not isinstance(audio_resolved, int) or not isinstance(metadata_resolved, int):
+        if not isinstance(audio_resolved, int) or not isinstance(
+            metadata_resolved, int
+        ):
             return False
 
         composition_fp = self._composition_fingerprint_for_playlist(playlist_id)
@@ -126,14 +130,18 @@ class AnalysisMixin:
                 return True
         return False
 
-    def _record_miss_fill_attempt(self, cached_analysis: Dict[str, Any], playlist_id: str) -> None:
+    def _record_miss_fill_attempt(
+        self, cached_analysis: Dict[str, Any], playlist_id: str
+    ) -> None:
         incomplete_endpoints = enrichment_incompleteness_endpoints(cached_analysis)
         unique_count = cached_analysis.get("unique_track_count")
         audio_resolved = cached_analysis.get("audio_features_resolved_count")
         metadata_resolved = cached_analysis.get("track_metadata_resolved_count")
         if not isinstance(unique_count, int):
             return
-        if not isinstance(audio_resolved, int) or not isinstance(metadata_resolved, int):
+        if not isinstance(audio_resolved, int) or not isinstance(
+            metadata_resolved, int
+        ):
             return
 
         composition_fp = self._composition_fingerprint_for_playlist(playlist_id)
@@ -231,7 +239,9 @@ class AnalysisMixin:
                             playlist_id, progress_callback, analysis_task
                         )
 
-                    logger.info(f"Loading analysis for {playlist_id} from cache (offline complete)")
+                    logger.info(
+                        f"Loading analysis for {playlist_id} from cache (offline complete)"
+                    )
                     return cached_analysis
 
                 if self._should_auto_miss_fill(cached_analysis, playlist_id):
@@ -297,9 +307,11 @@ class AnalysisMixin:
         playlist_id: str,
         analysis_task: Optional[Any] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Force backend/local analysis invalidation before re-running analysis."""
+        """Force per-track ReccoBeats refresh and re-run analysis."""
         try:
-            from ...services.enrichment_retry_ledger import reset_enrichment_retry_ledger
+            from ...services.enrichment_retry_ledger import (
+                reset_enrichment_retry_ledger,
+            )
 
             reset_enrichment_retry_ledger()
             if analysis_task is not None:
@@ -315,4 +327,39 @@ class AnalysisMixin:
             logger.error(f"Error force re-analyzing playlist: {e}")
             if self.error_callback:
                 self.error_callback(f"Analysis retry failed: {str(e)}")
+            return None
+
+    def refresh_playlist_tracks(
+        self,
+        playlist_id: str,
+        progress_callback: Optional[Callable[..., Any]] = None,
+        analysis_task: Optional[Any] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Force-refresh playlist tracks from Spotify, invalidate export cache,
+        and re-run analysis to delta-enrich any new track IDs.
+        """
+        try:
+            if progress_callback:
+                progress_callback("Refreshing playlist tracks...")
+
+            tracks = self.get_playlist_tracks(playlist_id, force_refresh=True)
+            if tracks is None:
+                return None
+
+            try:
+                self.backend_client.delete_export(playlist_id)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to invalidate export cache after track refresh for %s: %s",
+                    playlist_id,
+                    exc,
+                )
+
+            self.cache_manager.clear_file(f"analysis_{playlist_id}.json")
+            return self.analyze_playlist(playlist_id, progress_callback, analysis_task)
+        except Exception as e:
+            logger.error(f"Error refreshing playlist tracks: {e}")
+            if self.error_callback:
+                self.error_callback(f"Track refresh failed: {str(e)}")
             return None

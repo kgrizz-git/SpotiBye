@@ -8,6 +8,7 @@ export const AnalysisQueueMessagePayloadSchema = z.object({
   session_id: z.string().min(1),
   enqueued_at: z.string().min(1),
   attempt: z.number().int().nonnegative().optional(),
+  force_enrichment: z.boolean().optional(),
 });
 
 export const AnalysisQueueMessageSchema = AnalysisQueueMessagePayloadSchema.extend({

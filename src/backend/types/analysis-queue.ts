@@ -5,6 +5,8 @@ export interface AnalysisQueueMessage {
   session_id: string;
   enqueued_at: string;
   attempt: number;
+  /** When true, per-track ReccoBeats cache keys are cleared before refetch. */
+  force_enrichment?: boolean;
 }
 
 export type AnalysisJobStatus =

@@ -168,14 +168,20 @@ class TestDescribeErrorSource:
         )
 
     def test_includes_http_429_message(self) -> None:
-        assert _describe_error_source(
-            "reccobeats:audio-features", "HTTP 429: rate limited"
-        ) == "audio features unavailable (HTTP 429: rate limited)"
+        assert (
+            _describe_error_source(
+                "reccobeats:audio-features", "HTTP 429: rate limited"
+            )
+            == "audio features unavailable (HTTP 429: rate limited)"
+        )
 
     def test_includes_timeout_message(self) -> None:
-        assert _describe_error_source(
-            "reccobeats:track-metadata", "Request timed out after 15000ms"
-        ) == "track metadata unavailable (Request timed out after 15000ms)"
+        assert (
+            _describe_error_source(
+                "reccobeats:track-metadata", "Request timed out after 15000ms"
+            )
+            == "track metadata unavailable (Request timed out after 15000ms)"
+        )
 
     def test_includes_invalid_shape_message(self) -> None:
         assert _describe_error_source(
@@ -187,10 +193,13 @@ class TestDescribeErrorSource:
         )
 
     def test_simplifies_nested_spotify_404_message(self) -> None:
-        assert _describe_error_source(
-            "spotify:artists",
-            'HTTP 404: {"error": {"status": 404, "message": "Resource not found"}}',
-        ) == "artist genres unavailable (Spotify returned 404: Resource not found)"
+        assert (
+            _describe_error_source(
+                "spotify:artists",
+                'HTTP 404: {"error": {"status": 404, "message": "Resource not found"}}',
+            )
+            == "artist genres unavailable (Spotify returned 404: Resource not found)"
+        )
 
 
 class TestAnalysisPopupRendering:
@@ -203,15 +212,37 @@ class TestAnalysisPopupRendering:
         assert hasattr(content, "_analysis_status_label")
         assert content._analysis_status_label.text == "Analyzing playlist..."
 
-    def test_retry_enrichment_button_is_available_and_bound(self) -> None:
+    def test_refresh_buttons_are_available_and_bound(self) -> None:
         card = _card()
 
         content = card._build_analysis_popup_content()
 
-        assert hasattr(content, "_retry_enrichment_button")
-        retry_button = content._retry_enrichment_button
-        assert retry_button.text == "Retry enrichment"
-        assert retry_button.bound_events["on_release"] == card._retry_enrichment_analysis
+        assert hasattr(content, "_refresh_track_info_button")
+        assert hasattr(content, "_refresh_playlist_tracks_button")
+        assert content._refresh_track_info_button.text == "Refresh track info"
+        assert content._refresh_playlist_tracks_button.text == "Refresh playlist tracks"
+        assert (
+            content._refresh_track_info_button.bound_events["on_release"]
+            == card._refresh_track_info_analysis
+        )
+        assert (
+            content._refresh_playlist_tracks_button.bound_events["on_release"]
+            == card._refresh_playlist_tracks_analysis
+        )
+
+    def test_retry_enrichment_button_is_available_and_bound(self) -> None:
+        """Legacy alias still bound for Track A compatibility."""
+        card = _card()
+
+        content = card._build_analysis_popup_content()
+
+        assert hasattr(content, "_refresh_track_info_button")
+        refresh_button = content._refresh_track_info_button
+        assert refresh_button.text == "Refresh track info"
+        assert (
+            refresh_button.bound_events["on_release"]
+            == card._refresh_track_info_analysis
+        )
 
     def test_worker_passes_analysis_task_to_adapter(self, monkeypatch) -> None:
         card = _card()
@@ -240,6 +271,7 @@ class TestAnalysisPopupRendering:
         duration_label = _FakeWidget(text="")
         progress_bar = _FakeWidget()
         status_label = _FakeWidget(text="")
+        enrichment_label = _FakeWidget(text="")
 
         card._load_analysis_worker(
             "playlist-1",
@@ -247,12 +279,15 @@ class TestAnalysisPopupRendering:
             cast("Label", cast(Any, duration_label)),
             cast(Any, progress_bar),
             cast(Any, status_label),
+            cast(Any, enrichment_label),
         )
 
         assert captured["playlist_id"] == "playlist-1"
         assert captured["analysis_task"] is not None
 
-    def test_worker_force_reanalyze_uses_force_adapter_method(self, monkeypatch) -> None:
+    def test_worker_force_reanalyze_uses_force_adapter_method(
+        self, monkeypatch
+    ) -> None:
         card = _card()
         adapter = _FakeWidget()
         app = _FakeWidget(backend_adapter=adapter)
@@ -279,6 +314,7 @@ class TestAnalysisPopupRendering:
         duration_label = _FakeWidget(text="")
         progress_bar = _FakeWidget()
         status_label = _FakeWidget(text="")
+        enrichment_label = _FakeWidget(text="")
 
         card._load_analysis_worker(
             "playlist-1",
@@ -286,7 +322,9 @@ class TestAnalysisPopupRendering:
             cast("Label", cast(Any, duration_label)),
             cast(Any, progress_bar),
             cast(Any, status_label),
+            cast(Any, enrichment_label),
             True,
+            False,
         )
 
         assert captured["playlist_id"] == "playlist-1"
@@ -413,8 +451,7 @@ class TestAnalysisPopupRendering:
         joined = "\n".join(texts)
 
         assert (
-            "Partial data: artist genres unavailable (HTTP 429: rate limited)"
-            in joined
+            "Partial data: artist genres unavailable (HTTP 429: rate limited)" in joined
         )
         assert (
             "Partial data: track metadata unavailable "

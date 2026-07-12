@@ -24,7 +24,7 @@ import threading
 from typing import Any, Optional
 
 from kivy.app import App
-from kivy.clock import Clock, mainthread
+from kivy.clock import mainthread
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -36,9 +36,8 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
 from ...shared.logging_config import logger
-from ..screens.adapter_mixins.analysis import EXPECTED_ANALYSIS_SCHEMA_VERSION
 from ..utils.analysis_task import AnalysisTask
-from .backend_playlist_card_utils import _describe_error_source, _mood_label
+from .backend_playlist_card_analysis_render import render_analysis_popup_content
 
 
 class PlaylistCardAnalysisPopupMixin:
@@ -72,18 +71,7 @@ class PlaylistCardAnalysisPopupMixin:
 
         playlist_id = self.playlist_data.get("id")
         if playlist_id:
-            threading.Thread(
-                target=self._load_analysis_worker,
-                args=(
-                    playlist_id,
-                    content._analysis_container,
-                    content._duration_label,
-                    content._analysis_progress_bar,
-                    content._analysis_status_label,
-                    False,
-                ),
-                daemon=True,
-            ).start()
+            self._start_analysis_worker(playlist_id, content)
 
     def _build_analysis_popup_content(self) -> BoxLayout:
         root = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(12))
@@ -264,8 +252,18 @@ class PlaylistCardAnalysisPopupMixin:
             size_hint_y=None,
             height=dp(20),
         )
+        enrichment_label = Label(
+            text="",
+            font_size=dp(10),
+            color=(0.65, 0.65, 0.65, 1),
+            halign="left",
+            text_size=(dp(420), None),
+            size_hint_y=None,
+            height=dp(18),
+        )
         right.add_widget(progress_bar)
         right.add_widget(status_label)
+        right.add_widget(enrichment_label)
 
         # Analysis container — replaced by _update_analysis_ui when data arrives
         analysis_container = BoxLayout(
@@ -292,16 +290,25 @@ class PlaylistCardAnalysisPopupMixin:
         right_col = BoxLayout(orientation="vertical", spacing=dp(4))
 
         btn_row = BoxLayout(size_hint_y=None, height=dp(42))
-        btn_row.add_widget(Widget())  # pushes button to the right
-        retry_btn = Button(
-            text="Retry enrichment",
+        btn_row.add_widget(Widget())  # pushes buttons to the right
+        refresh_tracks_btn = Button(
+            text="Refresh playlist tracks",
+            size_hint=(None, 1),
+            width=dp(170),
+            background_color=(0.28, 0.38, 0.22, 1),
+            color=(1, 1, 1, 1),
+        )
+        refresh_tracks_btn.bind(on_release=self._refresh_playlist_tracks_analysis)
+        btn_row.add_widget(refresh_tracks_btn)
+        refresh_info_btn = Button(
+            text="Refresh track info",
             size_hint=(None, 1),
             width=dp(150),
             background_color=(0.46, 0.34, 0.16, 1),
             color=(1, 1, 1, 1),
         )
-        retry_btn.bind(on_release=self._retry_enrichment_analysis)
-        btn_row.add_widget(retry_btn)
+        refresh_info_btn.bind(on_release=self._refresh_track_info_analysis)
+        btn_row.add_widget(refresh_info_btn)
 
         show_tracks_btn = Button(
             text="Show Tracks",
@@ -323,28 +330,38 @@ class PlaylistCardAnalysisPopupMixin:
         root._duration_label = duration_label
         root._analysis_progress_bar = progress_bar
         root._analysis_status_label = status_label
-        root._retry_enrichment_button = retry_btn
+        root._enrichment_status_label = enrichment_label
+        root._refresh_track_info_button = refresh_info_btn
+        root._refresh_playlist_tracks_button = refresh_tracks_btn
         return root
 
-    def _retry_enrichment_analysis(self, *_args: Any) -> None:
-        playlist_id = self.playlist_data.get("id")
-        popup = self._detailed_popup
-        content = getattr(popup, "content", None)
-        if not playlist_id or content is None:
-            return
-
+    def _start_analysis_worker(
+        self,
+        playlist_id: str,
+        content: BoxLayout,
+        *,
+        force_reanalyze: bool = False,
+        refresh_tracks: bool = False,
+    ) -> None:
         progress_bar = content._analysis_progress_bar
         status_label = content._analysis_status_label
+        enrichment_label = content._enrichment_status_label
         analysis_container = content._analysis_container
         duration_label = content._duration_label
 
         progress_bar.height = dp(10)
         progress_bar.value = 0
-        status_label.text = "Retrying enrichment..."
+        enrichment_label.text = ""
+        if refresh_tracks:
+            status_label.text = "Refreshing playlist tracks..."
+        elif force_reanalyze:
+            status_label.text = "Refreshing track info..."
+        else:
+            status_label.text = "Analyzing playlist..."
         analysis_container.clear_widgets()
         analysis_container.add_widget(
             Label(
-                text="Retrying enrichment...",
+                text=status_label.text,
                 font_size=dp(11),
                 color=(0.75, 0.55, 0.15, 1),
                 halign="left",
@@ -362,10 +379,32 @@ class PlaylistCardAnalysisPopupMixin:
                 duration_label,
                 progress_bar,
                 status_label,
-                True,
+                enrichment_label,
+                force_reanalyze,
+                refresh_tracks,
             ),
             daemon=True,
         ).start()
+
+    def _refresh_track_info_analysis(self, *_args: Any) -> None:
+        playlist_id = self.playlist_data.get("id")
+        popup = self._detailed_popup
+        content = getattr(popup, "content", None)
+        if not playlist_id or content is None:
+            return
+        self._start_analysis_worker(playlist_id, content, force_reanalyze=True)
+
+    def _refresh_playlist_tracks_analysis(self, *_args: Any) -> None:
+        playlist_id = self.playlist_data.get("id")
+        popup = self._detailed_popup
+        content = getattr(popup, "content", None)
+        if not playlist_id or content is None:
+            return
+        self._start_analysis_worker(playlist_id, content, refresh_tracks=True)
+
+    def _retry_enrichment_analysis(self, *_args: Any) -> None:
+        """Legacy alias for refresh track info (Track A compatibility)."""
+        self._refresh_track_info_analysis()
 
     def _load_analysis_worker(
         self,
@@ -374,7 +413,9 @@ class PlaylistCardAnalysisPopupMixin:
         duration_label: Label,
         progress_bar: ProgressBar,
         status_label: Label,
+        enrichment_label: Label,
         force_reanalyze: bool = False,
+        refresh_tracks: bool = False,
     ) -> None:
         try:
             app = App.get_running_app()
@@ -387,11 +428,16 @@ class PlaylistCardAnalysisPopupMixin:
                     "No backend connection",
                     progress_bar,
                     status_label,
+                    enrichment_label,
                 )
                 return
 
             analysis_task = AnalysisTask(progress_bar, status_label)
-            if force_reanalyze and hasattr(adapter, "force_reanalyze_playlist"):
+            if refresh_tracks and hasattr(adapter, "refresh_playlist_tracks"):
+                analysis = adapter.refresh_playlist_tracks(
+                    playlist_id, analysis_task=analysis_task
+                )
+            elif force_reanalyze and hasattr(adapter, "force_reanalyze_playlist"):
                 analysis = adapter.force_reanalyze_playlist(
                     playlist_id, analysis_task=analysis_task
                 )
@@ -406,6 +452,7 @@ class PlaylistCardAnalysisPopupMixin:
                 None,
                 progress_bar,
                 status_label,
+                enrichment_label,
             )
         except Exception as exc:
             logger.warning("BackendPlaylistCard: analysis load error: %s", exc)
@@ -416,6 +463,7 @@ class PlaylistCardAnalysisPopupMixin:
                 str(exc),
                 progress_bar,
                 status_label,
+                enrichment_label,
             )
 
     @mainthread
@@ -427,232 +475,18 @@ class PlaylistCardAnalysisPopupMixin:
         error: Optional[str],
         progress_bar: Optional[ProgressBar] = None,
         status_label: Optional[Label] = None,
+        enrichment_label: Optional[Label] = None,
     ) -> None:
-        analysis_container.clear_widgets()
-
-        def _small_label(text, color=(0.75, 0.75, 0.75, 1), height=dp(18)):
-            return Label(
-                text=text,
-                font_size=dp(11),
-                color=color,
-                halign="left",
-                text_size=(dp(420), None),
-                size_hint_y=None,
-                height=height,
-            )
-
-        def _section_header(text):
-            return Label(
-                text=text,
-                font_size=dp(12),
-                bold=True,
-                color=(0.88, 0.88, 0.88, 1),
-                halign="left",
-                text_size=(dp(420), None),
-                size_hint_y=None,
-                height=dp(22),
-            )
-
-        if error or not analysis:
-            msg = (
-                f"Analysis unavailable: {error}" if error else "Analysis not available"
-            )
-            if progress_bar is not None:
-                progress_bar.value = 100
-                progress_bar.height = 0
-            if status_label is not None:
-                status_label.text = msg
-            analysis_container.add_widget(_small_label(msg, color=(0.65, 0.4, 0.4, 1)))
-            return
-
-        if progress_bar is not None:
-            progress_bar.value = 100
-            progress_bar.height = 0
-        if status_label is not None:
-            status_label.text = "Analysis complete"
-
-        # Normalise nested result wrapper
-        results = analysis.get("results", analysis)
-
-        # Results from a pre-schema-versioned (Phase 1) backend lack
-        # schema_version, errors, key_mode_distribution, and
-        # reccobeats_metadata entirely. Gate every Phase-2-and-later section
-        # on schema_version matching so the popup renders identically to
-        # today for those results instead of guessing at partial data.
-        has_current_schema = (
-            results.get("schema_version") == EXPECTED_ANALYSIS_SCHEMA_VERSION
+        render_analysis_popup_content(
+            analysis_container=analysis_container,
+            duration_label=duration_label,
+            playlist_data=self.playlist_data,
+            analysis=analysis,
+            error=error,
+            progress_bar=progress_bar,
+            status_label=status_label,
+            enrichment_label=enrichment_label,
         )
-
-        # Partial-failure banner — shown first so a user scanning top-down
-        # learns the analysis may be incomplete before reading the numbers.
-        if has_current_schema:
-            for err in results.get("errors") or []:
-                source = (
-                    err.get("source", "unknown") if isinstance(err, dict) else "unknown"
-                )
-                message = err.get("message") if isinstance(err, dict) else None
-                analysis_container.add_widget(
-                    _small_label(
-                        f"Partial data: {_describe_error_source(source, message)}",
-                        color=(0.65, 0.4, 0.4, 1),
-                    )
-                )
-
-        # Duration
-        overview = results.get("overview") or {}
-        duration_str = overview.get("formatted_duration", "")
-        if not duration_str:
-            total_ms = overview.get("total_duration_ms", 0) or 0
-            if total_ms:
-                hrs = total_ms // 3_600_000
-                mins = (total_ms % 3_600_000) // 60_000
-                secs = (total_ms % 60_000) // 1000
-                duration_str = f"{hrs}h {mins}m {secs}s" if hrs else f"{mins}m {secs}s"
-        if duration_str:
-            track_count = (self.playlist_data.get("tracks") or {}).get("total", 0)
-            duration_label.text = f"Tracks: {track_count} \u00b7 Duration: {duration_str}"
-
-        # Genre distribution
-        genre_dist = results.get("genre_distribution") or results.get("genres") or {}
-        analysis_container.add_widget(_section_header("Genre Distribution:"))
-        if genre_dist and isinstance(genre_dist, dict):
-            entries = []
-            for genre, val in genre_dist.items():
-                if isinstance(val, dict):
-                    pct = float(val.get("percentage", 0))
-                    count = int(val.get("count", 0))
-                elif isinstance(val, (int, float)):
-                    pct = float(val) * 100 if float(val) <= 1 else float(val)
-                    count = 0
-                else:
-                    continue
-                entries.append((genre, pct, count))
-            entries.sort(key=lambda x: x[1], reverse=True)
-            for genre, pct, count in entries[:7]:
-                line = (
-                    f"{genre}: {pct:.0f}% ({count} tracks)"
-                    if count
-                    else f"{genre}: {pct:.0f}%"
-                )
-                analysis_container.add_widget(_small_label(line))
-        else:
-            analysis_container.add_widget(
-                _small_label("No genre data available", color=(0.55, 0.55, 0.55, 1))
-            )
-
-        # Artist analysis
-        artists_data = results.get("artists") or {}
-        if artists_data:
-            analysis_container.add_widget(_section_header("Artist Analysis:"))
-
-            unique_artists = artists_data.get("unique_artists", 0)
-            diversity = artists_data.get("diversity", 0) or 0
-            diversity_pct = diversity * 100 if diversity <= 1 else diversity
-            analysis_container.add_widget(
-                _small_label(
-                    f"Unique Artists: {unique_artists} \u00b7 Diversity: {diversity_pct:.0f}%"
-                )
-            )
-
-            top_artists = artists_data.get("top_artists") or []
-            if top_artists:
-                top_str = ", ".join(
-                    f"{a.get('artist') or a.get('name', '?')} ({a.get('count', 0)})"
-                    for a in top_artists[:5]
-                )
-                analysis_container.add_widget(_small_label(f"Top Artists: {top_str}"))
-
-        # Audio features (from ReccoBeats, best-effort)
-        audio_features = results.get("audio_features") or {}
-        averages = audio_features.get("averages") or {}
-        if averages:
-            analysis_container.add_widget(_section_header("Audio Features:"))
-
-            def _pct(label: str, key: str) -> Optional[str]:
-                val = averages.get(key)
-                return f"{label}: {val * 100:.0f}%" if val is not None else None
-
-            row1 = [
-                p
-                for p in (
-                    _pct("Danceability", "danceability"),
-                    _pct("Energy", "energy"),
-                    _pct("Acousticness", "acousticness"),
-                )
-                if p
-            ]
-            if row1:
-                analysis_container.add_widget(_small_label(" \u00b7 ".join(row1)))
-
-            row2 = [
-                p
-                for p in (
-                    _pct("Instrumentalness", "instrumentalness"),
-                    _pct("Liveness", "liveness"),
-                    _pct("Speechiness", "speechiness"),
-                )
-                if p
-            ]
-            if row2:
-                analysis_container.add_widget(_small_label(" \u00b7 ".join(row2)))
-
-            row3 = []
-            tempo = averages.get("tempo")
-            if tempo is not None:
-                row3.append(f"Tempo: {int(tempo)} BPM")
-            loudness = averages.get("loudness")
-            if loudness is not None:
-                row3.append(f"Loudness: {loudness:.1f} dB")
-            if row3:
-                analysis_container.add_widget(_small_label(" \u00b7 ".join(row3)))
-
-            valence = averages.get("valence")
-            if valence is not None:
-                analysis_container.add_widget(
-                    _small_label(
-                        f"Mood: {_mood_label(valence)} (valence {valence * 100:.0f}%)"
-                    )
-                )
-
-            if has_current_schema:
-                key_mode = audio_features.get("key_mode_distribution") or {}
-                dominant_key = key_mode.get("dominant_key")
-                dominant_mode = key_mode.get("dominant_mode")
-                if dominant_key and dominant_mode:
-                    key_pct = key_mode.get("dominant_key_percentage", 0)
-                    analysis_container.add_widget(
-                        _small_label(
-                            f"Key: {dominant_key} {dominant_mode} ({key_pct:.0f}% of tracks)"
-                        )
-                    )
-
-            track_count = audio_features.get("track_count", 0)
-            if track_count:
-                analysis_container.add_widget(
-                    _small_label(
-                        f"Based on {track_count} tracks with available audio data",
-                        color=(0.55, 0.55, 0.55, 1),
-                    )
-                )
-
-        # ReccoBeats metadata aggregates (ISRC coverage, popularity range)
-        if has_current_schema:
-            reccobeats_metadata = results.get("reccobeats_metadata") or {}
-            if reccobeats_metadata:
-                analysis_container.add_widget(_section_header("ReccoBeats Metadata:"))
-                isrc_available = reccobeats_metadata.get("isrc_available", 0)
-                total_tracks = (self.playlist_data.get("tracks") or {}).get("total", 0)
-                analysis_container.add_widget(
-                    _small_label(
-                        f"ISRC available for {isrc_available} of {total_tracks} tracks"
-                    )
-                )
-                pop_min = reccobeats_metadata.get("popularity_min")
-                pop_max = reccobeats_metadata.get("popularity_max")
-                if pop_min is not None and pop_max is not None:
-                    analysis_container.add_widget(
-                        _small_label(f"Popularity range: {pop_min}\u2013{pop_max}")
-                    )
 
 
 __all__ = ["PlaylistCardAnalysisPopupMixin"]
