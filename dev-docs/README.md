@@ -66,7 +66,7 @@ Update an existing page when it already covers the same topic.
 |------|---------|
 | [`references/spotify-api-reference.md`](references/spotify-api-reference.md) | Spotify API endpoints, limits, and quirks |
 | [`references/cloudflare-workers-constraints.md`](references/cloudflare-workers-constraints.md) | Cloudflare Worker platform constraints |
-| [`reccobeats-api-contract.md`](reccobeats-api-contract.md) | ReccoBeats API contract notes |
+| [`reccobeats-api-contract.md`](reccobeats-api-contract.md) | ReccoBeats live API contract: join keys (`href`), omission semantics, field inventory (agent entry point) |
 
 ## Plans
 

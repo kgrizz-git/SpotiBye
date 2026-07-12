@@ -6,6 +6,7 @@ import { JWTService } from '../services/jwt';
 import { SpotifyAuthService } from '../services/spotify-auth';
 import { AuthRequiredException } from '../types/errors';
 import { AnalysisJobService } from '../services/analysis-job';
+import { AnalysisStatusStore } from '../services/analysis-status-object';
 import worker from '../index';
 import { kvNamespace, envWithKv } from './helpers/kv';
 import { createTestEnv } from './helpers/env';
@@ -195,16 +196,16 @@ describe('Spotify token expiration — analysis queue', () => {
   };
 
   it('AnalysisJobService fails permanently when session is missing', async () => {
-    const cacheKv = kvNamespace({
-      'analysis:playlist-1:user-1:status': {
-        job_id: 'job-1',
-        playlist_id: 'playlist-1',
-        user_id: 'user-1',
-        status: 'queued',
-        progress: 0,
-      },
+    const env = envWithKv(kvNamespace(), kvNamespace());
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', {
+      job_id: 'job-1',
+      playlist_id: 'playlist-1',
+      user_id: 'user-1',
+      status: 'queued',
+      progress: 0,
     });
-    const service = new AnalysisJobService(envWithKv(cacheKv, kvNamespace()));
+    const service = new AnalysisJobService(env);
 
     await expect(service.process(analysisMessage)).rejects.toMatchObject({
       name: 'NonRetryableError',

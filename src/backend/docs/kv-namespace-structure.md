@@ -8,6 +8,11 @@ The backend uses two primary KV namespaces:
 - `CACHE_KV` - Caching Spotify API responses and computed data
 - `SESSIONS_KV` - User session management and OAuth state
 
+Live playlist-analysis status is intentionally not stored in KV. The
+`ANALYSIS_STATUS` Durable Object stores the current queued/processing/retrying/
+completed/failed record for a user playlist so progress polling can read the
+latest update consistently. Completed analysis results remain in `CACHE_KV`.
+
 ## Namespace Configuration
 
 ### CACHE_KV

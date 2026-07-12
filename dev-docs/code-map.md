@@ -269,19 +269,20 @@ graph TD
 | [middleware/error.ts](../src/backend/middleware/error.ts) | Global error → structured `ErrorResponse` |
 | [routes/auth.ts](../src/backend/routes/auth.ts) | `POST /auth/spotify/login`, `GET /auth/spotify/callback` |
 | [routes/spotify.ts](../src/backend/routes/spotify.ts) | `GET /spotify/playlists` (KV-cached) |
-| [routes/analysis.ts](../src/backend/routes/analysis.ts) | Analysis job lifecycle — writes queued status and sends `ANALYSIS_QUEUE` messages |
+| [routes/analysis.ts](../src/backend/routes/analysis.ts) | Analysis job lifecycle — writes queued status to `ANALYSIS_STATUS` and sends `ANALYSIS_QUEUE` messages |
 | [routes/export/index.ts](../src/backend/routes/export/index.ts) | Composed router (facade at `routes/export.ts`) mounting resumable, batch, and single export sub-routers |
 | [services/spotify.ts](../src/backend/services/spotify.ts) | **Only** caller of `api.spotify.com` — playlists, tracks, audio features |
 | [services/spotify-auth.ts](../src/backend/services/spotify-auth.ts) | OAuth code exchange, token refresh |
 | [services/jwt.ts](../src/backend/services/jwt.ts) | HMAC-SHA256 JWT sign/verify (no external library) |
 | [services/cache.ts](../src/backend/services/cache.ts) | KV wrapper with namespaced keys |
 | [services/analysis.ts](../src/backend/services/analysis.ts) | Computes playlist analysis from Spotify track metadata and best-effort artist metadata |
-| [services/analysis-job.ts](../src/backend/services/analysis-job.ts) | Queue job runner — loads/refreshes session token, enforces idempotency, persists status/results |
+| [services/analysis-job.ts](../src/backend/services/analysis-job.ts) | Queue job runner — loads/refreshes session token, enforces idempotency, persists live status/results |
+| [services/analysis-status-object.ts](../src/backend/services/analysis-status-object.ts) | Durable Object status store for live playlist-analysis progress |
 | [services/export.ts](../src/backend/services/export.ts) | CSV/XLSX/JSON generation, cursor persistence in KV |
 | [types/auth.ts](../src/backend/types/auth.ts) | `JWTPayload`, `AuthTokens`, TTL constants |
 | [types/spotify.ts](../src/backend/types/spotify.ts) | Spotify response shapes |
 | [types/spotify-api.ts](../src/backend/types/spotify-api.ts) | API response schemas, `parseSpotifyResponse()` |
-| [types/env.ts](../src/backend/types/env.ts) | Cloudflare `Env` — KV bindings, queue binding, secrets |
+| [types/env.ts](../src/backend/types/env.ts) | Cloudflare `Env` — KV bindings, Durable Object binding, queue binding, secrets |
 | [types/analysis-queue.ts](../src/backend/types/analysis-queue.ts) | Queue message and analysis status record types |
 | [types/variables.ts](../src/backend/types/variables.ts) | Hono context variable types |
 | [types/api.ts](../src/backend/types/api.ts) | `ErrorResponse` envelope |
@@ -304,9 +305,11 @@ None currently. `services/reccobeats.ts` (previously a test stub) has been remov
 - Insights: generated text summaries
 
 Artist metadata is fetched through individual Spotify `GET /artists/{id}` requests. Do not reintroduce the removed batch endpoint `GET /artists?ids=...`.
-ReccoBeats metadata is fetched through `GET https://api.reccobeats.com/v1/audio-features` with repeated Spotify track `ids` query parameters. Do not use the old typo host `api.recocbeats.com` or unverified `POST /v1/analyze`.
+ReccoBeats metadata is fetched through `GET https://api.reccobeats.com/v1/audio-features` and `GET /v1/track` with repeated Spotify track `ids` query parameters. Do not use the old typo host `api.recocbeats.com` or unverified `POST /v1/analyze`.
 
-`POST /analysis/playlist/:id` writes a queued status and sends a message to `ANALYSIS_QUEUE`. The Worker queue consumer uses `services/analysis-job.ts` to load or refresh the session token, run analysis, and persist results to KV under `analysis:<playlistId>:<userId>:results` once complete. The previously-documented gap (results not written to KV) has been fixed.
+**Contract (agents):** live response shapes, Spotify join via track-level `href` (not ReccoBeats UUID `id`), and batch omission semantics are documented in [`reccobeats-api-contract.md`](reccobeats-api-contract.md).
+
+`POST /analysis/playlist/:id` writes a queued status to the `ANALYSIS_STATUS` Durable Object and sends a message to `ANALYSIS_QUEUE`. The Worker queue consumer uses `services/analysis-job.ts` to load or refresh the session token, run analysis, update live status in the Durable Object, and persist results to KV under `analysis:<playlistId>:<userId>:results` once complete. The previously-documented gap (results not written to KV) has been fixed.
 
 The frontend uses `services/reccobeats_backend.py` → `BackendClient` → `POST /analysis/playlist/:id` for the backend-connected analysis path.
 

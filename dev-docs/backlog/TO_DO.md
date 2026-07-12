@@ -27,7 +27,8 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
 
 ## Playlist Analysis — End-to-End
 
-- [ ] Add visual progress indicator for playlist analysis
+- [ ] Add visual progress indicator for playlist analysis ([plan](../exec-plans/active/2026-07-11-backend-playlist-analysis-progress-bar.md)) — **in progress 2026-07-11**
+  - [ ] Make backend report granular progress across ReccoBeats batches (replace single `emitWarmKeepaliveOnce`)
   - [ ] Wire `analysis_task` progress into the frontend state
   - [ ] Render in-progress, completed, and failed states in the UI
   - [ ] Add focused frontend tests for progress rendering
@@ -50,6 +51,11 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Add a per-session privacy notice because direct fetch sends the user's IP to ReccoBeats
   - [ ] Gate behind `SPOTIBYE_ENABLE_CLIENT_RECCOBEATS` / `FeatureFlags.ENABLE_CLIENT_RECCOBEATS`
   - [ ] Reuse the deferred frontend-fetch design notes in [`../exec-plans/completed/2026-07-09-reccobeats-egress-diagnosis-and-frontend-fetch.md`](../exec-plans/completed/2026-07-09-reccobeats-egress-diagnosis-and-frontend-fetch.md)
+- [ ] Make text on playlist details windows selectable and copyable
+  - [ ] Audit which playlist detail popups/windows render text in non-selectable `Label` widgets (analysis popup, tracks popup, cache explorer)
+  - [ ] Choose a copyable-text approach (e.g. Kivy `TextInput` readonly, or a copy-to-clipboard action per text block) that preserves layout/styling
+  - [ ] Wire a copy action (and/or native text selection) into the relevant windows
+  - [ ] Add focused frontend tests for selection/copy behavior
 - [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations — deferred from the enrichment integration plan above; needs separate UI/caching design (Phase 5 in that plan).
 - [ ] Migrate `export-tracks.ts` off dead Spotify `/audio-features` endpoints to ReccoBeats; remove `SpotifyService.getAudioFeatures`/`getMultipleAudioFeatures` and deprecate the `GET /spotify/tracks/:id/audio-features` proxy route once nothing calls it. Deferred from the enrichment integration plan above (analysis already migrated; export did not).
 - [ ] Consolidate `SpotifyService.fetchWithRetry` with `utils/http-retry.ts`'s `createFetchWithRetry` (added for ReccoBeats fetches) so there is one retry/backoff implementation instead of two. Deferred from the enrichment integration plan above.

@@ -35,6 +35,46 @@ class TestAnalyzePlaylistCacheStaleness:
         harness.reccobeats_service.analyze_playlist.assert_not_called()
         harness.cache_manager.clear_file.assert_not_called()
 
+    def test_forwards_analysis_task_to_normal_backend_analysis(self) -> None:
+        harness = _Harness()
+        analysis_task = MagicMock()
+        harness.cache_manager.is_analysis_cache_valid.return_value = False
+        fresh = {
+            "schema_version": EXPECTED_ANALYSIS_SCHEMA_VERSION,
+            "status": "completed",
+        }
+        harness.reccobeats_service.analyze_playlist.return_value = fresh
+
+        result = harness.analyze_playlist("playlist-1", analysis_task=analysis_task)
+
+        assert result == fresh
+        harness.reccobeats_service.analyze_playlist.assert_called_once_with(
+            "playlist-1", analysis_task
+        )
+
+    def test_forwards_analysis_task_to_forced_reanalysis(self) -> None:
+        harness = _Harness()
+        analysis_task = MagicMock()
+        harness.cache_manager.is_analysis_cache_valid.return_value = True
+        harness.cache_manager.get_cached_analysis.return_value = {
+            "schema_version": EXPECTED_ANALYSIS_SCHEMA_VERSION,
+            "status": "completed",
+            "errors": [{"source": "reccobeats:track-metadata"}],
+        }
+        fresh = {
+            "schema_version": EXPECTED_ANALYSIS_SCHEMA_VERSION,
+            "status": "completed",
+            "errors": [],
+        }
+        harness.reccobeats_service.force_reanalyze_playlist.return_value = fresh
+
+        result = harness.analyze_playlist("playlist-1", analysis_task=analysis_task)
+
+        assert result == fresh
+        harness.reccobeats_service.force_reanalyze_playlist.assert_called_once_with(
+            "playlist-1", analysis_task
+        )
+
     def test_forces_reanalysis_when_cached_current_schema_has_reccobeats_errors(
         self,
     ) -> None:

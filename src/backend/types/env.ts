@@ -28,6 +28,9 @@ export interface Env {
   CACHE_KV: KVNamespace;
   SESSIONS_KV: KVNamespace;
 
+  // Durable Object namespaces
+  ANALYSIS_STATUS: DurableObjectNamespace;
+
   // Queue bindings
   ANALYSIS_QUEUE: Queue<AnalysisQueueMessage>;
 }

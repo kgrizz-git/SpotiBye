@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from '../index';
 import { AnalysisJobService } from '../services/analysis-job';
 import { AnalysisService } from '../services/analysis';
+import { AnalysisStatusStore } from '../services/analysis-status-object';
 import { kvNamespace, envWithKv } from './helpers/kv';
 
 const analysisResult = {
@@ -84,17 +85,26 @@ describe('AnalysisJobService', () => {
     });
     vi.spyOn(AnalysisService.prototype, 'analyzePlaylist').mockResolvedValue(analysisResult);
 
-    const service = new AnalysisJobService(envWithKv(cacheKv, sessionsKv));
+    const env = envWithKv(cacheKv, sessionsKv);
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', {
+      job_id: 'job-1',
+      playlist_id: 'playlist-1',
+      user_id: 'user-1',
+      status: 'queued',
+      progress: 0,
+    });
+    const service = new AnalysisJobService(env);
 
     const outcome = await service.process(analysisMessage);
 
     expect(outcome).toEqual({ acknowledged: true, reason: 'completed' });
     expect(cacheKv.put).toHaveBeenCalledWith(resultsKey, JSON.stringify(analysisResult), { expirationTtl: 86400 });
-    expect(cacheKv.put).toHaveBeenCalledWith(
-      statusKey,
-      expect.stringContaining('"status":"completed"'),
-      { expirationTtl: 3600 }
-    );
+    expect(await statusStore.getStatus('user-1', 'playlist-1')).toMatchObject({
+      job_id: 'job-1',
+      status: 'completed',
+      progress: 100,
+    });
   });
 
   it('acknowledges stale duplicate deliveries without overwriting a newer job', async () => {
@@ -108,7 +118,16 @@ describe('AnalysisJobService', () => {
         progress: 0,
       },
     });
-    const service = new AnalysisJobService(envWithKv(cacheKv));
+    const env = envWithKv(cacheKv);
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', {
+      job_id: 'job-newer',
+      playlist_id: 'playlist-1',
+      user_id: 'user-1',
+      status: 'queued',
+      progress: 0,
+    });
+    const service = new AnalysisJobService(env);
     const analyzeSpy = vi.spyOn(AnalysisService.prototype, 'analyzePlaylist');
 
     const outcome = await service.process({ ...analysisMessage, job_id: 'job-old' });
@@ -145,7 +164,16 @@ describe('AnalysisJobService', () => {
       artists: { unique_artists: 0, top_artists: [], diversity: 0 },
     });
 
-    const service = new AnalysisJobService(envWithKv(cacheKv, sessionsKv));
+    const env = envWithKv(cacheKv, sessionsKv);
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', {
+      job_id: 'job-1',
+      playlist_id: 'playlist-1',
+      user_id: 'user-1',
+      status: 'queued',
+      progress: 0,
+    });
+    const service = new AnalysisJobService(env);
 
     await service.process(analysisMessage);
 
@@ -172,7 +200,17 @@ describe('AnalysisJobService', () => {
         completed_at: '2026-06-19T00:00:01.000Z',
       },
     });
-    const service = new AnalysisJobService(envWithKv(cacheKv));
+    const env = envWithKv(cacheKv);
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', {
+      job_id: 'job-1',
+      playlist_id: 'playlist-1',
+      user_id: 'user-1',
+      status: 'completed',
+      progress: 100,
+      completed_at: '2026-06-19T00:00:01.000Z',
+    });
+    const service = new AnalysisJobService(env);
     const analyzeSpy = vi.spyOn(AnalysisService.prototype, 'analyzePlaylist');
 
     const outcome = await service.process({ ...analysisMessage, attempt: 1 });

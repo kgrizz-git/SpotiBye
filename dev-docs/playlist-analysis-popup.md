@@ -72,9 +72,9 @@ The genre distribution and artist analysis shown in the original screenshots cam
 
 ### What works now
 
-- `POST /analysis/playlist/:id` queues analysis and stores queued status in KV.
+- `POST /analysis/playlist/:id` queues analysis and stores queued status in the `ANALYSIS_STATUS` Durable Object.
 - The Cloudflare Queues consumer runs analysis outside the initial HTTP request and can retry failed deliveries.
-- Completed results are written to `analysis:{playlistId}:{userId}:results`.
+- Completed results are written to KV at `analysis:{playlistId}:{userId}:results`.
 - `GET /analysis/playlist/:id/results` returns cached results after completion; it only returns 404 when no result exists.
 - Playlist tracks are paginated with Spotify's raw page count, so local/unavailable filtered items do not stop pagination early.
 - Artist metadata is fetched individually with `GET /artists/{id}` because Spotify removed the `GET /artists?ids=...` batch endpoint for affected apps.

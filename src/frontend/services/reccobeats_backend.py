@@ -16,6 +16,8 @@ from ..utils.network_utils import (
 
 logger = logging.getLogger(__name__)
 
+SYNTHETIC_PROGRESS_STALE_AFTER_SECONDS = 5.0
+
 
 def _has_reccobeats_errors(analysis: Dict[str, Any]) -> bool:
     errors = analysis.get("errors")
@@ -120,6 +122,8 @@ class ReccoBeatsBackendService:
         start_time = time.time()
         poll_interval = 2.0  # Start with 2 seconds
         max_poll_interval = 10.0  # Max 10 seconds between polls
+        last_reported_progress: Optional[int] = None
+        stale_progress_since: Optional[float] = None
 
         while time.time() - start_time < max_wait_time:
             if analysis_task and analysis_task.is_cancelled():
@@ -142,6 +146,8 @@ class ReccoBeatsBackendService:
 
             if status == "completed":
                 logger.info("Analysis completed successfully")
+                if analysis_task:
+                    analysis_task.update_progress(100, "Analysis complete")
                 try:
                     results = self.backend_client.get_analysis_results(playlist_id)
                     if (
@@ -198,9 +204,36 @@ class ReccoBeatsBackendService:
                 raise BackendAPIError(f"Analysis failed: {error_msg}")
             elif status in ["pending", "processing", "running", "queued"]:
                 if analysis_task:
-                    analysis_task.update_progress(
-                        progress, f"Analyzing playlist... {progress}%"
-                    )
+                    now = time.time()
+                    if (
+                        last_reported_progress is not None
+                        and progress <= last_reported_progress
+                        and hasattr(analysis_task, "update_synthetic_progress")
+                        and stale_progress_since is not None
+                        and now - stale_progress_since >= SYNTHETIC_PROGRESS_STALE_AFTER_SECONDS
+                    ):
+                        elapsed = now - start_time
+                        logger.debug(
+                            "Synthetic analysis progress active after "
+                            f"{elapsed:.1f}s; backend status remains {status}, "
+                            f"progress: {progress}%"
+                        )
+                        analysis_task.update_synthetic_progress(
+                            elapsed, "Analyzing playlist..."
+                        )
+                    else:
+                        if (
+                            last_reported_progress is None
+                            or progress > last_reported_progress
+                        ):
+                            analysis_task.update_progress(
+                                progress, f"Analyzing playlist... {progress}%"
+                            )
+                            stale_progress_since = now
+                        elif stale_progress_since is None:
+                            stale_progress_since = now
+                    if last_reported_progress is None or progress > last_reported_progress:
+                        last_reported_progress = progress
                 # Exponential backoff for polling
                 time.sleep(min(poll_interval, max_poll_interval))
                 poll_interval *= 1.5

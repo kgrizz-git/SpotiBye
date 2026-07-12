@@ -39,6 +39,10 @@ class _FakeWidget:
     def setter(self, _name: str):
         return lambda *_a, **_k: None
 
+    @staticmethod
+    def schedule_once(callback: Any, timeout: float = 0) -> Any:
+        return callback(timeout)
+
 
 def _fake_module(name: str, **attrs: Any) -> types.ModuleType:
     module = types.ModuleType(name)
@@ -66,6 +70,9 @@ _STUB_MODULES = {
     "kivy.uix.image": _fake_module("kivy.uix.image", AsyncImage=_FakeWidget),
     "kivy.uix.label": _fake_module("kivy.uix.label", Label=_FakeWidget),
     "kivy.uix.popup": _fake_module("kivy.uix.popup", Popup=_FakeWidget),
+    "kivy.uix.progressbar": _fake_module(
+        "kivy.uix.progressbar", ProgressBar=_FakeWidget
+    ),
     "kivy.uix.relativelayout": _fake_module(
         "kivy.uix.relativelayout", RelativeLayout=_FakeWidget
     ),
@@ -80,6 +87,7 @@ try:
         _describe_error_source,
         _mood_label,
     )
+    from ..ui import backend_playlist_card_analysis_popup as analysis_popup_module
 finally:
     for _name, _orig in _original_modules.items():
         if _orig is None:
@@ -90,7 +98,14 @@ finally:
 
 def _card(total_tracks: int = 5) -> BackendPlaylistCard:
     card = BackendPlaylistCard.__new__(BackendPlaylistCard)
-    card.playlist_data = {"tracks": {"total": total_tracks}}
+    card.playlist_data = {
+        "id": "playlist-1",
+        "name": "Playlist",
+        "tracks": {"total": total_tracks},
+        "owner": {},
+        "images": [],
+        "external_urls": {},
+    }
     return card
 
 
@@ -170,8 +185,62 @@ class TestDescribeErrorSource:
             "(Invalid ReccoBeats audio features response shape)"
         )
 
+    def test_simplifies_nested_spotify_404_message(self) -> None:
+        assert _describe_error_source(
+            "spotify:artists",
+            'HTTP 404: {"error": {"status": 404, "message": "Resource not found"}}',
+        ) == "artist genres unavailable (Spotify returned 404: Resource not found)"
+
 
 class TestAnalysisPopupRendering:
+    def test_loading_state_exposes_progress_widgets(self) -> None:
+        card = _card()
+
+        content = card._build_analysis_popup_content()
+
+        assert hasattr(content, "_analysis_progress_bar")
+        assert hasattr(content, "_analysis_status_label")
+        assert content._analysis_status_label.text == "Analyzing playlist..."
+
+    def test_worker_passes_analysis_task_to_adapter(self, monkeypatch) -> None:
+        card = _card()
+        adapter = _FakeWidget()
+        adapter.analyze_playlist = cast(
+            Any, lambda *_args, **_kwargs: {"status": "completed"}
+        )
+        app = _FakeWidget(backend_adapter=adapter)
+        monkeypatch.setattr(
+            analysis_popup_module.App,
+            "get_running_app",
+            lambda: app,
+            raising=False,
+        )
+        captured: dict[str, Any] = {}
+
+        def analyze_playlist(
+            playlist_id: str, analysis_task: Any = None
+        ) -> dict[str, Any]:
+            captured["playlist_id"] = playlist_id
+            captured["analysis_task"] = analysis_task
+            return {"status": "completed"}
+
+        adapter.analyze_playlist = analyze_playlist
+        container = _FakeWidget()
+        duration_label = _FakeWidget(text="")
+        progress_bar = _FakeWidget()
+        status_label = _FakeWidget(text="")
+
+        card._load_analysis_worker(
+            "playlist-1",
+            cast("BoxLayout", cast(Any, container)),
+            cast("Label", cast(Any, duration_label)),
+            cast(Any, progress_bar),
+            cast(Any, status_label),
+        )
+
+        assert captured["playlist_id"] == "playlist-1"
+        assert captured["analysis_task"] is not None
+
     def test_renders_all_nine_audio_features_key_mode_and_metadata(self) -> None:
         card = _card(total_tracks=10)
         analysis = {
@@ -279,6 +348,10 @@ class TestAnalysisPopupRendering:
                     "source": "reccobeats:track-metadata",
                     "message": "Request timed out after 15000ms",
                 },
+                {
+                    "source": "reccobeats:coverage",
+                    "message": "Audio features available for 0 of 30 tracks.",
+                },
             ],
             "overview": {},
             "genre_distribution": {},
@@ -295,6 +368,10 @@ class TestAnalysisPopupRendering:
         assert (
             "Partial data: track metadata unavailable "
             "(Request timed out after 15000ms)" in joined
+        )
+        assert (
+            "Partial data: audio feature coverage note "
+            "(Audio features available for 0 of 30 tracks.)" in joined
         )
 
     def test_no_crash_without_audio_features(self) -> None:

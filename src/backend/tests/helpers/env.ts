@@ -13,6 +13,7 @@
  */
 import { vi } from 'vitest';
 import type { Env } from '../../types/env';
+import { createAnalysisStatusNamespaceStub } from '../../services/analysis-status-object';
 
 export const TEST_ALLOWED_REDIRECT_URIS =
   'http://localhost:3000,http://localhost:3000/callback,http://localhost:8080';
@@ -41,6 +42,7 @@ export const createTestEnv = (overrides: Partial<Env> = {}): Env => {
       delete: vi.fn(async () => undefined),
       list: vi.fn(async () => ({ keys: [] })),
     } as unknown as KVNamespace,
+    ANALYSIS_STATUS: createAnalysisStatusNamespaceStub() as Env['ANALYSIS_STATUS'],
     ANALYSIS_QUEUE: {
       send: vi.fn(async () => undefined),
     } as unknown as Queue,

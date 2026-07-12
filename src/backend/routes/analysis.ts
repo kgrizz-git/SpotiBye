@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { authMiddleware } from '../middleware/auth';
 import { CacheService } from '../services/cache';
+import { AnalysisStatusStore } from '../services/analysis-status-object';
 import { ANALYSIS_SCHEMA_VERSION } from '../utils/constants';
 import { compareVersions } from '../utils/version';
 import type { AnalysisStatusRecord } from '../types/analysis-queue';
@@ -32,11 +33,11 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
     const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
+    const statusStore = new AnalysisStatusStore(c.env.ANALYSIS_STATUS);
 
     // Check if analysis is already in progress or completed
-    const statusKey = `analysis:${playlistId}:${userId}:status`;
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
-    const existingStatus = await cacheService.get<AnalysisStatusRecord>(statusKey);
+    const existingStatus = await statusStore.getStatus(userId, playlistId);
 
     if (existingStatus) {
       // completed: return cached result, unless the results are stale (missing
@@ -61,7 +62,7 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
           });
         }
         await Promise.all([
-          cacheService.delete(statusKey),
+          statusStore.deleteStatus(userId, playlistId),
           cacheService.delete(resultsKey),
         ]);
         // Falls through to enqueue a fresh job below.
@@ -84,7 +85,7 @@ app.post('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
       progress: 0,
     };
 
-    await cacheService.set(statusKey, status, 3600);
+    await statusStore.writeStatus(userId, playlistId, status);
 
     await c.env.ANALYSIS_QUEUE.send({
       job_id: jobId,
@@ -110,10 +111,8 @@ app.get('/playlist/:id/status', zValidator('param', IdParamSchema), async (c) =>
   try {
     const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
-    const cacheService = new CacheService(c.env.CACHE_KV);
-
-    const statusKey = `analysis:${playlistId}:${userId}:status`;
-    const status = await cacheService.get(statusKey);
+    const statusStore = new AnalysisStatusStore(c.env.ANALYSIS_STATUS);
+    const status = await statusStore.getStatus(userId, playlistId);
 
     if (!status) {
       return c.json({ error: { code: 'ANALYSIS_NOT_FOUND', message: 'Analysis not found' } }, { status: 404 as ContentfulStatusCode });
@@ -142,9 +141,11 @@ app.get('/playlist/:id/results', zValidator('param', IdParamSchema), async (c) =
 
     if (isStaleAnalysisResult(results)) {
       const statusKey = `analysis:${playlistId}:${userId}:status`;
+      const statusStore = new AnalysisStatusStore(c.env.ANALYSIS_STATUS);
       await Promise.all([
         cacheService.delete(resultsKey),
         cacheService.delete(statusKey),
+        statusStore.deleteStatus(userId, playlistId),
       ]);
       return c.json({ error: { code: 'ANALYSIS_RESULTS_NOT_FOUND', message: 'Analysis results not found' } }, { status: 404 as ContentfulStatusCode });
     }
@@ -162,12 +163,12 @@ app.delete('/playlist/:id', zValidator('param', IdParamSchema), async (c) => {
     const { id: playlistId } = c.req.valid('param');
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
+    const statusStore = new AnalysisStatusStore(c.env.ANALYSIS_STATUS);
 
-    const statusKey = `analysis:${playlistId}:${userId}:status`;
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
 
     await Promise.all([
-      cacheService.delete(statusKey),
+      statusStore.deleteStatus(userId, playlistId),
       cacheService.delete(resultsKey)
     ]);
 

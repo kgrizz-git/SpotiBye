@@ -7,7 +7,7 @@ This note explains the current TypeScript backend analysis route and how it rela
 - `POST /analysis/playlist/:id` creates a queued status, sends a message to `ANALYSIS_QUEUE`, and returns immediately.
 - The same Worker module exports a queue consumer that loads the session from `SESSIONS_KV`, refreshes the Spotify access token when needed, writes `processing`, and runs `AnalysisService`.
 - Completed results are written to KV at `analysis:{playlistId}:{userId}:results`.
-- Status is written to KV at `analysis:{playlistId}:{userId}:status`.
+- Live status is written to the `ANALYSIS_STATUS` Durable Object named `analysis:{userId}:{playlistId}`.
 - Retryable queue failures write `retrying` before rethrowing for Cloudflare Queues retry; exhausted retries write `failed`.
 - `GET /analysis/playlist/:id/results` returns cached results once analysis completes. It only returns 404 when no result is cached for that playlist/user.
 - `src/backend/services/analysis.ts` computes core analysis from Spotify playlist track metadata and best-effort Spotify artist metadata.
@@ -25,23 +25,25 @@ sequenceDiagram
     participant Route as routes/analysis.ts
     participant Queue as ANALYSIS_QUEUE
     participant Consumer as index.ts queue()
+    participant Status as ANALYSIS_STATUS DO
     participant Cache as CacheService/KV
     participant Analysis as services/analysis.ts
     participant Spotify as services/spotify.ts
 
     UI->>BC: analyze_playlist(playlistId)
     BC->>Route: POST /analysis/playlist/:id
-    Route->>Cache: set queued status
+    Route->>Status: set queued status
     Route->>Queue: send job identifiers
     Route-->>BC: status=queued, job_id
     Queue->>Consumer: deliver message
-    Consumer->>Cache: read current status
+    Consumer->>Status: read current status
     Consumer->>Analysis: analyzePlaylist
     Analysis->>Spotify: getPlaylistTracks(...pages)
     Analysis->>Spotify: getArtists(...individual IDs)
     Spotify-->>Analysis: artist metadata or failure
     Analysis-->>Consumer: flat analysis result
-    Consumer->>Cache: set results + completed status
+    Consumer->>Cache: set results
+    Consumer->>Status: set completed status
     UI->>BC: poll status/results
 ```
 

@@ -7,6 +7,8 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Playlist analysis popups now show live progress with a progress bar and status text while backend analysis runs, including bounded activity feedback when Cloudflare KV status reads are stale.
+- Backend playlist analysis status now uses a Durable Object for live progress reads, while completed analysis results remain in KV.
 - Added a file-length pre-commit hook (`scripts/check_file_lengths.py`) to warn when Python or Markdown files exceed line count thresholds (700 lines for code, 1000 lines for tests, 300 lines for docs), with configurable glob exemptions in `scripts/file-length-exemptions.json`. Initially runs in `--warn` mode for a 14-day transition period before enforcement.
 - Automatic re-authentication prompt when Spotify refresh tokens expire (handles Spotify's June 2026 6-month refresh token expiration policy)
 - Added Zod request and boundary validation to the TypeScript backend: invalid inputs return the app's `{ error: { code, message } }` envelope. Existing route-specific codes are preserved where they already existed (`MISSING_REDIRECT_URI`, `INVALID_PLAYLISTS`); newly validated path and query parameters use `VALIDATION_ERROR`. KV sessions, queue messages, and Worker env bindings are schema-validated at boundaries.
@@ -29,6 +31,8 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Refactored `services/export.ts` (1,186 lines) into focused modules: `export-types`, `export-cursor`, `export-job-state`, `export-assemble`, `export-collect`, `export-assembly`, `export-xlsx`, `export-xlsx-lite`, `export-csv`, `export-json`, `export-tracks`, `export-format-helpers`. The `ExportService` class is now a thin facade with static and instance delegating methods — no change to the public API, call sites, or output formats. Added unit tests for all extracted pure functions.
 
 ### Fixed
+- Playlist analysis now preserves Spotify genre data from artists that resolve successfully even when another artist metadata lookup returns 404, filters blank/null top-artist names, and shows a ReccoBeats coverage note when audio features are available for only part of a playlist.
+- Playlist analysis partial-data banners now simplify nested Spotify API errors, so artist-genre 404s show a readable message instead of raw JSON.
 - Playlist analysis now forces a fresh backend analysis when cached results contain ReccoBeats partial-failure errors, so playlists analyzed before an enrichment fix can retry instead of permanently showing stale missing-data banners.
 - Reduced ReccoBeats playlist-analysis request batches below the upstream 40-ID cap so larger playlists no longer lose enrichment because 50-ID batches are rejected.
 - Playlist analysis partial-data banners now include the backend's diagnostic error message, making ReccoBeats failures such as rate limits, timeouts, and invalid response shapes visible in the popup.

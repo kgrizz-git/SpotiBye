@@ -26,6 +26,7 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 - **User docs:** [docs/index.md](docs/index.md) — end-user documentation map
 - **Developer docs:** [dev-docs/README.md](dev-docs/README.md) — contributor, agent, architecture, plan, and reference map
 - **Dependency graph:** [dev-docs/dependency-graph.json](dev-docs/dependency-graph.json) — machine-readable import graph for impact analysis
+- **ReccoBeats API (live shapes, join keys, omission semantics):** [dev-docs/reccobeats-api-contract.md](dev-docs/reccobeats-api-contract.md) — read before changing analysis enrichment, export audio features, or per-track caching
 
 ---
 

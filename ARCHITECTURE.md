@@ -149,11 +149,11 @@ Full flow doc: [dev-docs/guides/authentication-flow.md](dev-docs/guides/authenti
 ## Analysis Flow
 
 1. Frontend calls `POST /analysis/playlist/:id`
-2. Backend checks KV for an existing completed, queued, or actively-processing job; returns it if found
-3. Otherwise, writes `queued` status to KV and sends a small message to `ANALYSIS_QUEUE`
+2. Backend checks the analysis-status Durable Object for an existing completed, queued, or actively-processing job; returns it if found
+3. Otherwise, writes `queued` status to the Durable Object and sends a small message to `ANALYSIS_QUEUE`
 4. The Worker queue consumer loads the session from `SESSIONS_KV`, refreshes the Spotify token if needed, writes `processing`, and runs `AnalysisService`
 5. Analysis fetches all tracks from Spotify, computes stats (track count, duration, artist diversity, genre distribution, text insights), and adds best-effort ReccoBeats audio-feature summary data when available
-6. Results are written to KV under `analysis:<playlistId>:<userId>:results`; status updates to `completed`, `retrying`, or `failed`
+6. Results are written to KV under `analysis:<playlistId>:<userId>:results`; live status updates to `completed`, `retrying`, or `failed` in the Durable Object
 7. Frontend polls `GET /analysis/playlist/:id/status` then fetches `GET /analysis/playlist/:id/results`
 
 ---
@@ -171,7 +171,7 @@ Cache keys in the backend do not follow a single format — each service uses it
 | Playlist tracks | `playlist:<playlistId>:tracks:<limit>:<offset>` | 5 min |
 | Track | `track:<trackId>` | 1 hr |
 | Audio features | `track:<trackId>:audio-features` | 1 hr |
-| Analysis status | `analysis:<playlistId>:<userId>:status` | 1 hr |
+| Analysis status | Durable Object `ANALYSIS_STATUS`, name `analysis:<userId>:<playlistId>` | Live job lifetime |
 | Analysis results | `analysis:<playlistId>:<userId>:results` | 24 hr |
 | Export job | `export:job:<jobId>:<userId>` | 1 hr |
 | Export file bytes | `export:job:<jobId>:<userId>:file[:<mode>]` | 1 hr |

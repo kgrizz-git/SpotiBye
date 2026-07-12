@@ -31,11 +31,13 @@ from kivy.uix.button import Button
 from kivy.uix.image import AsyncImage
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
+from kivy.uix.progressbar import ProgressBar
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
 from ...shared.logging_config import logger
 from ..screens.adapter_mixins.analysis import EXPECTED_ANALYSIS_SCHEMA_VERSION
+from ..utils.analysis_task import AnalysisTask
 from .backend_playlist_card_utils import _describe_error_source, _mood_label
 
 
@@ -76,6 +78,8 @@ class PlaylistCardAnalysisPopupMixin:
                     playlist_id,
                     content._analysis_container,
                     content._duration_label,
+                    content._analysis_progress_bar,
+                    content._analysis_status_label,
                 ),
                 daemon=True,
             ).start()
@@ -244,6 +248,24 @@ class PlaylistCardAnalysisPopupMixin:
         )
         right.add_widget(duration_label)
 
+        progress_bar = ProgressBar(
+            max=100,
+            value=0,
+            size_hint_y=None,
+            height=dp(10),
+        )
+        status_label = Label(
+            text="Analyzing playlist...",
+            font_size=dp(11),
+            color=(0.75, 0.55, 0.15, 1),
+            halign="left",
+            text_size=(dp(420), None),
+            size_hint_y=None,
+            height=dp(20),
+        )
+        right.add_widget(progress_bar)
+        right.add_widget(status_label)
+
         # Analysis container — replaced by _update_analysis_ui when data arrives
         analysis_container = BoxLayout(
             orientation="vertical", size_hint_y=None, spacing=dp(2)
@@ -259,17 +281,6 @@ class PlaylistCardAnalysisPopupMixin:
                 text_size=(dp(420), None),
                 size_hint_y=None,
                 height=dp(22),
-            )
-        )
-        analysis_container.add_widget(
-            Label(
-                text="Analyzing playlist...",
-                font_size=dp(11),
-                color=(0.75, 0.55, 0.15, 1),
-                halign="left",
-                text_size=(dp(420), None),
-                size_hint_y=None,
-                height=dp(20),
             )
         )
         right.add_widget(analysis_container)
@@ -299,25 +310,52 @@ class PlaylistCardAnalysisPopupMixin:
 
         root._analysis_container = analysis_container
         root._duration_label = duration_label
+        root._analysis_progress_bar = progress_bar
+        root._analysis_status_label = status_label
         return root
 
     def _load_analysis_worker(
-        self, playlist_id: str, analysis_container: BoxLayout, duration_label: Label
+        self,
+        playlist_id: str,
+        analysis_container: BoxLayout,
+        duration_label: Label,
+        progress_bar: ProgressBar,
+        status_label: Label,
     ) -> None:
         try:
             app = App.get_running_app()
             adapter = getattr(app, "backend_adapter", None)
             if adapter is None:
                 self._update_analysis_ui(
-                    analysis_container, duration_label, None, "No backend connection"
+                    analysis_container,
+                    duration_label,
+                    None,
+                    "No backend connection",
+                    progress_bar,
+                    status_label,
                 )
                 return
 
-            analysis = adapter.analyze_playlist(playlist_id)
-            self._update_analysis_ui(analysis_container, duration_label, analysis, None)
+            analysis_task = AnalysisTask(progress_bar, status_label)
+            analysis = adapter.analyze_playlist(playlist_id, analysis_task=analysis_task)
+            self._update_analysis_ui(
+                analysis_container,
+                duration_label,
+                analysis,
+                None,
+                progress_bar,
+                status_label,
+            )
         except Exception as exc:
             logger.warning("BackendPlaylistCard: analysis load error: %s", exc)
-            self._update_analysis_ui(analysis_container, duration_label, None, str(exc))
+            self._update_analysis_ui(
+                analysis_container,
+                duration_label,
+                None,
+                str(exc),
+                progress_bar,
+                status_label,
+            )
 
     @mainthread
     def _update_analysis_ui(
@@ -326,6 +364,8 @@ class PlaylistCardAnalysisPopupMixin:
         duration_label: Label,
         analysis: Optional[dict[str, Any]],
         error: Optional[str],
+        progress_bar: Optional[ProgressBar] = None,
+        status_label: Optional[Label] = None,
     ) -> None:
         analysis_container.clear_widgets()
 
@@ -356,8 +396,19 @@ class PlaylistCardAnalysisPopupMixin:
             msg = (
                 f"Analysis unavailable: {error}" if error else "Analysis not available"
             )
+            if progress_bar is not None:
+                progress_bar.value = 100
+                progress_bar.height = 0
+            if status_label is not None:
+                status_label.text = msg
             analysis_container.add_widget(_small_label(msg, color=(0.65, 0.4, 0.4, 1)))
             return
+
+        if progress_bar is not None:
+            progress_bar.value = 100
+            progress_bar.height = 0
+        if status_label is not None:
+            status_label.text = "Analysis complete"
 
         # Normalise nested result wrapper
         results = analysis.get("results", analysis)

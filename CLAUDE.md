@@ -10,6 +10,7 @@
 - **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md) — layer contracts, data flow, domain breakdown
 - **User docs:** [docs/index.md](docs/index.md) — end-user documentation map
 - **Developer docs:** [dev-docs/README.md](dev-docs/README.md) — contributor, agent, architecture, plan, and reference map
+- **ReccoBeats API:** [dev-docs/reccobeats-api-contract.md](dev-docs/reccobeats-api-contract.md) — live response shapes, Spotify join via `href`, batch omission semantics
 - **Sub-agents:** [.claude/sub-agents/](.claude/sub-agents/) — architecture-analyst, dependency-analyst, test-coverage-analyst, security-scanner, evaluator
 
 ---

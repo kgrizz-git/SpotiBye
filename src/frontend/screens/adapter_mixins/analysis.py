@@ -29,7 +29,10 @@ class AnalysisMixin:
     """Backend playlist analysis orchestration."""
 
     def analyze_playlist(
-        self, playlist_id: str, progress_callback: Optional[Callable[..., Any]] = None
+        self,
+        playlist_id: str,
+        progress_callback: Optional[Callable[..., Any]] = None,
+        analysis_task: Optional[Any] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Analyze a playlist using backend.
@@ -37,6 +40,7 @@ class AnalysisMixin:
         Args:
             playlist_id: Spotify playlist ID
             progress_callback: Optional progress callback
+            analysis_task: Optional analysis task for backend polling progress
 
         Returns:
             Analysis results or None if error
@@ -58,6 +62,12 @@ class AnalysisMixin:
                             self.cache_manager.clear_file(
                                 f"analysis_{playlist_id}.json"
                             )
+                            if analysis_task is not None:
+                                return (
+                                    self.reccobeats_service.force_reanalyze_playlist(
+                                        playlist_id, analysis_task
+                                    )
+                                )
                             return self.reccobeats_service.force_reanalyze_playlist(
                                 playlist_id
                             )
@@ -74,7 +84,14 @@ class AnalysisMixin:
                 progress_callback("Starting playlist analysis...")
 
             # Use the ReccoBeats backend service
-            analysis_results = self.reccobeats_service.analyze_playlist(playlist_id)
+            if analysis_task is not None:
+                analysis_results = self.reccobeats_service.analyze_playlist(
+                    playlist_id, analysis_task
+                )
+            else:
+                analysis_results = self.reccobeats_service.analyze_playlist(
+                    playlist_id
+                )
 
             if analysis_results:
                 # Cache the results

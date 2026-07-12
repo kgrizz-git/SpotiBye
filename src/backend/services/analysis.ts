@@ -44,7 +44,6 @@ export class AnalysisService {
   private accessToken: string;
   private reccoBeatsUrl = 'https://api.reccobeats.com/v1';
   private fetchWithRetry = createFetchWithRetry();
-  private emittedWarmKeepalive = false;
   private cache?: CacheService;
 
   constructor(accessToken: string, cache?: CacheService) {
@@ -89,20 +88,9 @@ export class AnalysisService {
           if (artist.id) artistIdSet.add(artist.id);
         }
       }
-      let artistData: SpotifyArtistFull[] = [];
-      try {
-        logger.info('Fetching Spotify artist metadata', { playlistId, artistCount: artistIdSet.size });
-        await onProgress?.(50);
-        artistData = await spotifyService.getArtists([...artistIdSet]);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.warn('Failed to fetch Spotify artist metadata; continuing without genre insights', {
-          playlistId,
-          artistCount: artistIdSet.size,
-          error: message,
-        });
-        errors.push({ source: 'spotify:artists', message });
-      }
+      logger.info('Fetching Spotify artist metadata', { playlistId, artistCount: artistIdSet.size });
+      await onProgress?.(50);
+      const artistData = await this.fetchSpotifyArtistsForGenres(spotifyService, [...artistIdSet], playlistId, errors);
 
       await onProgress?.(65);
 
@@ -185,12 +173,37 @@ export class AnalysisService {
         needsTrackMetadata,
       });
 
+      const uniqueTrackIds = [...new Set(trackIds.filter(Boolean))];
+      const audioBatches = needsAudioFeatures ? chunk(uniqueTrackIds, BATCH_SIZE) : [];
+      const metadataBatches = needsTrackMetadata ? chunk(uniqueTrackIds, BATCH_SIZE) : [];
+      const audioGroups = needsAudioFeatures ? Math.ceil(audioBatches.length / CONCURRENCY) : 0;
+      const metadataGroups = needsTrackMetadata ? Math.ceil(metadataBatches.length / CONCURRENCY) : 0;
+      const totalGroups = audioGroups + metadataGroups;
+      let completedGroups = 0;
+      let lastEmitted = 65;
+
+      const emitEnrichmentProgress = async (): Promise<void> => {
+        if (!onProgress || totalGroups === 0) return;
+        completedGroups += 1;
+        const calculated = 65 + Math.floor((completedGroups / totalGroups) * 20);
+        const next = Math.min(85, Math.max(lastEmitted + 1, calculated));
+        if (next > lastEmitted) {
+          lastEmitted = next;
+          await onProgress(next);
+        }
+      };
+
+      if (totalGroups > 0) {
+        lastEmitted = 75;
+        await onProgress?.(75);
+      }
+
       const [audioFeaturesResult, trackMetadataResult] = await Promise.allSettled([
         needsAudioFeatures
-          ? this.fetchReccoBeatsAudioFeatures(trackIds, onProgress)
+          ? this.fetchReccoBeatsAudioFeatures(uniqueTrackIds, emitEnrichmentProgress)
           : Promise.resolve(audioFeatures),
         needsTrackMetadata
-          ? this.fetchReccoBeatsTrackMetadata(trackIds, onProgress)
+          ? this.fetchReccoBeatsTrackMetadata(uniqueTrackIds, emitEnrichmentProgress)
           : Promise.resolve(trackMetadata),
       ]);
 
@@ -235,8 +248,98 @@ export class AnalysisService {
       }
     }
 
+    this.recordReccoBeatsCoverageWarning(trackIds, audioFeatures, errors);
+
     await onProgress?.(85);
     return { audioFeatures, trackMetadata };
+  }
+
+  private async fetchSpotifyArtistsForGenres(
+    spotifyService: SpotifyService,
+    artistIds: string[],
+    playlistId: string,
+    errors: Array<{ source: string; message: string }>
+  ): Promise<SpotifyArtistFull[]> {
+    const uniqueIds = [...new Set(artistIds.filter(Boolean))].slice(0, 40);
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    try {
+      return await spotifyService.getArtists(uniqueIds);
+    } catch (error) {
+      const message = errorMessage(error);
+      if (!message.startsWith('HTTP 404:')) {
+        logger.warn('Failed to fetch Spotify artist metadata; continuing without genre insights', {
+          playlistId,
+          artistCount: uniqueIds.length,
+          error: message,
+        });
+        errors.push({ source: 'spotify:artists', message });
+        return [];
+      }
+    }
+
+    const results: SpotifyArtistFull[] = [];
+    let failedCount = 0;
+    let nextIndex = 0;
+    const concurrency = 5;
+
+    const workers = Array.from(
+      { length: Math.min(concurrency, uniqueIds.length) },
+      async () => {
+        while (nextIndex < uniqueIds.length) {
+          const currentIndex = nextIndex;
+          nextIndex += 1;
+          try {
+            const artist = await spotifyService.getArtist(uniqueIds[currentIndex]);
+            results[currentIndex] = artist;
+          } catch (error) {
+            failedCount += 1;
+            logger.warn('Failed to fetch Spotify artist metadata item; preserving other genre insights', {
+              playlistId,
+              artistId: uniqueIds[currentIndex],
+              error: errorMessage(error),
+            });
+          }
+        }
+      }
+    );
+
+    await Promise.all(workers);
+
+    const resolvedArtists = results.filter(Boolean);
+    if (failedCount > 0) {
+      const message =
+        `Spotify artist metadata partially available: resolved ${resolvedArtists.length} of ${uniqueIds.length} artists; ` +
+        `${failedCount} failed.`;
+      errors.push({ source: 'spotify:artists', message });
+    }
+
+    return resolvedArtists;
+  }
+
+  private recordReccoBeatsCoverageWarning(
+    trackIds: string[],
+    audioFeatures: ReccoBeatsAudioFeature[],
+    errors: Array<{ source: string; message: string }>
+  ): void {
+    if (errors.some((error) => error.source === 'reccobeats:audio-features')) {
+      return;
+    }
+
+    const totalTrackCount = new Set(trackIds.filter(Boolean)).size;
+    if (totalTrackCount === 0) {
+      return;
+    }
+
+    const coverageRatio = audioFeatures.length / totalTrackCount;
+    if (coverageRatio === 0 || coverageRatio < 0.5) {
+      errors.push({
+        source: 'reccobeats:coverage',
+        message: `Audio features available for ${audioFeatures.length} of ${totalTrackCount} tracks.`,
+      });
+    }
   }
 
   private rawEnrichmentCacheKey(playlistId: string): string {
@@ -248,15 +351,9 @@ export class AnalysisService {
     return `analysis:playlist:${playlistId}:raw-enrichment`;
   }
 
-  private async emitWarmKeepaliveOnce(onProgress?: (progress: number) => Promise<void>): Promise<void> {
-    if (this.emittedWarmKeepalive) return;
-    this.emittedWarmKeepalive = true;
-    await onProgress?.(70);
-  }
-
   private async fetchReccoBeatsAudioFeatures(
     trackIds: string[],
-    onProgress?: (progress: number) => Promise<void>
+    onGroupComplete?: () => Promise<void>
   ): Promise<ReccoBeatsAudioFeature[]> {
     const uniqueIds = [...new Set(trackIds.filter(Boolean))];
     if (uniqueIds.length === 0) return [];
@@ -273,7 +370,7 @@ export class AnalysisService {
       for (const features of results) {
         allFeatures.push(...features);
       }
-      await this.emitWarmKeepaliveOnce(onProgress);
+      await onGroupComplete?.();
       if (i + CONCURRENCY < batches.length) {
         await sleep(RECCOBEATS_JITTER_DELAY_MS);
       }
@@ -318,7 +415,7 @@ export class AnalysisService {
 
   private async fetchReccoBeatsTrackMetadata(
     trackIds: string[],
-    onProgress?: (progress: number) => Promise<void>
+    onGroupComplete?: () => Promise<void>
   ): Promise<ReccoBeatsTrackMetadata[]> {
     const uniqueIds = [...new Set(trackIds.filter(Boolean))];
     if (uniqueIds.length === 0) return [];
@@ -334,7 +431,7 @@ export class AnalysisService {
       for (const metadata of results) {
         allMetadata.push(...metadata);
       }
-      await this.emitWarmKeepaliveOnce(onProgress);
+      await onGroupComplete?.();
     }
 
     return allMetadata;
@@ -640,7 +737,14 @@ export class AnalysisService {
   private countArtists(tracks: SpotifyTrack[]): Record<string, number> {
     return tracks.reduce((acc: Record<string, number>, track) => {
       track.artists.forEach((artist) => {
-        acc[artist.name] = (acc[artist.name] || 0) + 1;
+        if (typeof artist.name !== 'string') {
+          return;
+        }
+        const name = artist.name.trim();
+        if (!name) {
+          return;
+        }
+        acc[name] = (acc[name] || 0) + 1;
       });
       return acc;
     }, {});

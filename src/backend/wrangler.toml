@@ -5,6 +5,14 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 preview_urls = true
 
+[[durable_objects.bindings]]
+name = "ANALYSIS_STATUS"
+class_name = "AnalysisStatusObject"
+
+[[migrations]]
+tag = "v1-analysis-status"
+new_sqlite_classes = ["AnalysisStatusObject"]
+
 [vars]
 ENVIRONMENT = "development"
 ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080,http://127.0.0.1:8080/callback"
@@ -56,6 +64,10 @@ max_batch_timeout = 5
 max_retries = 3
 dead_letter_queue = "spotibye-analysis-dev-dlq"
 
+[[env.development.durable_objects.bindings]]
+name = "ANALYSIS_STATUS"
+class_name = "AnalysisStatusObject"
+
 [env.production]
 vars = { ENVIRONMENT = "production", ALLOWED_REDIRECT_URIS = "https://app.spotibye.com" }
 
@@ -79,6 +91,10 @@ max_batch_size = 1
 max_batch_timeout = 5
 max_retries = 3
 dead_letter_queue = "spotibye-analysis-dlq"
+
+[[env.production.durable_objects.bindings]]
+name = "ANALYSIS_STATUS"
+class_name = "AnalysisStatusObject"
 
 # Secrets (to be set via wrangler secret put)
 # SPOTIFY_CLIENT_ID

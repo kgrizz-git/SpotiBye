@@ -143,6 +143,25 @@ npx wrangler queues create spotibye-analysis-dlq
 
 The producer and consumer binding name is `ANALYSIS_QUEUE`. Queue messages contain `job_id`, `playlist_id`, `user_id`, `session_id`, `enqueued_at`, and `attempt`; they never contain Spotify access tokens. The consumer loads the session from `SESSIONS_KV` and refreshes the Spotify token when needed.
 
+## Analysis Status Durable Object
+
+Playlist analysis live status uses the `ANALYSIS_STATUS` Durable Object binding.
+The object is named deterministically as `analysis:{userId}:{playlistId}` and
+stores only the current status/progress record. Completed analysis results and
+raw ReccoBeats enrichment caches remain in `CACHE_KV`.
+
+`wrangler.toml` must include the binding and SQLite-backed class migration:
+
+```toml
+[[durable_objects.bindings]]
+name = "ANALYSIS_STATUS"
+class_name = "AnalysisStatusObject"
+
+[[migrations]]
+tag = "v1-analysis-status"
+new_sqlite_classes = ["AnalysisStatusObject"]
+```
+
 ## Domain Configuration
 
 ### Custom Domains

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnalysisJobService } from '../services/analysis-job';
+import { AnalysisStatusStore } from '../services/analysis-status-object';
 import { SpotifyService } from '../services/spotify';
 import { kvNamespace, envWithKv } from './helpers/kv';
 import type { AnalysisQueueMessage } from '../types/analysis-queue';
@@ -107,17 +108,8 @@ describe('AnalysisJobService end-to-end pipeline', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const statusKey = 'analysis:playlist1:user1:status';
     const resultsKey = 'analysis:playlist1:user1:results';
-    const cacheKv = kvNamespace({
-      [statusKey]: {
-        job_id: 'job1',
-        playlist_id: 'playlist1',
-        user_id: 'user1',
-        status: 'queued',
-        progress: 0,
-      },
-    });
+    const cacheKv = kvNamespace();
     const sessionsKv = kvNamespace({
       session1: {
         user_id: 'user1',
@@ -136,7 +128,16 @@ describe('AnalysisJobService end-to-end pipeline', () => {
       attempt: 0,
     };
 
-    const service = new AnalysisJobService(envWithKv(cacheKv, sessionsKv));
+    const env = envWithKv(cacheKv, sessionsKv);
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user1', 'playlist1', {
+      job_id: 'job1',
+      playlist_id: 'playlist1',
+      user_id: 'user1',
+      status: 'queued',
+      progress: 0,
+    });
+    const service = new AnalysisJobService(env);
     const outcome = await service.process(message);
 
     expect(outcome).toEqual({ acknowledged: true, reason: 'completed' });
@@ -162,9 +163,8 @@ describe('AnalysisJobService end-to-end pipeline', () => {
       popularity_max: 75,
     });
 
-    const statusRaw = await cacheKv.get(statusKey);
-    const status = JSON.parse(statusRaw as string) as { status: string; progress: number };
-    expect(status.status).toBe('completed');
-    expect(status.progress).toBe(100);
+    const status = await statusStore.getStatus('user1', 'playlist1');
+    expect(status?.status).toBe('completed');
+    expect(status?.progress).toBe(100);
   });
 });

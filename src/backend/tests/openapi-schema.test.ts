@@ -14,6 +14,7 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { load } from 'js-yaml';
 import { AnalysisJobService } from '../services/analysis-job';
+import { AnalysisStatusStore } from '../services/analysis-status-object';
 import { SpotifyService } from '../services/spotify';
 import { kvNamespace, envWithKv } from './helpers/kv';
 import type { AnalysisQueueMessage } from '../types/analysis-queue';
@@ -178,7 +179,16 @@ describe('openapi.yaml AnalysisResultsResponse reconciliation', () => {
       attempt: 0,
     };
 
-    const service = new AnalysisJobService(envWithKv(cacheKv, sessionsKv));
+    const env = envWithKv(cacheKv, sessionsKv);
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user1', 'playlist1', {
+      job_id: 'job1',
+      playlist_id: 'playlist1',
+      user_id: 'user1',
+      status: 'queued',
+      progress: 0,
+    });
+    const service = new AnalysisJobService(env);
     await service.process(message);
 
     const resultsRaw = await cacheKv.get(resultsKey);

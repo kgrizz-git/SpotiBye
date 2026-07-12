@@ -1,4 +1,5 @@
 import { AnalysisService } from './analysis';
+import { AnalysisStatusStore } from './analysis-status-object';
 import { CacheService } from './cache';
 import { SpotifyAuthService } from './spotify-auth';
 import { SPOTIFY_SESSION_TTL_SECONDS } from '../types/auth';
@@ -22,25 +23,18 @@ export interface AnalysisJobOutcome {
 
 export class AnalysisJobService {
   private cache: CacheService;
+  private statusStore: AnalysisStatusStore;
 
   constructor(private env: Env) {
     this.cache = new CacheService(env.CACHE_KV);
+    this.statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
   }
 
   async process(message: AnalysisQueueMessage): Promise<AnalysisJobOutcome> {
-    const statusKey = this.statusKey(message);
     const resultsKey = this.resultsKey(message);
-    const current = await this.cache.get<AnalysisStatusRecord>(statusKey);
+    const current = await this.statusStore.getStatus(message.user_id, message.playlist_id);
 
     if (!current) {
-      // KV is eventually consistent. Cloudflare's KV has eventual consistency with typical
-      // propagation under 60 seconds. We increase the replication wait to 30 seconds to trade
-      // queue throughput for fewer spurious retries.
-      const ageMs = Date.now() - new Date(message.enqueued_at).getTime();
-      if (ageMs < 30000) {
-        console.warn(`Status record not found for job ${message.job_id} - waiting for KV replication (age: ${ageMs}ms)`);
-        throw new Error(`Status record not found for job ${message.job_id} - waiting for KV replication (age: ${ageMs}ms)`);
-      }
       return { acknowledged: true, reason: 'stale' };
     }
 
@@ -52,7 +46,7 @@ export class AnalysisJobService {
       return { acknowledged: true, reason: 'already-completed' };
     }
 
-    await this.writeStatus(statusKey, {
+    await this.writeStatus(message, {
       ...current,
       status: 'processing',
       progress: 10,
@@ -69,7 +63,7 @@ export class AnalysisJobService {
         message.user_id,
         message.job_id,
         async (progressPercentage) => {
-          await this.writeStatusMerged(statusKey, {
+          await this.writeStatusMerged(message, {
             status: 'processing',
             progress: progressPercentage,
             attempt: message.attempt,
@@ -78,7 +72,7 @@ export class AnalysisJobService {
       );
 
       await this.cache.set(resultsKey, result satisfies AnalysisResult, this.resultsTtlSeconds());
-      await this.writeStatusMerged(statusKey, {
+      await this.writeStatusMerged(message, {
         status: 'completed',
         progress: 100,
         completed_at: new Date().toISOString(),
@@ -89,7 +83,7 @@ export class AnalysisJobService {
     } catch (error) {
       if (error instanceof AuthRequiredException) {
         await this.env.SESSIONS_KV.delete(message.session_id);
-        await this.writeStatus(statusKey, {
+        await this.writeStatus(message, {
           ...current,
           status: 'failed',
           progress: current.progress,
@@ -100,7 +94,7 @@ export class AnalysisJobService {
         });
         throw new NonRetryableError('Spotify session expired or revoked. Please sign in again.');
       }
-      await this.writeStatusMerged(statusKey, {
+      await this.writeStatusMerged(message, {
         status: 'retrying',
         retry_after: new Date(Date.now() + 60_000).toISOString(),
         attempt: message.attempt + 1,
@@ -111,13 +105,12 @@ export class AnalysisJobService {
   }
 
   async markFailed(message: AnalysisQueueMessage, error: unknown): Promise<void> {
-    const statusKey = this.statusKey(message);
-    const current = await this.cache.get<AnalysisStatusRecord>(statusKey);
+    const current = await this.statusStore.getStatus(message.user_id, message.playlist_id);
     if (!current || current.job_id !== message.job_id || current.status === 'completed') {
       return;
     }
 
-    await this.writeStatus(statusKey, {
+    await this.writeStatus(message, {
       ...current,
       status: 'failed',
       progress: current.progress,
@@ -162,25 +155,21 @@ export class AnalysisJobService {
     return session.access_token;
   }
 
-  private async writeStatus(key: string, status: AnalysisStatusRecord): Promise<void> {
-    await this.cache.set(key, status, 3600);
+  private async writeStatus(message: AnalysisQueueMessage, status: AnalysisStatusRecord): Promise<void> {
+    await this.statusStore.writeStatus(message.user_id, message.playlist_id, status);
   }
 
   private async writeStatusMerged(
-    key: string,
+    message: AnalysisQueueMessage,
     partial: Partial<AnalysisStatusRecord>,
   ): Promise<void> {
-    const latest = await this.cache.get<AnalysisStatusRecord>(key);
+    const latest = await this.statusStore.getStatus(message.user_id, message.playlist_id);
     if (!latest) return; // Defensive, status record should always exist
-    await this.writeStatus(key, {
+    await this.writeStatus(message, {
       ...latest,
       ...partial,
       updated_at: new Date().toISOString()
     });
-  }
-
-  private statusKey(message: AnalysisQueueMessage): string {
-    return `analysis:${message.playlist_id}:${message.user_id}:status`;
   }
 
   private resultsKey(message: AnalysisQueueMessage): string {

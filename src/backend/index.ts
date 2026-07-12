@@ -12,6 +12,7 @@ import type { AnalysisQueueMessage } from './types/analysis-queue';
 import type { Env } from './types/env';
 import { AnalysisQueueMessagePayloadSchema } from './validation/schemas/queue';
 import { NonRetryableError } from './types/errors';
+export { AnalysisStatusObject } from './services/analysis-status-object';
 
 const app = new Hono<{ Bindings: Env }>();
 
