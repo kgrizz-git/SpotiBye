@@ -233,31 +233,4 @@ app.get('/tracks/:id', zValidator('param', IdParamSchema), async (c) => {
   }
 });
 
-// GET /spotify/tracks/:id/audio-features - Get track audio features
-app.get('/tracks/:id/audio-features', zValidator('param', IdParamSchema), async (c) => {
-  try {
-    const { id: trackId } = c.req.valid('param');
-    const accessToken = c.get('access_token');
-    const cacheService = new CacheService(c.env.CACHE_KV);
-    const spotifyService = new SpotifyService(accessToken);
-
-    // Check cache first
-    const cacheKey = `track:${trackId}:audio-features`;
-    const cached = await cacheService.get(cacheKey);
-    if (cached) {
-      return c.json({ data: cached, meta: { timestamp: new Date().toISOString(), cached: true } });
-    }
-
-    const audioFeatures = await spotifyService.getAudioFeatures(trackId);
-
-    // Cache for 1 hour
-    await cacheService.set(cacheKey, audioFeatures, 3600);
-
-    return c.json({ data: audioFeatures, meta: { timestamp: new Date().toISOString() } });
-  } catch (error) {
-    console.error('Failed to get audio features:', error);
-    return c.json({ error: { code: 'AUDIO_FEATURES_FETCH_FAILED', message: 'Failed to fetch audio features' } }, { status: 500 as ContentfulStatusCode });
-  }
-});
-
 export { app as spotifyRoutes };

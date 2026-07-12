@@ -280,16 +280,27 @@ describe('Export Routes', () => {
         }
       });
 
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
-        playlist: {
-          id: 'playlist1',
-          name: 'Test Playlist',
-          description: '',
-          total_tracks: 1,
-          owner: 'Test User'
-        },
-        tracks: []
-      }));
+      (mockEnv.CACHE_KV.get as any).mockImplementation(async (key: string) => {
+        if (key.endsWith(':latest')) {
+          return null;
+        }
+        if (key.endsWith(':file')) {
+          return null;
+        }
+        if (key.endsWith(':data')) {
+          return null;
+        }
+        return JSON.stringify({
+          playlist: {
+            id: 'playlist1',
+            name: 'Test Playlist',
+            description: '',
+            total_tracks: 1,
+            owner: 'Test User',
+          },
+          tracks: [],
+        });
+      });
 
       const response = await app.request(request, undefined, mockEnv);
 

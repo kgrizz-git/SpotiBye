@@ -53,7 +53,6 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
 - `GET /spotify/playlists/:id/items` - Get playlist items
 - `GET /spotify/playlists/:id/tracks` - Backward-compatible alias for playlist items
 - `GET /spotify/tracks/:id` - Get track details
-- `GET /spotify/tracks/:id/audio-features` - Get track audio features
 
 ### Analysis
 - `POST /analysis/playlist/:id` - Analyze playlist (ReccoBeats integration)

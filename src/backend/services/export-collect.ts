@@ -9,6 +9,7 @@ import { createResumeToken } from './export-job-state';
 import { preAssemblePlaylist } from './export-assemble';
 import { buildExportTracks, calculateTotalDurationMs, buildPlaylistMetadata } from './export-tracks';
 import { SpotifyService } from './spotify';
+import type { CacheService } from './cache';
 
 export function mergeExportSlice(
   existingExportData: ExportData | undefined,
@@ -66,6 +67,7 @@ export async function generatePlaylistExportSlice(
     offset?: number;
     limit?: number;
     existingExportData?: ExportData;
+    cache?: CacheService;
   },
 ): Promise<{ exportData: ExportData; fetchedCount: number; rawCount: number; totalTracks: number }> {
   const spotifyService = new SpotifyService(accessToken);
@@ -77,7 +79,7 @@ export async function generatePlaylistExportSlice(
     ? undefined
     : await spotifyService.getPlaylist(playlistId);
   const tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
-  const exportTracks = await buildExportTracks(tracksData.items, includeAudioFeatures, spotifyService);
+  const exportTracks = await buildExportTracks(tracksData.items, includeAudioFeatures, options.cache);
   const totalDurationMs = calculateTotalDurationMs(tracksData.items);
   const playlistMetadata = existingExportData?.playlist || buildPlaylistMetadata(playlist, tracksData.total);
 
@@ -105,6 +107,7 @@ export async function runCollectStep(
   maxPlaylistsPerStep: number,
   startPlaylistIndex: number,
   startTrackOffset: number,
+  cache?: CacheService,
 ): Promise<ResumableExportStepResult> {
   let nextPlaylistIndex = startPlaylistIndex;
   let nextTrackOffset = startTrackOffset;
@@ -124,6 +127,7 @@ export async function runCollectStep(
       offset: playlistProgress.next_offset,
       limit: job.track_page_size,
       existingExportData,
+      cache,
     });
 
     const mergedExportData = mergeExportSlice(existingExportData, slice.exportData);

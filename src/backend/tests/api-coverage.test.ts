@@ -72,7 +72,6 @@ describe('API Coverage Tests', () => {
         { method: 'GET', path: '/spotify/playlists/test-playlist-id' },
         { method: 'GET', path: '/spotify/playlists/test-playlist-id/tracks' },
         { method: 'GET', path: '/spotify/tracks/test-track-id' },
-        { method: 'GET', path: '/spotify/tracks/test-track-id/audio-features' }
       ];
 
       for (const endpoint of endpoints) {
@@ -230,7 +229,6 @@ describe('API Coverage Tests', () => {
         '/spotify/playlists/test-id',
         '/spotify/playlists/test-id/tracks',
         '/spotify/tracks/test-id',
-        '/spotify/tracks/test-id/audio-features',
         '/analysis/playlist/test-id',
         '/analysis/playlist/test-id/status',
         '/analysis/playlist/test-id/results',

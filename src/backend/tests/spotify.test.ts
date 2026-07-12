@@ -48,13 +48,6 @@ vi.mock('../services/spotify', () => ({
       artists: ['Test Artist'],
       album: 'Test Album',
       duration_ms: 180000
-    }),
-    getAudioFeatures: vi.fn().mockResolvedValue({
-      danceability: 0.8,
-      energy: 0.7,
-      valence: 0.6,
-      tempo: 120,
-      acousticness: 0.1
     })
     };
   })
@@ -149,7 +142,6 @@ describe('Spotify Routes', () => {
             getPlaylist: vi.fn(),
             getPlaylistTracks: vi.fn(),
             getTrack: vi.fn(),
-            getAudioFeatures: vi.fn(),
           } as any;
         } as any
       );
@@ -303,25 +295,6 @@ describe('Spotify Routes', () => {
       expect(response.status).toBe(200);
       expect(data.data).toHaveProperty('id', 'track1');
       expect(data.data).toHaveProperty('name');
-    });
-  });
-
-  describe('GET /spotify/tracks/:id/audio-features', () => {
-    it('should return track audio features', async () => {
-      const request = new Request('http://localhost/spotify/tracks/track1/audio-features', {
-        method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
-      expect(data.data).toHaveProperty('danceability');
-      expect(data.data).toHaveProperty('energy');
     });
   });
 });

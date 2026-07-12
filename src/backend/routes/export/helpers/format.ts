@@ -29,6 +29,7 @@ export function formatHttpMeta(format: ExportFormat): [string, string] {
 }
 
 export function resolveIncludeAudioFeatures(body: Record<string, unknown>): boolean {
+  // Semantics: include ReccoBeats per-track enrichment columns (not Spotify /audio-features).
   return body?.include_audio_features === true;
 }
 

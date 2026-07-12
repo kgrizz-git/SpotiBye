@@ -9,6 +9,8 @@ import {
   buildSingleExportPrefix,
   buildSingleExportDataKey,
   buildSingleExportFileKey,
+  buildSingleExportLatestKey,
+  type SingleExportKeyOptions,
 } from './helpers/cache-keys';
 import {
   resolveRequestedFormat,
@@ -27,6 +29,28 @@ import { IdParamSchema } from '../../validation/schemas/common';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+interface SingleExportLatestPointer {
+  format: string;
+  includeEnrichment: boolean;
+}
+
+async function resolveSingleExportKeyOptions(
+  cacheService: CacheService,
+  playlistId: string,
+  userId: string,
+): Promise<SingleExportKeyOptions | undefined> {
+  const latest = await cacheService.get<SingleExportLatestPointer>(
+    buildSingleExportLatestKey(playlistId, userId),
+  );
+  if (latest) {
+    return {
+      format: resolveStoredFormat(latest.format),
+      includeEnrichment: latest.includeEnrichment === true,
+    };
+  }
+  return undefined;
+}
+
 // POST /export/playlist/:id - Generate playlist export
 app.post('/:id', zValidator('param', IdParamSchema), async (c) => {
   const requestId = newRequestId();
@@ -36,15 +60,16 @@ app.post('/:id', zValidator('param', IdParamSchema), async (c) => {
     const userId = c.get('user').id;
     const accessToken = c.get('access_token');
     const body = await c.req.json().catch(() => ({}));
+    const cacheService = new CacheService(c.env.CACHE_KV);
     const requestedFormat = resolveRequestedFormat(body);
     const includeAudioFeatures = resolveIncludeAudioFeatures(body);
+    const keyOptions = { format: requestedFormat, includeEnrichment: includeAudioFeatures };
 
-    const exportService = new ExportService(accessToken);
-    const cacheService = new CacheService(c.env.CACHE_KV);
+    const exportService = new ExportService(accessToken, cacheService);
     console.info('[export] start', { requestId, traceId, userId, playlistId });
 
     // Check if export already exists
-    const exportKey = buildSingleExportKey(playlistId, userId);
+    const exportKey = buildSingleExportKey(playlistId, userId, keyOptions);
     const existingExport = await cacheService.get<Record<string, unknown>>(exportKey);
 
     if (existingExport && (existingExport as Record<string, unknown>)?.status === 'completed') {
@@ -80,18 +105,24 @@ app.post('/:id', zValidator('param', IdParamSchema), async (c) => {
         progress: 100,
         file_url: `/export/playlist/${playlistId}/download`,
         file_format: requestedFormat,
+        include_audio_features: includeAudioFeatures,
         file_size: JSON.stringify(exportData).length,
         track_count: exportData.tracks.length
       };
 
       await cacheService.set(exportKey, completedStatus, 3600);
-      await cacheService.set(buildSingleExportDataKey(playlistId, userId), exportData, 3600);
+      await cacheService.set(buildSingleExportDataKey(playlistId, userId, keyOptions), exportData, 3600);
+      await cacheService.set(
+        buildSingleExportLatestKey(playlistId, userId),
+        { format: requestedFormat, includeEnrichment: includeAudioFeatures },
+        3600,
+      );
 
       // Pre-build file bytes so the download endpoint only needs a KV read (avoids ExcelJS CPU spike).
       const singleFormat = requestedFormat;
       try {
         const fileBytes = await generateFileBytes(exportService, [exportData], singleFormat);
-        await cacheService.setBuffer(buildSingleExportFileKey(playlistId, userId), fileBytes, 3600);
+        await cacheService.setBuffer(buildSingleExportFileKey(playlistId, userId, keyOptions), fileBytes, 3600);
       } catch (genErr) {
         console.warn('[export] file pre-build failed; download will regenerate', {
           playlistId,
@@ -166,8 +197,13 @@ app.get('/:id/status', zValidator('param', IdParamSchema), async (c) => {
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 
-    const exportKey = buildSingleExportKey(playlistId, userId);
-    const status = await cacheService.get(exportKey);
+    const keyOptions = await resolveSingleExportKeyOptions(cacheService, playlistId, userId);
+    const exportKey = buildSingleExportKey(playlistId, userId, keyOptions);
+    let status = await cacheService.get(exportKey);
+
+    if (!status && !keyOptions) {
+      status = await cacheService.get(buildSingleExportKey(playlistId, userId));
+    }
 
     if (!status) {
       return c.json({ error: { code: 'EXPORT_NOT_FOUND', message: 'Export not found' } }, { status: 404 as ContentfulStatusCode });
@@ -187,11 +223,22 @@ app.get('/:id/download', zValidator('param', IdParamSchema), async (c) => {
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
 
-    const exportKey = buildSingleExportKey(playlistId, userId);
+    const keyOptions = await resolveSingleExportKeyOptions(cacheService, playlistId, userId);
+    const exportKey = buildSingleExportKey(playlistId, userId, keyOptions);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- backward-compat read: shape varies across schema versions (old format stored ExportData directly)
-    const exportStatus = await cacheService.get<any>(exportKey);
+    let exportStatus = await cacheService.get<any>(exportKey);
+    if (!exportStatus && !keyOptions) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- backward-compat read: legacy unversioned export key
+      exportStatus = await cacheService.get<any>(buildSingleExportKey(playlistId, userId));
+    }
+    const resolvedKeyOptions: SingleExportKeyOptions = keyOptions ?? {
+      format: resolveStoredFormat(exportStatus?.file_format),
+      includeEnrichment: exportStatus?.include_audio_features === true,
+    };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- backward-compat read: shape varies across schema versions
-    let exportData = await cacheService.get<any>(buildSingleExportDataKey(playlistId, userId));
+    let exportData = await cacheService.get<any>(
+      buildSingleExportDataKey(playlistId, userId, keyOptions ? resolvedKeyOptions : undefined),
+    );
     // Backward compatibility: older payloads stored export data directly under exportKey.
     if (!exportData && exportStatus && exportStatus.playlist && Array.isArray(exportStatus.tracks)) {
       exportData = exportStatus;
@@ -204,7 +251,9 @@ app.get('/:id/download', zValidator('param', IdParamSchema), async (c) => {
     const spFilename = `playlist_${playlistId}_export_${Date.now()}.${spExt}`;
 
     // Serve pre-built bytes (written during POST) — zero CPU re-generation.
-    const prebuiltBytes = await cacheService.getBuffer(buildSingleExportFileKey(playlistId, userId));
+    const prebuiltBytes = await cacheService.getBuffer(
+      buildSingleExportFileKey(playlistId, userId, keyOptions ? resolvedKeyOptions : undefined),
+    );
     if (prebuiltBytes) {
       return new Response(prebuiltBytes, {
         headers: { 'Content-Type': spContentType, 'Content-Disposition': `attachment; filename="${spFilename}"` },
@@ -215,9 +264,13 @@ app.get('/:id/download', zValidator('param', IdParamSchema), async (c) => {
     if (!exportData) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export data not found' } }, { status: 404 as ContentfulStatusCode });
     }
-    const exportService = new ExportService(c.get('access_token'));
+    const exportService = new ExportService(c.get('access_token'), cacheService);
     const fallbackBytes = await generateFileBytes(exportService, [exportData], singleFileFormat);
-    await cacheService.setBuffer(buildSingleExportFileKey(playlistId, userId), fallbackBytes, 3600);
+    await cacheService.setBuffer(
+      buildSingleExportFileKey(playlistId, userId, keyOptions ? resolvedKeyOptions : undefined),
+      fallbackBytes,
+      3600,
+    );
     return new Response(fallbackBytes, {
       headers: { 'Content-Type': spContentType, 'Content-Disposition': `attachment; filename="${spFilename}"` },
     });

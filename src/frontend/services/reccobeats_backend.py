@@ -24,9 +24,8 @@ class ReccoBeatsBackendService:
     """
     ReccoBeats service using Cloudflare Worker backend.
 
-    Note: Legacy compatibility methods (such as get_multiple_track_audio_features, etc.)
-    are kept only for interface compatibility and are not called in the production
-    end-to-end analysis popup flow.
+    Playlist analysis and export enrichment are served by backend analysis and
+    export routes; per-track cache is global on the Worker.
     """
 
     def __init__(self, backend_client: Optional[BackendClient] = None):
@@ -283,55 +282,6 @@ class ReccoBeatsBackendService:
         except Exception as e:
             logger.error(f"Failed to get playlist for analysis: {e}")
             raise
-
-    # Legacy compatibility methods - these maintain the same interface as the original ReccoBeatsAPI
-    def get_multiple_track_audio_features(
-        self,
-        spotify_track_ids: List[str],
-        max_concurrent: int = 2,
-        analysis_task: Optional[Any] = None,
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Get audio features for multiple tracks using backend analysis.
-
-        This method provides compatibility with the original interface but uses
-        the backend analysis system instead of direct ReccoBeats API calls.
-        """
-        return self.get_multiple_track_audio_features_safe(
-            spotify_track_ids, max_concurrent, analysis_task
-        )
-
-    def get_multiple_track_audio_features_safe(
-        self,
-        spotify_track_ids: List[str],
-        max_concurrent: int = 2,
-        analysis_task: Optional[Any] = None,
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Get audio features for multiple tracks with caching.
-
-        Args:
-            spotify_track_ids: List of Spotify track IDs
-            max_concurrent: Maximum concurrent requests (not used in backend version)
-            analysis_task: Optional analysis task for cancellation tracking
-
-        Returns:
-            Dictionary mapping track IDs to audio features
-        """
-        results: Dict[str, Dict[str, Any]] = {}
-
-        if analysis_task and analysis_task.is_cancelled():
-            return results
-
-        # Per-track cache lookup is not implemented. The previous version of
-        # this method silently returned fabricated `danceability: 0.8,
-        # energy: 0.9` data for two hardcoded "cached" track IDs, which
-        # made the audio-feature UI look functional in development but
-        # corrupted all production analysis output.
-        raise NotImplementedError(
-            "ReccoBeats per-track cache lookup not implemented; "
-            "see docs/exec-plans/active/2026-06-21-reccobeats-wiring.md"
-        )
 
     def get_reccobeats_id_from_spotify_id(
         self,

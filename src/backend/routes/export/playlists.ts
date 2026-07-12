@@ -44,8 +44,8 @@ app.post('/', zValidator('json', ExportBatchBodySchema, 'INVALID_PLAYLISTS'), as
     const requestedFormat = resolveRequestedFormat(body);
     const includeAudioFeatures = resolveIncludeAudioFeatures(body);
 
-    const exportService = new ExportService(accessToken);
     const cacheService = new CacheService(c.env.CACHE_KV);
+    const exportService = new ExportService(accessToken, cacheService);
     const jobId = crypto.randomUUID();
     const batchKey = buildBatchKey(jobId, userId);
 
@@ -297,7 +297,7 @@ app.get('/:jobId/download', zValidator('param', JobIdParamSchema), async (c) => 
     if (!exportDataList || !Array.isArray(exportDataList) || exportDataList.length === 0) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Combined export data not found' } }, { status: 404 as ContentfulStatusCode });
     }
-    const exportService = new ExportService(c.get('access_token'));
+    const exportService = new ExportService(c.get('access_token'), cacheService);
     const fallbackBytes = await generateFileBytes(exportService, exportDataList, batchFileFormat);
     await cacheService.setBuffer(buildBatchFileKey(jobId, userId), fallbackBytes, 3600);
     return new Response(fallbackBytes, {

@@ -1,6 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import { mapTrackForExport, calculateTotalDurationMs } from '../services/export-tracks';
-import type { SpotifyAudioFeatures, SpotifyPlaylistTrackItem } from '../types/spotify';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import {
+  mapTrackForExport,
+  calculateTotalDurationMs,
+  loadAudioFeaturesMap,
+  buildExportTracks,
+  toExportFeatures,
+  type ReccoBeatsExportFeatures,
+} from '../services/export-tracks';
+import type { SpotifyPlaylistTrackItem } from '../types/spotify';
+import { CacheService } from '../services/cache';
+import { audioFeaturesCacheKey } from '../services/reccobeats-track-cache';
+import { kvNamespace } from './helpers/kv';
 
 function makeTrack(overrides: Partial<Parameters<typeof mapTrackForExport>[0]> = {}) {
   return {
@@ -20,11 +30,10 @@ function makeTrack(overrides: Partial<Parameters<typeof mapTrackForExport>[0]> =
   };
 }
 
-const fullAudioFeatures: SpotifyAudioFeatures = {
-  id: 'af1',
+const fullAudioFeatures: ReccoBeatsExportFeatures = {
   tempo: 120.5,
-  key: 0,   // C
-  mode: 1,  // major
+  key: 0,
+  mode: 1,
   danceability: 0.8,
   energy: 0.9,
   valence: 0.5,
@@ -33,11 +42,26 @@ const fullAudioFeatures: SpotifyAudioFeatures = {
   liveness: 0.2,
   speechiness: 0.05,
   loudness: -5.0,
-  time_signature: 4,
 };
 
+const afRow = (spotifyId: string) => ({
+  id: `recco-${spotifyId}`,
+  href: `https://open.spotify.com/track/${spotifyId}`,
+  acousticness: 0.1,
+  danceability: 0.8,
+  energy: 0.9,
+  instrumentalness: 0.0,
+  liveness: 0.2,
+  loudness: -5.0,
+  speechiness: 0.05,
+  tempo: 120.5,
+  valence: 0.5,
+  key: 0,
+  mode: 1,
+});
+
 describe('mapTrackForExport', () => {
-  it('maps a track with full audio features', () => {
+  it('maps a track with full ReccoBeats export features', () => {
     const result = mapTrackForExport(makeTrack(), fullAudioFeatures);
     expect(result.Artist).toBe('Artist A, Artist B');
     expect(result.Album).toBe('Test Album');
@@ -47,7 +71,11 @@ describe('mapTrackForExport', () => {
     expect(result.Key).toBe('C major');
     expect(result.Danceability).toBe(0.8);
     expect(result.Energy).toBe(0.9);
-    expect(result['Time Signature']).toBe(4);
+  });
+
+  it('always sets Time Signature to N/A (ReccoBeats has no time_signature)', () => {
+    const result = mapTrackForExport(makeTrack(), fullAudioFeatures);
+    expect(result['Time Signature']).toBe('N/A');
   });
 
   it('uses N/A for all audio feature fields when audioFeatures is null', () => {
@@ -60,7 +88,7 @@ describe('mapTrackForExport', () => {
   });
 
   it('uses N/A for missing audio feature fields (partial features)', () => {
-    const partial = { ...fullAudioFeatures, key: 0, mode: 0, danceability: undefined } as unknown as SpotifyAudioFeatures;
+    const partial = { ...fullAudioFeatures, danceability: undefined };
     const result = mapTrackForExport(makeTrack(), partial);
     expect(result.Danceability).toBe('N/A');
   });
@@ -68,7 +96,6 @@ describe('mapTrackForExport', () => {
   it('formats key without mode when mode is not a known number', () => {
     const features = { ...fullAudioFeatures, mode: 99 };
     const result = mapTrackForExport(makeTrack(), features);
-    // mode 99 is not in modeMap, so modeName is null, key has no mode suffix
     expect(result.Key).toBe('C');
   });
 
@@ -81,6 +108,90 @@ describe('mapTrackForExport', () => {
   it('formats duration from track.duration_ms', () => {
     const result = mapTrackForExport(makeTrack({ duration_ms: 201000 }), null);
     expect(result.Duration).toBe('3:21');
+  });
+});
+
+describe('toExportFeatures', () => {
+  it('maps ReccoBeats row fields without time_signature', () => {
+    const row = afRow('track1');
+    const mapped = toExportFeatures(row);
+    expect(mapped.tempo).toBe(120.5);
+    expect(mapped.danceability).toBe(0.8);
+    expect(mapped).not.toHaveProperty('time_signature');
+  });
+});
+
+describe('loadAudioFeaturesMap', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('returns empty map when enrichment disabled', async () => {
+    const cache = new CacheService(kvNamespace());
+    const result = await loadAudioFeaturesMap(['t1'], false, cache);
+    expect(result.size).toBe(0);
+  });
+
+  it('miss-fills via ReccoBeats when cache is cold', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ content: [afRow('track1')] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cache = new CacheService(kvNamespace());
+    const result = await loadAudioFeaturesMap(['track1'], true, cache);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.get('track1')?.danceability).toBe(0.8);
+  });
+
+  it('reuses warm global cache without HTTP', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cache = new CacheService(
+      kvNamespace({
+        [audioFeaturesCacheKey('track1')]: afRow('track1'),
+      }),
+    );
+    const result = await loadAudioFeaturesMap(['track1'], true, cache);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.get('track1')?.tempo).toBe(120.5);
+  });
+});
+
+describe('buildExportTracks', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const makeItem = (id: string): SpotifyPlaylistTrackItem => ({
+    added_by: null,
+    track: makeTrack({ id }),
+  });
+
+  it('populates numeric enrichment from per-track cache without prior analysis', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ content: [afRow('shared-track')] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cache = new CacheService(kvNamespace());
+    const tracks = await buildExportTracks([makeItem('shared-track')], true, cache);
+
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].Danceability).toBe(0.8);
+    expect(tracks[0].Energy).toBe(0.9);
+    expect(tracks[0]['Time Signature']).toBe('N/A');
   });
 });
 

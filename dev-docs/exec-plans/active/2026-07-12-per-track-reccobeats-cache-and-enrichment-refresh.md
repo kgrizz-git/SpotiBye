@@ -188,22 +188,22 @@ Document this exception in `dev-docs/guides/golden-principles.md` when B1 lands.
 
 ### Phase B4 — Export uses per-track cache
 
-- [ ] **B4.1.** `loadAudioFeaturesMap` (`src/backend/services/export-tracks.ts`) / export path reads global per-track cache via `resolveAudioFeatures` (same miss-fill as analysis — **do not** require the user to have analyzed first). Define a minimal adapter (do **not** force ReccoBeats into `SpotifyAudioFeatures`):
+- [x] **B4.1.** `loadAudioFeaturesMap` (`src/backend/services/export-tracks.ts`) / export path reads global per-track cache via `resolveAudioFeatures` (same miss-fill as analysis — **do not** require the user to have analyzed first). Define a minimal adapter (do **not** force ReccoBeats into `SpotifyAudioFeatures`):
   - Thread `CacheService`/KV access into export code before calling `resolveAudioFeatures`: `ExportService` currently only stores `accessToken`, and `runCollectStep` / `generatePlaylistExportSlice` / `buildExportTracks` currently pass only `SpotifyService`. Update those signatures/routes in one PR so single exports and resumable jobs use the same cache-backed path.
   - Type e.g. `ReccoBeatsExportFeatures` = ReccoBeats audio-feature numeric fields used by export (`tempo`, `key`, `danceability`, `energy`, `valence`, `acousticness`, `instrumentalness`, `liveness`, `speechiness`, `loudness`, …) — **no** `time_signature`.
   - `toExportFeatures(row: ReccoBeatsAudioFeature): ReccoBeatsExportFeatures` mapping function; wire export columns through it.
   - **Empty-cache case:** when enrichment is requested and IDs miss the global cache, export **miss-fills** via ReccoBeats (progress/status as appropriate); only leave columns as `N/A` for verified absents or hard fetch failures — never silently all-`N/A` solely because analysis was never opened.
-- [ ] **B4.2.** Update `mapTrackForExport` in `export-tracks.ts` (today reads `audioFeatures?.time_signature` from Spotify shape): map adapter fields → `ExportTrack`; **`Time Signature`** → permanent literal `N/A`; add an explicit test asserting that.
-- [ ] **B4.3.** After B4.1: flip enrichment on in **all** frontend export call sites in `src/frontend/services/backend_client.py` that currently hardcode `include_audio_features: False`:
+- [x] **B4.2.** Update `mapTrackForExport` in `export-tracks.ts` (today reads `audioFeatures?.time_signature` from Spotify shape): map adapter fields → `ExportTrack`; **`Time Signature`** → permanent literal `N/A`; add an explicit test asserting that.
+- [x] **B4.3.** After B4.1: flip enrichment on in **all** frontend export call sites in `src/frontend/services/backend_client.py` that currently hardcode `include_audio_features: False`:
   - `generate_export`
   - `generate_batch_export`
   - `generate_batch_export_chunk`
   - `create_export_job`
   - Document semantic change in route/helper comments: flag means **“include ReccoBeats/per-track enrichment”**, not Spotify `/audio-features`. Renaming to `include_enrichment` is optional (can be a follow-up).
   - Required before flipping the frontend default: update `buildSingleExportKey` / related single-export keys (or explicitly invalidate legacy `export:${playlistId}:${userId}` first) so enriched vs unenriched and format variants do not collide. Today the single-export cache key ignores `include_audio_features` and `format`, so a previous unenriched export can be returned before B3 refresh invalidation ever runs.
-- [ ] **B4.4.** Export tests: numeric enrichment values (not all `N/A`); export without prior analysis still miss-fills; shared track across playlists hits cache; Time Signature always `N/A`; post-force-enrichment export is not a stale cached file.
-- [ ] **B4.5.** `CHANGELOG.md`: export includes ReccoBeats enrichment columns; note one-time analysis re-fetch if schema bump already landed in B1.
-- [ ] **B4.6.** Remove dead Spotify audio-features path once unused: `SpotifyService.getMultipleAudioFeatures`, `GET /spotify/tracks/:id/audio-features` (or equivalent proxy), and frontend `get_multiple_track_audio_features` / `_safe` stubs that raise `NotImplementedError`. Update/remove related tests. **Order:** B4.1 must land before B4.6 — today `loadAudioFeaturesMap` still hard-depends on the Spotify path. If any legacy stub remains, update/remove stale `docs/exec-plans/...` references; canonical historical plans live under `dev-docs/exec-plans/completed/`.
+- [x] **B4.4.** Export tests: numeric enrichment values (not all `N/A`); export without prior analysis still miss-fills; shared track across playlists hits cache; Time Signature always `N/A`; post-force-enrichment export is not a stale cached file.
+- [x] **B4.5.** `CHANGELOG.md`: export includes ReccoBeats enrichment columns; note one-time analysis re-fetch if schema bump already landed in B1.
+- [x] **B4.6.** Remove dead Spotify audio-features path once unused: `SpotifyService.getMultipleAudioFeatures`, `GET /spotify/tracks/:id/audio-features` (or equivalent proxy), and frontend `get_multiple_track_audio_features` / `_safe` stubs that raise `NotImplementedError`. Update/remove related tests. **Order:** B4.1 must land before B4.6 — today `loadAudioFeaturesMap` still hard-depends on the Spotify path. If any legacy stub remains, update/remove stale `docs/exec-plans/...` references; canonical historical plans live under `dev-docs/exec-plans/completed/`.
 
 ### Phase B5 — Deferred: optional client-side ReccoBeats fetch
 

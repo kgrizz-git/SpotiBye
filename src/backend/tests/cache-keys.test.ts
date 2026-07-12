@@ -60,12 +60,25 @@ describe('cache-keys helper', () => {
     expect(buildBatchFileKey(jobId, userId)).toBe('export:batch:job-123:user-456:file');
   });
 
-  it('buildSingleExportKey matches historical inline structure', () => {
+  it('buildSingleExportKey matches historical inline structure without options', () => {
     expect(buildSingleExportKey(playlistId, userId)).toBe('export:playlist-789:user-456');
+  });
+
+  it('buildSingleExportKey encodes format and enrichment variant', () => {
+    expect(buildSingleExportKey(playlistId, userId, { format: 'xlsx', includeEnrichment: true }))
+      .toBe('export:playlist-789:user-456:xlsx:enriched');
+    expect(buildSingleExportKey(playlistId, userId, { format: 'csv', includeEnrichment: false }))
+      .toBe('export:playlist-789:user-456:csv:plain');
   });
 
   it('buildSingleExportDataKey matches historical inline structure', () => {
     expect(buildSingleExportDataKey(playlistId, userId)).toBe('export:playlist-789:user-456:data');
+  });
+
+  it('buildSingleExportDataKey includes variant suffix', () => {
+    expect(
+      buildSingleExportDataKey(playlistId, userId, { format: 'json', includeEnrichment: true }),
+    ).toBe('export:playlist-789:user-456:json:enriched:data');
   });
 
   it('buildSingleExportFileKey matches historical inline structure', () => {

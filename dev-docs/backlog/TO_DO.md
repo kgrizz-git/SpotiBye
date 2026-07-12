@@ -57,7 +57,6 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Wire a copy action (and/or native text selection) into the relevant windows
   - [ ] Add focused frontend tests for selection/copy behavior
 - [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations — deferred from the enrichment integration plan above; needs separate UI/caching design (Phase 5 in that plan).
-- [ ] Migrate `export-tracks.ts` off dead Spotify `/audio-features` endpoints to ReccoBeats; remove `SpotifyService.getAudioFeatures`/`getMultipleAudioFeatures` and deprecate the `GET /spotify/tracks/:id/audio-features` proxy route once nothing calls it. Deferred from the enrichment integration plan above (analysis already migrated; export did not).
 - [ ] Consolidate `SpotifyService.fetchWithRetry` with `utils/http-retry.ts`'s `createFetchWithRetry` (added for ReccoBeats fetches) so there is one retry/backoff implementation instead of two. Deferred from the enrichment integration plan above.
 - [ ] **Optional:** Backend playlist composition manifest KV (`analysis:playlist:{id}:manifest`, 24h) — deferred from [per-track ReccoBeats cache plan](../exec-plans/active/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md) **B2.5** (skipped for B2 PR; not required for correctness).
   - [ ] Store `{ track_ids: unique[], snapshot_id }` when analysis completes or tracks are refreshed

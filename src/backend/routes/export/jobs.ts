@@ -133,7 +133,7 @@ app.post('/:jobId/step', zValidator('param', JobIdParamSchema), async (c) => {
       throw error;
     }
 
-    const exportService = new ExportService(accessToken);
+    const exportService = new ExportService(accessToken, cacheService);
     const result = await exportService.runResumableStep(
       job,
       Array.isArray(exportDataList) ? exportDataList : [],
@@ -256,7 +256,7 @@ app.get('/:jobId/download', zValidator('param', JobIdParamSchema), async (c) => 
     // Fallback: regenerate from cached track data (backward-compat for jobs without a pre-built file).
     const assemblyState = await cacheService.get<ResumableExportAssemblyState>(assemblyKey);
     if (assemblyState && Array.isArray(assemblyState.summary_rows) && exportStatus.phase === 'assemble') {
-      const exportService = new ExportService(c.get('access_token'));
+      const exportService = new ExportService(c.get('access_token'), cacheService);
       const completedFormat = fileFormat;
       if (completedFormat === 'xlsx') {
         try {
@@ -306,7 +306,7 @@ app.get('/:jobId/download', zValidator('param', JobIdParamSchema), async (c) => 
     if (!Array.isArray(exportDataList) || exportDataList.length === 0) {
       return c.json({ error: { code: 'EXPORT_DATA_NOT_FOUND', message: 'Export job data not found' } }, { status: 404 as ContentfulStatusCode });
     }
-    const exportService = new ExportService(c.get('access_token'));
+    const exportService = new ExportService(c.get('access_token'), cacheService);
     const fallbackBytes = await generateFileBytes(exportService, exportDataList, fileFormat);
     await cacheService.setBuffer(buildExportFileKey(jobKey), fallbackBytes, 3600);
     return new Response(fallbackBytes, {

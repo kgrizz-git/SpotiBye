@@ -1,8 +1,49 @@
+/**
+ * Export track assembly — playlist metadata, duration totals, and per-track rows.
+ *
+ * When `include_audio_features` is true, enrichment columns are populated from
+ * the global per-track ReccoBeats cache (`ReccoBeatsTrackCacheService`) with
+ * on-demand miss-fill — analysis does not need to run first.
+ */
 import type { ExportTrack, ExportData } from './export-types';
-import type { SpotifyPlaylist, SpotifyTrack, SpotifyPlaylistTrackItem, SpotifyAudioFeatures } from '../types/spotify';
+import type { SpotifyPlaylist, SpotifyTrack, SpotifyPlaylistTrackItem } from '../types/spotify';
+import type { ReccoBeatsAudioFeature } from '../types/analysis';
 import { formatDuration } from './export-format-helpers';
-import { SpotifyService } from './spotify';
 import { keyName, modeName } from '../utils/music-helpers';
+import { CacheService } from './cache';
+import { ReccoBeatsTrackCacheService } from './reccobeats-track-cache';
+import { logger } from '../utils/logger';
+
+/** Numeric ReccoBeats audio-feature fields used by export columns (no time_signature). */
+export interface ReccoBeatsExportFeatures {
+  tempo?: number;
+  key?: number;
+  mode?: number;
+  danceability?: number;
+  energy?: number;
+  valence?: number;
+  acousticness?: number;
+  instrumentalness?: number;
+  liveness?: number;
+  speechiness?: number;
+  loudness?: number;
+}
+
+export function toExportFeatures(row: ReccoBeatsAudioFeature): ReccoBeatsExportFeatures {
+  return {
+    tempo: row.tempo,
+    key: row.key,
+    mode: row.mode,
+    danceability: row.danceability,
+    energy: row.energy,
+    valence: row.valence,
+    acousticness: row.acousticness,
+    instrumentalness: row.instrumentalness,
+    liveness: row.liveness,
+    speechiness: row.speechiness,
+    loudness: row.loudness,
+  };
+}
 
 export function buildPlaylistMetadata(playlist: SpotifyPlaylist | undefined, fallbackTrackCount: number): ExportData['playlist'] {
   return {
@@ -23,7 +64,10 @@ export function calculateTotalDurationMs(items: SpotifyPlaylistTrackItem[]): num
     .reduce((acc, item) => acc + (item.track!.duration_ms || 0), 0);
 }
 
-export function mapTrackForExport(track: SpotifyTrack, audioFeatures: SpotifyAudioFeatures | null | undefined): ExportTrack {
+export function mapTrackForExport(
+  track: SpotifyTrack,
+  audioFeatures: ReccoBeatsExportFeatures | null | undefined,
+): ExportTrack {
   const key = keyName(audioFeatures?.key);
   const mode = modeName(audioFeatures?.mode);
   const keyValue = key ? `${key}${mode ? ` ${mode}` : ''}` : 'N/A';
@@ -44,51 +88,40 @@ export function mapTrackForExport(track: SpotifyTrack, audioFeatures: SpotifyAud
     Liveness: typeof audioFeatures?.liveness === 'number' ? Number(audioFeatures.liveness.toFixed(3)) : 'N/A',
     Speechiness: typeof audioFeatures?.speechiness === 'number' ? Number(audioFeatures.speechiness.toFixed(3)) : 'N/A',
     Loudness: typeof audioFeatures?.loudness === 'number' ? Number(audioFeatures.loudness.toFixed(1)) : 'N/A',
-    'Time Signature': typeof audioFeatures?.time_signature === 'number' ? audioFeatures.time_signature : 'N/A',
+    // ReccoBeats does not expose time_signature — permanent N/A for export.
+    'Time Signature': 'N/A',
   };
 }
 
 export async function loadAudioFeaturesMap(
   trackIds: string[],
   includeAudioFeatures: boolean,
-  spotifyService: SpotifyService,
-): Promise<Map<string, SpotifyAudioFeatures>> {
-  const audioFeaturesMap = new Map<string, SpotifyAudioFeatures>();
-  let audioFeaturesUnavailable = false;
+  cache?: CacheService,
+): Promise<Map<string, ReccoBeatsExportFeatures>> {
+  const audioFeaturesMap = new Map<string, ReccoBeatsExportFeatures>();
 
   if (!includeAudioFeatures || trackIds.length === 0) {
     return audioFeaturesMap;
   }
 
-  for (let i = 0; i < trackIds.length; i += 100) {
-    if (audioFeaturesUnavailable) {
-      break;
+  if (!cache) {
+    throw new Error('CacheService is required to resolve ReccoBeats enrichment for export');
+  }
+
+  const uniqueIds = [...new Set(trackIds.filter(Boolean))];
+  const trackCache = new ReccoBeatsTrackCacheService(cache);
+
+  try {
+    const result = await trackCache.resolveAudioFeatures(uniqueIds);
+    for (const [spotifyId, row] of result.bySpotifyId) {
+      audioFeaturesMap.set(spotifyId, toExportFeatures(row));
     }
-    const batch = trackIds.slice(i, i + 100);
-    try {
-      const audioFeatures = await spotifyService.getMultipleAudioFeatures(batch);
-      audioFeatures.forEach((feature) => {
-        if (feature) {
-          audioFeaturesMap.set(feature.id, feature);
-        }
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/HTTP\s+(401|403)/i.test(message)) {
-        audioFeaturesUnavailable = true;
-        console.warn('Audio-features API unavailable for this token; skipping remaining batches', {
-          batchStart: i,
-          batchSize: batch.length,
-          error: message,
-        });
-        continue;
-      }
-      console.warn('Audio-features batch failed; continuing without those features', {
-        batchStart: i,
-        batchSize: batch.length,
-        error: message,
-      });
-    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn('ReccoBeats audio-features resolve failed for export; unresolved columns remain N/A', {
+      trackCount: uniqueIds.length,
+      error: message,
+    });
   }
 
   return audioFeaturesMap;
@@ -97,13 +130,13 @@ export async function loadAudioFeaturesMap(
 export async function buildExportTracks(
   allTracks: SpotifyPlaylistTrackItem[],
   includeAudioFeatures: boolean,
-  spotifyService: SpotifyService,
+  cache?: CacheService,
 ): Promise<ExportTrack[]> {
   const trackIds = allTracks
     .filter((item) => item.track && item.track.id)
     .map((item) => item.track!.id);
 
-  const audioFeaturesMap = await loadAudioFeaturesMap(trackIds, includeAudioFeatures, spotifyService);
+  const audioFeaturesMap = await loadAudioFeaturesMap(trackIds, includeAudioFeatures, cache);
 
   return allTracks
     .filter((item) => item.track)

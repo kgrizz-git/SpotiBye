@@ -11,7 +11,6 @@
 import type {
   SpotifyPlaylist,
   SpotifyTrack,
-  SpotifyAudioFeatures,
   SpotifyPlaylistTrackItem,
   SpotifyArtistFull,
 } from '../types/spotify';
@@ -19,7 +18,6 @@ import type {
   SpotifyPlaylistsResponse,
   SpotifyPlaylistResponse,
   SpotifyTrackResponse,
-  SpotifyAudioFeaturesResponse,
 } from '../types/spotify-api';
 import { parsePlaylistItems, parseSpotifyResponse } from '../types/spotify-api';
 
@@ -105,12 +103,6 @@ export class SpotifyService {
     return rawData as SpotifyTrack;
   }
 
-  async getAudioFeatures(trackId: string): Promise<SpotifyAudioFeatures> {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/audio-features/${trackId}`);
-    const rawData = await response.json();
-    parseSpotifyResponse<Record<string, unknown>>(rawData, ['id']);
-    return asAudioFeatures(rawData);
-  }
 
   async getArtist(artistId: string): Promise<SpotifyArtistFull> {
     const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${artistId}`);
@@ -127,16 +119,6 @@ export class SpotifyService {
     return this.fetchWithConcurrency(uniqueIds, (id) => this.getArtist(id), 5);
   }
 
-  async getMultipleAudioFeatures(trackIds: string[]): Promise<SpotifyAudioFeatures[]> {
-    const url = new URL(`${this.baseUrl}/audio-features`);
-    url.searchParams.set('ids', trackIds.join(','));
-
-    const response = await this.fetchWithRetry(url.toString());
-    const rawData = await response.json();
-    parseSpotifyResponse<SpotifyAudioFeaturesResponse>(rawData, ['audio_features']);
-
-    return asAudioFeaturesList(rawData.audio_features);
-  }
 
   private async fetchWithRetry(url: string, retries: number = 3): Promise<Response> {
     for (let i = 0; i < retries; i++) {
@@ -251,13 +233,6 @@ export function parseRetryAfter(header: string | null | undefined): number {
  * Each one does a minimal shape check; if the shape is wrong, the wrapper
  * throws instead of silently returning a malformed value.
  */
-function asAudioFeatures(raw: unknown): SpotifyAudioFeatures {
-  if (!raw || typeof raw !== 'object' || typeof (raw as { id?: unknown }).id !== 'string') {
-    throw new Error('Invalid audio features shape: missing string id');
-  }
-  return raw as SpotifyAudioFeatures;
-}
-
 function asArtistFull(raw: unknown): SpotifyArtistFull {
   if (
     !raw ||
@@ -268,16 +243,4 @@ function asArtistFull(raw: unknown): SpotifyArtistFull {
     throw new Error('Invalid artist shape: missing string id or name');
   }
   return raw as SpotifyArtistFull;
-}
-
-function asAudioFeaturesList(raw: unknown): SpotifyAudioFeatures[] {
-  if (!Array.isArray(raw)) {
-    throw new Error('Invalid audio_features list: expected array');
-  }
-  return raw.map((entry) => {
-    if (entry === null || entry === undefined) {
-      return null as unknown as SpotifyAudioFeatures;
-    }
-    return asAudioFeatures(entry);
-  });
 }

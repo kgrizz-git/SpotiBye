@@ -381,11 +381,11 @@ class BackendClient:
 
     # Export endpoints
     def generate_export(self, playlist_id: str, format: str = "xlsx") -> Dict[str, Any]:
-        """Generate export for a playlist."""
+        """Generate export for a playlist (includes ReccoBeats enrichment columns)."""
         response = self._make_request(
             "POST",
             f"/export/playlist/{playlist_id}",
-            json={"format": format, "include_audio_features": False},
+            json={"format": format, "include_audio_features": True},
             timeout=180,
         )
         return response
@@ -400,7 +400,7 @@ class BackendClient:
             json={
                 "playlist_ids": playlist_ids,
                 "format": format,
-                "include_audio_features": False,
+                "include_audio_features": True,
             },
             timeout=300,
         )
@@ -420,7 +420,7 @@ class BackendClient:
             "format": format,
             "cursor": max(0, int(cursor)),
             "chunk_size": max(1, int(chunk_size)),
-            "include_audio_features": False,
+            "include_audio_features": True,
         }
         if job_id:
             payload["job_id"] = job_id
@@ -443,7 +443,7 @@ class BackendClient:
             json={
                 "playlist_ids": playlist_ids,
                 "format": format,
-                "include_audio_features": False,
+                "include_audio_features": True,
             },
             timeout=120,
         )

@@ -10,6 +10,7 @@
  * Reference: docs/design-docs/resumable-export-cursors.md
  */
 import { SpotifyService } from './spotify';
+import type { CacheService } from './cache';
 import { encodeCursor, decodeCursor } from './export-cursor';
 import { createResumeToken, createJobState, validateStepRequest } from './export-job-state';
 import { createAssemblyState } from './export-assemble';
@@ -46,9 +47,11 @@ import type {
 
 export class ExportService {
   private accessToken: string;
+  private cache?: CacheService;
 
-  constructor(accessToken: string) {
+  constructor(accessToken: string, cache?: CacheService) {
     this.accessToken = accessToken;
+    this.cache = cache;
   }
 
   static encodeCursor(
@@ -121,6 +124,7 @@ export class ExportService {
       maxPlaylistsPerStep,
       decodedCursor.nextPlaylistIndex,
       decodedCursor.nextTrackOffset,
+      this.cache,
     );
   }
 
@@ -146,7 +150,7 @@ export class ExportService {
       offset += limit;
     }
 
-    const exportTracks = await buildExportTracks(allTracks, includeAudioFeatures, spotifyService);
+    const exportTracks = await buildExportTracks(allTracks, includeAudioFeatures, this.cache);
     const totalDurationMs = calculateTotalDurationMs(allTracks);
 
     return {

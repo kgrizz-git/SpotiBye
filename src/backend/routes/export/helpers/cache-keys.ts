@@ -37,19 +37,50 @@ export function buildBatchFileKey(jobId: string, userId: string): string {
   return `${buildBatchKey(jobId, userId)}:file`;
 }
 
-export function buildSingleExportKey(playlistId: string, userId: string): string {
+import type { ExportFormat } from './types';
+
+export interface SingleExportKeyOptions {
+  format?: ExportFormat;
+  /** When true, export includes ReccoBeats enrichment columns. */
+  includeEnrichment?: boolean;
+}
+
+export function buildSingleExportKey(
+  playlistId: string,
+  userId: string,
+  options?: SingleExportKeyOptions,
+): string {
+  const base = `export:${playlistId}:${userId}`;
+  if (!options) {
+    return base;
+  }
+  const format = options.format ?? 'xlsx';
+  const enrichment = options.includeEnrichment === true ? 'enriched' : 'plain';
+  return `${base}:${format}:${enrichment}`;
+}
+
+/** Prefix for single-export KV keys (all format/enrichment variants). */
+export function buildSingleExportPrefix(playlistId: string, userId: string): string {
   return `export:${playlistId}:${userId}`;
 }
 
-/** Prefix for single-export KV keys (`:data`, `:file`, format variants). */
-export function buildSingleExportPrefix(playlistId: string, userId: string): string {
-  return buildSingleExportKey(playlistId, userId);
+export function buildSingleExportDataKey(
+  playlistId: string,
+  userId: string,
+  options?: SingleExportKeyOptions,
+): string {
+  return `${buildSingleExportKey(playlistId, userId, options)}:data`;
 }
 
-export function buildSingleExportDataKey(playlistId: string, userId: string): string {
-  return `${buildSingleExportKey(playlistId, userId)}:data`;
+export function buildSingleExportFileKey(
+  playlistId: string,
+  userId: string,
+  options?: SingleExportKeyOptions,
+): string {
+  return `${buildSingleExportKey(playlistId, userId, options)}:file`;
 }
 
-export function buildSingleExportFileKey(playlistId: string, userId: string): string {
-  return `${buildSingleExportKey(playlistId, userId)}:file`;
+/** Points at the most recent single-export variant (format + enrichment). */
+export function buildSingleExportLatestKey(playlistId: string, userId: string): string {
+  return `${buildSingleExportPrefix(playlistId, userId)}:latest`;
 }
