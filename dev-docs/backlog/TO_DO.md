@@ -67,6 +67,11 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
 ## Code Quality / Tech Debt
 
 - [ ] Fix deprecated `AsyncImage` properties (`allow_stretch`, `keep_ratio`)
+- [ ] Reduce backend test `@typescript-eslint/no-explicit-any` warnings (low priority; CI-nonblocking)
+  - [ ] Note: production TS is already `error`; tests are intentionally `warn` in `src/backend/eslint.config.mjs`
+  - [ ] Type common offenders (parsed JSON responses, mock KV/env returns, analysis result fixtures) instead of `as any`
+  - [ ] Prefer shared typed helpers (`createTestEnv`, typed result fixtures) over one-off casts
+  - [ ] After the warning count is near zero, consider promoting the test override from `warn` to `error`
 - [x] Add basedpyright as a pre-push hook in `.pre-commit-config.yaml` ([plan](../exec-plans/completed/2026-06-27-basedpyright-prepush-hook.md)) — **done 2026-06-27**
 - [x] Run pyright and triage type issues **NEEDS REVIEW**
   - [x] Document the exact command and current issue count
