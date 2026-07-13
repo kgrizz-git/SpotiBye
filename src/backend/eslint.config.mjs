@@ -64,7 +64,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['index.ts'],
+    files: ['**/index.ts'],
     rules: { 'no-restricted-imports': 'off' },
   },
   { ignores: ['dist/', 'node_modules/', '.wrangler/'] },

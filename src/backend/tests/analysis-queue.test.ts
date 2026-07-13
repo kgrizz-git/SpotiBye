@@ -287,8 +287,7 @@ describe('analysis queue consumer', () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(message.retry).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('markFailed threw'),
-      expect.any(Error)
+      expect.stringContaining('QUEUE_MARK_FAILED_THREW')
     );
   });
 });

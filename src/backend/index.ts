@@ -81,10 +81,11 @@ export default {
     for (const message of batch.messages) {
       const payloadResult = AnalysisQueueMessagePayloadSchema.safeParse(message.body);
       if (!payloadResult.success) {
-        console.error(
-          `[Queue] Invalid message body for job ${message.body?.job_id ?? 'unknown'}:`,
-          payloadResult.error.flatten(),
-        );
+        console.error(JSON.stringify({
+          event: 'QUEUE_INVALID_MESSAGE_BODY',
+          job_id: message.body?.job_id ?? null,
+          errors: payloadResult.error.flatten(),
+        }));
         message.ack();
         continue;
       }
@@ -115,7 +116,13 @@ export default {
           try {
             await jobService.markFailed(body, error);
           } catch (markFailedError) {
-            console.error(`[Queue] markFailed threw for job ${body.job_id}; acking anyway:`, markFailedError);
+            const err = markFailedError as Error;
+            console.error(JSON.stringify({
+              event: 'QUEUE_MARK_FAILED_THREW',
+              job_id: body.job_id,
+              error: err.message ?? String(err),
+              stack: err.stack,
+            }));
           }
           message.ack();
           continue;

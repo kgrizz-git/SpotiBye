@@ -143,8 +143,8 @@ repos:
     hooks:
       - id: semgrep-sast
         name: Semgrep SAST (pre-push)
-        description: Full SAST scan matching CI — OWASP Top 10, CWE Top 25, JS/TS/Python
-        entry: semgrep --config=p/security-audit --config=p/owasp-top-ten --config=p/cwe-top-25 --error --skip-unknown-extensions
+        description: Full SAST scan matching CI — OWASP Top 10, CWE Top 25, plus JavaScript/TypeScript language packs (catches rules like unsafe-formatstring that the secrets-only pre-commit hook misses)
+        entry: semgrep --config=p/security-audit --config=p/owasp-top-ten --config=p/cwe-top-25 --config=p/javascript --config=p/typescript --config=p/python --error --skip-unknown-extensions
         language: system
         pass_filenames: false
         always_run: true
