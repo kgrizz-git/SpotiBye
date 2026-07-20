@@ -20,17 +20,33 @@ def selected_export_format(format_text: Optional[str]) -> str:
     return fmt if fmt in ("xlsx", "csv", "json") else "xlsx"
 
 
+def normalize_display_username(
+    username: Optional[str],
+    *,
+    fallback: str = "Unknown User",
+) -> str:
+    """Return a safe display name, never the literal string ``None``.
+
+    ``getattr(app, "username", ...)`` is insufficient when the attribute exists
+    but is Python ``None`` — f-strings then render ``Logged in as: None``.
+    """
+    if not username or str(username) == "None":
+        return fallback
+    return str(username)
+
+
+def logged_in_as_text(username: Optional[str]) -> str:
+    """Header label text for the authenticated user."""
+    return f"Logged in as: {normalize_display_username(username)}"
+
+
 def generate_default_filename(
     username: Optional[str] = None,
     format_type: str = "xlsx",
     now: Optional[datetime] = None,
 ) -> str:
     """Generate a default export filename based on username and current timestamp."""
-    # Handle None or empty username cases
-    if not username or username == "None":
-        safe_username = "user"
-    else:
-        safe_username = str(username)
+    safe_username = normalize_display_username(username, fallback="user")
 
     # Format: YYYY-MM-DD_HH-MM-SSAM/PM
     current = now or datetime.now()

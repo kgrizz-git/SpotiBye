@@ -72,7 +72,11 @@ BACKEND_PRESETS: Final[dict[str, str]] = {
 EXPORT_DIR: Final[str] = os.environ.get(
     "SPOTIBYE_EXPORT_DIR", os.path.expanduser("~/Downloads")
 )
-TEMP_DIR: Final[str] = os.environ.get("SPOTIBYE_TEMP_DIR", "/tmp/spotibye_exports")
+# Keep staging/temp files under the user-private cache tree — never under
+# world-writable ``/tmp`` (Sonar python:S5443 / CWE symlink-race risk).
+TEMP_DIR: Final[str] = os.environ.get(
+    "SPOTIBYE_TEMP_DIR", str(CACHE_DIR / "temp_exports")
+)
 
 
 # UI Configuration
@@ -151,12 +155,22 @@ class PerformanceSettings:
 
 
 # Ensure directories exist
+def _ensure_private_dir(path: Path) -> None:
+    """Create ``path`` (and parents) with owner-only permissions when possible."""
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        path.chmod(0o700)
+    except OSError:
+        # Windows / restricted filesystems may ignore or reject Unix modes.
+        pass
+
+
 def ensure_directories() -> None:
     """Create necessary directories if they don't exist."""
-    CACHE_DIR.mkdir(exist_ok=True)
-    Path(TOKEN_CACHE_PATH).parent.mkdir(exist_ok=True)
+    _ensure_private_dir(CACHE_DIR)
+    _ensure_private_dir(Path(TOKEN_CACHE_PATH).parent)
     Path(EXPORT_DIR).expanduser().mkdir(exist_ok=True)
-    Path(TEMP_DIR).mkdir(exist_ok=True)
+    _ensure_private_dir(Path(TEMP_DIR).expanduser())
 
 
 def is_valid_backend_url(url: str) -> bool:

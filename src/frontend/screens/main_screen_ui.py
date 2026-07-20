@@ -19,6 +19,7 @@ from kivy.uix.widget import Widget
 
 from ..config.backend_config import EXPORT_DIR as SAVE_DIR
 from ..ui.layouts import ResponsiveGridLayout
+from .main_screen_filenames import logged_in_as_text
 
 if TYPE_CHECKING:
     from .main_screen import MainScreen
@@ -78,9 +79,9 @@ class MainScreenUIBuilder:
         )
 
         app = App.get_running_app()
-        username = getattr(app, "username", "Unknown User")
+        username = getattr(app, "username", None) if app else None
         screen.username_label = Label(
-            text=f"Logged in as: {username}",
+            text=logged_in_as_text(username),
             font_size=dp(14),
             color=(0.8, 0.8, 0.8, 1),
             size_hint=(None, None),

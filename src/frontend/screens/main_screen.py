@@ -18,6 +18,7 @@ from .main_screen_filenames import (
     generate_default_filename,
     get_file_extension,
     increment_filename_suffix,
+    logged_in_as_text,
     sanitize_export_filename_component,
     selected_export_format,
 )
@@ -222,8 +223,8 @@ class MainScreen(Screen):
 
     def on_enter(self):
         app = App.get_running_app()
-        username = getattr(app, "username", "Unknown User")
-        self.username_label.text = f"Logged in as: {username}"
+        username = getattr(app, "username", None) if app else None
+        self.username_label.text = logged_in_as_text(username)
         Clock.schedule_once(lambda _: self.update_sort_controls_visibility(), 0.2)
 
         if hasattr(self, "filename_input"):

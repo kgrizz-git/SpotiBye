@@ -5,6 +5,8 @@ from src.frontend.screens.main_screen_filenames import (
     selected_export_format,
     generate_default_filename,
     increment_filename_suffix,
+    logged_in_as_text,
+    normalize_display_username,
     sanitize_export_filename_component,
 )
 
@@ -23,6 +25,13 @@ def test_selected_export_format():
     assert selected_export_format("JSON") == "json"
     assert selected_export_format("") == "xlsx"
     assert selected_export_format(None) == "xlsx"
+
+
+def test_logged_in_as_text_never_shows_literal_none():
+    assert logged_in_as_text("Ada") == "Logged in as: Ada"
+    assert logged_in_as_text(None) == "Logged in as: Unknown User"
+    assert logged_in_as_text("None") == "Logged in as: Unknown User"
+    assert normalize_display_username(None, fallback="user") == "user"
 
 
 def test_generate_default_filename():

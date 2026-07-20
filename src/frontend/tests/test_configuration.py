@@ -25,6 +25,7 @@ _ENV_KEYS = [
     "SPOTIBYE_OAUTH_PORT",
     "SPOTIBYE_CACHE_DIR",
     "SPOTIBYE_EXPORT_DIR",
+    "SPOTIBYE_TEMP_DIR",
     "SPOTIBYE_DEV_BACKEND_URL",
     "SPOTIBYE_LOCALHOST_BACKEND_URL",
 ]
@@ -101,11 +102,44 @@ class TestConfiguration:
             default_client.base_url == "http://localhost:8787"
         ), f"Default client URL should be http://localhost:8787, got {default_client.base_url}"
 
+    def test_temp_dir_defaults_to_private_cache_subdir(self):
+        """Default TEMP_DIR must live under the user-private cache tree (Sonar S5443)."""
+        os.environ.pop("SPOTIBYE_TEMP_DIR", None)
+
+        with patch.dict("sys.modules"):
+            import importlib
+            from ..config import backend_config
+
+            importlib.reload(backend_config)
+
+            from pathlib import Path
+
+            temp_dir = Path(backend_config.TEMP_DIR)
+            cache_dir = backend_config.CACHE_DIR
+            assert temp_dir == cache_dir / "temp_exports"
+            assert temp_dir.is_relative_to(cache_dir)
+            assert temp_dir.is_relative_to(Path.home())
+
+    def test_temp_dir_honors_env_override(self):
+        from pathlib import Path
+
+        custom = str(Path.home() / ".spotibye_cache" / "custom_temp_exports")
+        os.environ["SPOTIBYE_TEMP_DIR"] = custom
+
+        with patch.dict("sys.modules"):
+            import importlib
+            from ..config import backend_config
+
+            importlib.reload(backend_config)
+            assert backend_config.TEMP_DIR == custom
+
     def test_cache_directory_configuration(self):
-        custom_cache_dir = "/tmp/spotibye-test-cache"
+        from pathlib import Path
+
+        # Prefer a user-private path so Sonar S5443 does not flag this test.
+        custom_cache_dir = str(Path.home() / ".spotibye_cache" / "pytest-cache-config")
         os.environ["SPOTIBYE_CACHE_DIR"] = custom_cache_dir
 
-        from pathlib import Path
         from ..caching.backend_cache import BackendCacheManager
 
         with patch.object(BackendCacheManager, "__init__", return_value=None):

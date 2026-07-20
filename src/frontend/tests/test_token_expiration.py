@@ -257,7 +257,10 @@ class TestTryAutoLogin:
     def test_transport_error_proceeds_without_wiping_cache(self) -> None:
         app, backend_app_module = self._build_app()
         token = _valid_jwt()
-        app.cache_manager.load_auth_token.return_value = {"token": token}
+        app.cache_manager.load_auth_token.return_value = {
+            "token": token,
+            "username": "Cached User",
+        }
 
         def run_callbacks(callback, _dt=0, *_args) -> None:
             callback(0)
@@ -283,6 +286,8 @@ class TestTryAutoLogin:
         app.cache_manager.clear_auth_token.assert_not_called()
         app.switch_to_main.assert_called_once()
         app._set_login_status.assert_not_called()
+        assert app.username == "Cached User"
+        assert app.token_info == {"access_token": token}
 
     def test_auth_required_wipes_cache_and_keeps_user_on_login_screen(self) -> None:
         app, backend_app_module = self._build_app()
@@ -314,3 +319,62 @@ class TestTryAutoLogin:
         app.switch_to_main.assert_not_called()
         app._set_login_status.assert_called_once()
         assert "expired" in app._set_login_status.call_args[0][0].lower()
+        assert app.username is None
+
+    def test_get_me_success_hydrates_username_from_profile(self) -> None:
+        app, backend_app_module = self._build_app()
+        token = _valid_jwt()
+        app.cache_manager.load_auth_token.return_value = {"token": token}
+
+        def run_callbacks(callback, _dt=0, *_args) -> None:
+            callback(0)
+
+        with patch.object(
+            backend_app_module.Clock,
+            "schedule_once",
+            side_effect=run_callbacks,
+        ):
+            app.backend_client.get_me = MagicMock(
+                return_value={"id": "u1", "name": "Alice", "email": "a@example.com"}
+            )
+            app._try_auto_login()
+            for _ in range(20):
+                if app.switch_to_main.called:
+                    break
+                threading.Event().wait(0.05)
+
+        app.switch_to_main.assert_called_once()
+        assert app.username == "Alice"
+        assert app.token_info == {"access_token": token}
+        app.cache_manager.save_auth_token.assert_called()
+        saved = app.cache_manager.save_auth_token.call_args[0][0]
+        assert saved["username"] == "Alice"
+        assert saved["token"] == token
+
+    def test_get_me_success_falls_back_to_cached_username(self) -> None:
+        app, backend_app_module = self._build_app()
+        token = _valid_jwt()
+        app.cache_manager.load_auth_token.return_value = {
+            "token": token,
+            "username": "From Cache",
+        }
+
+        def run_callbacks(callback, _dt=0, *_args) -> None:
+            callback(0)
+
+        with patch.object(
+            backend_app_module.Clock,
+            "schedule_once",
+            side_effect=run_callbacks,
+        ):
+            # Empty / null-ish profile fields should fall through to cache.
+            app.backend_client.get_me = MagicMock(
+                return_value={"id": None, "name": None, "display_name": None}
+            )
+            app._try_auto_login()
+            for _ in range(20):
+                if app.switch_to_main.called:
+                    break
+                threading.Event().wait(0.05)
+
+        assert app.username == "From Cache"

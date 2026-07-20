@@ -146,7 +146,9 @@ export async function generateCombinedExcelFile(exportDataList: ExportData[]): P
     if (rowNumber > 12) {
       const lastColLetter = String.fromCharCode(64 + headers.length);
       const fullRef = `A11:${lastColLetter}${rowNumber - 1}`;
-      const tableName = `tbl_${sheetName.replace(/[^A-Za-z0-9_]/g, '').slice(0, 20)}_${Math.floor(Math.random() * 1000)}`;
+      // Excel table names allow letters/digits/underscore only — use CSPRNG hex, not Math.random (Sonar S2245).
+      const uniqueSuffix = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+      const tableName = `tbl_${sheetName.replace(/[^A-Za-z0-9_]/g, '').slice(0, 20)}_${uniqueSuffix}`;
       const tbl = sheet.addTable({
         name: tableName,
         ref: 'A11',

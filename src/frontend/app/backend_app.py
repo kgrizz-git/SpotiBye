@@ -274,11 +274,25 @@ class BackendSpotifyExporterApp(MDApp):
             if status:
                 status.text = "Verifying session…"
 
+        def _proceed_to_main(username: str) -> None:
+            """Hydrate session display state, then switch to main on the UI thread."""
+            self.token_info = {"access_token": token}
+            self.username = username
+            if self.cache_manager and cached_token.get("username") != username:
+                self.cache_manager.save_auth_token(
+                    {
+                        "token": token,
+                        "username": username,
+                        "saved_at": int(time.time()),
+                    }
+                )
+            Clock.schedule_once(lambda _: self.switch_to_main(), 0)
+
         def _validate_and_proceed() -> None:
             try:
-                self.backend_client.get_me()
-                # Success — switch to main on the UI thread
-                Clock.schedule_once(lambda _: self.switch_to_main(), 0)
+                me = self.backend_client.get_me() if self.backend_client else None
+                username = _resolve_auto_login_username(me=me, cached=cached_token)
+                _proceed_to_main(username)
             except BackendAPIError as exc:
                 if exc.status_code == 401:
                     # Permanently invalid — wipe disk cache
@@ -293,10 +307,12 @@ class BackendSpotifyExporterApp(MDApp):
                     original_logger.warning(
                         "Session validation offline, proceeding: %s", exc
                     )
-                    Clock.schedule_once(lambda _: self.switch_to_main(), 0)
+                    username = _resolve_auto_login_username(cached=cached_token)
+                    _proceed_to_main(username)
             except Exception as exc:
                 original_logger.warning("Unexpected get_me error, proceeding: %s", exc)
-                Clock.schedule_once(lambda _: self.switch_to_main(), 0)
+                username = _resolve_auto_login_username(cached=cached_token)
+                _proceed_to_main(username)
 
         import threading
 
@@ -561,6 +577,45 @@ class BackendSpotifyExporterApp(MDApp):
 
         except Exception as e:
             original_logger.error(f"Error refreshing backend connection: {e}")
+
+
+def _first_nonempty_str(*values: Any) -> Optional[str]:
+    """Return the first value that is a non-empty string (not the literal ``None``)."""
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text and text != "None":
+            return text
+    return None
+
+
+def _resolve_auto_login_username(
+    *,
+    me: Optional[Dict[str, Any]] = None,
+    cached: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Resolve a display username for auto-login from /auth/me and/or token cache.
+
+    ``/auth/me`` returns JWT fields (``name``, ``id``). Interactive login stores
+    ``username`` in the local token cache. Prefer live profile, then cache.
+    """
+    if isinstance(me, dict):
+        from_me = _first_nonempty_str(
+            me.get("name"),
+            me.get("display_name"),
+            me.get("username"),
+            me.get("id"),
+        )
+        if from_me:
+            return from_me
+
+    if isinstance(cached, dict):
+        from_cache = _first_nonempty_str(cached.get("username"))
+        if from_cache:
+            return from_cache
+
+    return "User"
 
 
 def _is_jwt_expired(token: str) -> bool:
