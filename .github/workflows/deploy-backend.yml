@@ -8,9 +8,6 @@ on:
       - 'src/backend/**'
       - '.github/workflows/deploy-backend.yml'
       - '.github/workflows/security.yml'
-  pull_request:
-    branches: [main]
-    paths: ['src/backend/**', '.github/workflows/deploy-backend.yml']
   workflow_dispatch:
 
 concurrency:
@@ -24,11 +21,12 @@ permissions:
   security-events: read
 
 jobs:
-  # Only run tests if triggered manually or if CI hasn't run yet
-  # This avoids duplicate test runs when CI already validated the code
+  # Only run tests if triggered manually. Push to main/tags skip this job
+  # (ci.yml already validates PRs and pushes); deploy jobs accept skipped test.
   test:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request != null
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch'
     steps:
     - name: Checkout code
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -58,6 +56,7 @@ jobs:
   deploy-dev:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: development
     # Deploy on main branch push or manual trigger, but allow skipped test job
     if: |
@@ -88,6 +87,7 @@ jobs:
   deploy-prod:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: production
     # Deploy on version tags, but allow skipped test job
     if: |

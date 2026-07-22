@@ -22,6 +22,7 @@ jobs:
   security-checks:
     name: Security Verification
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: ${{ !inputs.skip_security_checks }}
     steps:
       - name: Checkout code
@@ -37,6 +38,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
     - name: Checkout code
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -67,6 +69,7 @@ jobs:
     needs: [test, security-checks]
     if: always() && needs.test.result == 'success' && (needs.security-checks.result == 'success' || needs.security-checks.result == 'skipped')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: production
     permissions:
       contents: read

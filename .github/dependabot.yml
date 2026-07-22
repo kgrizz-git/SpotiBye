@@ -34,27 +34,6 @@ updates:
           - "minor"
           - "patch"
 
-  # Python dependencies - Backup project
-  - package-ecosystem: "pip"
-    directory: "/SpotifyPlaylistExporterV2-BACKUP-COPY-READ-ONLY"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/New_York"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    reviewers:
-      - "kgrizz"
-    labels:
-      - "dependencies"
-      - "python"
-      - "backup"
-    commit-message:
-      prefix: "deps"
-      prefix-development: "deps(dev)"
-
   # Node.js dependencies - Backend
   - package-ecosystem: "npm"
     directory: "/src/backend"
@@ -124,25 +103,6 @@ updates:
         update-types:
           - "minor"
           - "patch"
-
-  # Docker dependencies (if Dockerfile exists)
-  - package-ecosystem: "docker"
-    directory: "/backend-backup"
-    schedule:
-      interval: "weekly"
-      time: "09:00"
-      timezone: "America/New_York"
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 3
-    reviewers:
-      - "kgrizz"
-    labels:
-      - "dependencies"
-      - "docker"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
 
 # Security updates configuration
 # Enable automated security updates (separate from version updates)

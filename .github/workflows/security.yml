@@ -28,100 +28,68 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Single sequential runner: parallel short jobs each bill 1 minute; one job
+# keeps the same scanners while cutting billable minutes ~6x → 1–2x per run.
 jobs:
-  # Secret Scanning
-  secret-scan:
-    name: Secret Detection (TruffleHog)
+  security-scan:
+    name: Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
-          fetch-depth: 0  # Required for TruffleHog to scan history
+          fetch-depth: 0
 
-      - name: TruffleHog OSS
+      # TruffleHog PR Diff Mode
+      - name: TruffleHog Secret Scan (PR Diff)
+        id: trufflehog_pr
+        if: (success() || failure()) && github.event_name == 'pull_request'
         uses: trufflesecurity/trufflehog@d411fff7b8879a62509f3fa98c07f247ac089a51
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
           extra_args: --debug --only-verified
-        # Only run commit diff mode on PRs; for schedule/dispatch, scan full history
-        if: github.event_name == 'pull_request'
 
-      - name: TruffleHog OSS (Full History)
+      # TruffleHog Full History Mode (Schedule / Manual Dispatch)
+      - name: TruffleHog Secret Scan (Full History)
+        id: trufflehog_full
+        if: (success() || failure()) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         uses: trufflesecurity/trufflehog@d411fff7b8879a62509f3fa98c07f247ac089a51
         with:
           path: ./
           extra_args: --debug --only-verified
-        # Run full history scan on schedule/dispatch
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
-  # SAST - Multi-language (JavaScript, TypeScript, Python)
-  semgrep:
-    name: SAST (Semgrep)
-    runs-on: ubuntu-latest
-    container:
-      image: semgrep/semgrep
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      - name: Semgrep scan
-        run: semgrep ci --config=auto
-        env:
-          SEMGREP_RULES: >-
-            p/security-audit
-            p/owasp-top-ten
-            p/cwe-top-25
-            p/ci
-            p/secrets
-            p/javascript
-            p/typescript
-            p/python
-
-  # Python SAST - Bandit (only on Python file changes to reduce redundancy)
-  bandit:
-    name: Python SAST (Bandit)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      # Semgrep SAST — pass rules via -e only (do not also pass --config;
+      # CLI --config overrides/ignores SEMGREP_RULES).
+      - name: Semgrep SAST
+        id: semgrep
+        if: success() || failure()
+        run: |
+          docker run --rm \
+            -e SEMGREP_RULES="p/security-audit p/owasp-top-ten p/cwe-top-25 p/ci p/secrets p/javascript p/typescript p/python" \
+            -v "${PWD}:/src" \
+            semgrep/semgrep semgrep ci
 
       - name: Set up Python
+        if: success() || failure()
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.10'
 
-      - name: Install Bandit
-        run: pip install bandit[toml]
+      - name: Bandit Python SAST
+        id: bandit
+        if: success() || failure()
+        run: |
+          # Pin + wheels-only: avoids Sonar githubactions findings on unlocked
+          # versions and setup.py execution from sdists (S8543 / S8544).
+          pip install --only-binary=:all: "bandit[toml]==1.9.4"
+          bandit -r src/ scripts/ -c pyproject.toml -f txt
 
-      - name: Run Bandit
-        run: bandit -r src/ scripts/ -c pyproject.toml -f json -o bandit-report.json
-
-      - name: Display Bandit results
-        run: bandit -r src/ scripts/ -c pyproject.toml -f txt
-
-      - name: Upload Bandit report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        if: always()
-        with:
-          name: bandit-report
-          retention-days: 30
-          path: bandit-report.json
-
-  # Dependency Scanning (Python + Node.js via OSV-Scanner)
-  dependency-scan:
-    name: Dependency Vulnerabilities (OSV-Scanner)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      - name: Run OSV-Scanner
+      - name: OSV-Scanner Dependency Check
+        id: osv
+        if: success() || failure()
         uses: google/osv-scanner-action/osv-scanner-action@c51854704019a247608d928f370c98740469d4b5
         with:
           # OSV-Scanner honours .gitignore by default, so .venv/, node_modules/,
@@ -130,47 +98,40 @@ jobs:
             -r
             ./
 
-  # Infrastructure as Code Scanning (if wrangler.toml exists)
-  iac-scan:
-    name: IaC Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      - name: Check if wrangler.toml exists
-        id: check_file
-        run: |
-          if [ -f "src/backend/wrangler.toml" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkov Scan
-        if: steps.check_file.outputs.exists == 'true'
+      - name: IaC Security Check (Checkov)
+        id: checkov
+        if: (success() || failure()) && hashFiles('src/backend/wrangler.toml') != ''
         uses: bridgecrewio/checkov-action@a7683e7b72a04503521247973281ec8142e1ac1f
         with:
           directory: src/backend/
           framework: cloudformation,terraform
-          output_format: sarif
-          output_file_path: reports/checkov.sarif
 
-  # Summary
-  security-summary:
-    name: Security Summary
-    needs: [secret-scan, semgrep, bandit, dependency-scan]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Security Check Summary
+      # Note: step.outcome is 'skipped' (truthy) when a step's if: is false,
+      # so do not use || between PR and full-history TruffleHog outcomes.
+      - name: Generate Security Scan Summary
+        if: always()
+        env:
+          TRUFFLEHOG_PR: ${{ steps.trufflehog_pr.outcome }}
+          TRUFFLEHOG_FULL: ${{ steps.trufflehog_full.outcome }}
+          SEMGREP: ${{ steps.semgrep.outcome }}
+          BANDIT: ${{ steps.bandit.outcome }}
+          OSV: ${{ steps.osv.outcome }}
+          CHECKOV: ${{ steps.checkov.outcome }}
         run: |
+          if [ "${TRUFFLEHOG_PR}" != "skipped" ] && [ -n "${TRUFFLEHOG_PR}" ]; then
+            TRUFFLEHOG_OUTCOME="${TRUFFLEHOG_PR}"
+          elif [ "${TRUFFLEHOG_FULL}" != "skipped" ] && [ -n "${TRUFFLEHOG_FULL}" ]; then
+            TRUFFLEHOG_OUTCOME="${TRUFFLEHOG_FULL}"
+          else
+            TRUFFLEHOG_OUTCOME="skipped"
+          fi
           {
             echo "## Security Scan Results"
-            echo "| Job | Status |"
-            echo "|-----|--------|"
-            echo "| Secret Scan (TruffleHog) | ${{ needs.secret-scan.result }} |"
-            echo "| SAST (Semgrep) | ${{ needs.semgrep.result }} |"
-            echo "| Python SAST (Bandit) | ${{ needs.bandit.result }} |"
-            echo "| Dependencies (OSV-Scanner) | ${{ needs.dependency-scan.result }} |"
+            echo "| Security Scanner | Outcome |"
+            echo "|---|---|"
+            echo "| TruffleHog Secret Scan | ${TRUFFLEHOG_OUTCOME} |"
+            echo "| Semgrep SAST | ${SEMGREP:-skipped} |"
+            echo "| Bandit Python SAST | ${BANDIT:-skipped} |"
+            echo "| OSV-Scanner | ${OSV:-skipped} |"
+            echo "| Checkov IaC Scan | ${CHECKOV:-skipped} |"
           } >> "$GITHUB_STEP_SUMMARY"

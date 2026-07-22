@@ -113,7 +113,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Confirm backend deployment workflow and required secrets
   - [ ] Confirm CI runs the expected frontend, backend, and structure checks
 - [x] Bump CI Node version from 20 (EOL Apr 2026) to 24 LTS ([plan](../exec-plans/completed/2026-06-28-bump-ci-node-24.md)) — **done 2026-06-29**
-- [ ] Check GitHub Actions minutes usage and see if any can be trimmed
+- [ ] Check GitHub Actions minutes usage and see if any can be trimmed ([plan](../exec-plans/active/2026-07-22-reduce-github-actions-billable-minutes.md))
 - [ ] Decide whether to start a new repository before wider release-readiness work
   - [ ] Complete repository cleanup prerequisites
   - [ ] Decide what history, issues, and release artifacts must be retained
