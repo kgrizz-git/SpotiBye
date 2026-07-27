@@ -34,6 +34,7 @@ Update an existing page when it already covers the same topic.
 | [`code-map.md`](code-map.md) | File index, Mermaid diagrams, and role of source files |
 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer contracts, data flow, and domain breakdown |
 | [`guides/golden-principles.md`](guides/golden-principles.md) | Mechanical engineering rules for this repo |
+| [`guides/osv-scanner-findings-playbook.md`](guides/osv-scanner-findings-playbook.md) | Decision tree for resolving OSV-Scanner advisories (bump, override, parent-update, suppress) |
 | [`dependency-graph.json`](dependency-graph.json) | Machine-readable import graph for impact analysis |
 
 ## Architecture
