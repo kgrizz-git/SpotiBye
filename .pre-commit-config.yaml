@@ -170,7 +170,7 @@ repos:
   # so no local Docker or Go install is required. OSV-Scanner honours .gitignore
   # by default, so .venv/, node_modules/, backups/, etc. are skipped already.
   - repo: https://github.com/google/osv-scanner
-    rev: v2.3.5
+    rev: v2.3.8
     hooks:
       - id: osv-scanner
         name: OSV-Scanner (pre-push)
