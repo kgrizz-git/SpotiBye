@@ -40,6 +40,7 @@ import re
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 try:
     import pathspec
@@ -53,7 +54,12 @@ except ImportError:
 logger = logging.getLogger("check_file_lengths")
 
 ExemptionEntry = dict[str, str]
-ExemptionSpec = pathspec.PathSpec[pathspec.pattern.Pattern]
+if TYPE_CHECKING:
+    # Module-level type alias used only in annotations (deferred by
+    # `from __future__ import annotations`). Keep it under TYPE_CHECKING
+    # so it never runs at import time on pathspec versions whose
+    # PathSpec does not support PEP 585 subscription (e.g. 0.12.x).
+    ExemptionSpec = pathspec.PathSpec[pathspec.pattern.Pattern]
 
 CODE_LIMIT = 700
 DOC_LIMIT = 300
