@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from kivy.uix.boxlayout import BoxLayout
     from kivy.uix.label import Label
+    from kivy.uix.progressbar import ProgressBar
 
 
 class _FakeWidget:
@@ -50,6 +51,21 @@ def _fake_module(name: str, **attrs: Any) -> types.ModuleType:
     for key, value in attrs.items():
         setattr(module, key, value)
     return module
+
+
+def _as_box_layout(widget: _FakeWidget) -> BoxLayout:
+    """Cast a headless test double at the Kivy UI boundary."""
+    return cast("BoxLayout", cast(Any, widget))
+
+
+def _as_label(widget: _FakeWidget) -> Label:
+    """Cast a headless test double at the Kivy UI boundary."""
+    return cast("Label", cast(Any, widget))
+
+
+def _as_progress_bar(widget: _FakeWidget) -> ProgressBar:
+    """Cast a headless test double at the Kivy UI boundary."""
+    return cast("ProgressBar", cast(Any, widget))
 
 
 _STUB_MODULES = {
@@ -116,8 +132,8 @@ def _render(
     container = _FakeWidget()
     duration_label = _FakeWidget(text="")
     card._update_analysis_ui(
-        cast("BoxLayout", cast(Any, container)),
-        cast("Label", cast(Any, duration_label)),
+        _as_box_layout(container),
+        _as_label(duration_label),
         analysis,
         error,
     )
@@ -493,3 +509,178 @@ class TestAnalysisPopupRendering:
 
         texts, _ = _render(card, analysis)
         assert "Audio Features:" not in "\n".join(texts)
+
+
+class TestRefactoredRenderFunctions:
+    """Tests for extracted render functions after refactoring."""
+
+    def test_handle_error_state_with_error_message(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        container = _FakeWidget()
+        progress_bar = _FakeWidget()
+        status_label = _FakeWidget()
+        enrichment_label = _FakeWidget()
+
+        render_module._handle_error_state(
+            _as_box_layout(container),
+            "test error",
+            _as_progress_bar(progress_bar),
+            _as_label(status_label),
+            _as_label(enrichment_label),
+        )
+
+        assert len(container.children) == 1
+        assert "Analysis unavailable: test error" in container.children[0].text
+        assert progress_bar.value == 100
+        assert progress_bar.height == 0
+        assert status_label.text == "Analysis unavailable: test error"
+        assert enrichment_label.text == ""
+
+    def test_handle_error_state_without_error(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        container = _FakeWidget()
+        progress_bar = _FakeWidget()
+        status_label = _FakeWidget()
+        enrichment_label = _FakeWidget()
+
+        render_module._handle_error_state(
+            _as_box_layout(container),
+            None,
+            _as_progress_bar(progress_bar),
+            _as_label(status_label),
+            _as_label(enrichment_label),
+        )
+
+        assert len(container.children) == 1
+        assert "Analysis not available" in container.children[0].text
+
+    def test_update_progress_widgets(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        progress_bar = _FakeWidget()
+        status_label = _FakeWidget()
+
+        render_module._update_progress_widgets(
+            _as_progress_bar(progress_bar), _as_label(status_label)
+        )
+
+        assert progress_bar.value == 100
+        assert progress_bar.height == 0
+        assert status_label.text == "Analysis complete"
+
+    def test_render_overview_section_with_formatted_duration(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        duration_label = _FakeWidget()
+        playlist_data = {"tracks": {"total": 10}}
+        results = {"overview": {"formatted_duration": "30m 0s"}}
+
+        render_module._render_overview_section(
+            _as_label(duration_label), playlist_data, results
+        )
+
+        assert "Tracks: 10 · Duration: 30m 0s" in duration_label.text
+
+    def test_render_overview_section_with_duration_calculation(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        duration_label = _FakeWidget()
+        playlist_data = {"tracks": {"total": 5}}
+        results = {"overview": {"total_duration_ms": 180000}}  # 3 minutes
+
+        render_module._render_overview_section(
+            _as_label(duration_label), playlist_data, results
+        )
+
+        assert "Tracks: 5 · Duration: 3m 0s" in duration_label.text
+
+    def test_render_genre_distribution_with_data(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        container = _FakeWidget()
+        results = {
+            "genre_distribution": {
+                "Rock": {"percentage": 45, "count": 10},
+                "Pop": {"percentage": 30, "count": 7},
+            }
+        }
+
+        render_module._render_genre_distribution(_as_box_layout(container), results)
+
+        texts = [w.text for w in container.children]
+        assert "Genre Distribution:" in texts
+        assert any("Rock: 45%" in t for t in texts)
+        assert any("Pop: 30%" in t for t in texts)
+
+    def test_render_artist_analysis_with_data(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        container = _FakeWidget()
+        results = {
+            "artists": {
+                "unique_artists": 15,
+                "diversity": 0.75,
+                "top_artists": [
+                    {"artist": "Artist1", "count": 5},
+                    {"artist": "Artist2", "count": 3},
+                ],
+            }
+        }
+
+        render_module._render_artist_analysis(_as_box_layout(container), results)
+
+        texts = [w.text for w in container.children]
+        assert "Artist Analysis:" in texts
+        assert any("Unique Artists: 15" in t for t in texts)
+        assert any("Diversity: 75%" in t for t in texts)
+        assert any("Top Artists:" in t for t in texts)
+
+    def test_render_audio_features_percentage_row(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        container = _FakeWidget()
+        averages = {
+            "danceability": 0.6,
+            "energy": 0.8,
+            "acousticness": 0.3,
+        }
+
+        render_module._render_audio_features_percentage_row(
+            _as_box_layout(container),
+            averages,
+            [
+                ("Danceability", "danceability"),
+                ("Energy", "energy"),
+                ("Acousticness", "acousticness"),
+            ],
+        )
+
+        assert len(container.children) == 1
+        text = container.children[0].text
+        assert "Danceability: 60%" in text
+        assert "Energy: 80%" in text
+        assert "Acousticness: 30%" in text
+
+    def test_render_reccobeats_metadata(self) -> None:
+        from ..ui import backend_playlist_card_analysis_render as render_module
+
+        container = _FakeWidget()
+        results = {
+            "reccobeats_metadata": {
+                "isrc_available": 8,
+                "popularity_min": 20,
+                "popularity_max": 90,
+            }
+        }
+        playlist_data = {"tracks": {"total": 10}}
+
+        render_module._render_reccobeats_metadata(
+            _as_box_layout(container), results, playlist_data
+        )
+
+        texts = [w.text for w in container.children]
+        assert "ReccoBeats Metadata:" in texts
+        assert any("ISRC available for 8 of 10 tracks" in t for t in texts)
+        assert any("Popularity range: 20–90" in t for t in texts)

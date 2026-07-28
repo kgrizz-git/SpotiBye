@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import os
 import threading
-import time
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Optional, Tuple
 
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
@@ -16,6 +15,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.widget import Widget
 
 from ...shared.logging_config import logger
+from .main_screen_export_sequential import SequentialExportMixin
 from ..state import (
     clear_current_export_job,
     get_current_export_job,
@@ -24,7 +24,7 @@ from ..state import (
 )
 
 
-class MainScreenExportOrchestrator:
+class MainScreenExportOrchestrator(SequentialExportMixin):
     """Orchestrates the export flow, including threading and UI state updates."""
 
     def __init__(self, screen, scheduler) -> None:
@@ -205,6 +205,255 @@ class MainScreenExportOrchestrator:
             return True
         return False
 
+    def _validate_and_prepare_export(
+        self, playlists: Any, output_path: str
+    ) -> Tuple[list[dict[str, Any]], list[str], str, dict[str, Any]]:
+        """Validate and prepare export parameters."""
+        selected_playlists = playlists if isinstance(playlists, list) else [playlists]
+        valid_playlists = [
+            p for p in selected_playlists if isinstance(p, dict) and p.get("id")
+        ]
+        if not valid_playlists:
+            return [], [], "", {}
+
+        total = len(valid_playlists)
+        playlist_ids = [str(p.get("id")) for p in valid_playlists if p.get("id")]
+        target_path = self._build_backend_output_path(output_path, total > 1)
+        resume_context = {
+            "allow_resume": False,
+            "output_path": target_path,
+            "playlist_names": [p.get("name", "") for p in valid_playlists],
+        }
+        return valid_playlists, playlist_ids, target_path, resume_context
+
+    def _update_ui_for_export_start(self, playlists: Any, output_path: str) -> None:
+        """Update UI for export start."""
+        screen = self.screen
+        if screen.trace_mode_enabled:
+            screen._current_trace_id = uuid.uuid4().hex[:12]
+        else:
+            screen._current_trace_id = ""
+
+        if screen.backend_adapter:
+            screen.backend_adapter.set_trace_id(screen._current_trace_id)
+
+        screen.export_btn.disabled = True
+        screen.cancel_btn.opacity = 1
+        screen.cancel_btn.disabled = True
+        total = len(playlists) if isinstance(playlists, list) else 1
+        filename = os.path.basename(output_path)
+        screen.status_label.text = (
+            f"Exporting {total} playlist(s) via backend to: {filename}"
+        )
+        screen.progress_bar.value = 5
+
+    def _attempt_chunked_export(
+        self,
+        playlist_ids: list[str],
+        target_path: str,
+        resume_context: dict[str, Any],
+    ) -> Tuple[Optional[dict[str, Any]], bool]:
+        """Attempt chunked export and return result and success flag."""
+        self._set_backend_error_context(
+            "chunked-combined", f"prepare ({len(playlist_ids)} playlists)"
+        )
+
+        self.scheduler.call_soon(
+            lambda: setattr(
+                self.screen.status_label,
+                "text",
+                f"Generating combined backend export for {len(playlist_ids)} playlist(s) (chunked)...",
+            )
+        )
+        self.scheduler.call_soon(lambda: setattr(self.screen.progress_bar, "value", 35))
+
+        self._set_backend_error_context("chunked-combined", "generate")
+        if self._check_cancelled():
+            return None, False
+
+        export_info = self.screen.backend_adapter.generate_batch_export_chunked(
+            playlist_ids,
+            self._selected_export_format(),
+            chunk_size=1,
+            report_errors=False,
+            resume_context=resume_context,
+        )
+        return export_info, export_info is not None
+
+    def _handle_chunked_export_failure(
+        self,
+        valid_playlists: list[dict[str, Any]],
+        output_path: str,
+    ) -> dict[str, Any]:
+        """Handle chunked export failure with sequential fallback."""
+        self._set_backend_error_context("sequential-fallback", "start")
+        if self._check_cancelled():
+            return {"cancelled": True}
+
+        fallback_result = self._backend_export_fallback_sequential(
+            valid_playlists, output_path
+        )
+        return fallback_result
+
+    def _handle_sequential_result(
+        self, fallback_result: dict[str, Any], total: int
+    ) -> None:
+        """Handle sequential export result UI updates."""
+        screen = self.screen
+        adapter = screen.backend_adapter
+        if fallback_result.get("cancelled"):
+            return
+
+        if (
+            fallback_result.get("success_count", 0) > 0
+            and fallback_result.get("failed_count", 0) == 0
+        ):
+            adapter.clear_active_export_job()
+            self.scheduler.call_soon(
+                lambda: setattr(
+                    screen.status_label,
+                    "text",
+                    f"Export complete ({total} playlist(s), sequential fallback)",
+                )
+            )
+            self.scheduler.call_soon(lambda: setattr(screen.progress_bar, "value", 100))
+        elif fallback_result.get("success_count", 0) > 0:
+            s = fallback_result.get("success_count", 0)
+            f = fallback_result.get("failed_count", 0)
+            self.scheduler.call_soon(
+                lambda: setattr(
+                    screen.status_label,
+                    "text",
+                    f"Partial export complete ({s} saved, {f} failed)",
+                )
+            )
+            self.scheduler.call_soon(lambda: setattr(screen.progress_bar, "value", 100))
+            self._show_backend_error_popup(
+                f"Sequential fallback partially succeeded. Saved {s}, failed {f}. Failed IDs: {', '.join(fallback_result.get('failed_playlist_ids', []))}"
+            )
+        else:
+            self.scheduler.call_soon(
+                lambda: setattr(
+                    screen.status_label,
+                    "text",
+                    "Backend combined export generation failed",
+                )
+            )
+            self._show_backend_error_popup(
+                "Combined export generation failed after retries and sequential fallback"
+            )
+
+    def _attempt_combined_download(
+        self, export_id: str, target_path: str, export_info: Optional[dict[str, Any]]
+    ) -> bool:
+        """Attempt combined download with recovery logic."""
+        screen = self.screen
+        adapter = screen.backend_adapter
+        if not export_info:
+            return False
+        total_tracks = (
+            int(export_info.get("track_count", 0))
+            if isinstance(export_info, dict)
+            else 0
+        )
+
+        if total_tracks >= 2400:
+            self.scheduler.call_soon(
+                lambda: setattr(
+                    screen.status_label,
+                    "text",
+                    f"Large export ({total_tracks} tracks): reliability mode active; combined file prioritized over heavy styling.",
+                )
+            )
+
+        self._set_backend_error_context(
+            "chunked-combined", f'download job={export_id or "unknown"}'
+        )
+
+        self.scheduler.call_soon(
+            lambda: setattr(
+                screen.status_label,
+                "text",
+                "Downloading combined backend export...",
+            )
+        )
+        self.scheduler.call_soon(lambda: setattr(screen.progress_bar, "value", 80))
+
+        if self._check_cancelled():
+            return False
+
+        success = adapter.download_batch_export(
+            export_id, target_path, report_errors=False
+        )
+        return success
+
+    def _attempt_download_recovery(
+        self,
+        playlist_ids: list[str],
+        valid_playlists: list[dict[str, Any]],
+        target_path: str,
+        resume_context: dict[str, Any],
+        export_id: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """Attempt download recovery with resume context."""
+        screen = self.screen
+        adapter = screen.backend_adapter
+
+        self._set_backend_error_context("chunked-combined", "recover-and-redownload")
+        self.scheduler.call_soon(
+            lambda: setattr(
+                screen.status_label,
+                "text",
+                "Combined download failed; retrying combined export recovery...",
+            )
+        )
+
+        if self._check_cancelled():
+            return False, None
+
+        recovered_info = adapter.generate_batch_export_chunked(
+            playlist_ids,
+            self._selected_export_format(),
+            chunk_size=1,
+            max_steps=240,
+            report_errors=False,
+            resume_context={
+                "allow_resume": True,
+                "output_path": target_path,
+                "playlist_names": [p.get("name", "") for p in valid_playlists],
+            },
+        )
+        recovered_export_id = (
+            recovered_info.get("job_id", "") if isinstance(recovered_info, dict) else ""
+        ) or export_id
+
+        if recovered_export_id:
+            if self._check_cancelled():
+                return False, None
+            success = adapter.download_batch_export(
+                recovered_export_id, target_path, report_errors=False
+            )
+            return success, recovered_export_id
+
+        return False, None
+
+    def _finalize_successful_export(self, total: int) -> None:
+        """Finalize successful export UI updates."""
+        screen = self.screen
+        self.scheduler.call_soon(lambda: setattr(screen.progress_bar, "value", 100))
+        self.scheduler.call_soon(
+            lambda: setattr(
+                screen.status_label,
+                "text",
+                f"Export complete ({total} playlist(s))",
+            )
+        )
+        self._set_backend_error_context(
+            "completed", f"combined success ({total} playlists)"
+        )
+        self.scheduler.call_soon(lambda: self.cleanup_after_export())
+        self._refresh_filename_after_export()
+
     def backend_export_worker(
         self, playlists, output_path, resume_saved_job: bool = False
     ) -> None:
@@ -221,12 +470,9 @@ class MainScreenExportOrchestrator:
                 self.scheduler.call_soon(lambda: self.cleanup_after_export())
                 return
 
-            selected_playlists = (
-                playlists if isinstance(playlists, list) else [playlists]
+            valid_playlists, playlist_ids, target_path, resume_context = (
+                self._validate_and_prepare_export(playlists, output_path)
             )
-            valid_playlists = [
-                p for p in selected_playlists if isinstance(p, dict) and p.get("id")
-            ]
             if not valid_playlists:
                 self.scheduler.call_soon(
                     lambda: setattr(
@@ -240,252 +486,69 @@ class MainScreenExportOrchestrator:
                 return
 
             total = len(valid_playlists)
-            playlist_ids = [p.get("id") for p in valid_playlists if p.get("id")]
-            target_path = self._build_backend_output_path(output_path, total > 1)
-            resume_context = {
-                "allow_resume": resume_saved_job,
-                "output_path": target_path,
-                "playlist_names": [p.get("name", "") for p in valid_playlists],
-            }
-            self._set_backend_error_context(
-                "chunked-combined", f"prepare ({total} playlists)"
+            self._update_ui_for_export_start(playlists, output_path)
+
+            # Initialize global job state for cancellation tracking
+            job_id = screen._current_trace_id or uuid.uuid4().hex[:12]
+            set_current_export_job(
+                job_id=job_id,
+                playlist_ids=playlist_ids,
+                export_format=self._selected_export_format(),
+                output_path=output_path,
             )
 
-            self.scheduler.call_soon(
-                lambda: setattr(
-                    screen.status_label,
-                    "text",
-                    f"Generating combined backend export for {total} playlist(s) (chunked)...",
-                )
+            # Attempt chunked export
+            export_info, chunked_success = self._attempt_chunked_export(
+                playlist_ids, target_path, resume_context
             )
-            self.scheduler.call_soon(lambda: setattr(screen.progress_bar, "value", 35))
-
-            # Use chunked processing to avoid per-invocation subrequest caps on Cloudflare free plans.
-            self._set_backend_error_context("chunked-combined", "generate")
-            if self._check_cancelled():
-                return
-
-            export_info = adapter.generate_batch_export_chunked(
-                playlist_ids,
-                self._selected_export_format(),
-                chunk_size=1,
-                report_errors=False,
-                resume_context=resume_context,
-            )
-            if not export_info:
-                # Fallback: combined export can exceed Worker subrequest limits for larger selections.
-                # Degrade gracefully to sequential per-playlist exports so the user still gets files.
-                self._set_backend_error_context("sequential-fallback", "start")
-                if self._check_cancelled():
-                    return
-
-                fallback_result = self._backend_export_fallback_sequential(
+            if not chunked_success:
+                # Fallback to sequential export
+                fallback_result = self._handle_chunked_export_failure(
                     valid_playlists, output_path
                 )
-                if fallback_result.get("cancelled"):
-                    return
-
-                if (
-                    fallback_result.get("success_count", 0) > 0
-                    and fallback_result.get("failed_count", 0) == 0
-                ):
-                    adapter.clear_active_export_job()
-                    self.scheduler.call_soon(
-                        lambda: setattr(
-                            screen.status_label,
-                            "text",
-                            f"Export complete ({total} playlist(s), sequential fallback)",
-                        )
-                    )
-                    self.scheduler.call_soon(
-                        lambda: setattr(screen.progress_bar, "value", 100)
-                    )
-                elif fallback_result.get("success_count", 0) > 0:
-                    s = fallback_result.get("success_count", 0)
-                    f = fallback_result.get("failed_count", 0)
-                    self.scheduler.call_soon(
-                        lambda: setattr(
-                            screen.status_label,
-                            "text",
-                            f"Partial export complete ({s} saved, {f} failed)",
-                        )
-                    )
-                    self.scheduler.call_soon(
-                        lambda: setattr(screen.progress_bar, "value", 100)
-                    )
-                    self._show_backend_error_popup(
-                        f"Sequential fallback partially succeeded. Saved {s}, failed {f}. Failed IDs: {', '.join(fallback_result.get('failed_playlist_ids', []))}"
-                    )
-                else:
-                    self.scheduler.call_soon(
-                        lambda: setattr(
-                            screen.status_label,
-                            "text",
-                            "Backend combined export generation failed",
-                        )
-                    )
-                    self._show_backend_error_popup(
-                        "Combined export generation failed after retries and sequential fallback"
-                    )
+                self._handle_sequential_result(fallback_result, total)
                 self.scheduler.call_soon(lambda: self.cleanup_after_export())
                 self._refresh_filename_after_export()
                 return
 
+            # Attempt combined download
             export_id = (
                 export_info.get("job_id", "") if isinstance(export_info, dict) else ""
             )
-            total_tracks = (
-                int(export_info.get("track_count", 0))
-                if isinstance(export_info, dict)
-                else 0
-            )
-            if total_tracks >= 2400:
-                self.scheduler.call_soon(
-                    lambda: setattr(
-                        screen.status_label,
-                        "text",
-                        f"Large export ({total_tracks} tracks): reliability mode active; combined file prioritized over heavy styling.",
-                    )
-                )
-
-            self._set_backend_error_context(
-                "chunked-combined", f'download job={export_id or "unknown"}'
+            download_success = self._attempt_combined_download(
+                export_id, target_path, export_info
             )
 
-            self.scheduler.call_soon(
-                lambda: setattr(
-                    screen.status_label,
-                    "text",
-                    "Downloading combined backend export...",
-                )
-            )
-            self.scheduler.call_soon(lambda: setattr(screen.progress_bar, "value", 80))
-
-            if self._check_cancelled():
-                return
-
-            success = adapter.download_batch_export(
-                export_id, target_path, report_errors=False
-            )
-            if not success:
-                # Recovery pass: try to resume/reconcile combined job state and retry combined download once.
-                self._set_backend_error_context(
-                    "chunked-combined", "recover-and-redownload"
-                )
-                self.scheduler.call_soon(
-                    lambda: setattr(
-                        screen.status_label,
-                        "text",
-                        "Combined download failed; retrying combined export recovery...",
-                    )
-                )
-
+            if not download_success:
+                # Check cancellation before attempting recovery
                 if self._check_cancelled():
                     return
-
-                recovered_info = adapter.generate_batch_export_chunked(
+                # Attempt download recovery
+                recovery_success, recovered_id = self._attempt_download_recovery(
                     playlist_ids,
-                    self._selected_export_format(),
-                    chunk_size=1,
-                    max_steps=240,
-                    report_errors=False,
-                    resume_context={
-                        "allow_resume": True,
-                        "output_path": target_path,
-                        "playlist_names": [p.get("name", "") for p in valid_playlists],
-                    },
+                    valid_playlists,
+                    target_path,
+                    resume_context,
+                    export_id,
                 )
-                recovered_export_id = (
-                    recovered_info.get("job_id", "")
-                    if isinstance(recovered_info, dict)
-                    else ""
-                ) or export_id
+                if recovery_success:
+                    download_success = True
+                    export_id = recovered_id or export_id
 
-                if recovered_export_id:
-                    if self._check_cancelled():
-                        return
-                    success = adapter.download_batch_export(
-                        recovered_export_id, target_path, report_errors=False
-                    )
-
-            if not success:
-                self._set_backend_error_context(
-                    "sequential-fallback", "start-after-combined-failure"
-                )
-                # Combined path failed after retries/recovery; now degrade to sequential.
-                for _ in range(12):
-                    if self._check_cancelled():
-                        return
-                    time.sleep(0.5)
-
+            if not download_success:
+                # Check cancellation before final fallback
                 if self._check_cancelled():
                     return
-
-                fallback_result = self._backend_export_fallback_sequential(
+                # Final fallback to sequential
+                fallback_result = self._handle_chunked_export_failure(
                     valid_playlists, output_path
                 )
-                if fallback_result.get("cancelled"):
-                    return
-
-                if (
-                    fallback_result.get("success_count", 0) > 0
-                    and fallback_result.get("failed_count", 0) == 0
-                ):
-                    adapter.clear_active_export_job(export_id or None)
-                    self.scheduler.call_soon(
-                        lambda: setattr(
-                            screen.status_label,
-                            "text",
-                            f"Export complete ({total} playlist(s), sequential fallback)",
-                        )
-                    )
-                    self.scheduler.call_soon(
-                        lambda: setattr(screen.progress_bar, "value", 100)
-                    )
-                elif fallback_result.get("success_count", 0) > 0:
-                    s = fallback_result.get("success_count", 0)
-                    f = fallback_result.get("failed_count", 0)
-                    self.scheduler.call_soon(
-                        lambda: setattr(
-                            screen.status_label,
-                            "text",
-                            f"Partial export complete ({s} saved, {f} failed)",
-                        )
-                    )
-                    self.scheduler.call_soon(
-                        lambda: setattr(screen.progress_bar, "value", 100)
-                    )
-                    self._show_backend_error_popup(
-                        f"Combined download failed; sequential fallback partially succeeded. Saved {s}, failed {f}. Failed IDs: {', '.join(fallback_result.get('failed_playlist_ids', []))}"
-                    )
-                else:
-                    self.scheduler.call_soon(
-                        lambda: setattr(
-                            screen.status_label,
-                            "text",
-                            "Backend combined export download failed",
-                        )
-                    )
-                    self._show_backend_error_popup(
-                        "Combined export download failed after retries and sequential fallback"
-                    )
+                self._handle_sequential_result(fallback_result, total)
                 self.scheduler.call_soon(lambda: self.cleanup_after_export())
                 self._refresh_filename_after_export()
                 return
 
-            self.scheduler.call_soon(lambda: setattr(screen.progress_bar, "value", 100))
-            self.scheduler.call_soon(
-                lambda: setattr(
-                    screen.status_label,
-                    "text",
-                    f"Export complete ({total} playlist(s))",
-                )
-            )
-            self._set_backend_error_context(
-                "completed", f"combined success ({total} playlists)"
-            )
-            self.scheduler.call_soon(lambda: self.cleanup_after_export())
-            self._refresh_filename_after_export()
+            self._finalize_successful_export(total)
 
         except Exception as exc:
             logger.error("Backend export failed: %s", exc)
@@ -498,127 +561,6 @@ class MainScreenExportOrchestrator:
             self._show_backend_error_popup(f"Backend export failed: {str(exc)}")
             self.scheduler.call_soon(lambda: self.cleanup_after_export())
             self._refresh_filename_after_export()
-
-    def _backend_export_fallback_sequential(
-        self, playlists: List[Dict[str, Any]], base_output_path: str
-    ) -> Dict[str, Any]:
-        """Fallback export strategy: generate one backend export per playlist."""
-        screen = self.screen
-        adapter = screen.backend_adapter
-        if not adapter:
-            return {
-                "success_count": 0,
-                "failed_count": len(playlists),
-                "failed_playlist_ids": [
-                    p.get("id", "") for p in playlists if p.get("id")
-                ],
-            }
-
-        total = len(playlists)
-        base_dir = os.path.dirname(base_output_path)
-        base_name = os.path.splitext(os.path.basename(base_output_path))[0]
-        export_format = self._selected_export_format()
-        success_count = 0
-        failed_playlist_ids: List[str] = []
-
-        for index, playlist in enumerate(playlists, start=1):
-            playlist_id = playlist.get("id")
-            if not playlist_id:
-                continue
-
-            playlist_name = self._sanitize_export_filename_component(
-                playlist.get("name", "playlist")
-            )
-            safe_id = self._sanitize_export_filename_component(playlist_id)
-            extension = self._get_file_extension(export_format)
-            target_file = f"{base_name} - {playlist_name} ({safe_id}){extension}"
-            target_path = os.path.join(base_dir, target_file)
-
-            self.scheduler.call_soon(
-                lambda i=index, t=total, name=playlist_name: setattr(
-                    screen.status_label,
-                    "text",
-                    f"Fallback [{i}/{t}] Generating export for {name}...",
-                )
-            )
-            self.scheduler.call_soon(
-                lambda i=index, t=total: setattr(
-                    screen.progress_bar, "value", int(((i - 1) / t) * 100) + 10
-                )
-            )
-            self._set_backend_error_context(
-                "sequential-fallback",
-                f"generate {index}/{total} playlist={playlist_id}",
-            )
-
-            if self._check_cancelled():
-                return {
-                    "success_count": success_count,
-                    "failed_count": total - success_count,
-                    "cancelled": True,
-                }
-
-            export_info = adapter.generate_export(
-                playlist_id, export_format, report_errors=False
-            )
-            if not export_info:
-                failed_playlist_ids.append(playlist_id)
-                continue
-
-            self.scheduler.call_soon(
-                lambda i=index, t=total, name=playlist_name: setattr(
-                    screen.status_label,
-                    "text",
-                    f"Fallback [{i}/{t}] Downloading export for {name}...",
-                )
-            )
-            self.scheduler.call_soon(
-                lambda i=index, t=total: setattr(
-                    screen.progress_bar, "value", int(((i - 1) / t) * 100) + 60
-                )
-            )
-            self._set_backend_error_context(
-                "sequential-fallback",
-                f"download {index}/{total} playlist={playlist_id}",
-            )
-
-            if self._check_cancelled():
-                return {
-                    "success_count": success_count,
-                    "failed_count": total - success_count,
-                    "cancelled": True,
-                }
-
-            success = adapter.download_export(playlist_id, target_path)
-            if not success:
-                failed_playlist_ids.append(playlist_id)
-                continue
-
-            success_count += 1
-
-            # Pace long sequential runs slightly to reduce backend/upstream burst failures.
-            if index < total:
-                time.sleep(0.5)
-
-        if success_count > 0 and not failed_playlist_ids:
-            self._set_backend_error_context(
-                "completed", f"sequential fallback success ({total} playlists)"
-            )
-        elif success_count > 0:
-            self._set_backend_error_context(
-                "completed",
-                f"sequential fallback partial ({success_count}/{total} playlists)",
-            )
-        else:
-            self._set_backend_error_context(
-                "failed", f"sequential fallback failed ({total} playlists)"
-            )
-
-        return {
-            "success_count": success_count,
-            "failed_count": len(failed_playlist_ids),
-            "failed_playlist_ids": failed_playlist_ids,
-        }
 
     def cancel_export(self, *_args) -> None:
         """Cancel the active export job."""
