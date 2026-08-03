@@ -16,7 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260629.1",
+    "@cloudflare/workers-types": "^5.20260722.1",
     "@eslint/js": "^10.0.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.13.3",
@@ -24,7 +24,7 @@
     "@typescript-eslint/parser": "^8.65.0",
     "dotenv": "^17.4.2",
     "eslint": "^10.8.0",
-    "globals": "^15.15.0",
+    "globals": "^17.7.0",
     "js-yaml": "^4.3.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
