@@ -29,7 +29,7 @@ jobs:
   # "new vulnerabilities introduced by this branch" check.
   scan-pr:
     name: Dependency Vulnerabilities (OSV PR)
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@8dc09193bb540e09b23da07ad7e30bd33bf87018
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@fa4ff678dd5d0a4fa3d628e57af8162873e93cd6
     with:
       # Private personal repos here do not have GitHub Code Scanning enabled,
       # so uploading SARIF via github/codeql-action/upload-sarif will fail.
