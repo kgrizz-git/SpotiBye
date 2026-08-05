@@ -31,8 +31,8 @@ The backend-integrated frontend now prompts for backend target at startup.
 
 Options in the popup:
 - `Localhost` (`http://localhost:8787`)
-- `Cloudflare Dev`
-- `Cloudflare Prod`
+- `Cloudflare Dev` (only when `SPOTIBYE_DEV_BACKEND_URL` is configured)
+- `Cloudflare Prod` (only when `SPOTIBYE_PRODUCTION_BACKEND_URL` is configured)
 - `Custom` URL
 
 Flow:
@@ -41,11 +41,12 @@ Flow:
 3. Click `Continue`.
 4. If the backend is unavailable, the app blocks the actual Spotify connect/login step and shows an error there.
 
-The selected backend URL is saved to `~/.spotibye_cache/backend_selection.json` and restored on next launch.
+The selected backend URL is saved to `~/.spotibye_cache/backend_selection.json` and restored on next launch. With no saved or configured URL, the app opens with an empty Custom selection and does not connect until you choose a valid endpoint. Cancelling at that point leaves it unconfigured; it never silently connects to localhost.
 
 Notes:
-- You can still force defaults with env vars:
+- You can configure a startup URL or named cloud presets with env vars:
   - `SPOTIBYE_BACKEND_URL`
+  - `SPOTIBYE_DEV_BACKEND_URL`
   - `SPOTIBYE_PRODUCTION_BACKEND_URL`
   - `SPOTIBYE_USE_PRODUCTION`
 - Feature flag to disable startup selector:

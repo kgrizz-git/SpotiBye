@@ -1,210 +1,177 @@
-# Environment Variables Setup Guide
+# Configuration Sources and Precedence
 
-This guide explains how to properly configure environment variables for the SpotiBye project.
+This is the canonical guide for where SpotiBye reads configuration, credentials,
+and deployment settings. Read it before adding an environment variable or a
+secret.
 
-## Quick Start
+## Quick reference
 
-1. **Copy the example file:**
-   ```bash
-   cp .env.example .env
-   ```
+| Concern | Put it here | Committed? | Read by |
+|---|---|---:|---|
+| Desktop-app URL, feature, or performance override | The process environment used to launch the app | No | `src/frontend/config/backend_config.py` |
+| Desktop-app configuration template | `.desktop.env.example` | Yes, placeholders only | Humans; it is **not** auto-loaded |
+| Desktop-app local override | `.desktop.env.local` | No | Shell/IDE only when explicitly loaded |
+| Local Worker secrets | `src/backend/.dev.vars` | No | `wrangler dev` |
+| Local Worker secret template | `src/backend/.dev.vars.example` | Yes, placeholders only | Humans |
+| Local Worker environment-specific secrets | `src/backend/.dev.vars.development` (or another Worker environment) | No | `wrangler dev --env <environment>` |
+| Deployed Worker non-secret configuration and bindings | `src/backend/wrangler.toml` | Yes | Cloudflare Worker `env` binding |
+| Deployed Worker credentials | Cloudflare Worker secrets, set with `wrangler secret put --env <environment>` | No | Cloudflare Worker `env` binding |
+| Backend test values | `src/backend/.env.test` and test helpers | Yes, test-only values | Vitest setup |
+| Local SonarQube token | `.sonar_token` | No | Explicit shell command only |
+| SonarQube Cloud token | `.sonar_cloud_token` locally; `SONAR_TOKEN` in CI | No | Explicit scanner command or CI |
 
-2. **Edit the `.env` file** with your actual values (never commit this file)
+Never put a real credential, access token, or account-specific secret in an
+example file, `wrangler.toml`, source code, a command line, or a commit.
 
-3. **Restart your application** to load the new environment variables
+## Desktop application configuration
 
-## Required Variables
+The frontend only reads the environment inherited by its process. It does not
+call a dotenv loader, so creating a file alone has no effect. The committed
+`.desktop.env.example` is only a template.
 
-### Spotify API Credentials
-
-Get these from the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard):
-
-```bash
-SPOTIFY_CLIENT_ID=your_spotify_client_id_here
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
-```
-
-**Steps:**
-1. Go to Spotify Developer Dashboard
-2. Create a new app or select existing one
-3. Copy the Client ID and generate a Client Secret
-4. Add your redirect URI (e.g., `http://localhost:8080/callback`)
-
-### JWT Secret
-
-Generate a secure random string for JWT signing:
+To use a local file as a launcher convenience, source it explicitly before
+starting the app, or configure the variables in the IDE/run configuration:
 
 ```bash
-# Generate a secure JWT secret
-openssl rand -base64 32
+set -a
+source .desktop.env.local
+set +a
+# Run the desktop app using the normal project command.
 ```
+
+`.desktop.env.example` is a portable template, not a configuration source. Copy
+it to `.desktop.env.local` only when you intend to source that file yourself.
+
+### Frontend precedence
+
+For ordinary frontend settings, an explicitly set process environment variable
+takes priority over the code default. Backend endpoint selection is intentionally
+different:
+
+1. A valid saved choice in `~/.spotibye_cache/backend_selection.json`.
+2. A valid configured startup URL: `SPOTIBYE_BACKEND_URL`, or
+   `SPOTIBYE_PRODUCTION_BACKEND_URL` when `SPOTIBYE_USE_PRODUCTION=true`.
+3. No endpoint. The selector opens in a blank **Custom** state and the app does
+   not create a backend client until the user selects a valid URL.
+
+The backend selector can subsequently choose a URL at runtime and persists the
+user's selection in the user-private `~/.spotibye_cache` directory. That choice
+does not create or modify an environment variable.
+
+Useful URL variables are:
 
 ```bash
-JWT_SECRET=your_generated_secret_here_minimum_32_characters
+# Optional environment startup choice
+SPOTIBYE_BACKEND_URL=https://your-default-backend.example
+
+# Optional named selector presets; Localhost is always an explicit preset.
+SPOTIBYE_DEV_BACKEND_URL=https://your-dev-backend.example
+SPOTIBYE_PRODUCTION_BACKEND_URL=https://your-prod-backend.example
 ```
 
-## Optional Variables
+Use placeholders in committed documentation and examples. Worker URLs are not
+credentials, but account-specific URLs do not belong in a reusable template.
+Neither a placeholder nor an absent value is treated as a usable endpoint.
 
-### Backend URLs
+## Local Cloudflare Worker configuration
 
-Configure different backend environments:
+The backend's Wrangler project directory is `src/backend/`, alongside
+`wrangler.toml`. Put local Worker credentials in
+`src/backend/.dev.vars`, for example:
+
+```dotenv
+SPOTIFY_CLIENT_ID="your-local-client-id"
+SPOTIFY_CLIENT_SECRET="your-local-client-secret"
+JWT_SECRET="generate-a-unique-local-secret"
+```
+
+Start it with:
 
 ```bash
-# Development backend
-SPOTIBYE_BACKEND_URL=https://your-dev-backend.workers.dev
-
-# Production backend
-SPOTIBYE_PRODUCTION_BACKEND_URL=https://your-prod-backend.workers.dev
-
-# Local development
-SPOTIBYE_LOCALHOST_BACKEND_URL=http://localhost:8787
+cd src/backend
+npm run dev
 ```
 
-### Feature Flags
+Use `src/backend/.dev.vars.example` as the committed template for this file.
 
-Control application behavior:
+Use one local-file family: `.dev.vars` **or** `.env`, not both. This project
+uses `.dev.vars` for secrets because it makes the Worker-specific scope clear.
+Wrangler does not import arbitrary shell variables into the Worker by default.
+
+### Local Worker precedence
+
+When using the recommended `.dev.vars` family:
+
+1. `src/backend/.dev.vars.<environment>` is used by
+   `wrangler dev --env <environment>` and replaces generic `.dev.vars`.
+2. Otherwise, `src/backend/.dev.vars` supplies local values.
+3. Non-secret defaults and bindings come from `wrangler.toml`.
+
+If the `.env` family is used instead, Wrangler loads and merges files in this
+order, most specific first:
+
+1. `.env.<environment>.local`
+2. `.env.local`
+3. `.env.<environment>`
+4. `.env`
+
+Cloudflare documents the full local-development behavior in its
+[environment variables and secrets guide](https://developers.cloudflare.com/workers/local-development/environment-variables/).
+
+## Deployed Cloudflare Worker configuration
+
+`src/backend/wrangler.toml` defines versioned, non-secret configuration:
+
+- `ENVIRONMENT` and allowed redirect URIs
+- KV, Queue, and Durable Object bindings
+- development and production environment names/bindings
+
+Deploy credentials are not in the repository. The Worker reads
+`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and `JWT_SECRET` from Cloudflare
+Worker secrets. Set or rotate one interactively:
 
 ```bash
-# Enable/disable features
-SPOTIBYE_ENABLE_ANALYSIS=true
-SPOTIBYE_ENABLE_EXPORT=true
-SPOTIBYE_ENABLE_CACHING=true
-SPOTIBYE_ENABLE_OFFLINE=false
-
-# Debug mode
-SPOTIBYE_DEBUG_NETWORK=false
-SPOTIBYE_DEBUG_AUTH=false
+cd src/backend
+npx wrangler secret put JWT_SECRET --env development
 ```
 
-### Performance Settings
+Use `npm run deploy:dev` or `npm run deploy:prod` for normal deployments. The
+deployment script additionally supplies `RELEASE_SHA`, `RELEASE_VERSION`, and
+`DEPLOYED_AT` for that release. Do not define the same sensitive name as both a
+Wrangler `vars` entry and a Worker secret.
 
-Fine-tune application performance:
+For the current Cloudflare model, see the official documentation on
+[environment variables](https://developers.cloudflare.com/workers/configuration/environment-variables/)
+and [environments](https://developers.cloudflare.com/workers/wrangler/environments/).
 
-```bash
-# Request handling
-SPOTIBYE_BATCH_SIZE=50
-SPOTIBYE_MAX_CONCURRENT=3
-SPOTIBYE_MAX_RETRIES=3
-SPOTIBYE_RETRY_BACKOFF=1.0
+## Tests
 
-# Timeouts (seconds)
-SPOTIBYE_API_TIMEOUT=30
-SPOTIBYE_ANALYSIS_TIMEOUT=300
-SPOTIBYE_OAUTH_TIMEOUT=300
-```
+Backend tests load `src/backend/.env.test`, then test setup and helper factories
+set fixed non-production values. Do not put real credentials in test files.
+Frontend tests set and restore their own environment values per test.
 
-## Environment-Specific Files
+## Sonar tokens
 
-For different environments, you can create:
+The scanner does not read either desktop configuration file automatically.
 
-- `.env.development` - Development settings
-- `.env.production` - Production settings
-- `.env.local` - Local overrides (gitignored)
+- Local SonarQube: `.sonar_token` is ignored. The documented command explicitly
+  maps its value to `SONAR_TOKEN`.
+- SonarQube Cloud: keep a local project-specific token in the ignored
+  `.sonar_cloud_token` file, then explicitly map it to `SONAR_TOKEN` for the
+  scan. In CI, set `SONAR_TOKEN` as a CI secret. Do not store it in
+  `sonar-project.properties`.
 
-The application will automatically load `.env` first, then environment-specific files.
+See [Local SonarQube Analysis](sonarqube-local.md). Sonar's guidance is to use
+the `SONAR_TOKEN` environment variable rather than placing a token in scanner
+configuration.
 
-## Security Best Practices
+## Adding or changing a value
 
-### ✅ Do
-
-- Keep `.env` files out of version control
-- Use strong, randomly generated secrets
-- Rotate secrets periodically
-- Use different secrets for different environments
-- Limit access to production secrets
-
-### ❌ Don't
-
-- Commit `.env` files to git
-- Share secrets via email, chat, or code comments
-- Use weak or predictable secrets
-- Reuse secrets across different applications
-- Hard-code secrets in application code
-
-## Loading Environment Variables
-
-### Python (Frontend)
-
-The frontend configuration automatically loads environment variables using `os.environ.get()`:
-
-```python
-# Example from src/frontend/config/backend_config.py
-BACKEND_URL = os.environ.get("SPOTIBYE_BACKEND_URL", "https://default-url.com")
-```
-
-### Node.js/TypeScript (Backend)
-
-The backend (Cloudflare Workers) accesses environment variables through the `Env` binding:
-
-```typescript
-// Example from src/backend/routes/auth.ts
-const spotifyAuth = new SpotifyAuthService(c.env.SPOTIFY_CLIENT_ID, c.env.SPOTIFY_CLIENT_SECRET);
-```
-
-## Cloudflare Workers Configuration
-
-For the backend, ensure your `wrangler.toml` includes the necessary environment variable bindings:
-
-```toml
-[env.production.vars]
-SPOTIFY_CLIENT_ID = "your_production_client_id"
-SPOTIFY_CLIENT_SECRET = "your_production_client_secret"
-JWT_SECRET = "your_production_jwt_secret"
-
-[env.development.vars]
-SPOTIFY_CLIENT_ID = "your_dev_client_id"
-SPOTIFY_CLIENT_SECRET = "your_dev_client_secret"
-JWT_SECRET = "your_dev_jwt_secret"
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"Missing environment variable" error**
-   - Ensure the variable is set in `.env`
-   - Restart the application after changing `.env`
-
-2. **Spotify OAuth errors**
-   - Verify redirect URI matches in Spotify Dashboard
-   - Check Client ID and Secret are correct
-
-3. **JWT errors**
-   - Ensure JWT_SECRET is at least 32 characters
-   - Check for typos in the secret
-
-### Debug Mode
-
-Enable debug logging to troubleshoot:
-
-```bash
-SPOTIBYE_DEBUG_NETWORK=true
-SPOTIBYE_DEBUG_AUTH=true
-LOG_LEVEL=debug
-```
-
-## Template for New Variables
-
-When adding new environment variables:
-
-1. Add to `.env.example` with a descriptive comment
-2. Update this documentation
-3. Add loading code in appropriate config files
-4. Test with different values
-
-```bash
-# New feature flag
-NEW_FEATURE_ENABLED=false
-
-# API configuration
-NEW_API_TIMEOUT=30
-```
-
-## Support
-
-If you encounter issues with environment variable setup:
-
-1. Check this documentation first
-2. Verify your `.env` file format (no spaces around `=`)
-3. Ensure required variables are set
-4. Check application logs for specific error messages
+1. Classify it: frontend runtime setting, local-only Worker secret, deployed
+   Worker configuration, deployed Worker secret, test fixture, or scanner token.
+2. Put it in the source listed in the quick-reference table.
+3. Add placeholders and explanatory comments to a tracked example only when a
+   developer must create a local value.
+4. Update the relevant type/validation and this guide.
+5. Verify the affected startup, test, or deployment path without printing the
+   secret.

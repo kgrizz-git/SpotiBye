@@ -139,7 +139,11 @@ class BackendCacheExplorerPopup(Popup):
             return
 
         try:
-            self.backend_client = _backend_client_cls(_resolve_startup_backend_url())
+            backend_url = _resolve_startup_backend_url()
+            if not backend_url:
+                self.backend_status_label.text = "Backend: Not Selected"
+                return
+            self.backend_client = _backend_client_cls(backend_url)
             self.backend_status_label.text = "Backend: Connected"
             self.backend_switch.active = True
         except Exception as exc:

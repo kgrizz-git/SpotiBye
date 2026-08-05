@@ -1,5 +1,10 @@
 # Environment Variables Documentation
 
+> **Configuration source and precedence:** Read the canonical
+> [`dev-docs/guides/environment-setup.md`](../../../dev-docs/guides/environment-setup.md)
+> before configuring this Worker. In particular, keep sensitive values out of
+> `wrangler.toml`; use `.dev.vars` locally and Cloudflare Worker secrets when deployed.
+
 This document describes all environment variables and secrets required for the SpotiBye Cloudflare Workers backend.
 
 ## Overview
@@ -92,10 +97,7 @@ binding = "SESSIONS_KV"
 id = "your-sessions-kv-namespace-id"
 preview_id = "your-sessions-kv-preview-id"
 
-[secrets]
-SPOTIFY_CLIENT_ID = ""
-SPOTIFY_CLIENT_SECRET = ""
-JWT_SECRET = ""
+# Do not put secrets in this file. Set them with `wrangler secret put`.
 ```
 
 ## Environment Setup
@@ -133,11 +135,9 @@ JWT_SECRET = ""
    wrangler secret put JWT_SECRET
    ```
 
-2. **Set environment variables**:
-   ```bash
-   wrangler secret put ENVIRONMENT
-   # Enter "production" when prompted
-   ```
+2. **Set non-secret environment variables** in `wrangler.toml` under the
+   appropriate `[env.<name>.vars]` section. This project already defines
+   `ENVIRONMENT` there.
 
 3. **Deploy with environment**:
    ```bash

@@ -208,6 +208,12 @@ def _make_app_instance(backend_app_module):
     app.token_info = None
     app.username = None
     app.screen_manager = None
+    app.backend_client = None
+    app.cache_manager = None
+    app.backend_adapter = None
+    app.selected_backend_url = None
+    app.backend_selector_popup = None
+    app.pending_export_popup = None
     return app
 
 
@@ -224,6 +230,60 @@ class TestHandleSessionExpired:
 
         assert app.backend_client.auth_token is None
         app.cache_manager.clear_auth_token.assert_called_once()
+
+
+class TestBackendSelectionStartup:
+    """App-level guards for the intentionally unconfigured first-run state."""
+
+    def test_cancel_with_no_backend_does_not_initialize_or_auto_login(self) -> None:
+        backend_app_module = _import_backend_app_module()
+        app = _make_app_instance(backend_app_module)
+        app.selected_backend_url = None
+        app.apply_backend_url = MagicMock()
+
+        app._on_backend_selector_cancel()
+
+        app.apply_backend_url.assert_not_called()
+
+    def test_cancel_preserves_a_saved_or_configured_backend_choice(self) -> None:
+        backend_app_module = _import_backend_app_module()
+        app = _make_app_instance(backend_app_module)
+        app.selected_backend_url = "https://saved.example.test"
+        app.apply_backend_url = MagicMock()
+
+        app._on_backend_selector_cancel()
+
+        app.apply_backend_url.assert_called_once_with("https://saved.example.test")
+
+    def test_disabled_selector_with_no_url_stays_unconfigured(self) -> None:
+        backend_app_module = _import_backend_app_module()
+        app = _make_app_instance(backend_app_module)
+        app.selected_backend_url = None
+        app._setup_fonts = MagicMock()
+        app._initialize_backend = MagicMock()
+        app._try_auto_login = MagicMock()
+
+        with patch.object(
+            backend_app_module, "ENABLE_BACKEND_SELECTOR", False
+        ), patch.object(backend_app_module, "diagnose_macos_issues"), patch.object(
+            backend_app_module, "set_window_basics"
+        ):
+            app.build()
+
+        app._initialize_backend.assert_not_called()
+        app._try_auto_login.assert_not_called()
+
+    def test_invalid_url_is_not_applied_or_persisted(self) -> None:
+        backend_app_module = _import_backend_app_module()
+        app = _make_app_instance(backend_app_module)
+        app._initialize_backend = MagicMock(return_value=False)
+        app._try_auto_login = MagicMock()
+
+        with patch.object(backend_app_module, "save_backend_url") as save_url:
+            app.apply_backend_url("not-a-url")
+
+        save_url.assert_not_called()
+        app._try_auto_login.assert_not_called()
 
 
 class TestFormatBackendApiError:

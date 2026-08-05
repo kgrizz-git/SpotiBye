@@ -202,8 +202,8 @@ class TestConfiguration:
 
     def test_environment_switching(self):
         os.environ["SPOTIBYE_USE_PRODUCTION"] = "false"
-        os.environ["SPOTIBYE_BACKEND_URL"] = "http://dev-backend:8787"
-        os.environ["SPOTIBYE_PRODUCTION_BACKEND_URL"] = "http://prod-backend:8787"
+        os.environ["SPOTIBYE_BACKEND_URL"] = "http://dev-backend.test:8787"
+        os.environ["SPOTIBYE_PRODUCTION_BACKEND_URL"] = "http://prod-backend.test:8787"
 
         with patch.dict("sys.modules"):
             import importlib
@@ -211,19 +211,19 @@ class TestConfiguration:
 
             importlib.reload(backend_config)
             assert (
-                backend_config.CURRENT_BACKEND_URL == "http://dev-backend:8787"
+                backend_config.CURRENT_BACKEND_URL == "http://dev-backend.test:8787"
             ), "Should use development backend"
 
             os.environ["SPOTIBYE_USE_PRODUCTION"] = "true"
             importlib.reload(backend_config)
             assert (
-                backend_config.CURRENT_BACKEND_URL == "http://prod-backend:8787"
+                backend_config.CURRENT_BACKEND_URL == "http://prod-backend.test:8787"
             ), "Should use production backend"
 
             os.environ["SPOTIBYE_USE_PRODUCTION"] = "false"
             importlib.reload(backend_config)
             assert (
-                backend_config.CURRENT_BACKEND_URL == "http://dev-backend:8787"
+                backend_config.CURRENT_BACKEND_URL == "http://dev-backend.test:8787"
             ), "Should switch back to development backend"
 
     def test_configuration_validation(self):
@@ -258,62 +258,85 @@ class TestConfiguration:
             ), "Should default to False for invalid boolean"
 
 
-class TestBackendPresetsDistinct:
-    """Regression test: BACKEND_PRESETS entries must not alias each other,
-    or the selector spinner and preset-restore-on-relaunch silently break.
+class TestBackendEndpointSelection:
+    """Endpoint defaults and selector presets must require an explicit choice."""
 
-    Assumes SPOTIBYE_LOCALHOST_BACKEND_URL is unset for the duration of
-    this class (nothing in TestConfiguration currently sets it, but if a
-    future test does, test_presets_are_pairwise_distinct_by_default could
-    spuriously fail if the localhost override happens to collide with the
-    dev URL)."""
-
-    def test_presets_are_pairwise_distinct_by_default(self):
+    @staticmethod
+    def _reload_config():
         import importlib
         from ..config import backend_config
 
-        importlib.reload(backend_config)
-        urls = list(backend_config.BACKEND_PRESETS.values())
-        assert len(urls) == len(
-            set(urls)
-        ), f"BACKEND_PRESETS has duplicate URLs: {backend_config.BACKEND_PRESETS}"
+        return importlib.reload(backend_config)
 
-    def test_cloudflare_dev_preset_uses_dev_backend_url(self):
-        import importlib
-        from ..config import backend_config
+    def test_unconfigured_startup_has_no_url_or_cloudflare_presets(self, monkeypatch):
+        for variable in (
+            "SPOTIBYE_BACKEND_URL",
+            "SPOTIBYE_DEV_BACKEND_URL",
+            "SPOTIBYE_PRODUCTION_BACKEND_URL",
+            "SPOTIBYE_USE_PRODUCTION",
+        ):
+            monkeypatch.delenv(variable, raising=False)
 
-        importlib.reload(backend_config)
-        assert (
-            backend_config.BACKEND_PRESETS["Cloudflare Dev"]
-            == backend_config.DEV_BACKEND_URL
+        backend_config = self._reload_config()
+
+        assert backend_config.BACKEND_URL is None
+        assert backend_config.DEV_BACKEND_URL is None
+        assert backend_config.PRODUCTION_BACKEND_URL is None
+        monkeypatch.setattr(backend_config, "get_saved_backend_url", lambda: None)
+        assert backend_config.resolve_startup_backend_url() is None
+        assert backend_config.BACKEND_PRESETS == {"Localhost": "http://localhost:8787"}
+
+    def test_configured_cloudflare_presets_are_visible_and_distinct(self, monkeypatch):
+        monkeypatch.setenv("SPOTIBYE_DEV_BACKEND_URL", "https://dev.example.test")
+        monkeypatch.setenv(
+            "SPOTIBYE_PRODUCTION_BACKEND_URL", "https://prod.example.test"
         )
 
-    def test_dev_backend_url_reexported_from_config_package(self):
-        # Regression check for the config/__init__.py re-export.
-        # config/__init__.py does `from .backend_config import DEV_BACKEND_URL`,
-        # a name binding captured at *its own* import time — reloading
-        # backend_config alone does not update it. Reload both, in
-        # dependency order, so this actually exercises the re-export wiring
-        # rather than comparing two values from the same stale snapshot.
+        backend_config = self._reload_config()
+
+        assert backend_config.BACKEND_PRESETS == {
+            "Localhost": "http://localhost:8787",
+            "Cloudflare Dev": "https://dev.example.test",
+            "Cloudflare Prod": "https://prod.example.test",
+        }
+        assert len(set(backend_config.BACKEND_PRESETS.values())) == len(
+            backend_config.BACKEND_PRESETS
+        )
+
+    def test_invalid_cloudflare_endpoint_does_not_create_a_preset(self, monkeypatch):
+        monkeypatch.setenv("SPOTIBYE_DEV_BACKEND_URL", "not-a-url")
+
+        backend_config = self._reload_config()
+
+        assert backend_config.DEV_BACKEND_URL is None
+        assert "Cloudflare Dev" not in backend_config.BACKEND_PRESETS
+
+    def test_saved_custom_url_precedes_configured_startup_url(self, monkeypatch):
+        monkeypatch.setenv("SPOTIBYE_BACKEND_URL", "https://configured.example.test")
+        backend_config = self._reload_config()
+        monkeypatch.setattr(
+            backend_config,
+            "get_saved_backend_url",
+            lambda: "https://saved-custom.example.test",
+        )
+
+        assert (
+            backend_config.resolve_startup_backend_url()
+            == "https://saved-custom.example.test"
+        )
+
+    def test_dev_backend_url_reexported_from_config_package(self, monkeypatch):
+        monkeypatch.setenv(
+            "SPOTIBYE_DEV_BACKEND_URL", "https://custom-dev.example.test"
+        )
+
         import importlib
-        from ..config import backend_config
         from .. import config as config_pkg
 
-        importlib.reload(backend_config)
+        backend_config = self._reload_config()
         importlib.reload(config_pkg)
+
         assert config_pkg.DEV_BACKEND_URL == backend_config.DEV_BACKEND_URL
-
-    def test_dev_backend_url_env_override(self, monkeypatch):
-        monkeypatch.setenv("SPOTIBYE_DEV_BACKEND_URL", "https://custom-dev.example.com")
-
-        import importlib
-        from ..config import backend_config
-
-        importlib.reload(backend_config)
-        assert (
-            backend_config.BACKEND_PRESETS["Cloudflare Dev"]
-            == "https://custom-dev.example.com"
-        )
 
 
 class TestIsValidBackendUrl:
@@ -341,6 +364,12 @@ class TestIsValidBackendUrl:
     def test_accepts_http_localhost_no_port(self):
         assert self._is_valid("http://localhost")
 
+    def test_accepts_ipv4_address(self):
+        assert self._is_valid("http://192.168.1.1:8787")
+
+    def test_accepts_ipv6_address(self):
+        assert self._is_valid("http://[::1]:8787")
+
     def test_rejects_empty_string(self):
         assert not self._is_valid("")
 
@@ -351,6 +380,9 @@ class TestIsValidBackendUrl:
         # 'https://x' has no dot and isn't localhost
         assert not self._is_valid("https://x")
 
+    def test_rejects_url_with_embedded_credentials(self):
+        assert not self._is_valid("https://user:password@example.com")
+
     def test_rejects_missing_scheme(self):
         assert not self._is_valid("example.com")
 
@@ -359,3 +391,54 @@ class TestIsValidBackendUrl:
 
     def test_rejects_garbage(self):
         assert not self._is_valid("not-a-url")
+
+
+class TestSavedBackendSelection:
+    """Saved backend selections should tolerate interrupted or invalid local state."""
+
+    def test_save_is_atomic_and_round_trips(self, monkeypatch, tmp_path):
+        from ..config import backend_config
+
+        selection_path = tmp_path / "backend_selection.json"
+        monkeypatch.setattr(backend_config, "BACKEND_SELECTION_PATH", selection_path)
+
+        assert backend_config.save_backend_url("http://[::1]:8787/")
+        assert backend_config.get_saved_backend_url() == "http://[::1]:8787"
+        assert not list(tmp_path.glob(".backend_selection.json.*.tmp"))
+
+    def test_malformed_saved_selection_is_ignored(self, monkeypatch, tmp_path, caplog):
+        from ..config import backend_config
+
+        selection_path = tmp_path / "backend_selection.json"
+        selection_path.write_text("{not valid JSON", encoding="utf-8")
+        monkeypatch.setattr(backend_config, "BACKEND_SELECTION_PATH", selection_path)
+
+        with caplog.at_level(logging.WARNING):
+            assert backend_config.get_saved_backend_url() is None
+        assert "Unable to load backend selection" in caplog.text
+
+    def test_non_mapping_saved_selection_is_ignored(
+        self, monkeypatch, tmp_path, caplog
+    ):
+        from ..config import backend_config
+
+        selection_path = tmp_path / "backend_selection.json"
+        selection_path.write_text("[]", encoding="utf-8")
+        monkeypatch.setattr(backend_config, "BACKEND_SELECTION_PATH", selection_path)
+
+        with caplog.at_level(logging.WARNING):
+            assert backend_config.get_saved_backend_url() is None
+        assert "invalid JSON shape" in caplog.text
+
+    def test_invalid_saved_url_is_ignored_with_a_warning(
+        self, monkeypatch, tmp_path, caplog
+    ):
+        from ..config import backend_config
+
+        selection_path = tmp_path / "backend_selection.json"
+        selection_path.write_text('{"backend_url": "https://x"}', encoding="utf-8")
+        monkeypatch.setattr(backend_config, "BACKEND_SELECTION_PATH", selection_path)
+
+        with caplog.at_level(logging.WARNING):
+            assert backend_config.get_saved_backend_url() is None
+        assert "invalid URL" in caplog.text

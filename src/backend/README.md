@@ -18,7 +18,7 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
 
 2. **Set up environment variables**
 
-   Create a `.dev.vars` file in the project root:
+   Create a `.dev.vars` file in `src/backend/` (next to `wrangler.toml`):
    ```bash
    SPOTIFY_CLIENT_ID=your_spotify_client_id
    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret

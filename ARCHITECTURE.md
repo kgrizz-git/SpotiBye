@@ -94,6 +94,68 @@ utils/           ← Pure utility functions (no imports from other app layers)
 - `utils/` must not import from any other app layer
 - `auth/` may import from `config/` and `utils/` only
 
+### Frontend Startup and Backend Connection Flow
+
+Use this flow when changing backend URLs, the chooser UI, saved selections, or
+login initialization. The desktop app has one selected backend at a time; every
+HTTP API call and OAuth action must use the client initialized for that URL.
+
+```mermaid
+flowchart TD
+    A[App constructor] --> B[resolve_startup_backend_url]
+    B --> C{Saved URL in user-private cache?}
+    C -->|Yes| D[Use saved URL]
+    C -->|No| E[Use explicit environment URL or no URL]
+    D --> F{Backend selector enabled?}
+    E --> F
+    F -->|Yes| G[BackendSelectorPopup]
+    F -->|No, URL present| H[Initialize selected backend]
+    F -->|No, no URL| N[Remain unconfigured]
+    G --> I[Preset or Custom URL]
+    I --> H
+    G -->|Cancel with no URL| N
+    H --> J[set_backend_url + BackendClient]
+    J --> K[BackendCacheManager + adapter]
+    K --> M[save_backend_url]
+    M --> L
+```
+
+#### Source-of-truth order
+
+1. `get_saved_backend_url()` reads a user-selected URL from
+   `~/.spotibye_cache/backend_selection.json` when it is valid.
+2. Otherwise `CURRENT_BACKEND_URL` is derived from the process environment:
+   `SPOTIBYE_PRODUCTION_BACKEND_URL` if `SPOTIBYE_USE_PRODUCTION=true`, else
+   `SPOTIBYE_BACKEND_URL`.
+3. If neither source provides a valid URL, resolution returns no URL. With the
+   selector enabled (the default), the app opens in a blank Custom state;
+   cancelling leaves the app unconfigured. With the selector disabled, the app
+   likewise remains unconfigured until a valid URL is supplied.
+
+`BackendSelectorPopup` always offers Localhost and Custom. It offers Cloudflare
+Dev and Cloudflare Prod only when their respective environment variables are
+validly configured. Applying any selection calls `apply_backend_url()`, which
+creates the global backend client, cache manager, and frontend adapter, then
+persists the selected URL. A previously saved URL that no longer matches a
+named preset remains an explicit Custom choice. Reopening the chooser changes
+the active client only through that same method.
+
+Do not add deployment-specific endpoint fallbacks to `config/backend_config.py`.
+Named cloud endpoints belong in the launch environment; Localhost remains an
+intentional user-selected preset, never a startup fallback.
+
+#### Agent change rules
+
+- Treat `backend_config.py`, `backend_app.py`, `backend_selector_popup.py`, and
+  their tests as one behavior unit. A configuration change alone can leave a
+  stale preset, saved-selection path, or wrongly initialized client.
+- Preserve the **Custom** path: it is the escape hatch for any endpoint not
+  covered by a named preset.
+- Keep saved URLs valid and user-private; never serialize credentials with a URL.
+- Do not make a backend connection before a valid URL is selected.
+- Update [Configuration Sources and Precedence](dev-docs/guides/environment-setup.md)
+  and `CHANGELOG.md` whenever a user-visible selector or startup behavior changes.
+
 ### UI Component Split: `BackendPlaylistCard`
 
 `src/frontend/ui/backend_playlist_card.py` is a thin orchestrator that preserves the public `BackendPlaylistCard` API while delegating implementation details to focused helper modules:

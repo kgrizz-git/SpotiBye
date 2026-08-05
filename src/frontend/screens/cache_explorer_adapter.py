@@ -38,7 +38,13 @@ class CacheExplorerAdapter:
 
         if self.backend_available and resolve_startup_backend_url is not None:
             try:
-                self.backend_config = {"backend_url": resolve_startup_backend_url()}
+                backend_url = resolve_startup_backend_url()
+                if backend_url is None:
+                    logger.info(
+                        "Backend cache explorer disabled until a backend is selected"
+                    )
+                    return
+                self.backend_config = {"backend_url": backend_url}
                 logger.info("Backend cache explorer adapter initialized")
             except Exception as exc:
                 logger.warning("Backend config unavailable: %s", exc)

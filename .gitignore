@@ -28,6 +28,10 @@ docs/api_key_security.md
 .env.local
 .env.production
 .env.development
+.desktop.env.local
+.dev.vars
+.dev.vars.*
+!src/backend/.dev.vars.example
 
 # VSCode
 .vscode/
@@ -48,3 +52,4 @@ coverage-python.xml
 src/backend/coverage/
 # Local SonarQube scanner token (git-ignored; see dev-docs/sonarqube-local.md)
 .sonar_token
+.sonar_cloud_token

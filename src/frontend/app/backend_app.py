@@ -29,6 +29,7 @@ from ..auth.backend_login_screen import create_backend_login_screen
 from ..caching.backend_cache import BackendCacheManager, set_cache_manager
 from ..config.backend_config import (
     ENABLE_BACKEND_SELECTOR,
+    is_valid_backend_url,
     resolve_startup_backend_url,
     save_backend_url,
     validate_config,
@@ -62,7 +63,9 @@ class BackendSpotifyExporterApp(MDApp):
         self.backend_client: Optional[BackendClient] = None
         self.cache_manager: Optional[BackendCacheManager] = None
         self.backend_adapter: Optional[BackendMainScreenAdapter] = None
-        self.selected_backend_url: str = resolve_startup_backend_url()
+        # None is an intentional startup state: wait for an explicit user
+        # choice instead of connecting to localhost or a shipped Worker URL.
+        self.selected_backend_url: str | None = resolve_startup_backend_url()
         self.backend_selector_popup: Optional[Popup] = None
         self.pending_export_popup: Optional[Popup] = None
 
@@ -75,8 +78,15 @@ class BackendSpotifyExporterApp(MDApp):
 
         # Backend components are initialized after runtime backend selection.
 
-    def _initialize_backend(self, backend_url: str) -> None:
-        """Initialize backend components."""
+    def _initialize_backend(self, backend_url: str) -> bool:
+        """Initialize backend components for a valid, explicitly chosen URL.
+
+        Returns ``False`` without creating a client when the supplied URL is
+        invalid. Callers use that guard to keep an unconfigured launch offline.
+        """
+        if not is_valid_backend_url(backend_url):
+            original_logger.warning("Refusing to initialize an invalid backend URL")
+            return False
         try:
             # Validate configuration
             config_issues = validate_config()
@@ -110,10 +120,12 @@ class BackendSpotifyExporterApp(MDApp):
             if FeatureFlags.DEBUG_NETWORK:
                 config_summary = get_config_summary()
                 original_logger.info(f"Backend config: {config_summary}")
+            return True
 
         except Exception as e:
             original_logger.error(f"Failed to initialize backend: {e}")
             # Continue without backend - will show error to user
+            return False
 
     def build(self):  # type: ignore[override]
         try:
@@ -138,12 +150,17 @@ class BackendSpotifyExporterApp(MDApp):
             self.screen_manager.add_widget(self.login_screen)
             self.screen_manager.add_widget(self.main_screen)
 
-            # Open selector first, or apply resolved default if selector disabled.
+            # Open selector first. If disabled, only initialize an explicitly
+            # saved/configured URL; an unconfigured app stays offline.
             if ENABLE_BACKEND_SELECTOR:
                 Clock.schedule_once(lambda _dt: self.open_backend_selector(), 0)
-            else:
+            elif self.selected_backend_url:
                 self._initialize_backend(self.selected_backend_url)
                 self._try_auto_login()
+            else:
+                original_logger.info(
+                    "No backend selected; waiting for an explicit backend choice"
+                )
 
             return self.screen_manager
 
@@ -171,13 +188,19 @@ class BackendSpotifyExporterApp(MDApp):
         self.backend_selector_popup = None
 
     def _on_backend_selector_cancel(self) -> None:
-        """Fallback to resolved startup backend when selector is canceled."""
-        self.apply_backend_url(self.selected_backend_url)
+        """Keep an unconfigured launch offline when the selector is cancelled."""
+        if self.selected_backend_url:
+            self.apply_backend_url(self.selected_backend_url)
+        else:
+            original_logger.info(
+                "Backend selection cancelled before any URL was chosen"
+            )
 
     def apply_backend_url(self, backend_url: str) -> None:
         """Apply user-selected backend URL and continue startup flow."""
-        self._initialize_backend(backend_url)
-        save_backend_url(self.selected_backend_url)
+        if not self._initialize_backend(backend_url):
+            return
+        save_backend_url(backend_url)
 
         # Check for cached authentication after backend is ready.
         self._try_auto_login()

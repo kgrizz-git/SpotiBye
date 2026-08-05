@@ -23,7 +23,7 @@ class BackendSelectorPopup(Popup):
 
     def __init__(
         self,
-        default_url: str,
+        default_url: str | None,
         on_apply: Callable[[str], None],
         on_cancel: Optional[Callable[[], None]] = None,
         **kwargs,
@@ -33,7 +33,9 @@ class BackendSelectorPopup(Popup):
         self.size_hint = (0.8, 0.7)
         self.auto_dismiss = False
 
-        self._default_url = default_url.rstrip("/")
+        # An empty Custom field is a valid initial state: no endpoint has been
+        # selected yet, so do not turn it into an implicit localhost request.
+        self._default_url = default_url.rstrip("/") if default_url else ""
         self._on_apply = on_apply
         self._on_cancel = on_cancel
         self._last_tested_url: str | None = None

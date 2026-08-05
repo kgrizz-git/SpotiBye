@@ -238,6 +238,23 @@ class TestCacheExplorerAdapter(unittest.TestCase):
         mock_standard_explorer.assert_called_once()
         self.assertEqual(explorer, mock_explorer)
 
+    @patch("src.frontend.screens.cache_explorer_adapter.resolve_startup_backend_url")
+    @patch("src.frontend.screens.cache_explorer_adapter.CacheExplorerPopup")
+    def test_adapter_stays_local_until_backend_is_selected(
+        self, mock_standard_explorer, mock_backend_url
+    ):
+        """A blank first-run selection must not create a backend cache client."""
+        mock_backend_url.return_value = None
+        mock_explorer = Mock()
+        mock_standard_explorer.return_value = mock_explorer
+
+        adapter = CacheExplorerAdapter()
+        explorer = adapter.get_cache_explorer()
+
+        self.assertFalse(adapter.is_backend_enabled())
+        self.assertIsNone(adapter.get_cache_status_info()["backend_url"])
+        self.assertEqual(explorer, mock_explorer)
+
     def test_adapter_cache_status_info(self):
         """Test adapter cache status information."""
         with patch(

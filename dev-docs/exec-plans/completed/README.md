@@ -23,6 +23,7 @@
 
 | Plan | Description | Completed |
 |------|-------------|-----------|
+| [`2026-08-05-cloudflare-dev-url-config.md`](2026-08-05-cloudflare-dev-url-config.md) | Removed the shipped Cloudflare Dev fallback and automatic localhost connection. The selector now starts unconfigured when necessary, preserves explicit saved/custom selections, and displays cloud presets only when configured. | 2026-08-05 |
 | [`2026-06-21-bug-fix-critical-high.md`](2026-06-21-bug-fix-critical-high.md) | Critical and high severity bug fixes from 2026-06-21 audit (BT-1–8, FT-1–6): JWT bypass, Retry-After busy spin, OAuth redirect validation, silent catch blocks, queue consumer ack, PII in KV, context type loss, hardcoded test data, exposed dev URL, playlist track crash, filename corruption, cache path dedup, dead cache stats | 2026-06-24 |
 | [`2026-06-21-bug-fix-medium-low.md`](2026-06-21-bug-fix-medium-low.md) | Medium and low severity bug fixes from 2026-06-21 audit (BM-1–10, BL-1–10, FM-1–6, FL-1–9): type safety, auth hardening, stale-snapshot writes, concurrent refresh dedup, error classification, cache clearing, thread safety, import diagnostics. BM-11 deferred to lint-hardening follow-up. | 2026-06-24 |
 | [`2026-06-26-analysis-popup-e2e.md`](2026-06-26-analysis-popup-e2e.md) | End-to-end playlist analysis popup wiring: chunked ReccoBeats audio feature track fetching to prevent HTTP 414 error, rendered audio features averages in the popup UI, updated loading status message, and audited legacy compatibility methods. | 2026-06-26 |

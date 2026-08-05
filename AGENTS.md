@@ -81,6 +81,8 @@ On complex multi-step tasks, plan for partial completion: finish each step to a 
 
 **Quick verification:** Run `./scripts/verify-all.sh` from repo root (silent on success, errors only on failure)
 
+**Localhost-dependent tests:** The frontend verification suite makes loopback HTTP calls. If a sandboxed `./scripts/verify-all.sh` run fails with `Operation not permitted` while connecting to `localhost`, rerun the same command with local-network access (`require_escalated`) before treating the failures as test regressions.
+
 **Node version:** Backend CI runs on Node 24 LTS (pinned in `.nvmrc`, with matching `@types/node@^24`). With nvm/fnm shell integration, the version switches automatically on `cd`; without it, run `nvm use` first. CI's Node 24 environment is the source of truth — if you are on a different local Node, push to a branch and let CI verify.
 
 **Backend (TypeScript):**

@@ -32,7 +32,7 @@ Update an existing page when it already covers the same topic.
 | File | Purpose |
 |------|---------|
 | [`code-map.md`](code-map.md) | File index, Mermaid diagrams, and role of source files |
-| [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer contracts, data flow, and domain breakdown |
+| [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer contracts, data flow, domain breakdown, and frontend startup/backend connection flow |
 | [`guides/golden-principles.md`](guides/golden-principles.md) | Mechanical engineering rules for this repo |
 | [`guides/osv-scanner-findings-playbook.md`](guides/osv-scanner-findings-playbook.md) | Decision tree for resolving OSV-Scanner advisories (bump, override, parent-update, suppress) |
 | [`dependency-graph.json`](dependency-graph.json) | Machine-readable import graph for impact analysis |
@@ -49,7 +49,7 @@ Update an existing page when it already covers the same topic.
 
 | File | Purpose |
 |------|---------|
-| [`guides/environment-setup.md`](guides/environment-setup.md) | Local development setup |
+| [`guides/environment-setup.md`](guides/environment-setup.md) | Canonical configuration sources, secret locations, and precedence |
 | [`guides/developer-guide-backend.md`](guides/developer-guide-backend.md) | Backend development guide |
 | [`guides/authentication-flow.md`](guides/authentication-flow.md) | OAuth PKCE flow walkthrough |
 | [`guides/build-and-deploy-guide.md`](guides/build-and-deploy-guide.md) | Build and deployment steps |

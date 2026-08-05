@@ -44,6 +44,21 @@ curl -u admin:admin -X POST \
 
 …then overwrite `.sonar_token` with the new value.
 
+## SonarQube Cloud token
+
+Keep the project-specific cloud token in the ignored `.sonar_cloud_token` file
+at the repository root. The scanner does not read this file itself; map it to
+`SONAR_TOKEN` only for the command that needs it. In CI, store the same value
+as the CI secret `SONAR_TOKEN` instead.
+
+```bash
+SONAR_TOKEN="$(cat .sonar_cloud_token)" sonar-scanner \
+  -Dsonar.host.url=https://sonarcloud.io
+```
+
+The cloud project key and organization must be configured separately; never add
+the token to `sonar-project.properties`.
+
 ## Run an analysis
 
 ```bash
