@@ -16,9 +16,6 @@ on:
         - macos
         - linux
 
-permissions:
-  contents: write
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -30,6 +27,8 @@ jobs:
   preflight:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
       should_build: ${{ steps.gate.outputs.should_build }}
     steps:
@@ -64,6 +63,8 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.should_build == 'true'
     timeout-minutes: 120
+    permissions:
+      contents: read
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     runs-on: ${{ matrix.os }}
@@ -219,6 +220,8 @@ jobs:
     needs: [preflight, build]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:

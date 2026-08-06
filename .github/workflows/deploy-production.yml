@@ -15,8 +15,6 @@ concurrency:
 
 permissions:
   contents: read
-  actions: write
-  deployments: write
 
 jobs:
   security-checks:
@@ -63,7 +61,7 @@ jobs:
 
     - name: Run linting
       working-directory: src/backend
-      run: echo "Linting skipped temporarily - ESLint configuration issues" # npm run lint
+      run: npm run lint
 
   deploy-prod:
     needs: [test, security-checks]
@@ -73,7 +71,6 @@ jobs:
     environment: production
     permissions:
       contents: read
-      actions: write
       deployments: write
 
     steps:

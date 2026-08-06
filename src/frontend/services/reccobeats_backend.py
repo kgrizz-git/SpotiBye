@@ -77,7 +77,7 @@ class ReccoBeatsBackendService:
             return self._poll_analysis_completion(job_id, playlist_id, analysis_task)
 
         except Exception as e:
-            logger.error(f"Playlist analysis failed: {e}")
+            logger.error("Playlist analysis failed: %s", e)
             raise
 
     def force_reanalyze_playlist(
@@ -141,7 +141,7 @@ class ReccoBeatsBackendService:
             try:
                 status_response = self.backend_client.get_analysis_status(playlist_id)
             except BackendAPIError as e:
-                logger.error(f"Error checking analysis status: {e}")
+                logger.error("Error checking analysis status: %s", e)
                 time.sleep(poll_interval)
                 continue
 
@@ -244,7 +244,7 @@ class ReccoBeatsBackendService:
                 time.sleep(min(poll_interval, max_poll_interval))
                 poll_interval *= 1.5
             else:
-                logger.warning(f"Unknown analysis status: {status}")
+                logger.warning("Unknown analysis status: %s", status)
                 time.sleep(poll_interval)
 
         raise NetworkTimeoutError(f"Analysis timed out after {max_wait_time} seconds")
@@ -280,7 +280,7 @@ class ReccoBeatsBackendService:
             return playlist_data
 
         except Exception as e:
-            logger.error(f"Failed to get playlist for analysis: {e}")
+            logger.error("Failed to get playlist for analysis: %s", e)
             raise
 
     def get_reccobeats_id_from_spotify_id(

@@ -91,7 +91,7 @@ class BackendSpotifyExporterApp(MDApp):
             # Validate configuration
             config_issues = validate_config()
             if config_issues:
-                original_logger.warning(f"Configuration issues: {config_issues}")
+                original_logger.warning("Configuration issues: %s", config_issues)
 
             self.selected_backend_url = backend_url.rstrip("/")
 
@@ -123,7 +123,7 @@ class BackendSpotifyExporterApp(MDApp):
             return True
 
         except Exception as e:
-            original_logger.error(f"Failed to initialize backend: {e}")
+            original_logger.error("Failed to initialize backend: %s", e)
             # Continue without backend - will show error to user
             return False
 
@@ -375,7 +375,7 @@ class BackendSpotifyExporterApp(MDApp):
             original_logger.info("Logout completed successfully")
 
         except Exception as e:
-            original_logger.error(f"Error during logout: {e}")
+            original_logger.error("Error during logout: %s", e)
 
     def handle_session_expired(
         self, message: str = "Session expired. Please login again."
@@ -458,7 +458,7 @@ class BackendSpotifyExporterApp(MDApp):
             }
 
         except Exception as e:
-            original_logger.error(f"Error getting backend status: {e}")
+            original_logger.error("Error getting backend status: %s", e)
             return {"status": "error", "error": str(e)}
 
     def _check_pending_export_after_login(self) -> None:
@@ -599,7 +599,7 @@ class BackendSpotifyExporterApp(MDApp):
                 self.backend_adapter.refresh_connection()
 
         except Exception as e:
-            original_logger.error(f"Error refreshing backend connection: {e}")
+            original_logger.error("Error refreshing backend connection: %s", e)
 
 
 def _first_nonempty_str(*values: Any) -> Optional[str]:

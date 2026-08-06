@@ -166,7 +166,7 @@ class BackendLoginScreen(Screen):
                 self._update_connection_status(
                     "Unable to connect to backend", (1, 0.3, 0.3, 1)
                 )
-                logger.error(f"Backend connection check failed: {e}")
+                logger.error("Backend connection check failed: %s", e)
 
         threading.Thread(target=check_connection, daemon=True).start()
 
@@ -224,7 +224,7 @@ class BackendLoginScreen(Screen):
                 "Cannot connect to backend. Check your internet connection."
             )
             self.status_label.color = (1, 0.3, 0.3, 1)
-            logger.error(f"Backend health check failed: {e}")
+            logger.error("Backend health check failed: %s", e)
             return
 
         self.status_label.text = "Opening browser for authentication..."
@@ -252,7 +252,7 @@ class BackendLoginScreen(Screen):
                 )
 
         except Exception as e:
-            logger.error(f"Backend login worker error: {e}")
+            logger.error("Backend login worker error: %s", e)
             Clock.schedule_once(
                 lambda dt, err=str(e): self._on_login_error(f"Login error: {err}"), 0
             )
@@ -312,13 +312,13 @@ class BackendLoginScreen(Screen):
             app.switch_to_main()
 
         except Exception as e:
-            logger.error(f"Error handling login success: {e}")
+            logger.error("Error handling login success: %s", e)
             self._on_login_error(f"Login success handling failed: {str(e)}")
 
     @mainthread
     def _on_login_error(self, error_msg: str) -> None:
         """Handle login error."""
-        logger.error(f"Backend login error: {error_msg}")
+        logger.error("Backend login error: %s", error_msg)
 
         # Format error message for user
         user_msg = format_error_message(NetworkError(error_msg))
@@ -366,7 +366,7 @@ class BackendLoginScreen(Screen):
             logger.info("Backend logout completed")
 
         except Exception as e:
-            logger.error(f"Backend logout error: {e}")
+            logger.error("Backend logout error: %s", e)
 
     def is_authenticated(self) -> bool:
         """Check if user is authenticated."""

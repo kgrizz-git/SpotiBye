@@ -12,5 +12,9 @@ export default defineConfig({
       exclude: ['**/node_modules/**'],
       tsconfig: './tsconfig.json',
     },
+    coverage: {
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.ts'],
+    },
   },
 });

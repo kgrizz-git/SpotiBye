@@ -361,7 +361,7 @@ class ExportsResumableMixin:
                 self.error_callback(error_msg)
             return None
         except Exception as e:
-            logger.error(f"Error generating resumable batch export: {e}")
+            logger.error("Error generating resumable batch export: %s", e)
             if report_errors and self.error_callback:
                 self.error_callback(f"Resumable export failed: {str(e)}")
             return None

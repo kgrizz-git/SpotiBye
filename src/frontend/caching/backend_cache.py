@@ -71,7 +71,7 @@ class BackendCacheManager:
                 json.dump(token_data, f, indent=2)
             logger.debug("Authentication token saved to cache")
         except Exception as e:
-            logger.error(f"Failed to save auth token: {e}")
+            logger.error("Failed to save auth token: %s", e)  # nosemgrep
 
     def load_auth_token(self) -> Optional[Dict[str, Any]]:
         """
@@ -91,7 +91,7 @@ class BackendCacheManager:
             return token_data
 
         except Exception as e:
-            logger.error(f"Failed to load auth token: {e}")
+            logger.error("Failed to load auth token: %s", e)  # nosemgrep
             return None
 
     def clear_auth_token(self) -> None:
@@ -101,7 +101,7 @@ class BackendCacheManager:
                 self.token_cache_path.unlink()
                 logger.debug("Authentication token cleared from cache")
         except Exception as e:
-            logger.error(f"Failed to clear auth token: {e}")
+            logger.error("Failed to clear auth token: %s", e)  # nosemgrep
 
     # Playlist caching
     def get_cached_playlists(self) -> Optional[List[Dict[str, Any]]]:
@@ -297,7 +297,7 @@ class BackendCacheManager:
                     cache_path.unlink()
                     logger.debug("Cleared active export job cache")
             except Exception as e:
-                logger.error(f"Failed to clear active export job cache: {e}")
+                logger.error("Failed to clear active export job cache: %s", e)
 
     # Cache utility methods
     def _get_file_lock(self, cache_path: Path):
@@ -331,7 +331,9 @@ class BackendCacheManager:
                 temp_file.replace(cache_path)
 
             except Exception as e:
-                logger.error(f"Failed to atomically write cache file {cache_path}: {e}")
+                logger.error(
+                    "Failed to atomically write cache file %s: %s", cache_path, e
+                )
                 # Clean up temp file if it exists
                 if temp_file is not None and temp_file.exists():
                     try:
@@ -380,8 +382,8 @@ class BackendCacheManager:
 
                 return cache_data.get("data")
 
-            except Exception as e:
-                logger.error(f"Failed to load cache file {filename}: {e}")
+            except Exception:
+                logger.exception("Failed to load cache file %s", filename)
                 return None
 
     def _save_cache_file(self, filename: str, data: Dict[str, Any]) -> None:
@@ -415,8 +417,8 @@ class BackendCacheManager:
 
             return self._is_cache_data_valid(cache_data)
 
-        except Exception as e:
-            logger.error(f"Failed to validate cache file {filename}: {e}")
+        except Exception:
+            logger.exception("Failed to validate cache file %s", filename)
             return False
 
     def _is_cache_data_valid(self, cache_data: Dict[str, Any]) -> bool:
@@ -465,8 +467,8 @@ class BackendCacheManager:
 
             logger.info(f"Cleared {len(cache_files)} cache files")
 
-        except Exception as e:
-            logger.error(f"Failed to clear cache: {e}")
+        except Exception:
+            logger.exception("Failed to clear cache")
 
     def clear_file(self, filename: str) -> None:
         """
@@ -481,8 +483,8 @@ class BackendCacheManager:
             if cache_path.exists():
                 cache_path.unlink()
                 logger.debug(f"Removed cache file: {cache_path}")
-        except Exception as e:
-            logger.error(f"Failed to clear cache file {filename}: {e}")
+        except Exception:
+            logger.exception("Failed to clear cache file %s", filename)
 
     def clear_cache_glob(self, pattern: str) -> None:
         """
@@ -498,8 +500,8 @@ class BackendCacheManager:
             for cache_file in self.cache_dir.glob(full_pattern):
                 cache_file.unlink()
                 logger.debug(f"Removed cache file: {cache_file}")
-        except Exception as e:
-            logger.error(f"Failed to clear cache glob {pattern}: {e}")
+        except Exception:
+            logger.exception("Failed to clear cache glob %s", pattern)
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """
@@ -551,7 +553,7 @@ class BackendCacheManager:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get cache stats: {e}")
+            logger.exception("Failed to get cache stats")
             return {
                 "total_files": 0,
                 "total_size_bytes": 0,

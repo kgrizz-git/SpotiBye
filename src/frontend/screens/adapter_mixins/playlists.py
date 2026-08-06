@@ -76,7 +76,7 @@ class PlaylistsMixin:
                 )
                 Clock.schedule_once(lambda dt: self._on_error(error_msg), 0)
             except Exception as e:
-                logger.error(f"Error loading playlists: {e}")
+                logger.error("Error loading playlists: %s", e)
                 error_msg = f"Failed to load playlists: {str(e)}"
                 Clock.schedule_once(lambda dt: self._on_error(error_msg), 0)
 

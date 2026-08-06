@@ -69,8 +69,10 @@ PRODUCTION_BACKEND_URL: Final[str | None] = _configured_backend_url(
     "SPOTIBYE_PRODUCTION_BACKEND_URL"
 )
 DEV_BACKEND_URL: Final[str | None] = _configured_backend_url("SPOTIBYE_DEV_BACKEND_URL")
+# Intentional loopback default for local Cloudflare Worker
 LOCALHOST_BACKEND_URL: Final[str] = (
-    _configured_backend_url("SPOTIBYE_LOCALHOST_BACKEND_URL") or "http://localhost:8787"
+    _configured_backend_url("SPOTIBYE_LOCALHOST_BACKEND_URL")
+    or "http://localhost:8787"  # NOSONAR(S5332)
 )
 
 # Determine which backend URL to use

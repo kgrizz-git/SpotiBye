@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { errorHandler } from '../middleware/error';
+import { AuthRequiredException } from '../types/errors';
 import type { Env } from '../types/env';
 import { createTestEnv } from './helpers/env';
 
@@ -130,5 +132,57 @@ describe('errorHandler discriminator strengthening (BL-6)', () => {
     const { status, body } = await runRequest();
     expect(status).toBe(500);
     expect(body.error.code).toBe('INTERNAL_ERROR');
+  });
+});
+
+describe('errorHandler HTTPException branch (status code lookup table)', () => {
+  let app: Hono<{ Bindings: Env }>;
+  let env: Env;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    app = new Hono<{ Bindings: Env }>();
+    app.onError(errorHandler);
+    env = createTestEnv();
+  });
+
+  const runRequest = async () => {
+    const res = await app.request(new Request('http://localhost/test'), undefined, env);
+    return {
+      status: res.status,
+      body: (await res.json()) as { error: { code: string; message: string } },
+    };
+  };
+
+  it.each([
+    { status: 401, code: 'UNAUTHORIZED', message: 'bad token' },
+    { status: 403, code: 'FORBIDDEN' },
+    { status: 404, code: 'NOT_FOUND' },
+  ])('maps HTTPException($status) to $code', async ({ status, code, message }) => {
+    app.get('/test', () => {
+      throw message
+        ? new HTTPException(status as 401 | 403 | 404, { message })
+        : new HTTPException(status as 401 | 403 | 404);
+    });
+    const { status: resStatus, body } = await runRequest();
+    expect(resStatus).toBe(status);
+    expect(body.error.code).toBe(code);
+    if (message) {
+      expect(body.error.message).toBe(message);
+    }
+  });
+
+  it('maps HTTPException with unmapped status to HTTP_ERROR', async () => {
+    app.get('/test', () => { throw new HTTPException(422); });
+    const { status, body } = await runRequest();
+    expect(status).toBe(422);
+    expect(body.error.code).toBe('HTTP_ERROR');
+  });
+
+  it('maps AuthRequiredException (extends HTTPException 401) to AUTH_REQUIRED', async () => {
+    app.get('/test', () => { throw new AuthRequiredException(); });
+    const { status, body } = await runRequest();
+    expect(status).toBe(401);
+    expect(body.error.code).toBe('AUTH_REQUIRED');
   });
 });

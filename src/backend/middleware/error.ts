@@ -41,15 +41,10 @@ export const errorHandler: ErrorHandler = (err, c) => {
   if (err instanceof HTTPException) {
     status = err.status;
     message = err.message || message;
+    const httpStatusCodes: Record<number, string> = { 401: 'UNAUTHORIZED', 403: 'FORBIDDEN', 404: 'NOT_FOUND' };
     code = err instanceof AuthRequiredException
       ? 'AUTH_REQUIRED'
-      : status === 401
-        ? 'UNAUTHORIZED'
-        : status === 403
-          ? 'FORBIDDEN'
-          : status === 404
-            ? 'NOT_FOUND'
-            : 'HTTP_ERROR';
+      : (httpStatusCodes[status] ?? 'HTTP_ERROR');
   } else if (
     err.name === 'ValidationError' &&
     isValidationCode((err as { code?: unknown }).code)

@@ -36,7 +36,7 @@ class BackendAPIError(Exception):
 class BackendClient:
     """HTTP client for Cloudflare Worker backend communication."""
 
-    def __init__(self, base_url: str = "http://localhost:8787"):
+    def __init__(self, base_url: str = "http://localhost:8787"):  # NOSONAR(S5332)
         """
         Initialize backend client.
 
@@ -71,8 +71,8 @@ class BackendClient:
         )
 
         adapter = HTTPAdapter(max_retries=retry_strategy)
-        # nosemgrep: python.lang.security.audit.insecure-transport.requests.request-session-with-http.request-session-with-http
-        session.mount("http://", adapter)
+        # Intentional loopback adapter for localhost dev; HTTPS not applicable
+        session.mount("http://", adapter)  # nosemgrep # NOSONAR(S5332)
         session.mount("https://", adapter)
 
         # Set default headers
@@ -151,8 +151,8 @@ class BackendClient:
 
             return response_data
 
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection error: {e}")
+        except requests.exceptions.ConnectionError:
+            logger.exception("Connection error")
             raise BackendAPIError(
                 "Unable to connect to backend. Check your internet connection.",
                 None,
@@ -161,8 +161,8 @@ class BackendClient:
                     "transport_error": "connection",
                 },
             )
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Request timeout: {e}")
+        except requests.exceptions.Timeout:
+            logger.exception("Request timeout")
             raise BackendAPIError(
                 "Request timed out. Please try again.",
                 None,
@@ -172,7 +172,7 @@ class BackendClient:
                 },
             )
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request error: {e}")
+            logger.exception("Request error")
             raise BackendAPIError(
                 f"Network error: {str(e)}",
                 None,
@@ -181,8 +181,8 @@ class BackendClient:
                     "transport_error": "request",
                 },
             )
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
+        except json.JSONDecodeError:
+            logger.exception("JSON decode error")
             raise BackendAPIError(
                 "Invalid response from backend.",
                 None,

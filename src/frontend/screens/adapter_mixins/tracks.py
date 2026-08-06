@@ -33,7 +33,7 @@ class TracksMixin:
                 self.error_callback(error_msg)
             return None
         except Exception as e:
-            logger.error(f"Error getting playlist details: {e}")
+            logger.error("Error getting playlist details: %s", e)
             if self.error_callback:
                 self.error_callback(f"Failed to load playlist details: {str(e)}")
             return None
@@ -113,7 +113,7 @@ class TracksMixin:
                 self.error_callback(error_msg)
             return None
         except Exception as e:
-            logger.error(f"Error getting playlist tracks: {e}")
+            logger.error("Error getting playlist tracks: %s", e)
             if self.error_callback:
                 self.error_callback(f"Failed to load tracks: {str(e)}")
             return None
@@ -136,7 +136,7 @@ class TracksMixin:
                 )
             return tracks
         except Exception as e:
-            logger.error(f"Error refreshing playlist tracks only: {e}")
+            logger.error("Error refreshing playlist tracks only: %s", e)
             if self.error_callback:
                 self.error_callback(f"Track refresh failed: {str(e)}")
             return None

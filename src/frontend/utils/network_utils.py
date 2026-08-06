@@ -13,6 +13,9 @@ from ..services.backend_client import BackendAPIError
 
 logger = logging.getLogger(__name__)
 
+# Constant for progress callback error messages
+PROGRESS_CALLBACK_ERROR = "Progress callback error"
+
 
 class NetworkError(Exception):
     """Base class for network-related errors."""
@@ -77,11 +80,15 @@ def retry_on_network_error(
                     if attempt < max_retries:
                         delay = backoff_factor * (2**attempt)
                         logger.warning(
-                            f"Network error (attempt {attempt + 1}/{max_retries + 1}): {e}. Retrying in {delay}s..."
+                            "Network error (attempt %s/%s): %s. Retrying in %ss...",
+                            attempt + 1,
+                            max_retries + 1,
+                            e,
+                            delay,
                         )
                         time.sleep(delay)
                     else:
-                        logger.error(f"Max retries exceeded for network error: {e}")
+                        logger.exception("Max retries exceeded for network error")
                         break
                 except Exception as e:
                     # Don't retry on non-network errors
@@ -111,7 +118,7 @@ def handle_network_errors(func: Callable[..., Any]) -> Callable[..., Any]:
         try:
             return func(*args, **kwargs)
         except BackendAPIError as e:
-            logger.error(f"Backend API error: {e}")
+            logger.exception("Backend API error")
             # Convert to appropriate network error
             if e.status_code:
                 if e.status_code == 429:
@@ -121,16 +128,16 @@ def handle_network_errors(func: Callable[..., Any]) -> Callable[..., Any]:
                 elif e.status_code == 0:
                     raise ConnectionError(str(e))
             raise NetworkError(str(e))
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection error: {e}")
+        except requests.exceptions.ConnectionError:
+            logger.exception("Connection error")
             raise ConnectionError(
                 "Unable to connect to backend. Check your internet connection."
             )
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Timeout error: {e}")
+        except requests.exceptions.Timeout:
+            logger.exception("Timeout error")
             raise NetworkTimeoutError("Request timed out. Please try again.")
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request error: {e}")
+            logger.exception("Request error")
             raise NetworkError(f"Network error: {str(e)}")
 
     return wrapper
@@ -174,7 +181,7 @@ class NetworkStatusMonitor:
             self.last_check_time = current_time
             return status.get("status") == "healthy"
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.exception("Health check failed")
             self.last_status = {"status": "unhealthy", "error": str(e)}
             self.last_check_time = current_time
             return False
@@ -241,8 +248,8 @@ class ProgressTracker:
         for callback in self.callbacks:
             try:
                 callback(self.current_step, self.total_steps, message)
-            except Exception as e:
-                logger.error(f"Progress callback error: {e}")
+            except Exception:
+                logger.exception(PROGRESS_CALLBACK_ERROR)
 
     def complete(self, message: str = "Complete") -> None:
         """Mark operation as complete."""
@@ -254,8 +261,8 @@ class ProgressTracker:
                 callback(
                     self.total_steps, self.total_steps, f"{message} ({elapsed:.1f}s)"
                 )
-            except Exception as e:
-                logger.error(f"Progress callback error: {e}")
+            except Exception:
+                logger.exception(PROGRESS_CALLBACK_ERROR)
 
     def get_progress(self) -> Dict[str, Any]:
         """
@@ -347,7 +354,7 @@ def create_progress_callback(
             if status_label and message:
                 status_label.text = message
 
-        except Exception as e:
-            logger.error(f"Progress callback error: {e}")
+        except Exception:
+            logger.exception(PROGRESS_CALLBACK_ERROR)
 
     return callback

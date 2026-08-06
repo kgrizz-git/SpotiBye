@@ -43,7 +43,7 @@ class UtilitiesMixin:
             logger.info(f"Cleared {cache_type or 'all'} cache")
 
         except Exception as e:
-            logger.error(f"Error clearing cache: {e}")
+            logger.error("Error clearing cache: %s", e)
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
@@ -68,4 +68,4 @@ class UtilitiesMixin:
             logger.info("Backend logout completed")
 
         except Exception as e:
-            logger.error(f"Error during logout: {e}")
+            logger.error("Error during logout: %s", e)

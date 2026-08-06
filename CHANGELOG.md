@@ -21,6 +21,15 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Expanded the playlist analysis popup's "Audio Features" section from 5 to all 9 ReccoBeats audio features (adds instrumentalness, liveness, speechiness, loudness), plus a musical key/mode row (e.g. "C major") when at least 2 tracks have a valid key/mode. Valence is now shown as a human-readable mood label (Melancholic/Somber/Neutral/Cheerful/Euphoric) instead of a raw percentage. Added a "ReccoBeats Metadata" section (ISRC coverage count, popularity range) from a new `GET /v1/track` fetch, and a partial-failure banner listing which enrichment sources (Spotify artists, ReccoBeats audio features, ReccoBeats track metadata) failed for a given analysis, since ReccoBeats enrichment is always best-effort and analysis still completes without it.
 - Backend analysis results now include `errors` (always present; empty on full success) and `schema_version`, and a 24h raw-ReccoBeats-enrichment cache shared across users for the same playlist (namespaced by playlist only, not user, since the data is playlist-derived) to avoid duplicate fetches. Cached analysis results whose `schema_version` is missing or older than the server's are treated as stale: `GET .../results` purges them and returns 404, and a subsequent `POST` enqueues a fresh job automatically.
 
+### Fixed
+- Corrected a dead-code bug in `scripts/check-dependencies.py` where the return value was always 0 regardless of `all_passed` (the `--ci` exit path was already handled by `sys.exit(1)`).
+- Fixed remaining Python `logger.error()` calls inside `except` blocks to use `logger.exception()` so SonarCloud rule S8572 is satisfied; the initial migration to lazy `%s` formatting left several error-level calls that should include traceback context.
+- Parameterized three similar HTTPException status-code tests in `src/backend/tests/error-middleware.test.ts` to resolve SonarCloud rule S5976.
+
+### Security
+- Scoped GitHub Actions workflow permissions to minimum required: `build.yml` top-level `contents: write` moved to the `release` job; `deploy-production.yml` top-level `actions: write` removed entirely with `deployments: write` scoped to the `deploy-prod` job.
+- Corrected placement of `# NOSONAR: python:S5332` suppressions for intentional loopback HTTP connections in `backend_auth.py`, `backend_client.py`, and `backend_config.py` so SonarCloud recognizes them on the same line as the suppressed code.
+
 ### Changed
 - CI/CD cost reductions: removed dead Dependabot directory scans, cancelled superseded CI runs, dropped duplicate backend tests from the Deploy Backend PR path, and consolidated Security Scan from 6 parallel jobs into one sequential job (PR checks now show a single **Security Scan** status).
 - Backend npm overrides: `brace-expansion` 1.1.16 / 2.1.2 / 5.0.7 and `sharp` ^0.35.3 (transitive via exceljs/eslint/miniflare) to clear high-severity OSV findings that blocked push.

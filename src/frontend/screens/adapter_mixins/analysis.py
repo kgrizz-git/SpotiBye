@@ -280,7 +280,7 @@ class AnalysisMixin:
             )
 
         except Exception as e:
-            logger.error(f"Error analyzing playlist: {e}")
+            logger.error("Error analyzing playlist: %s", e)
             error_msg = f"Analysis failed: {str(e)}"
             if self.error_callback:
                 self.error_callback(error_msg)
@@ -299,7 +299,7 @@ class AnalysisMixin:
         try:
             return self.backend_client.get_analysis_status(playlist_id)
         except Exception as e:
-            logger.error(f"Error getting analysis status: {e}")
+            logger.error("Error getting analysis status: %s", e)
             return {"status": "error", "error": str(e)}
 
     def force_reanalyze_playlist(
@@ -324,7 +324,7 @@ class AnalysisMixin:
                 self.cache_manager.cache_analysis(playlist_id, result)
             return result
         except Exception as e:
-            logger.error(f"Error force re-analyzing playlist: {e}")
+            logger.error("Error force re-analyzing playlist: %s", e)
             if self.error_callback:
                 self.error_callback(f"Analysis retry failed: {str(e)}")
             return None
@@ -359,7 +359,7 @@ class AnalysisMixin:
             self.cache_manager.clear_file(f"analysis_{playlist_id}.json")
             return self.analyze_playlist(playlist_id, progress_callback, analysis_task)
         except Exception as e:
-            logger.error(f"Error refreshing playlist tracks: {e}")
+            logger.error("Error refreshing playlist tracks: %s", e)
             if self.error_callback:
                 self.error_callback(f"Track refresh failed: {str(e)}")
             return None

@@ -134,7 +134,7 @@ class ExportsDownloadMixin:
                 self.error_callback(error_msg)
             return False
         except Exception as e:
-            logger.error(f"Error downloading combined export: {e}")
+            logger.error("Error downloading combined export: %s", e)
             if report_errors and self.error_callback:
                 self.error_callback(f"Combined download failed: {str(e)}")
             return False

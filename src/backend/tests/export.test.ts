@@ -610,6 +610,94 @@ describe('Export Routes', () => {
       expect(downloadResponse.status).toBe(200);
       expect(body.byteLength).toBeGreaterThan(0);
     });
+
+    // Tests for keyChecks branch selection and resolvedMode header.
+    // Each test seeds the completed job state + a prebuilt file key directly
+    // into the mock KV so the handler takes the cache-hit path rather than
+    // the assembly-fallback path that the test above exercises.
+    const seedCompletedJob = async (
+      env: Env,
+      jobId: string,
+      userId: string,
+      fileFormat: string,
+      renderModeHint?: string,
+    ) => {
+      const jobKey = `export:job:${jobId}:${userId}`;
+      const jobState = {
+        status: 'completed',
+        phase: 'assemble',
+        file_format: fileFormat,
+        render_mode_hint: renderModeHint ?? null,
+      };
+      await env.CACHE_KV.put(jobKey, JSON.stringify(jobState));
+      return jobKey;
+    };
+
+    const fakeBuffer = new TextEncoder().encode('fake-file-content').buffer;
+
+    it('CSV format: serves prebuilt CSV key and sets render-mode=csv', async () => {
+      const jobKey = await seedCompletedJob(mockEnv, 'csv-job', 'test-user-id', 'csv');
+      await mockEnv.CACHE_KV.put(`${jobKey}:file:csv`, fakeBuffer as any);
+
+      const res = await app.request(
+        new Request('http://localhost/export/jobs/csv-job/download', {
+          headers: { 'Authorization': 'Bearer test-jwt-token' },
+        }),
+        undefined, mockEnv,
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toContain('text/csv');
+      expect(res.headers.get('X-SpotiBye-Render-Mode')).toBe('csv');
+    });
+
+    it('JSON format: serves file key and sets render-mode from hint', async () => {
+      const jobKey = await seedCompletedJob(mockEnv, 'json-job', 'test-user-id', 'json');
+      await mockEnv.CACHE_KV.put(`${jobKey}:file`, fakeBuffer as any);
+
+      const res = await app.request(
+        new Request('http://localhost/export/jobs/json-job/download', {
+          headers: { 'Authorization': 'Bearer test-jwt-token' },
+        }),
+        undefined, mockEnv,
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toContain('application/json');
+      expect(res.headers.get('X-SpotiBye-Render-Mode')).toBe('auto');
+    });
+
+    it('XLSX rich: serves rich variant key and sets render-mode=rich', async () => {
+      const jobKey = await seedCompletedJob(mockEnv, 'rich-job', 'test-user-id', 'xlsx', 'rich');
+      await mockEnv.CACHE_KV.put(`${jobKey}:file:rich`, fakeBuffer as any);
+
+      const res = await app.request(
+        new Request('http://localhost/export/jobs/rich-job/download?mode=rich', {
+          headers: { 'Authorization': 'Bearer test-jwt-token' },
+        }),
+        undefined, mockEnv,
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toContain('spreadsheetml');
+      expect(res.headers.get('X-SpotiBye-Render-Mode')).toBe('rich');
+    });
+
+    it('XLSX lite: serves lite variant key and sets render-mode=lite', async () => {
+      const jobKey = await seedCompletedJob(mockEnv, 'lite-job', 'test-user-id', 'xlsx', 'lite');
+      await mockEnv.CACHE_KV.put(`${jobKey}:file:lite`, fakeBuffer as any);
+
+      const res = await app.request(
+        new Request('http://localhost/export/jobs/lite-job/download?mode=lite', {
+          headers: { 'Authorization': 'Bearer test-jwt-token' },
+        }),
+        undefined, mockEnv,
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toContain('spreadsheetml');
+      expect(res.headers.get('X-SpotiBye-Render-Mode')).toBe('lite');
+    });
   });
 
   describe('GET /export/playlists/:jobId/status', () => {

@@ -52,7 +52,7 @@ class ExportsMixin:
                 self.error_callback(error_msg)
             return None
         except Exception as e:
-            logger.error(f"Error generating export: {e}")
+            logger.error("Error generating export: %s", e)
             if report_errors and self.error_callback:
                 self.error_callback(f"Export failed: {str(e)}")
             return None
@@ -90,7 +90,7 @@ class ExportsMixin:
                 self.error_callback(error_msg)
             return False
         except Exception as e:
-            logger.error(f"Error downloading export: {e}")
+            logger.error("Error downloading export: %s", e)
             if self.error_callback:
                 self.error_callback(f"Download failed: {str(e)}")
             return False
@@ -116,7 +116,7 @@ class ExportsMixin:
                 self.error_callback(error_msg)
             return None
         except Exception as e:
-            logger.error(f"Error generating batch export: {e}")
+            logger.error("Error generating batch export: %s", e)
             if self.error_callback:
                 self.error_callback(f"Combined export failed: {str(e)}")
             return None
@@ -200,7 +200,7 @@ class ExportsMixin:
                 self.error_callback(error_msg)
             return None
         except Exception as e:
-            logger.error(f"Error generating chunked batch export: {e}")
+            logger.error("Error generating chunked batch export: %s", e)
             if report_errors and self.error_callback:
                 self.error_callback(f"Chunked export failed: {str(e)}")
             return None

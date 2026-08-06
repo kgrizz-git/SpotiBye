@@ -86,7 +86,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
                 </html>
                 """
                 self.wfile.write(error_html.encode())
-                logger.error(f"OAuth error: {error} - {error_description}")
+                logger.error("OAuth error: %s - %s", error, error_description)
                 self.auth_result_container["error"] = f"{error}: {error_description}"
 
             else:
@@ -112,7 +112,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
                 )
 
         except Exception as e:
-            logger.error(f"Error handling OAuth callback: {e}")
+            logger.exception("Error handling OAuth callback")
             self.auth_result_container["error"] = str(e)
             self.send_response(500)
             self.end_headers()
@@ -160,7 +160,8 @@ class BackendAuthenticator:
             logger.info("Initiating OAuth login flow")
 
             # Get authorization URL from backend
-            redirect_uri = f"http://{self.callback_host}:{self.callback_port}/callback"
+            # Intentional loopback for Spotify PKCE OAuth callback
+            redirect_uri = f"http://{self.callback_host}:{self.callback_port}/callback"  # NOSONAR(S5332)
             auth_url = self.backend_client.initiate_spotify_login(redirect_uri)
             logger.info(f"Got authorization URL: {auth_url}")
 
@@ -174,8 +175,8 @@ class BackendAuthenticator:
             try:
                 webbrowser.open(auth_url)
                 logger.info("Opened browser for authentication")
-            except Exception as e:
-                logger.error(f"Failed to open browser: {e}")
+            except Exception:
+                logger.exception("Failed to open browser")
                 if on_error:
                     on_error("Failed to open browser for authentication")
                 self._stop_callback_server()
@@ -202,7 +203,7 @@ class BackendAuthenticator:
                     return True
 
                 except BackendAPIError as e:
-                    logger.error(f"Failed to exchange authorization code: {e}")
+                    logger.exception("Failed to exchange authorization code")
                     if on_error:
                         on_error(f"Authentication failed: {e}")
                     return False
@@ -212,13 +213,13 @@ class BackendAuthenticator:
                     if auth_result
                     else "Authentication timed out"
                 )
-                logger.error(f"Authentication failed: {error_msg}")
+                logger.error("Authentication failed: %s", error_msg)
                 if on_error:
                     on_error(error_msg)
                 return False
 
         except Exception as e:
-            logger.error(f"Login flow error: {e}")
+            logger.exception("Login flow error")
             if on_error:
                 on_error(f"Login error: {e}")
             return False
@@ -250,8 +251,8 @@ class BackendAuthenticator:
             )
             return True
 
-        except Exception as e:
-            logger.error(f"Failed to start callback server: {e}")
+        except Exception:
+            logger.exception("Failed to start callback server")
             return False
 
     def _stop_callback_server(self) -> None:
@@ -268,8 +269,8 @@ class BackendAuthenticator:
 
             logger.info("Callback server stopped")
 
-        except Exception as e:
-            logger.error(f"Error stopping callback server: {e}")
+        except Exception:
+            logger.exception("Error stopping callback server")
 
     def _wait_for_callback(
         self, timeout: Optional[int] = None
@@ -319,8 +320,8 @@ class BackendAuthenticator:
             logger.info("Logged out successfully")
             return True
 
-        except Exception as e:
-            logger.error(f"Logout error: {e}")
+        except Exception:
+            logger.exception("Logout error")
             return False
 
     def is_authenticated(self) -> bool:
@@ -375,7 +376,7 @@ class BackendAuthenticator:
             return True
 
         except BackendAPIError as e:
-            logger.error(f"Token refresh failed: {e}")
+            logger.exception("Token refresh failed")
             if e.error_code == "AUTH_REQUIRED":
                 self.backend_client.clear_auth_token()
                 app = None
@@ -403,8 +404,8 @@ class BackendAuthenticator:
                         0.2,
                     )
             return False
-        except Exception as e:
-            logger.error(f"Token refresh error: {e}")
+        except Exception:
+            logger.exception("Token refresh error")
             return False
 
 

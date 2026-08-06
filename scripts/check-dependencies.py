@@ -152,7 +152,7 @@ def main():
     if args.ci and not all_passed:
         sys.exit(1)
 
-    return 0 if all_passed else 0  # Always return 0 unless --ci
+    return 0
 
 
 if __name__ == "__main__":

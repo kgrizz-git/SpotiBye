@@ -222,27 +222,32 @@ app.get('/:jobId/download', zValidator('param', JobIdParamSchema), async (c) => 
       ? (requestedMode === 'auto' ? (exportStatus.render_mode_hint || 'auto') : requestedMode)
       : fileFormat;
 
-    const keyChecks =
-      fileFormat === 'csv'
-        ? [buildPrebuiltFormatKey(jobKey, 'csv'), buildExportFileKey(jobKey)]
-        : fileFormat === 'json'
-          ? [buildExportFileKey(jobKey)]
-          : renderMode === 'rich'
-            ? [buildXlsxVariantKey(jobKey, 'rich'), buildExportFileKey(jobKey), buildXlsxVariantKey(jobKey, 'lite')]
-            : renderMode === 'lite'
-              ? [buildXlsxVariantKey(jobKey, 'lite'), buildExportFileKey(jobKey)]
-              : [buildExportFileKey(jobKey), buildXlsxVariantKey(jobKey, 'lite'), buildXlsxVariantKey(jobKey, 'rich')];
+    let keyChecks: string[];
+    if (fileFormat === 'csv') {
+      keyChecks = [buildPrebuiltFormatKey(jobKey, 'csv'), buildExportFileKey(jobKey)];
+    } else if (fileFormat === 'json') {
+      keyChecks = [buildExportFileKey(jobKey)];
+    } else if (renderMode === 'rich') {
+      keyChecks = [buildXlsxVariantKey(jobKey, 'rich'), buildExportFileKey(jobKey), buildXlsxVariantKey(jobKey, 'lite')];
+    } else if (renderMode === 'lite') {
+      keyChecks = [buildXlsxVariantKey(jobKey, 'lite'), buildExportFileKey(jobKey)];
+    } else {
+      keyChecks = [buildExportFileKey(jobKey), buildXlsxVariantKey(jobKey, 'lite'), buildXlsxVariantKey(jobKey, 'rich')];
+    }
 
     for (const key of keyChecks) {
       const prebuiltBytes = await cacheService.getBuffer(key);
       if (prebuiltBytes) {
-        const resolvedMode = key.endsWith(':file:rich')
-          ? 'rich'
-          : key.endsWith(':file:lite')
-            ? 'lite'
-            : fileFormat === 'csv'
-              ? 'csv'
-              : (exportStatus.render_mode_hint || 'auto');
+        let resolvedMode: string;
+        if (key.endsWith(':file:rich')) {
+          resolvedMode = 'rich';
+        } else if (key.endsWith(':file:lite')) {
+          resolvedMode = 'lite';
+        } else if (fileFormat === 'csv') {
+          resolvedMode = 'csv';
+        } else {
+          resolvedMode = exportStatus.render_mode_hint || 'auto';
+        }
         return new Response(prebuiltBytes, {
           headers: {
             'Content-Type': dlContentType,

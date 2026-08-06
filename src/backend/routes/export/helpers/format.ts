@@ -34,10 +34,11 @@ export function resolveIncludeAudioFeatures(body: Record<string, unknown>): bool
 }
 
 export function resolveStepSize(body: Record<string, unknown>): number {
-  const requested = Number.isInteger(body?.max_playlists_per_step)
-    ? Number(body.max_playlists_per_step)
-    : Number.isInteger(body?.chunk_size)
-      ? Number(body.chunk_size)
-      : 1;
+  let requested = 1;
+  if (Number.isInteger(body?.max_playlists_per_step)) {
+    requested = Number(body.max_playlists_per_step);
+  } else if (Number.isInteger(body?.chunk_size)) {
+    requested = Number(body.chunk_size);
+  }
   return Math.min(Math.max(requested, 1), 3);
 }
