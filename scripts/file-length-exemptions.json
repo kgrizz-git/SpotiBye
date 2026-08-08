@@ -14,6 +14,11 @@
       "pattern": ".github/instructions/**/*.md",
       "reason": "1 existing file over 300 lines — internal agent instructions",
       "expires": "2026-10-07"
+    },
+    {
+      "pattern": "SECURITY.md",
+      "reason": "Security policy doc grew past 300 lines after adding the SonarCloud tradeoffs section; kept whole for completeness",
+      "expires": "2026-10-07"
     }
   ]
 }

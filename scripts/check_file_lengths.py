@@ -53,6 +53,14 @@ except ImportError:
 
 logger = logging.getLogger("check_file_lengths")
 
+# Resolve repository root from script location, not CWD
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Roots from which the exemptions file may be loaded. Defaults to the repo
+# root only so the guard does not widen the attack surface to the shared temp
+# directory. Tests override this to allow pytest's tmp_path.
+ALLOWED_FILE_ROOTS: tuple[Path, ...] = (REPO_ROOT,)
+
 ExemptionEntry = dict[str, str]
 if TYPE_CHECKING:
     # Module-level type alias used only in annotations (deferred by
@@ -137,11 +145,37 @@ def count_lines(file_path: Path) -> int:
         return sum(1 for _ in f)
 
 
+def is_within_path(path: Path, root: Path) -> bool:
+    """Check if path is within root directory."""
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def allowed_file_roots() -> tuple[Path, ...]:
+    """Return allowed root directories for file access."""
+    return ALLOWED_FILE_ROOTS
+
+
 def load_exemptions(exemptions_path: Path) -> list[ExemptionEntry]:
-    if not exemptions_path.exists():
-        raise FileNotFoundError(f"Exemptions file not found: {exemptions_path}")
-    with open(exemptions_path, "r", encoding="utf-8") as f:
+    """Load exemptions from JSON file with path validation."""
+    resolved_path = exemptions_path.expanduser().resolve()
+    allowed_roots = allowed_file_roots()
+
+    # Validate path is within allowed directories
+    if not any(is_within_path(resolved_path, root) for root in allowed_roots):
+        raise ValueError(
+            f"Exemptions file must be within the repository: {exemptions_path}"
+        ) from None
+
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Exemptions file not found: {resolved_path}")
+
+    with open(resolved_path, "r", encoding="utf-8") as f:
         data = json.load(f)
+
     if "exemptions" not in data:
         raise ValueError("Invalid exemptions file: missing 'exemptions' key")
     return data["exemptions"]
@@ -235,7 +269,6 @@ def check_files(
     exemptions_spec: ExemptionSpec,
     exemptions_data: list[ExemptionEntry],
     warn_mode: bool,
-    ci_mode: bool,
     extra_excludes: list[str],
 ) -> int:
     violations: list[str] = []
@@ -349,9 +382,8 @@ def main() -> int:
         print_count_only(args.exemptions)
         return 0
 
-    repo_root = Path.cwd()
+    repo_root = REPO_ROOT
     warn_mode = args.warn
-    ci_mode = args.ci
 
     try:
         exemptions_data = load_exemptions(args.exemptions)
@@ -371,7 +403,6 @@ def main() -> int:
         exemptions_spec=exemptions_spec,
         exemptions_data=exemptions_data,
         warn_mode=warn_mode,
-        ci_mode=ci_mode,
         extra_excludes=args.exclude,
     )
 

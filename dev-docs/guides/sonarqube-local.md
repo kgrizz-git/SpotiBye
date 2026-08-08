@@ -56,8 +56,10 @@ SONAR_TOKEN="$(cat .sonar_cloud_token)" sonar-scanner \
   -Dsonar.host.url=https://sonarcloud.io
 ```
 
-The cloud project key and organization must be configured separately; never add
-the token to `sonar-project.properties`.
+The cloud project key is configured in `sonar-project.properties` as
+`sonar.projectKey=kgrizz-git_SpotiBye`. The organization is supplied via the
+SonarCloud interface or environment variables. Never add the token to
+`sonar-project.properties`.
 
 ## Run an analysis
 
@@ -67,8 +69,8 @@ sonar-scanner -Dsonar.host.url=http://localhost:9000
 ```
 
 The scanner reads project settings from `sonar-project.properties`
-(`sonar.projectKey=spotibye`). The project is auto-provisioned on first run.
-Results: <http://localhost:9000/dashboard?id=spotibye>
+(`sonar.projectKey=kgrizz-git_SpotiBye`). The project is auto-provisioned on first run.
+Results: <http://localhost:9000/dashboard?id=kgrizz-git_SpotiBye>
 
 ## Coverage (optional)
 

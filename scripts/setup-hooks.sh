@@ -14,16 +14,16 @@ if ! command -v pre-commit &> /dev/null; then
     echo "❌ pre-commit is not installed"
     echo ""
     echo "Installing pre-commit..."
-    pip install pre-commit
+    pip install pre-commit  # NOSONAR(S8541): local dev tool install; --only-binary would break Kivy source builds
 fi
 
 # Install development extras so hook dependencies like pathspec are present
 echo ""
 echo "📦 Installing Python development dependencies..."
 if [ -f "$REPO_ROOT/.venv/bin/pip" ]; then
-    "$REPO_ROOT/.venv/bin/pip" install -e ".[development]"
+    "$REPO_ROOT/.venv/bin/pip" install -e ".[development]"  # NOSONAR(S8541): Kivy/KivyMD need source builds on Linux
 else
-    pip install -e ".[development]"
+    pip install -e ".[development]"  # NOSONAR(S8541): Kivy/KivyMD need source builds on Linux
 fi
 
 # Install the hooks

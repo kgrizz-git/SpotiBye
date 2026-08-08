@@ -129,7 +129,6 @@ def test_expired_exemption_detection(
         exemptions_spec=spec,
         exemptions_data=exemptions_data["exemptions"],
         warn_mode=False,
-        ci_mode=False,
         extra_excludes=[],
     )
     assert exit_code == 1
@@ -144,7 +143,6 @@ def test_expired_exemption_detection(
         exemptions_spec=spec,
         exemptions_data=exemptions_data["exemptions"],
         warn_mode=True,
-        ci_mode=False,
         extra_excludes=[],
     )
     assert exit_code_warn == 0
@@ -175,6 +173,38 @@ def test_mutual_exclusivity_warn_and_ci(
     assert exc_info.value.code != 0
 
 
+def test_load_exemptions_accepts_repo_file() -> None:
+    repo_exemptions = cfl.REPO_ROOT / "scripts" / "file-length-exemptions.json"
+    # Guard must accept a file under the repo root
+    assert cfl.load_exemptions(repo_exemptions) is not None
+
+
+def test_load_exemptions_accepts_overridden_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Tests run from a temp dir outside the repo, so allow that root for this
+    # test only (mirrors how pytest passes tmp_path-based fixtures via main()).
+    temp_file = tmp_path / "exemptions.json"
+    temp_file.write_text('{"exemptions": []}')
+    monkeypatch.setattr(cfl, "ALLOWED_FILE_ROOTS", (tmp_path,))
+    assert cfl.load_exemptions(temp_file) == []
+
+
+def test_load_exemptions_rejects_traversal() -> None:
+    # A path outside the allowed roots must be rejected
+    outside = Path("/etc/passwd")
+    with pytest.raises(ValueError):
+        cfl.load_exemptions(outside)
+
+
+def test_load_exemptions_rejects_missing_outside_repo() -> None:
+    # Nonexistent path outside the allowed roots is a ValueError, not
+    # FileNotFoundError. The repo root is the only allowed root, so a path
+    # under /tmp is rejected on every platform (no temp-dir allowance).
+    with pytest.raises(ValueError):
+        cfl.load_exemptions(Path("/tmp/does-not-exist.json"))
+
+
 def test_check_files_warn_vs_enforce(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -192,7 +222,6 @@ def test_check_files_warn_vs_enforce(
         exemptions_spec=spec,
         exemptions_data=exemptions_data,
         warn_mode=True,
-        ci_mode=False,
         extra_excludes=[],
     )
     assert exit_code_warn == 0
@@ -207,7 +236,6 @@ def test_check_files_warn_vs_enforce(
         exemptions_spec=spec,
         exemptions_data=exemptions_data,
         warn_mode=False,
-        ci_mode=False,
         extra_excludes=[],
     )
     assert exit_code_enforce == 1

@@ -281,3 +281,30 @@ Configured in `pyproject.toml`:
 - Excludes: tests/, .venv/, build/, dist/
 - Severity threshold: medium
 - Confidence threshold: medium
+
+## SonarCloud Security Tradeoffs
+
+SonarCloud flags several issues that are **intentional, documented tradeoffs** for this project. They are acknowledged with inline `# NOSONAR(<rule>)` comments at the relevant `pip install` sites rather than silently suppressed.
+
+### Python build supply chain (S8541, S6505)
+
+- **Decision:** Omit `--only-binary=:all:` on `pip install` for the frontend (Kivy/KivyMD) and omit `--ignore-scripts` on the pinned build tool (PyInstaller).
+- **Rationale:** Kivy and KivyMD do not ship binary wheels for all Linux targets and require source compilation; `--only-binary` breaks Linux/PyInstaller builds. PyInstaller is a trusted, version-pinned build dependency.
+- **Mitigations:**
+  - `pyproject.toml` and `requirements.txt` declare matching pinned versions; unused `pandas`/`openpyxl` were dropped so `pip install -e ".[development]"` (ci.yml) and `pip install -r requirements.txt` (build.yml) resolve deterministically and agree.
+  - OSV-Scanner (CI + pre-push) and Dependabot scan all Python and Node dependencies for CVEs.
+- **Risk:** Medium — accepted for cross-platform desktop build support.
+
+### Node.js supply chain (S8541, S6505, S8544)
+
+- **Decision:** Use `npm ci` (fully locked via `package-lock.json`) without `--only-binary`/`--ignore-scripts` overrides.
+- **Rationale:** `npm ci` is deterministic; the backend dependency tree is trusted and scanned by OSV-Scanner and Dependabot.
+- **Risk:** Low.
+
+### Python path traversal (S8707)
+
+- **Status:** Fixed. `scripts/check_file_lengths.py` validates the exemptions path against the repo root (configurable via `ALLOWED_FILE_ROOTS`) before access.
+
+### Workflow permissions (S8233)
+
+- **Status:** Fixed. `deployments: write` is scoped to the `deploy-dev` / `deploy-prod` jobs only; workflow-level permissions are read-only.
