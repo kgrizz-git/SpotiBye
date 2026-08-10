@@ -1,0 +1,21 @@
+# TruffleHog --exclude-paths file (Go regexp, one per line)
+#
+# Used ONLY by the full-history TruffleHog step (schedule / workflow_dispatch).
+# Do not wire this into the PR-diff scan: a PR could expand this list and hide
+# secrets from the PR-time gate.
+#
+# Excludes specific test files whose `test_…` function names (exactly
+# test_ + 35 word chars) trigger the Lob detector false-positive with
+# --only-verified. Upstream: https://github.com/trufflesecurity/trufflehog/issues/5184
+#
+# Tradeoff: a real Lob secret committed into one of these exact files would be
+# hidden from full-history TruffleHog. PR-diff TruffleHog, Semgrep, and
+# Gitleaks/pre-commit still scan the working tree / PR diff. History-only
+# secrets in these 3 files are not covered — acceptable given the detector
+# matches unittest method names, not credential literals. If new test files
+# trigger the same Lob false positive, add their paths here; if it becomes
+# frequent, fall back to ^scripts/tests/.*$ and ^src/frontend/tests/.*$, or
+# temporarily --exclude-detectors=Lob until upstream fixes verification.
+^scripts/tests/test_check_dependencies\.py$
+^src/frontend/tests/test_backend_playlist_card_analysis\.py$
+^src/frontend/tests/test_enrichment_completeness\.py$

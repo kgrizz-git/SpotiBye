@@ -41,7 +41,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      # TruffleHog PR Diff Mode
+      # TruffleHog PR Diff Mode — no --exclude-paths. A PR-scoped exclude file
+      # would let the same PR widen exclusions and hide secrets from this gate.
+      # Lob false positives only appear in full-history scans (below).
       - name: TruffleHog Secret Scan (PR Diff)
         id: trufflehog_pr
         if: (success() || failure()) && github.event_name == 'pull_request'
@@ -52,14 +54,16 @@ jobs:
           head: HEAD
           extra_args: --debug --only-verified
 
-      # TruffleHog Full History Mode (Schedule / Manual Dispatch)
+      # TruffleHog Full History Mode (Schedule / Manual Dispatch).
+      # --exclude-paths applies only here: weekly history scans hit Lob FPs on
+      # unittest names matching test_ + 35 chars (trufflesecurity/trufflehog#5184).
       - name: TruffleHog Secret Scan (Full History)
         id: trufflehog_full
         if: (success() || failure()) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11
         with:
           path: ./
-          extra_args: --debug --only-verified
+          extra_args: --debug --only-verified --exclude-paths .trufflehog-exclude.txt
 
       # Semgrep SAST — pass rules via -e only (do not also pass --config;
       # CLI --config overrides/ignores SEMGREP_RULES).
