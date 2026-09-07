@@ -10,6 +10,10 @@
  * - Options objects (not positional parameters): the three inline factories
  *   each had a different positional signature, which is exactly why they
  *   diverged. Named options keep call sites self-documenting.
+ * - Defaults mirror the pipeline/OpenAPI happy path (`durationMs: 200000`,
+ *   `artistId: artist-<id>`). Analysis-style tests that assert on durations
+ *   or ReccoBeats artist-href joins must pass explicit `artistId` /
+ *   `durationMs` (all current call sites do).
  * - ReccoBeats payloads stay per-test: the `/v1/track` metadata arrays differ
  *   between callers in semantically meaningful ways (artist href join keys),
  *   so only the mock *structure* is shared. The audio-features arrays were
@@ -24,7 +28,6 @@ export interface SpotifyTrackFixtureOptions {
   name?: string;
   artistId?: string;
   artistName?: string;
-  albumId?: string;
   durationMs?: number;
 }
 
@@ -33,7 +36,6 @@ export const createSpotifyTrack = (options: SpotifyTrackFixtureOptions = {}): Sp
     id = 'track1',
     artistId = `artist-${id}`,
     artistName = `Artist ${id}`,
-    albumId = `album-${id}`,
     durationMs = 200000,
   } = options;
   return {
@@ -48,7 +50,7 @@ export const createSpotifyTrack = (options: SpotifyTrackFixtureOptions = {}): Sp
       },
     ],
     album: {
-      id: albumId,
+      id: `album-${id}`,
       name: `Album ${id}`,
       artists: [],
       images: [],

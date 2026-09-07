@@ -2,8 +2,9 @@
  * Shared Hono route-test setup for backend tests.
  *
  * Centralizes the `app = new Hono(); app.route(…)` + `SESSIONS_KV` stub +
- * `Bearer test-jwt-token` request boilerplate copy-pasted across the route
- * test files (`analysis.test.ts`, `spotify.test.ts`, `export*.test.ts`).
+ * `Bearer test-jwt-token` request boilerplate previously copy-pasted across
+ * route test files (migrated: `analysis.test.ts`, `spotify.test.ts`; the same
+ * pattern also exists in `export*.test.ts` — follow-up, not yet migrated).
  *
  * NOTE on `vi.mock('../middleware/auth', …)`: those blocks intentionally stay
  * inline in each test file. `vi.mock` factories are hoisted above imports, so
@@ -19,6 +20,12 @@ import { createTestEnv } from './env';
 
 /** JWT convention used by every route test (`Authorization: Bearer …`). */
 export const TEST_JWT_TOKEN = 'test-jwt-token';
+
+/**
+ * Authenticated `Request` for route tests. Caller-provided headers win; tests
+ * that need absent/invalid auth (e.g. 401 paths) should build a raw `Request`
+ * instead of using this helper.
+ */
 
 export const buildAuthenticatedRequest = (path: string, init: RequestInit = {}): Request => {
   const headers = new Headers(init.headers);
