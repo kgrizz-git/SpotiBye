@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AnalysisJobService } from '../services/analysis-job';
-import { AnalysisStatusStore } from '../services/analysis-status-object';
-import { SpotifyService } from '../services/spotify';
-import { kvNamespace, envWithKv } from './helpers/kv';
-import { createReccoBeatsFetchMock, createSpotifyArtist, createSpotifyTrack } from './helpers/spotify';
-import type { AnalysisQueueMessage } from '../types/analysis-queue';
+import { runAnalysisPipeline } from './helpers/analysis-job';
+import { createSpotifyArtist, createSpotifyTrack, defaultReccoBeatsTrackMetadata } from './helpers/spotify';
 import type { AnalysisResult } from '../types/analysis';
 
 afterEach(() => {
@@ -14,70 +10,20 @@ afterEach(() => {
 
 describe('AnalysisJobService end-to-end pipeline', () => {
   it('populates KV with a full AnalysisResult including ReccoBeats enrichment', async () => {
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 2,
-      rawCount: 2,
-      items: [
-        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1' }) },
-        { added_by: null, track: createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2' }) },
+    const { outcome, resultsRaw, statusStore } = await runAnalysisPipeline({
+      tracks: [
+        createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1' }),
+        createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2' }),
       ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([
-      createSpotifyArtist('artist1', 'Artist 1'),
-      createSpotifyArtist('artist2', 'Artist 2'),
-    ]);
-
-    const fetchMock = createReccoBeatsFetchMock({
-      trackMetadata: [
-        {
-          id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
-          artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/artist1' }],
-          durationMs: 200000, isrc: 'ISRC1', popularity: 55,
-        },
-        {
-          id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
-          artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/artist2' }],
-          durationMs: 200000, popularity: 75,
-        },
+      artists: [
+        createSpotifyArtist('artist1', 'Artist 1'),
+        createSpotifyArtist('artist2', 'Artist 2'),
       ],
+      trackMetadata: defaultReccoBeatsTrackMetadata(),
     });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const resultsKey = 'analysis:playlist1:user1:results';
-    const cacheKv = kvNamespace();
-    const sessionsKv = kvNamespace({
-      session1: {
-        user_id: 'user1',
-        access_token: 'token',
-        refresh_token: 'refresh',
-        expires_at: Date.now() + 3_600_000,
-      },
-    });
-
-    const message: AnalysisQueueMessage = {
-      job_id: 'job1',
-      playlist_id: 'playlist1',
-      user_id: 'user1',
-      session_id: 'session1',
-      enqueued_at: new Date().toISOString(),
-      attempt: 0,
-    };
-
-    const env = envWithKv(cacheKv, sessionsKv);
-    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
-    await statusStore.writeStatus('user1', 'playlist1', {
-      job_id: 'job1',
-      playlist_id: 'playlist1',
-      user_id: 'user1',
-      status: 'queued',
-      progress: 0,
-    });
-    const service = new AnalysisJobService(env);
-    const outcome = await service.process(message);
 
     expect(outcome).toEqual({ acknowledged: true, reason: 'completed' });
 
-    const resultsRaw = await cacheKv.get(resultsKey);
     expect(resultsRaw).not.toBeNull();
     const result = JSON.parse(resultsRaw as string) as AnalysisResult;
 

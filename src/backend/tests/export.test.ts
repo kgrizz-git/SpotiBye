@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { exportRoutes } from '../routes/export';
 import type { Env } from '../types/env';
-import { createTestEnv } from './helpers/env';
+import { setupRouteContext } from './helpers/hono';
 
 // Mock the services
 vi.mock('../services/export', () => ({
@@ -179,13 +179,9 @@ describe('Export Routes', () => {
   let mockEnv: Env;
 
   beforeEach(() => {
-    app = new Hono<{ Bindings: Env }>();
-    app.route('/export', exportRoutes);
-
     const cacheStore = new Map<string, string>();
 
-    mockEnv = {
-      ...createTestEnv(),
+    ({ app, env: mockEnv } = setupRouteContext('/export', exportRoutes, {
       CACHE_KV: {
         get: vi.fn().mockImplementation(async (key: string) => cacheStore.get(key) ?? null),
         put: vi.fn().mockImplementation(async (key: string, value: string) => {
@@ -193,19 +189,9 @@ describe('Export Routes', () => {
         }),
         delete: vi.fn().mockImplementation(async (key: string) => {
           cacheStore.delete(key);
-        })
-      } as any,
-      SESSIONS_KV: {
-        get: vi.fn().mockResolvedValue(JSON.stringify({
-          user_id: 'test-user-id',
-          access_token: 'test-access-token',
-          refresh_token: 'test-refresh-token',
-          expires_at: Date.now() + 3600000,
-        })),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined)
-      } as any,
-    };
+        }),
+      } as unknown as KVNamespace,
+    }));
   });
 
   describe('POST /export/playlist/:id', () => {

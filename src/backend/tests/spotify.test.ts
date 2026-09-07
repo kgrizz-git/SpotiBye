@@ -74,16 +74,17 @@ describe('Spotify Routes', () => {
     ({ app, env: mockEnv } = setupRouteContext('/spotify', spotifyRoutes));
   });
 
+  const getJson = async (path: string): Promise<{ status: number; data: any }> => {
+    const request = buildAuthenticatedRequest(path, { method: 'GET' });
+    const response = await app.request(request, undefined, mockEnv);
+    return { status: response.status, data: (await response.json()) as any };
+  };
+
   describe('GET /spotify/playlists', () => {
     it('should return user playlists', async () => {
-      const request = buildAuthenticatedRequest('/spotify/playlists', {
-        method: 'GET',
-      });
+      const { status, data } = await getJson('/spotify/playlists');
 
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
+      expect(status).toBe(200);
       expect(Array.isArray(data.data)).toBe(true);
       expect(data.data[0]).toHaveProperty('id');
       expect(data.data[0]).toHaveProperty('name');
@@ -127,14 +128,9 @@ describe('Spotify Routes', () => {
         } as any
       );
 
-      const request = buildAuthenticatedRequest('/spotify/playlists', {
-        method: 'GET',
-      });
+      const { status, data } = await getJson('/spotify/playlists');
 
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
+      expect(status).toBe(200);
       expect(Array.isArray(data.data)).toBe(true);
       expect(data.data.length).toBe(51);
       expect(mockGetUserPlaylists).toHaveBeenCalledTimes(2);
@@ -145,27 +141,17 @@ describe('Spotify Routes', () => {
 
   describe('GET /spotify/playlists/:id', () => {
     it('should return playlist details', async () => {
-      const request = buildAuthenticatedRequest('/spotify/playlists/playlist1', {
-        method: 'GET',
-      });
+      const { status, data } = await getJson('/spotify/playlists/playlist1');
 
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
+      expect(status).toBe(200);
       expect(data.data).toHaveProperty('id', 'playlist1');
       expect(data.data).toHaveProperty('name');
     });
 
     it('should return playlist details for requested id', async () => {
-      const request = buildAuthenticatedRequest('/spotify/playlists/nonexistent', {
-        method: 'GET',
-      });
+      const { status, data } = await getJson('/spotify/playlists/nonexistent');
 
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
+      expect(status).toBe(200);
       expect(data.data).toHaveProperty('id', 'playlist1');
     });
 
@@ -173,15 +159,9 @@ describe('Spotify Routes', () => {
       const kvGet = mockEnv.CACHE_KV.get as ReturnType<typeof vi.fn>;
       kvGet.mockClear();
 
-      const request = buildAuthenticatedRequest(
-        '/spotify/playlists/playlist1?force_refresh=true',
-        { method: 'GET' },
-      );
+      const { status, data } = await getJson('/spotify/playlists/playlist1?force_refresh=true');
 
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
+      expect(status).toBe(200);
       expect(kvGet).not.toHaveBeenCalled();
       expect(data.meta.cached).toBe(false);
     });
@@ -189,14 +169,9 @@ describe('Spotify Routes', () => {
 
   describe('GET /spotify/playlists/:id/tracks', () => {
     it('should return playlist tracks', async () => {
-      const request = buildAuthenticatedRequest('/spotify/playlists/playlist1/tracks', {
-        method: 'GET',
-      });
+      const { status, data } = await getJson('/spotify/playlists/playlist1/tracks');
 
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
+      expect(status).toBe(200);
       expect(data.data).toHaveProperty('items');
       expect(Array.isArray(data.data.items)).toBe(true);
       expect(data.data.items[0]).toHaveProperty('track');
@@ -207,22 +182,13 @@ describe('Spotify Routes', () => {
       const kvGet = mockEnv.CACHE_KV.get as ReturnType<typeof vi.fn>;
       kvGet.mockClear();
 
-      const warmRequest = buildAuthenticatedRequest('/spotify/playlists/playlist1/tracks', {
-        method: 'GET',
-      });
-      await app.request(warmRequest, undefined, mockEnv);
+      await getJson('/spotify/playlists/playlist1/tracks');
       expect(kvGet).toHaveBeenCalled();
 
       kvGet.mockClear();
-      const request = buildAuthenticatedRequest(
-        '/spotify/playlists/playlist1/tracks?force_refresh=true',
-        { method: 'GET' },
-      );
+      const { status, data } = await getJson('/spotify/playlists/playlist1/tracks?force_refresh=true');
 
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
+      expect(status).toBe(200);
       expect(kvGet).not.toHaveBeenCalled();
       expect(data.meta.cached).toBe(false);
     });
@@ -230,14 +196,9 @@ describe('Spotify Routes', () => {
 
   describe('GET /spotify/tracks/:id', () => {
     it('should return track details', async () => {
-      const request = buildAuthenticatedRequest('/spotify/tracks/track1', {
-        method: 'GET',
-      });
+      const { status, data } = await getJson('/spotify/tracks/track1');
 
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
+      expect(status).toBe(200);
       expect(data.data).toHaveProperty('id', 'track1');
       expect(data.data).toHaveProperty('name');
     });

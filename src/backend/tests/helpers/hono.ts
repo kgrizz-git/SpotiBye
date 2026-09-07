@@ -46,7 +46,8 @@ export interface RouteTestContext {
 /**
  * Fresh Hono app with `routes` mounted plus an env whose `SESSIONS_KV`
  * returns a canned session for `test-user-id`. Callers that need more
- * (e.g. an `AnalysisStatusStore`) build it from the returned `env`.
+ * (e.g. an `AnalysisStatusStore`, or a stateful `CACHE_KV` as in the export
+ * tests) build it from the returned `env` or pass `envOverrides`.
  */
 export const setupRouteContext = <
   SubEnv extends HonoEnv,
@@ -55,6 +56,7 @@ export const setupRouteContext = <
 >(
   mountPath: string,
   routes: Hono<SubEnv, SubSchema, SubBasePath>,
+  envOverrides: Partial<Env> = {},
 ): RouteTestContext => {
   const app = new Hono<{ Bindings: Env }>();
   app.route(mountPath, routes);
@@ -72,6 +74,7 @@ export const setupRouteContext = <
       put: vi.fn().mockResolvedValue(undefined),
       delete: vi.fn().mockResolvedValue(undefined),
     } as unknown as KVNamespace,
+    ...envOverrides,
   };
   return { app, env };
 };

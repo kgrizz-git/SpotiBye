@@ -21,6 +21,7 @@
  * - No shared mutable state: every helper returns a fresh object / mock.
  */
 import { vi } from 'vitest';
+import { SpotifyService } from '../../services/spotify';
 import type { SpotifyArtistFull, SpotifyTrack } from '../../types/spotify';
 
 export interface SpotifyTrackFixtureOptions {
@@ -76,6 +77,50 @@ export const createSpotifyArtist = (id: string, name: string): SpotifyArtistFull
   external_urls: { spotify: `https://open.spotify.com/artist/${id}` },
   uri: `spotify:artist:${id}`,
 });
+
+/**
+ * Stubs `SpotifyService` playlist-track and artist lookups for a fixed track
+ * list. `total`/`rawCount` always equal `tracks.length` and every item uses
+ * `added_by: null` (the only shape analysis tests need; pagination tests with
+ * per-page totals mock the service directly).
+ */
+export const mockPlaylistTracks = (
+  tracks: SpotifyTrack[],
+  artists: SpotifyArtistFull[] | Error = [],
+): void => {
+  vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
+    total: tracks.length,
+    rawCount: tracks.length,
+    items: tracks.map((track) => ({ added_by: null, track })),
+  });
+  const artistsSpy = vi.spyOn(SpotifyService.prototype, 'getArtists');
+  if (artists instanceof Error) {
+    artistsSpy.mockRejectedValue(artists);
+  } else {
+    artistsSpy.mockResolvedValue(artists);
+  }
+};
+
+/** Track-metadata payload shared verbatim by the pipeline and OpenAPI tests. */
+export const defaultReccoBeatsTrackMetadata = (): unknown[] => [
+  {
+    id: 'm1',
+    href: 'https://open.spotify.com/track/track1',
+    trackTitle: 'Track 1',
+    artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/artist1' }],
+    durationMs: 200000,
+    isrc: 'ISRC1',
+    popularity: 55,
+  },
+  {
+    id: 'm2',
+    href: 'https://open.spotify.com/track/track2',
+    trackTitle: 'Track 2',
+    artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/artist2' }],
+    durationMs: 200000,
+    popularity: 75,
+  },
+];
 
 /** Audio-features payload shared verbatim by the pipeline and OpenAPI tests. */
 export const defaultReccoBeatsAudioFeatures = (): unknown[] => [
