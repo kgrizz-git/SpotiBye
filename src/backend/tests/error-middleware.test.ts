@@ -6,32 +6,51 @@ import { AuthRequiredException } from '../types/errors';
 import type { Env } from '../types/env';
 import { createTestEnv } from './helpers/env';
 
+const setupErrorApp = (): { app: Hono<{ Bindings: Env }>; env: Env } => {
+  const app = new Hono<{ Bindings: Env }>();
+  app.onError(errorHandler);
+  return { app, env: createTestEnv() };
+};
+
+const runErrorRequest = async (app: Hono<{ Bindings: Env }>, env: Env) => {
+  const res = await app.request(new Request('http://localhost/test'), undefined, env);
+  return {
+    status: res.status,
+    body: (await res.json()) as { error: { code: string; message: string } },
+  };
+};
+
+/** Registers `/test` to throw a named error (the mapping depends on name + code, never message). */
+const throwNamedError = (
+  app: Hono<{ Bindings: Env }>,
+  name: string,
+  message: string,
+  code?: string,
+): void => {
+  app.get('/test', () => {
+    const err = new Error(message) as Error & { code?: string };
+    err.name = name;
+    if (code !== undefined) {
+      err.code = code;
+    }
+    throw err;
+  });
+};
+
 describe('errorHandler discriminator strengthening (BL-6)', () => {
   let app: Hono<{ Bindings: Env }>;
   let env: Env;
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    app = new Hono<{ Bindings: Env }>();
-    app.onError(errorHandler);
-    env = createTestEnv();
+    ({ app, env } = setupErrorApp());
   });
 
-  const runRequest = async () => {
-    const res = await app.request(new Request('http://localhost/test'), undefined, env);
-    return {
-      status: res.status,
-      body: (await res.json()) as { error: { code: string; message: string } },
-    };
-  };
+  const runRequest = () => runErrorRequest(app, env);
 
   it('does not map a 3rd-party ValidationError to 400 (no code discriminator)', async () => {
-    app.get('/test', () => {
-      // 3rd-party style: name is ValidationError but no code field
-      const err = new Error('something failed');
-      err.name = 'ValidationError';
-      throw err;
-    });
+    // 3rd-party style: name is ValidationError but no code field
+    throwNamedError(app, 'ValidationError', 'something failed');
 
     const { status, body } = await runRequest();
     expect(status).toBe(500);
@@ -39,12 +58,7 @@ describe('errorHandler discriminator strengthening (BL-6)', () => {
   });
 
   it('maps ValidationError with code=SCHEMA_VALIDATION to 400 (regex discriminator)', async () => {
-    app.get('/test', () => {
-      const err = new Error('schema validation failed') as Error & { code: string };
-      err.name = 'ValidationError';
-      err.code = 'SCHEMA_VALIDATION';
-      throw err;
-    });
+    throwNamedError(app, 'ValidationError', 'schema validation failed', 'SCHEMA_VALIDATION');
 
     const { status, body } = await runRequest();
     expect(status).toBe(400);
@@ -52,11 +66,7 @@ describe('errorHandler discriminator strengthening (BL-6)', () => {
   });
 
   it('does not map a 3rd-party UnauthorizedError without a code to 401', async () => {
-    app.get('/test', () => {
-      const err = new Error('auth failed');
-      err.name = 'UnauthorizedError';
-      throw err;
-    });
+    throwNamedError(app, 'UnauthorizedError', 'auth failed');
 
     const { status, body } = await runRequest();
     expect(status).toBe(500);
@@ -64,12 +74,7 @@ describe('errorHandler discriminator strengthening (BL-6)', () => {
   });
 
   it('maps UnauthorizedError with code=UNAUTHORIZED to 401', async () => {
-    app.get('/test', () => {
-      const err = new Error('unauthorized') as Error & { code: string };
-      err.name = 'UnauthorizedError';
-      err.code = 'UNAUTHORIZED';
-      throw err;
-    });
+    throwNamedError(app, 'UnauthorizedError', 'unauthorized', 'UNAUTHORIZED');
 
     const { status, body } = await runRequest();
     expect(status).toBe(401);
@@ -77,23 +82,14 @@ describe('errorHandler discriminator strengthening (BL-6)', () => {
   });
 
   it('does not map a 3rd-party ForbiddenError without a code to 403', async () => {
-    app.get('/test', () => {
-      const err = new Error('forbidden');
-      err.name = 'ForbiddenError';
-      throw err;
-    });
+    throwNamedError(app, 'ForbiddenError', 'forbidden');
 
     const { status } = await runRequest();
     expect(status).toBe(500);
   });
 
   it('maps ForbiddenError with code=FORBIDDEN to 403', async () => {
-    app.get('/test', () => {
-      const err = new Error('forbidden') as Error & { code: string };
-      err.name = 'ForbiddenError';
-      err.code = 'FORBIDDEN';
-      throw err;
-    });
+    throwNamedError(app, 'ForbiddenError', 'forbidden', 'FORBIDDEN');
 
     const { status, body } = await runRequest();
     expect(status).toBe(403);
@@ -101,23 +97,14 @@ describe('errorHandler discriminator strengthening (BL-6)', () => {
   });
 
   it('does not map a 3rd-party NotFoundError without a code to 404', async () => {
-    app.get('/test', () => {
-      const err = new Error('not found');
-      err.name = 'NotFoundError';
-      throw err;
-    });
+    throwNamedError(app, 'NotFoundError', 'not found');
 
     const { status } = await runRequest();
     expect(status).toBe(500);
   });
 
   it('maps NotFoundError with code=NOT_FOUND to 404', async () => {
-    app.get('/test', () => {
-      const err = new Error('not found') as Error & { code: string };
-      err.name = 'NotFoundError';
-      err.code = 'NOT_FOUND';
-      throw err;
-    });
+    throwNamedError(app, 'NotFoundError', 'not found', 'NOT_FOUND');
 
     const { status, body } = await runRequest();
     expect(status).toBe(404);
@@ -125,9 +112,7 @@ describe('errorHandler discriminator strengthening (BL-6)', () => {
   });
 
   it('falls back to 500 for plain Error (no name match)', async () => {
-    app.get('/test', () => {
-      throw new Error('plain error');
-    });
+    throwNamedError(app, 'Error', 'plain error');
 
     const { status, body } = await runRequest();
     expect(status).toBe(500);
@@ -141,18 +126,10 @@ describe('errorHandler HTTPException branch (status code lookup table)', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    app = new Hono<{ Bindings: Env }>();
-    app.onError(errorHandler);
-    env = createTestEnv();
+    ({ app, env } = setupErrorApp());
   });
 
-  const runRequest = async () => {
-    const res = await app.request(new Request('http://localhost/test'), undefined, env);
-    return {
-      status: res.status,
-      body: (await res.json()) as { error: { code: string; message: string } },
-    };
-  };
+  const runRequest = () => runErrorRequest(app, env);
 
   it.each([
     { status: 401, code: 'UNAUTHORIZED', message: 'bad token' },

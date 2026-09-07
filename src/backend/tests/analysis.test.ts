@@ -6,9 +6,9 @@ import { SpotifyService } from '../services/spotify';
 import { CacheService } from '../services/cache';
 import { AnalysisStatusStore } from '../services/analysis-status-object';
 import type { Env } from '../types/env';
-import type { SpotifyTrack } from '../types/spotify';
-import { createTestEnv } from './helpers/env';
 import { kvNamespace } from './helpers/kv';
+import { createSpotifyTrack, mockPlaylistTracks } from './helpers/spotify';
+import { buildAuthenticatedRequest, setupRouteContext } from './helpers/hono';
 
 vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation((c, next) => {
@@ -25,40 +25,6 @@ vi.mock('../middleware/auth', () => ({
   })
 }));
 
-const spotifyTrack = (
-  id: string,
-  artistId: string,
-  artistName: string,
-  durationMs: number
-): SpotifyTrack => ({
-  id,
-  name: `Track ${id}`,
-  artists: [
-    {
-      id: artistId,
-      name: artistName,
-      external_urls: { spotify: `https://open.spotify.com/artist/${artistId}` },
-      uri: `spotify:artist:${artistId}`,
-    },
-  ],
-  album: {
-    id: `album-${id}`,
-    name: `Album ${id}`,
-    artists: [],
-    images: [],
-    release_date: '2026-01-01',
-    total_tracks: 1,
-    external_urls: { spotify: `https://open.spotify.com/album/${id}` },
-    uri: `spotify:album:${id}`,
-  },
-  duration_ms: durationMs,
-  explicit: false,
-  popularity: 50,
-  external_urls: { spotify: `https://open.spotify.com/track/${id}` },
-  uri: `spotify:track:${id}`,
-  preview_url: null,
-});
-
 describe('AnalysisService', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(async () => (
@@ -74,21 +40,45 @@ describe('AnalysisService', () => {
     vi.restoreAllMocks();
   });
 
+  /** Stubs `fetch` with a canned body (used for error-path ReccoBeats responses). */
+  const stubFetchBody = (body: BodyInit, init?: ResponseInit): void => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(body, init)),
+    );
+  };
+
+  const jsonResponse = (content: unknown): Response =>
+    new Response(JSON.stringify({ content }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  /**
+   * Two-branch ReccoBeats stub (`/v1/track` vs `/v1/audio-features`) with
+   * per-test payloads. Returns the mock for call-count assertions.
+   */
+  const stubReccoBeatsFetch = (
+    trackResponse: (url: URL) => Response | Promise<Response>,
+    audioResponse: (url: URL) => Response | Promise<Response>,
+  ) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/v1/track') {
+        return trackResponse(url);
+      }
+      return audioResponse(url);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  };
+
   it('completes playlist analysis without genre data when Spotify artist metadata fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 1,
-      rawCount: 1,
-      items: [
-        {
-          added_by: null,
-          track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000),
-        },
-      ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockRejectedValue(
-      new Error('HTTP 403: Forbidden')
+    mockPlaylistTracks(
+      [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 })],
+      new Error('HTTP 403: Forbidden'),
     );
 
     const service = new AnalysisService('access-token');
@@ -118,16 +108,12 @@ describe('AnalysisService', () => {
   });
 
   it('keeps successful Spotify artist genres when one artist metadata lookup returns 404', async () => {
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 2,
-      rawCount: 2,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist404', 'Missing Artist', 180000) },
+    mockPlaylistTracks(
+      [
+        createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 }),
+        createSpotifyTrack({ id: 'track2', artistId: 'artist404', artistName: 'Missing Artist', durationMs: 180000 }),
       ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockRejectedValue(
-      new Error('HTTP 404: {"error":{"status":404,"message":"Resource not found"}}')
+      new Error('HTTP 404: {"error":{"status":404,"message":"Resource not found"}}'),
     );
     vi.spyOn(SpotifyService.prototype, 'getArtist')
       .mockResolvedValueOnce({
@@ -158,15 +144,12 @@ describe('AnalysisService', () => {
   });
 
   it('records a ReccoBeats coverage warning when audio features are unavailable for every track', async () => {
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 2,
-      rawCount: 2,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 180000) },
+    mockPlaylistTracks(
+      [
+        createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 }),
+        createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 180000 }),
       ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    );
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -183,18 +166,13 @@ describe('AnalysisService', () => {
   });
 
   it('does not expose null or blank artist names in top artists', async () => {
-    const trackWithInvalidArtists = spotifyTrack('track1', 'artist1', 'Artist 1', 180000);
+    const trackWithInvalidArtists = createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 });
     trackWithInvalidArtists.artists = [
       { id: 'artist1', name: 'Artist 1', external_urls: { spotify: 'https://open.spotify.com/artist/artist1' }, uri: 'spotify:artist:artist1' },
       { id: 'artist-null', name: null as unknown as string, external_urls: { spotify: 'https://open.spotify.com/artist/artist-null' }, uri: 'spotify:artist:artist-null' },
       { id: 'artist-blank', name: '   ', external_urls: { spotify: 'https://open.spotify.com/artist/artist-blank' }, uri: 'spotify:artist:artist-blank' },
     ];
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 1,
-      rawCount: 1,
-      items: [{ added_by: null, track: trackWithInvalidArtists }],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    mockPlaylistTracks([trackWithInvalidArtists]);
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -212,7 +190,7 @@ describe('AnalysisService', () => {
         items: [
           {
             added_by: null,
-            track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000),
+            track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }),
           },
         ],
       })
@@ -222,7 +200,7 @@ describe('AnalysisService', () => {
         items: [
           {
             added_by: null,
-            track: spotifyTrack('track2', 'artist2', 'Artist 2', 240000),
+            track: createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 240000 }),
           },
         ],
       });
@@ -285,15 +263,12 @@ describe('AnalysisService', () => {
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
     vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 2,
-      rawCount: 2,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 240000) },
+    mockPlaylistTracks(
+      [
+        createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }),
+        createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 240000 }),
       ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    );
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -317,20 +292,13 @@ describe('AnalysisService', () => {
 
   it('keeps Spotify analysis results when ReccoBeats audio features fail', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    vi.stubGlobal('fetch', vi.fn(async () => (
-      new Response('temporarily unavailable', {
-        status: 503,
-        statusText: 'Service Unavailable',
-      })
-    )));
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 1,
-      rawCount: 1,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
-      ],
+    stubFetchBody('temporarily unavailable', {
+      status: 503,
+      statusText: 'Service Unavailable',
     });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    mockPlaylistTracks(
+      [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 })],
+    );
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -359,116 +327,80 @@ describe('AnalysisService', () => {
     );
   });
 
-  it('logs a body preview when ReccoBeats returns invalid JSON', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    vi.stubGlobal('fetch', vi.fn(async () => (
-      new Response('<html>blocked</html>', {
+  it.each([
+    {
+      name: 'invalid JSON',
+      fetchBody: '<html>blocked</html>',
+      fetchHeaders: { 'Content-Type': 'text/html' },
+      audioError: 'Invalid ReccoBeats audio-features response JSON',
+      trackError: 'Invalid ReccoBeats track response JSON',
+      audioWarnMessage: 'Invalid ReccoBeats JSON response',
+      trackWarnMessage: 'Invalid ReccoBeats JSON response',
+      bodyPreview: '<html>blocked</html>',
+    },
+    {
+      name: 'an invalid response shape',
+      fetchBody: JSON.stringify({ error: 'blocked' }),
+      fetchHeaders: { 'Content-Type': 'application/json' },
+      audioError: 'Invalid ReccoBeats audio features response shape',
+      trackError: 'Invalid ReccoBeats track metadata response shape',
+      audioWarnMessage: 'Invalid ReccoBeats audio features response shape',
+      trackWarnMessage: 'Invalid ReccoBeats track metadata response shape',
+      bodyPreview: '{"error":"blocked"}',
+    },
+  ])(
+    'logs a body preview when ReccoBeats returns $name',
+    async ({ fetchBody, fetchHeaders, audioError, trackError, audioWarnMessage, trackWarnMessage, bodyPreview }) => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      stubFetchBody(fetchBody, {
         status: 200,
-        headers: { 'Content-Type': 'text/html' },
-      })
-    )));
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 1,
-      rawCount: 1,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
-      ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+        headers: fetchHeaders,
+      });
+      mockPlaylistTracks(
+        [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 })],
+      );
 
-    const service = new AnalysisService('access-token');
-    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
+      const service = new AnalysisService('access-token');
+      const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
 
-    expect(result.status).toBe('completed');
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
+      expect(result.status).toBe('completed');
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            source: 'reccobeats:audio-features',
+            message: audioError,
+          }),
+          expect.objectContaining({
+            source: 'reccobeats:track-metadata',
+            message: trackError,
+          }),
+        ])
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        audioWarnMessage,
         expect.objectContaining({
-          source: 'reccobeats:audio-features',
-          message: 'Invalid ReccoBeats audio-features response JSON',
-        }),
+          endpoint: 'audio-features',
+          status: 200,
+          batchSize: 1,
+          bodyPreview,
+        })
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        trackWarnMessage,
         expect.objectContaining({
-          source: 'reccobeats:track-metadata',
-          message: 'Invalid ReccoBeats track response JSON',
-        }),
-      ])
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Invalid ReccoBeats JSON response',
-      expect.objectContaining({
-        endpoint: 'audio-features',
-        status: 200,
-        batchSize: 1,
-        bodyPreview: '<html>blocked</html>',
-      })
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Invalid ReccoBeats JSON response',
-      expect.objectContaining({
-        endpoint: 'track',
-        status: 200,
-        batchSize: 1,
-        bodyPreview: '<html>blocked</html>',
-      })
-    );
-  });
-
-  it('logs a body preview when ReccoBeats JSON has an invalid response shape', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    vi.stubGlobal('fetch', vi.fn(async () => (
-      new Response(JSON.stringify({ error: 'blocked' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )));
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 1,
-      rawCount: 1,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
-      ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
-
-    const service = new AnalysisService('access-token');
-    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
-
-    expect(result.status).toBe('completed');
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          source: 'reccobeats:audio-features',
-          message: 'Invalid ReccoBeats audio features response shape',
-        }),
-        expect.objectContaining({
-          source: 'reccobeats:track-metadata',
-          message: 'Invalid ReccoBeats track metadata response shape',
-        }),
-      ])
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Invalid ReccoBeats audio features response shape',
-      expect.objectContaining({
-        endpoint: 'audio-features',
-        status: 200,
-        batchSize: 1,
-        bodyPreview: '{"error":"blocked"}',
-      })
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Invalid ReccoBeats track metadata response shape',
-      expect.objectContaining({
-        endpoint: 'track',
-        status: 200,
-        batchSize: 1,
-        bodyPreview: '{"error":"blocked"}',
-      })
-    );
-  });
+          endpoint: 'track',
+          status: 200,
+          batchSize: 1,
+          bodyPreview,
+        })
+      );
+    },
+  );
 
   it('chunks track IDs into batches of 30 and aggregates correct averages across batches', async () => {
     const tracksList = Array.from({ length: 75 }, (_, i) => ({
       added_by: null,
-      track: spotifyTrack(`track${i + 1}`, `artist${i + 1}`, `Artist ${i + 1}`, 120000),
+      track: createSpotifyTrack({ id: `track${i + 1}`, artistId: `artist${i + 1}`, artistName: `Artist ${i + 1}`, durationMs: 120000 }),
     }));
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -506,12 +438,7 @@ describe('AnalysisService', () => {
     });
 
     vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 75,
-      rawCount: 75,
-      items: tracksList,
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    mockPlaylistTracks(tracksList.map((item) => item.track));
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -557,7 +484,7 @@ describe('AnalysisService', () => {
   it('emits multiple monotonic progress updates during multi-group ReccoBeats enrichment', async () => {
     const tracksList = Array.from({ length: 120 }, (_, i) => ({
       added_by: null,
-      track: spotifyTrack(`track${i + 1}`, `artist${i + 1}`, `Artist ${i + 1}`, 120000),
+      track: createSpotifyTrack({ id: `track${i + 1}`, artistId: `artist${i + 1}`, artistName: `Artist ${i + 1}`, durationMs: 120000 }),
     }));
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -595,12 +522,7 @@ describe('AnalysisService', () => {
     });
 
     vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: tracksList.length,
-      rawCount: tracksList.length,
-      items: tracksList,
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    mockPlaylistTracks(tracksList.map((item) => item.track));
 
     const progressValues: number[] = [];
     const service = new AnalysisService('access-token');
@@ -643,16 +565,13 @@ describe('AnalysisService', () => {
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
     vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 3,
-      rawCount: 3,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
-        { added_by: null, track: spotifyTrack('track3', 'artist3', 'Artist 3', 120000) },
+    mockPlaylistTracks(
+      [
+        createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }),
+        createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 120000 }),
+        createSpotifyTrack({ id: 'track3', artistId: 'artist3', artistName: 'Artist 3', durationMs: 120000 }),
       ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    );
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -667,40 +586,28 @@ describe('AnalysisService', () => {
   });
 
   it('omits key_mode_distribution when fewer than 2 tracks have a valid key/mode pair', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname === '/v1/track') {
-        return new Response(JSON.stringify({ content: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({
-        content: [
-          {
-            id: 'recco-1', href: 'https://open.spotify.com/track/track1',
-            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
-            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
-            key: 0, mode: 1,
-          },
-          {
-            id: 'recco-2', href: 'https://open.spotify.com/track/track2',
-            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
-            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
-          },
-        ],
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 2,
-      rawCount: 2,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
+    stubReccoBeatsFetch(
+      () => jsonResponse([]),
+      () => jsonResponse([
+        {
+          id: 'recco-1', href: 'https://open.spotify.com/track/track1',
+          acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+          liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+          key: 0, mode: 1,
+        },
+        {
+          id: 'recco-2', href: 'https://open.spotify.com/track/track2',
+          acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+          liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+        },
+      ]),
+    );
+    mockPlaylistTracks(
+      [
+        createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }),
+        createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 120000 }),
       ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    );
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -709,51 +616,40 @@ describe('AnalysisService', () => {
   });
 
   it('aggregates ReccoBeats track metadata into reccobeats_metadata (ISRC count, popularity range)', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname === '/v1/track') {
-        return new Response(JSON.stringify({
-          content: [
-            {
-              id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
-              artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/a1' }],
-              durationMs: 120000, isrc: 'ISRC1', popularity: 40,
-            },
-            {
-              id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
-              artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/a2' }],
-              durationMs: 120000, popularity: 80,
-            },
-          ],
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({
-        content: [
-          {
-            id: 'r1', href: 'https://open.spotify.com/track/track1',
-            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
-            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
-            isrc: 'ISRC1',
-          },
-          {
-            id: 'r2', href: 'https://open.spotify.com/track/track2',
-            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
-            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
-            isrc: null,
-          },
-        ],
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 2,
-      rawCount: 2,
-      items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
+    stubReccoBeatsFetch(
+      () => jsonResponse([
+        {
+          id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
+          artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/a1' }],
+          durationMs: 120000, isrc: 'ISRC1', popularity: 40,
+        },
+        {
+          id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
+          artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/a2' }],
+          durationMs: 120000, popularity: 80,
+        },
+      ]),
+      () => jsonResponse([
+        {
+          id: 'r1', href: 'https://open.spotify.com/track/track1',
+          acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+          liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+          isrc: 'ISRC1',
+        },
+        {
+          id: 'r2', href: 'https://open.spotify.com/track/track2',
+          acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+          liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+          isrc: null,
+        },
+      ]),
+    );
+    mockPlaylistTracks(
+      [
+        createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }),
+        createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 120000 }),
       ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    );
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -768,28 +664,19 @@ describe('AnalysisService', () => {
 
   it('records a partial error when ReccoBeats track metadata fails but audio features succeed', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname === '/v1/track') {
-        return new Response('boom', { status: 500, statusText: 'Internal Server Error' });
-      }
-      return new Response(JSON.stringify({
-        content: [
-          {
-            id: 'r1', href: 'https://open.spotify.com/track/track1',
-            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
-            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
-          },
-        ],
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 1,
-      rawCount: 1,
-      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    stubReccoBeatsFetch(
+      () => new Response('boom', { status: 500, statusText: 'Internal Server Error' }),
+      () => jsonResponse([
+        {
+          id: 'r1', href: 'https://open.spotify.com/track/track1',
+          acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+          liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+        },
+      ]),
+    );
+    mockPlaylistTracks(
+      [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 })],
+    );
 
     const service = new AnalysisService('access-token');
     const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
@@ -808,12 +695,9 @@ describe('AnalysisService', () => {
   it('serves ReccoBeats enrichment from the global per-track cache without fetching', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 1,
-      rawCount: 1,
-      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    mockPlaylistTracks(
+      [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 })],
+    );
 
     const cacheKv = kvNamespace({
       'global:reccobeats:audio-features:track1': {
@@ -845,31 +729,19 @@ describe('AnalysisService', () => {
   });
 
   it('writes fetched ReccoBeats enrichment to the global per-track cache', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname === '/v1/track') {
-        return new Response(JSON.stringify({ content: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({
-        content: [
-          {
-            id: 'r1', href: 'https://open.spotify.com/track/track1',
-            acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
-            liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
-          },
-        ],
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 1,
-      rawCount: 1,
-      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
+    stubReccoBeatsFetch(
+      () => jsonResponse([]),
+      () => jsonResponse([
+        {
+          id: 'r1', href: 'https://open.spotify.com/track/track1',
+          acousticness: 0.1, danceability: 0.1, energy: 0.1, instrumentalness: 0.1,
+          liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.1,
+        },
+      ]),
+    );
+    mockPlaylistTracks(
+      [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 })],
+    );
 
     const cacheKv = kvNamespace();
     const cache = new CacheService(cacheKv);
@@ -896,44 +768,66 @@ describe('Analysis Routes', () => {
   let statusStore: AnalysisStatusStore;
 
   beforeEach(() => {
-    app = new Hono<{ Bindings: Env }>();
-    app.route('/analysis', analysisRoutes);
-
-    mockEnv = {
-      ...createTestEnv(),
-      SESSIONS_KV: {
-        get: vi.fn().mockResolvedValue(JSON.stringify({
-          user_id: 'test-user-id',
-          access_token: 'test-access-token',
-          refresh_token: 'test-refresh-token',
-          expires_at: Date.now() + 3600000,
-        })),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined)
-      } as any,
-    };
+    ({ app, env: mockEnv } = setupRouteContext('/analysis', analysisRoutes));
     statusStore = new AnalysisStatusStore(mockEnv.ANALYSIS_STATUS);
   });
 
+  const seedStatus = (
+    jobId: string,
+    status: 'queued' | 'completed',
+    progress: number,
+    queuedAt?: string,
+  ): Promise<void> =>
+    statusStore.writeStatus('test-user-id', 'playlist1', {
+      job_id: jobId,
+      playlist_id: 'playlist1',
+      user_id: 'test-user-id',
+      status,
+      ...(queuedAt === undefined ? {} : { queued_at: queuedAt }),
+      progress,
+    });
+
+  /** Cached `AnalysisResult` JSON with per-test overrides (`undefined` drops a key). */
+  const createCachedAnalysisResult = (jobId: string, overrides: Record<string, unknown> = {}): string =>
+    JSON.stringify({
+      job_id: jobId,
+      playlist_id: 'playlist1',
+      user_id: 'test-user-id',
+      status: 'completed',
+      computed_at: '2026-01-01T00:00:00.000Z',
+      completed_at: '2026-01-01T00:00:01.000Z',
+      overview: { total_tracks: 2, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
+      artists: { unique_artists: 0, top_artists: [], diversity: 0 },
+      genre_distribution: {},
+      insights: [],
+      errors: [],
+      schema_version: '1.1',
+      unique_track_count: 2,
+      audio_features_resolved_count: 2,
+      track_metadata_resolved_count: 2,
+      enrichment_resolved_track_count: 2,
+      ...overrides,
+    });
+
+  const mockCachedResults = (jobId: string, overrides: Record<string, unknown> = {}): void => {
+    (mockEnv.CACHE_KV.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      createCachedAnalysisResult(jobId, overrides),
+    );
+  };
+
+  const postPlaylist = async (init?: RequestInit): Promise<Response> => {
+    const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
+      method: 'POST',
+      ...init,
+    });
+    return app.request(request, undefined, mockEnv);
+  };
+
   describe('POST /analysis/playlist/:id', () => {
     it('should start playlist analysis', async () => {
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
-      });
+      await seedStatus('test-job-id', 'queued', 0);
 
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'test-job-id',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'queued',
-        progress: 0,
-      });
-
-      const response = await app.request(request, undefined, mockEnv);
+      const response = await postPlaylist();
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
@@ -943,15 +837,8 @@ describe('Analysis Routes', () => {
 
     it('writes queued status and enqueues the analysis job without running analysis inline', async () => {
       const analyzeSpy = vi.spyOn(AnalysisService.prototype, 'analyzePlaylist');
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
-      });
 
-      const response = await app.request(request, undefined, mockEnv);
+      const response = await postPlaylist();
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
@@ -976,23 +863,9 @@ describe('Analysis Routes', () => {
     });
 
     it('returns existing queued status without enqueuing a duplicate job', async () => {
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'job-existing',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'queued',
-        queued_at: '2026-06-19T00:00:00.000Z',
-        progress: 0,
-      });
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
-      });
+      await seedStatus('job-existing', 'queued', 0, '2026-06-19T00:00:00.000Z');
 
-      const response = await app.request(request, undefined, mockEnv);
+      const response = await postPlaylist();
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
@@ -1003,24 +876,27 @@ describe('Analysis Routes', () => {
       expect(mockEnv.ANALYSIS_QUEUE.send).not.toHaveBeenCalled();
     });
 
-    it('re-enqueues a fresh job when completed status has no matching results (stale)', async () => {
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'job-old',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        progress: 100,
-      });
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(null);
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
-      });
+  it.each([
+    {
+      title: 're-enqueues a fresh job when completed status has no matching results (stale)',
+      cache: null as Record<string, unknown> | null,
+    },
+    {
+      title: 're-enqueues when completed results have incomplete enrichment coverage',
+      cache: {
+        audio_features_resolved_count: 1,
+        enrichment_resolved_track_count: 1,
+      } as Record<string, unknown> | null,
+    },
+  ])('$title', async ({ cache }) => {
+      await seedStatus('job-old', 'completed', 100);
+      if (cache === null) {
+        (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(null);
+      } else {
+        mockCachedResults('job-old', cache);
+      }
 
-      const response = await app.request(request, undefined, mockEnv);
+      const response = await postPlaylist();
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
@@ -1031,121 +907,29 @@ describe('Analysis Routes', () => {
     });
 
     it('re-enqueues a fresh job when completed results are missing schema_version (stale)', async () => {
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'job-old',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        progress: 100,
-      });
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
-          job_id: 'job-old',
-          playlist_id: 'playlist1',
-          user_id: 'test-user-id',
-          status: 'completed',
-          computed_at: '2026-01-01T00:00:00.000Z',
-          completed_at: '2026-01-01T00:00:01.000Z',
-          overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
-          artists: { unique_artists: 0, top_artists: [], diversity: 0 },
-          genre_distribution: {},
-          insights: [],
-          errors: [],
-        }));
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
+      await seedStatus('job-old', 'completed', 100);
+      mockCachedResults('job-old', {
+        overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
+        schema_version: undefined,
+        unique_track_count: undefined,
+        audio_features_resolved_count: undefined,
+        track_metadata_resolved_count: undefined,
+        enrichment_resolved_track_count: undefined,
       });
 
-      const response = await app.request(request, undefined, mockEnv);
+      const response = await postPlaylist();
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
       expect(data.data.status).toBe('queued');
-      expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalled();
-    });
-
-    it('re-enqueues when completed results have incomplete enrichment coverage', async () => {
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'job-old',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        progress: 100,
-      });
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
-        job_id: 'job-old',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        computed_at: '2026-01-01T00:00:00.000Z',
-        completed_at: '2026-01-01T00:00:01.000Z',
-        overview: { total_tracks: 2, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
-        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
-        genre_distribution: {},
-        insights: [],
-        errors: [],
-        schema_version: '1.1',
-        unique_track_count: 2,
-        audio_features_resolved_count: 1,
-        track_metadata_resolved_count: 2,
-        enrichment_resolved_track_count: 1,
-      }));
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
-      expect(data.data.status).toBe('queued');
-      expect(data.data.job_id).not.toBe('job-old');
-      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
       expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalled();
     });
 
     it('returns existing completed status when enrichment coverage is complete', async () => {
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'job-complete',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        progress: 100,
-      });
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
-        job_id: 'job-complete',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        computed_at: '2026-01-01T00:00:00.000Z',
-        completed_at: '2026-01-01T00:00:01.000Z',
-        overview: { total_tracks: 2, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
-        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
-        genre_distribution: {},
-        insights: [],
-        errors: [],
-        schema_version: '1.1',
-        unique_track_count: 2,
-        audio_features_resolved_count: 2,
-        track_metadata_resolved_count: 2,
-        enrichment_resolved_track_count: 2,
-      }));
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
-      });
+      await seedStatus('job-complete', 'completed', 100);
+      mockCachedResults('job-complete');
 
-      const response = await app.request(request, undefined, mockEnv);
+      const response = await postPlaylist();
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
@@ -1154,41 +938,10 @@ describe('Analysis Routes', () => {
     });
 
     it('force_enrichment bypasses completed status and enqueues with flag', async () => {
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'job-complete',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        progress: 100,
-      });
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
-        job_id: 'job-complete',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        computed_at: '2026-01-01T00:00:00.000Z',
-        completed_at: '2026-01-01T00:00:01.000Z',
-        overview: { total_tracks: 2, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
-        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
-        genre_distribution: {},
-        insights: [],
-        errors: [],
-        schema_version: '1.1',
-        unique_track_count: 2,
-        audio_features_resolved_count: 2,
-        track_metadata_resolved_count: 2,
-        enrichment_resolved_track_count: 2,
-      }));
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ force_enrichment: true }),
-      });
+      await seedStatus('job-complete', 'completed', 100);
+      mockCachedResults('job-complete');
 
-      const response = await app.request(request, undefined, mockEnv);
+      const response = await postPlaylist({ body: JSON.stringify({ force_enrichment: true }) });
       const data = (await response.json()) as any;
 
       expect(response.status).toBe(200);
@@ -1201,23 +954,10 @@ describe('Analysis Routes', () => {
     });
 
     it('force_enrichment bypasses queued status without duplicate short-circuit', async () => {
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'job-existing',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'queued',
-        queued_at: '2026-06-19T00:00:00.000Z',
-        progress: 0,
-      });
-      const request = new Request(
-        'http://localhost/analysis/playlist/playlist1?force_enrichment=true',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer test-jwt-token',
-            'Content-Type': 'application/json',
-          },
-        },
+      await seedStatus('job-existing', 'queued', 0, '2026-06-19T00:00:00.000Z');
+      const request = buildAuthenticatedRequest(
+        '/analysis/playlist/playlist1?force_enrichment=true',
+        { method: 'POST' },
       );
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1232,12 +972,8 @@ describe('Analysis Routes', () => {
     });
 
     it('should return 400 for invalid playlist ID', async () => {
-      const request = new Request('http://localhost/analysis/playlist/', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1247,20 +983,10 @@ describe('Analysis Routes', () => {
 
   describe('GET /analysis/playlist/:id/status', () => {
     it('should return analysis status', async () => {
-      await statusStore.writeStatus('test-user-id', 'playlist1', {
-        job_id: 'test-job-id',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        progress: 100,
-      });
+      await seedStatus('test-job-id', 'completed', 100);
 
-      const request = new Request('http://localhost/analysis/playlist/playlist1/status', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/status', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1273,12 +999,8 @@ describe('Analysis Routes', () => {
     });
 
     it('should return 404 for non-existent analysis job', async () => {
-      const request = new Request('http://localhost/analysis/playlist/nonexistent/status', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/nonexistent/status', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1291,12 +1013,8 @@ describe('Analysis Routes', () => {
 
   describe('GET /analysis/playlist/:id/results', () => {
     it('should return analysis results', async () => {
-      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1307,11 +1025,7 @@ describe('Analysis Routes', () => {
     });
 
     it('should return results when cached', async () => {
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
-        job_id: 'test-job-id',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
+      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(createCachedAnalysisResult('test-job-id', {
         computed_at: '2026-06-19T00:00:00.000Z',
         completed_at: '2026-06-19T00:00:01.000Z',
         overview: {
@@ -1325,7 +1039,6 @@ describe('Analysis Routes', () => {
           diversity: 1,
           top_artists: [{ artist: 'Artist 1', count: 1 }],
         },
-        genre_distribution: {},
         audio_features: {
           track_count: 2,
           averages: {
@@ -1340,21 +1053,10 @@ describe('Analysis Routes', () => {
             valence: 0.6,
           },
         },
-        insights: [],
-        unique_track_count: 2,
-        audio_features_resolved_count: 2,
-        track_metadata_resolved_count: 2,
-        enrichment_resolved_track_count: 2,
-        errors: [],
-        schema_version: '1.1',
       }));
 
-      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1369,60 +1071,27 @@ describe('Analysis Routes', () => {
       expect(data.data).not.toHaveProperty('results');
     });
 
-    it('deletes both KV keys and returns 404 when cached results are missing schema_version (stale)', async () => {
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
-        job_id: 'test-job-id',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        computed_at: '2026-01-01T00:00:00.000Z',
-        completed_at: '2026-01-01T00:00:01.000Z',
+  it.each([
+    {
+      title: 'deletes both KV keys and returns 404 when cached results are missing schema_version (stale)',
+      schemaVersion: undefined as string | undefined,
+    },
+    {
+      title: 'deletes both KV keys and returns 404 when cached results use schema_version 1.0 (stale after 1.1 bump)',
+      schemaVersion: '1.0' as string | undefined,
+    },
+  ])('$title', async ({ schemaVersion }) => {
+      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(createCachedAnalysisResult('test-job-id', {
         overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
-        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
-        genre_distribution: {},
-        insights: [],
-        errors: [],
+        schema_version: schemaVersion,
+        unique_track_count: undefined,
+        audio_features_resolved_count: undefined,
+        track_metadata_resolved_count: undefined,
+        enrichment_resolved_track_count: undefined,
       }));
 
-      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(404);
-      expect(data.error).toHaveProperty('code', 'ANALYSIS_RESULTS_NOT_FOUND');
-      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
-      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:status');
-    });
-
-    it('deletes both KV keys and returns 404 when cached results use schema_version 1.0 (stale after 1.1 bump)', async () => {
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(JSON.stringify({
-        job_id: 'test-job-id',
-        playlist_id: 'playlist1',
-        user_id: 'test-user-id',
-        status: 'completed',
-        computed_at: '2026-01-01T00:00:00.000Z',
-        completed_at: '2026-01-01T00:00:01.000Z',
-        overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
-        artists: { unique_artists: 0, top_artists: [], diversity: 0 },
-        genre_distribution: {},
-        insights: [],
-        errors: [],
-        schema_version: '1.0',
-      }));
-
-      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
-        method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1437,12 +1106,8 @@ describe('Analysis Routes', () => {
 
   describe('DELETE /analysis/playlist/:id', () => {
     it('deletes user analysis results and legacy raw-enrichment key, not global per-track keys', async () => {
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'DELETE',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);

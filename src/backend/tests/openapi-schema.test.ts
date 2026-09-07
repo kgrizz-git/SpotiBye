@@ -13,12 +13,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { load } from 'js-yaml';
-import { AnalysisJobService } from '../services/analysis-job';
-import { AnalysisStatusStore } from '../services/analysis-status-object';
-import { SpotifyService } from '../services/spotify';
-import { kvNamespace, envWithKv } from './helpers/kv';
-import type { AnalysisQueueMessage } from '../types/analysis-queue';
-import type { SpotifyTrack } from '../types/spotify';
+import { runAnalysisPipeline } from './helpers/analysis-job';
+import { createSpotifyTrack, defaultReccoBeatsTrackMetadata } from './helpers/spotify';
 
 interface OpenApiDocument {
   paths: Record<string, unknown>;
@@ -61,35 +57,6 @@ function assertExampleKeysExist(example: unknown, actual: unknown, path: string)
   }
 }
 
-const track = (id: string): SpotifyTrack => ({
-  id,
-  name: `Track ${id}`,
-  artists: [
-    {
-      id: `artist-${id}`,
-      name: `Artist ${id}`,
-      external_urls: { spotify: `https://open.spotify.com/artist/artist-${id}` },
-      uri: `spotify:artist:artist-${id}`,
-    },
-  ],
-  album: {
-    id: `album-${id}`,
-    name: `Album ${id}`,
-    artists: [],
-    images: [],
-    release_date: '2026-01-01',
-    total_tracks: 1,
-    external_urls: { spotify: `https://open.spotify.com/album/${id}` },
-    uri: `spotify:album:${id}`,
-  },
-  duration_ms: 200000,
-  explicit: false,
-  popularity: 50,
-  external_urls: { spotify: `https://open.spotify.com/track/${id}` },
-  uri: `spotify:track:${id}`,
-  preview_url: null,
-});
-
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -97,101 +64,25 @@ afterEach(() => {
 
 describe('openapi.yaml AnalysisResultsResponse reconciliation', () => {
   it('the live analysis result contains every key-path from the spec example, and every required field', async () => {
-    vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
-      total: 2,
-      rawCount: 2,
-      items: [
-        { added_by: null, track: track('track1') },
-        { added_by: null, track: track('track2') },
-      ],
-    });
-    vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname === '/v1/track') {
-        return new Response(
-          JSON.stringify({
-            content: [
-              {
-                id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
-                artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/artist-track1' }],
-                durationMs: 200000, isrc: 'ISRC1', popularity: 55,
-              },
-              {
-                id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
-                artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/artist-track2' }],
-                durationMs: 200000, popularity: 75,
-              },
-            ],
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      return new Response(
-        JSON.stringify({
-          content: [
-            {
-              id: 'r1', href: 'https://open.spotify.com/track/track1',
-              acousticness: 0.1, danceability: 0.2, energy: 0.3, instrumentalness: 0.1,
-              liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.4,
-              key: 0, mode: 1, isrc: 'ISRC1',
-            },
-            {
-              id: 'r2', href: 'https://open.spotify.com/track/track2',
-              acousticness: 0.2, danceability: 0.3, energy: 0.4, instrumentalness: 0.2,
-              liveness: 0.2, loudness: -6, speechiness: 0.2, tempo: 110, valence: 0.5,
-              key: 0, mode: 1,
-            },
-          ],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
     const statusKey = 'analysis:playlist1:user1:status';
-    const resultsKey = 'analysis:playlist1:user1:results';
-    const cacheKv = kvNamespace({
-      [statusKey]: {
-        job_id: 'job1',
-        playlist_id: 'playlist1',
-        user_id: 'user1',
-        status: 'queued',
-        progress: 0,
+    const { resultsRaw } = await runAnalysisPipeline({
+      tracks: [
+        createSpotifyTrack({ id: 'track1' }),
+        createSpotifyTrack({ id: 'track2' }),
+      ],
+      artists: [],
+      trackMetadata: defaultReccoBeatsTrackMetadata(),
+      cacheSeed: {
+        [statusKey]: {
+          job_id: 'job1',
+          playlist_id: 'playlist1',
+          user_id: 'user1',
+          status: 'queued',
+          progress: 0,
+        },
       },
     });
-    const sessionsKv = kvNamespace({
-      session1: {
-        user_id: 'user1',
-        access_token: 'token',
-        refresh_token: 'refresh',
-        expires_at: Date.now() + 3_600_000,
-      },
-    });
 
-    const message: AnalysisQueueMessage = {
-      job_id: 'job1',
-      playlist_id: 'playlist1',
-      user_id: 'user1',
-      session_id: 'session1',
-      enqueued_at: new Date().toISOString(),
-      attempt: 0,
-    };
-
-    const env = envWithKv(cacheKv, sessionsKv);
-    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
-    await statusStore.writeStatus('user1', 'playlist1', {
-      job_id: 'job1',
-      playlist_id: 'playlist1',
-      user_id: 'user1',
-      status: 'queued',
-      progress: 0,
-    });
-    const service = new AnalysisJobService(env);
-    await service.process(message);
-
-    const resultsRaw = await cacheKv.get(resultsKey);
     const liveResult = JSON.parse(resultsRaw as string) as Record<string, unknown>;
 
     const spec = loadOpenApiSpec();
