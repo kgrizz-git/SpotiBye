@@ -163,13 +163,13 @@ vi.mock('../services/export', () => ({
 
 vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation((c, next) => {
-    // Mock authenticated user
+    // Mock authenticated user (token set first; order is irrelevant)
+    c.set('access_token', 'test-access-token');
     c.set('user', {
       id: 'test-user-id',
       email: 'test@example.com',
       name: 'Test User'
     });
-    c.set('access_token', 'test-access-token');
     return next();
   })
 }));

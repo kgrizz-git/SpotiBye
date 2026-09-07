@@ -327,97 +327,75 @@ describe('AnalysisService', () => {
     );
   });
 
-  it('logs a body preview when ReccoBeats returns invalid JSON', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    stubFetchBody('<html>blocked</html>', {
-      status: 200,
-      headers: { 'Content-Type': 'text/html' },
-    });
-    mockPlaylistTracks(
-      [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 })],
-    );
-
-    const service = new AnalysisService('access-token');
-    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
-
-    expect(result.status).toBe('completed');
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          source: 'reccobeats:audio-features',
-          message: 'Invalid ReccoBeats audio-features response JSON',
-        }),
-        expect.objectContaining({
-          source: 'reccobeats:track-metadata',
-          message: 'Invalid ReccoBeats track response JSON',
-        }),
-      ])
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Invalid ReccoBeats JSON response',
-      expect.objectContaining({
-        endpoint: 'audio-features',
+  it.each([
+    {
+      name: 'invalid JSON',
+      fetchBody: '<html>blocked</html>',
+      fetchHeaders: { 'Content-Type': 'text/html' },
+      audioError: 'Invalid ReccoBeats audio-features response JSON',
+      trackError: 'Invalid ReccoBeats track response JSON',
+      audioWarnMessage: 'Invalid ReccoBeats JSON response',
+      trackWarnMessage: 'Invalid ReccoBeats JSON response',
+      bodyPreview: '<html>blocked</html>',
+    },
+    {
+      name: 'an invalid response shape',
+      fetchBody: JSON.stringify({ error: 'blocked' }),
+      fetchHeaders: { 'Content-Type': 'application/json' },
+      audioError: 'Invalid ReccoBeats audio features response shape',
+      trackError: 'Invalid ReccoBeats track metadata response shape',
+      audioWarnMessage: 'Invalid ReccoBeats audio features response shape',
+      trackWarnMessage: 'Invalid ReccoBeats track metadata response shape',
+      bodyPreview: '{"error":"blocked"}',
+    },
+  ])(
+    'logs a body preview when ReccoBeats returns $name',
+    async ({ fetchBody, fetchHeaders, audioError, trackError, audioWarnMessage, trackWarnMessage, bodyPreview }) => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      stubFetchBody(fetchBody, {
         status: 200,
-        batchSize: 1,
-        bodyPreview: '<html>blocked</html>',
-      })
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Invalid ReccoBeats JSON response',
-      expect.objectContaining({
-        endpoint: 'track',
-        status: 200,
-        batchSize: 1,
-        bodyPreview: '<html>blocked</html>',
-      })
-    );
-  });
+        headers: fetchHeaders,
+      });
+      mockPlaylistTracks(
+        [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 })],
+      );
 
-  it('logs a body preview when ReccoBeats JSON has an invalid response shape', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    stubFetchBody(JSON.stringify({ error: 'blocked' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-    mockPlaylistTracks(
-      [createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 })],
-    );
+      const service = new AnalysisService('access-token');
+      const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
 
-    const service = new AnalysisService('access-token');
-    const result = await service.analyzePlaylist('playlist1', 'user1', 'job1');
-
-    expect(result.status).toBe('completed');
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
+      expect(result.status).toBe('completed');
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            source: 'reccobeats:audio-features',
+            message: audioError,
+          }),
+          expect.objectContaining({
+            source: 'reccobeats:track-metadata',
+            message: trackError,
+          }),
+        ])
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        audioWarnMessage,
         expect.objectContaining({
-          source: 'reccobeats:audio-features',
-          message: 'Invalid ReccoBeats audio features response shape',
-        }),
+          endpoint: 'audio-features',
+          status: 200,
+          batchSize: 1,
+          bodyPreview,
+        })
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        trackWarnMessage,
         expect.objectContaining({
-          source: 'reccobeats:track-metadata',
-          message: 'Invalid ReccoBeats track metadata response shape',
-        }),
-      ])
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Invalid ReccoBeats audio features response shape',
-      expect.objectContaining({
-        endpoint: 'audio-features',
-        status: 200,
-        batchSize: 1,
-        bodyPreview: '{"error":"blocked"}',
-      })
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Invalid ReccoBeats track metadata response shape',
-      expect.objectContaining({
-        endpoint: 'track',
-        status: 200,
-        batchSize: 1,
-        bodyPreview: '{"error":"blocked"}',
-      })
-    );
-  });
+          endpoint: 'track',
+          status: 200,
+          batchSize: 1,
+          bodyPreview,
+        })
+      );
+    },
+  );
 
   it('chunks track IDs into batches of 30 and aggregates correct averages across batches', async () => {
     const tracksList = Array.from({ length: 75 }, (_, i) => ({
@@ -898,9 +876,25 @@ describe('Analysis Routes', () => {
       expect(mockEnv.ANALYSIS_QUEUE.send).not.toHaveBeenCalled();
     });
 
-    it('re-enqueues a fresh job when completed status has no matching results (stale)', async () => {
+  it.each([
+    {
+      title: 're-enqueues a fresh job when completed status has no matching results (stale)',
+      cache: null as Record<string, unknown> | null,
+    },
+    {
+      title: 're-enqueues when completed results have incomplete enrichment coverage',
+      cache: {
+        audio_features_resolved_count: 1,
+        enrichment_resolved_track_count: 1,
+      } as Record<string, unknown> | null,
+    },
+  ])('$title', async ({ cache }) => {
       await seedStatus('job-old', 'completed', 100);
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(null);
+      if (cache === null) {
+        (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(null);
+      } else {
+        mockCachedResults('job-old', cache);
+      }
 
       const response = await postPlaylist();
       const data = (await response.json()) as any;
@@ -928,23 +922,6 @@ describe('Analysis Routes', () => {
 
       expect(response.status).toBe(200);
       expect(data.data.status).toBe('queued');
-      expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalled();
-    });
-
-    it('re-enqueues when completed results have incomplete enrichment coverage', async () => {
-      await seedStatus('job-old', 'completed', 100);
-      mockCachedResults('job-old', {
-        audio_features_resolved_count: 1,
-        enrichment_resolved_track_count: 1,
-      });
-
-      const response = await postPlaylist();
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(200);
-      expect(data.data.status).toBe('queued');
-      expect(data.data.job_id).not.toBe('job-old');
-      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
       expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalled();
     });
 
@@ -1094,33 +1071,19 @@ describe('Analysis Routes', () => {
       expect(data.data).not.toHaveProperty('results');
     });
 
-    it('deletes both KV keys and returns 404 when cached results are missing schema_version (stale)', async () => {
+  it.each([
+    {
+      title: 'deletes both KV keys and returns 404 when cached results are missing schema_version (stale)',
+      schemaVersion: undefined as string | undefined,
+    },
+    {
+      title: 'deletes both KV keys and returns 404 when cached results use schema_version 1.0 (stale after 1.1 bump)',
+      schemaVersion: '1.0' as string | undefined,
+    },
+  ])('$title', async ({ schemaVersion }) => {
       (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(createCachedAnalysisResult('test-job-id', {
         overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
-        schema_version: undefined,
-        unique_track_count: undefined,
-        audio_features_resolved_count: undefined,
-        track_metadata_resolved_count: undefined,
-        enrichment_resolved_track_count: undefined,
-      }));
-
-      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/results', {
-        method: 'GET',
-      });
-
-      const response = await app.request(request, undefined, mockEnv);
-      const data = (await response.json()) as any;
-
-      expect(response.status).toBe(404);
-      expect(data.error).toHaveProperty('code', 'ANALYSIS_RESULTS_NOT_FOUND');
-      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:results');
-      expect(mockEnv.CACHE_KV.delete).toHaveBeenCalledWith('analysis:playlist1:test-user-id:status');
-    });
-
-    it('deletes both KV keys and returns 404 when cached results use schema_version 1.0 (stale after 1.1 bump)', async () => {
-      (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(createCachedAnalysisResult('test-job-id', {
-        overview: { total_tracks: 0, total_duration_ms: 0, average_duration_ms: 0, formatted_duration: '0s' },
-        schema_version: '1.0',
+        schema_version: schemaVersion,
         unique_track_count: undefined,
         audio_features_resolved_count: undefined,
         track_metadata_resolved_count: undefined,

@@ -80,6 +80,12 @@ describe('Spotify Routes', () => {
     return { status: response.status, data: (await response.json()) as any };
   };
 
+  /** Asserts a cache-bypassed GET: HTTP 200 with `meta.cached === false`. */
+  const expectUncachedOk = (status: number, data: { meta: { cached: unknown } }): void => {
+    expect(status).toBe(200);
+    expect(data.meta.cached).toBe(false);
+  };
+
   describe('GET /spotify/playlists', () => {
     it('should return user playlists', async () => {
       const { status, data } = await getJson('/spotify/playlists');
@@ -161,9 +167,8 @@ describe('Spotify Routes', () => {
 
       const { status, data } = await getJson('/spotify/playlists/playlist1?force_refresh=true');
 
-      expect(status).toBe(200);
+      expectUncachedOk(status, data);
       expect(kvGet).not.toHaveBeenCalled();
-      expect(data.meta.cached).toBe(false);
     });
   });
 
@@ -188,9 +193,8 @@ describe('Spotify Routes', () => {
       kvGet.mockClear();
       const { status, data } = await getJson('/spotify/playlists/playlist1/tracks?force_refresh=true');
 
-      expect(status).toBe(200);
+      expectUncachedOk(status, data);
       expect(kvGet).not.toHaveBeenCalled();
-      expect(data.meta.cached).toBe(false);
     });
   });
 
