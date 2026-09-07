@@ -6,24 +6,30 @@ import { AuthRequiredException } from '../types/errors';
 import type { Env } from '../types/env';
 import { createTestEnv } from './helpers/env';
 
+const setupErrorApp = (): { app: Hono<{ Bindings: Env }>; env: Env } => {
+  const app = new Hono<{ Bindings: Env }>();
+  app.onError(errorHandler);
+  return { app, env: createTestEnv() };
+};
+
+const runErrorRequest = async (app: Hono<{ Bindings: Env }>, env: Env) => {
+  const res = await app.request(new Request('http://localhost/test'), undefined, env);
+  return {
+    status: res.status,
+    body: (await res.json()) as { error: { code: string; message: string } },
+  };
+};
+
 describe('errorHandler discriminator strengthening (BL-6)', () => {
   let app: Hono<{ Bindings: Env }>;
   let env: Env;
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    app = new Hono<{ Bindings: Env }>();
-    app.onError(errorHandler);
-    env = createTestEnv();
+    ({ app, env } = setupErrorApp());
   });
 
-  const runRequest = async () => {
-    const res = await app.request(new Request('http://localhost/test'), undefined, env);
-    return {
-      status: res.status,
-      body: (await res.json()) as { error: { code: string; message: string } },
-    };
-  };
+  const runRequest = () => runErrorRequest(app, env);
 
   it('does not map a 3rd-party ValidationError to 400 (no code discriminator)', async () => {
     app.get('/test', () => {
@@ -141,18 +147,10 @@ describe('errorHandler HTTPException branch (status code lookup table)', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    app = new Hono<{ Bindings: Env }>();
-    app.onError(errorHandler);
-    env = createTestEnv();
+    ({ app, env } = setupErrorApp());
   });
 
-  const runRequest = async () => {
-    const res = await app.request(new Request('http://localhost/test'), undefined, env);
-    return {
-      status: res.status,
-      body: (await res.json()) as { error: { code: string; message: string } },
-    };
-  };
+  const runRequest = () => runErrorRequest(app, env);
 
   it.each([
     { status: 401, code: 'UNAUTHORIZED', message: 'bad token' },

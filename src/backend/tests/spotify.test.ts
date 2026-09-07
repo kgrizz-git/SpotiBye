@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { spotifyRoutes } from '../routes/spotify';
 import type { Env } from '../types/env';
-import { createTestEnv } from './helpers/env';
+import { buildAuthenticatedRequest, setupRouteContext } from './helpers/hono';
 
 // Mock the services
 vi.mock('../services/spotify', () => ({
@@ -71,32 +71,13 @@ describe('Spotify Routes', () => {
   let mockEnv: Env;
 
   beforeEach(() => {
-    app = new Hono<{ Bindings: Env }>();
-    app.route('/spotify', spotifyRoutes);
-
-    mockEnv = {
-      ...createTestEnv(),
-      SESSIONS_KV: {
-        get: vi.fn().mockResolvedValue(JSON.stringify({
-          user_id: 'test-user-id',
-          access_token: 'test-access-token',
-          refresh_token: 'test-refresh-token',
-          expires_at: Date.now() + 3600000,
-        })),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined)
-      } as any,
-    };
+    ({ app, env: mockEnv } = setupRouteContext('/spotify', spotifyRoutes));
   });
 
   describe('GET /spotify/playlists', () => {
     it('should return user playlists', async () => {
-      const request = new Request('http://localhost/spotify/playlists', {
+      const request = buildAuthenticatedRequest('/spotify/playlists', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -146,12 +127,8 @@ describe('Spotify Routes', () => {
         } as any
       );
 
-      const request = new Request('http://localhost/spotify/playlists', {
+      const request = buildAuthenticatedRequest('/spotify/playlists', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -168,12 +145,8 @@ describe('Spotify Routes', () => {
 
   describe('GET /spotify/playlists/:id', () => {
     it('should return playlist details', async () => {
-      const request = new Request('http://localhost/spotify/playlists/playlist1', {
+      const request = buildAuthenticatedRequest('/spotify/playlists/playlist1', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -185,12 +158,8 @@ describe('Spotify Routes', () => {
     });
 
     it('should return playlist details for requested id', async () => {
-      const request = new Request('http://localhost/spotify/playlists/nonexistent', {
+      const request = buildAuthenticatedRequest('/spotify/playlists/nonexistent', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -204,15 +173,9 @@ describe('Spotify Routes', () => {
       const kvGet = mockEnv.CACHE_KV.get as ReturnType<typeof vi.fn>;
       kvGet.mockClear();
 
-      const request = new Request(
-        'http://localhost/spotify/playlists/playlist1?force_refresh=true',
-        {
-          method: 'GET',
-          headers: {
-            Authorization: 'Bearer test-jwt-token',
-            'Content-Type': 'application/json',
-          },
-        },
+      const request = buildAuthenticatedRequest(
+        '/spotify/playlists/playlist1?force_refresh=true',
+        { method: 'GET' },
       );
 
       const response = await app.request(request, undefined, mockEnv);
@@ -226,12 +189,8 @@ describe('Spotify Routes', () => {
 
   describe('GET /spotify/playlists/:id/tracks', () => {
     it('should return playlist tracks', async () => {
-      const request = new Request('http://localhost/spotify/playlists/playlist1/tracks', {
+      const request = buildAuthenticatedRequest('/spotify/playlists/playlist1/tracks', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -248,26 +207,16 @@ describe('Spotify Routes', () => {
       const kvGet = mockEnv.CACHE_KV.get as ReturnType<typeof vi.fn>;
       kvGet.mockClear();
 
-      const warmRequest = new Request('http://localhost/spotify/playlists/playlist1/tracks', {
+      const warmRequest = buildAuthenticatedRequest('/spotify/playlists/playlist1/tracks', {
         method: 'GET',
-        headers: {
-          Authorization: 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
       await app.request(warmRequest, undefined, mockEnv);
       expect(kvGet).toHaveBeenCalled();
 
       kvGet.mockClear();
-      const request = new Request(
-        'http://localhost/spotify/playlists/playlist1/tracks?force_refresh=true',
-        {
-          method: 'GET',
-          headers: {
-            Authorization: 'Bearer test-jwt-token',
-            'Content-Type': 'application/json',
-          },
-        },
+      const request = buildAuthenticatedRequest(
+        '/spotify/playlists/playlist1/tracks?force_refresh=true',
+        { method: 'GET' },
       );
 
       const response = await app.request(request, undefined, mockEnv);
@@ -281,12 +230,8 @@ describe('Spotify Routes', () => {
 
   describe('GET /spotify/tracks/:id', () => {
     it('should return track details', async () => {
-      const request = new Request('http://localhost/spotify/tracks/track1', {
+      const request = buildAuthenticatedRequest('/spotify/tracks/track1', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);

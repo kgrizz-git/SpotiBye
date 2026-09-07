@@ -6,9 +6,9 @@ import { SpotifyService } from '../services/spotify';
 import { CacheService } from '../services/cache';
 import { AnalysisStatusStore } from '../services/analysis-status-object';
 import type { Env } from '../types/env';
-import type { SpotifyTrack } from '../types/spotify';
-import { createTestEnv } from './helpers/env';
 import { kvNamespace } from './helpers/kv';
+import { createSpotifyTrack } from './helpers/spotify';
+import { buildAuthenticatedRequest, setupRouteContext } from './helpers/hono';
 
 vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn().mockImplementation((c, next) => {
@@ -24,40 +24,6 @@ vi.mock('../middleware/auth', () => ({
     return next();
   })
 }));
-
-const spotifyTrack = (
-  id: string,
-  artistId: string,
-  artistName: string,
-  durationMs: number
-): SpotifyTrack => ({
-  id,
-  name: `Track ${id}`,
-  artists: [
-    {
-      id: artistId,
-      name: artistName,
-      external_urls: { spotify: `https://open.spotify.com/artist/${artistId}` },
-      uri: `spotify:artist:${artistId}`,
-    },
-  ],
-  album: {
-    id: `album-${id}`,
-    name: `Album ${id}`,
-    artists: [],
-    images: [],
-    release_date: '2026-01-01',
-    total_tracks: 1,
-    external_urls: { spotify: `https://open.spotify.com/album/${id}` },
-    uri: `spotify:album:${id}`,
-  },
-  duration_ms: durationMs,
-  explicit: false,
-  popularity: 50,
-  external_urls: { spotify: `https://open.spotify.com/track/${id}` },
-  uri: `spotify:track:${id}`,
-  preview_url: null,
-});
 
 describe('AnalysisService', () => {
   beforeEach(() => {
@@ -83,7 +49,7 @@ describe('AnalysisService', () => {
       items: [
         {
           added_by: null,
-          track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000),
+          track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 }),
         },
       ],
     });
@@ -122,8 +88,8 @@ describe('AnalysisService', () => {
       total: 2,
       rawCount: 2,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist404', 'Missing Artist', 180000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 }) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track2', artistId: 'artist404', artistName: 'Missing Artist', durationMs: 180000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockRejectedValue(
@@ -162,8 +128,8 @@ describe('AnalysisService', () => {
       total: 2,
       rawCount: 2,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 180000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 }) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 180000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -183,7 +149,7 @@ describe('AnalysisService', () => {
   });
 
   it('does not expose null or blank artist names in top artists', async () => {
-    const trackWithInvalidArtists = spotifyTrack('track1', 'artist1', 'Artist 1', 180000);
+    const trackWithInvalidArtists = createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 });
     trackWithInvalidArtists.artists = [
       { id: 'artist1', name: 'Artist 1', external_urls: { spotify: 'https://open.spotify.com/artist/artist1' }, uri: 'spotify:artist:artist1' },
       { id: 'artist-null', name: null as unknown as string, external_urls: { spotify: 'https://open.spotify.com/artist/artist-null' }, uri: 'spotify:artist:artist-null' },
@@ -212,7 +178,7 @@ describe('AnalysisService', () => {
         items: [
           {
             added_by: null,
-            track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000),
+            track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }),
           },
         ],
       })
@@ -222,7 +188,7 @@ describe('AnalysisService', () => {
         items: [
           {
             added_by: null,
-            track: spotifyTrack('track2', 'artist2', 'Artist 2', 240000),
+            track: createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 240000 }),
           },
         ],
       });
@@ -289,8 +255,8 @@ describe('AnalysisService', () => {
       total: 2,
       rawCount: 2,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 240000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 240000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -327,7 +293,7 @@ describe('AnalysisService', () => {
       total: 1,
       rawCount: 1,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -371,7 +337,7 @@ describe('AnalysisService', () => {
       total: 1,
       rawCount: 1,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -424,7 +390,7 @@ describe('AnalysisService', () => {
       total: 1,
       rawCount: 1,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 180000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 180000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -468,7 +434,7 @@ describe('AnalysisService', () => {
   it('chunks track IDs into batches of 30 and aggregates correct averages across batches', async () => {
     const tracksList = Array.from({ length: 75 }, (_, i) => ({
       added_by: null,
-      track: spotifyTrack(`track${i + 1}`, `artist${i + 1}`, `Artist ${i + 1}`, 120000),
+      track: createSpotifyTrack({ id: `track${i + 1}`, artistId: `artist${i + 1}`, artistName: `Artist ${i + 1}`, durationMs: 120000 }),
     }));
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -557,7 +523,7 @@ describe('AnalysisService', () => {
   it('emits multiple monotonic progress updates during multi-group ReccoBeats enrichment', async () => {
     const tracksList = Array.from({ length: 120 }, (_, i) => ({
       added_by: null,
-      track: spotifyTrack(`track${i + 1}`, `artist${i + 1}`, `Artist ${i + 1}`, 120000),
+      track: createSpotifyTrack({ id: `track${i + 1}`, artistId: `artist${i + 1}`, artistName: `Artist ${i + 1}`, durationMs: 120000 }),
     }));
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -647,9 +613,9 @@ describe('AnalysisService', () => {
       total: 3,
       rawCount: 3,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
-        { added_by: null, track: spotifyTrack('track3', 'artist3', 'Artist 3', 120000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 120000 }) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track3', artistId: 'artist3', artistName: 'Artist 3', durationMs: 120000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -696,8 +662,8 @@ describe('AnalysisService', () => {
       total: 2,
       rawCount: 2,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 120000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -749,8 +715,8 @@ describe('AnalysisService', () => {
       total: 2,
       rawCount: 2,
       items: [
-        { added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) },
-        { added_by: null, track: spotifyTrack('track2', 'artist2', 'Artist 2', 120000) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track2', artistId: 'artist2', artistName: 'Artist 2', durationMs: 120000 }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
@@ -787,7 +753,7 @@ describe('AnalysisService', () => {
     vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
       total: 1,
       rawCount: 1,
-      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
+      items: [{ added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }) }],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
 
@@ -811,7 +777,7 @@ describe('AnalysisService', () => {
     vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
       total: 1,
       rawCount: 1,
-      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
+      items: [{ added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }) }],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
 
@@ -867,7 +833,7 @@ describe('AnalysisService', () => {
     vi.spyOn(SpotifyService.prototype, 'getPlaylistTracks').mockResolvedValue({
       total: 1,
       rawCount: 1,
-      items: [{ added_by: null, track: spotifyTrack('track1', 'artist1', 'Artist 1', 120000) }],
+      items: [{ added_by: null, track: createSpotifyTrack({ id: 'track1', artistId: 'artist1', artistName: 'Artist 1', durationMs: 120000 }) }],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
 
@@ -896,33 +862,14 @@ describe('Analysis Routes', () => {
   let statusStore: AnalysisStatusStore;
 
   beforeEach(() => {
-    app = new Hono<{ Bindings: Env }>();
-    app.route('/analysis', analysisRoutes);
-
-    mockEnv = {
-      ...createTestEnv(),
-      SESSIONS_KV: {
-        get: vi.fn().mockResolvedValue(JSON.stringify({
-          user_id: 'test-user-id',
-          access_token: 'test-access-token',
-          refresh_token: 'test-refresh-token',
-          expires_at: Date.now() + 3600000,
-        })),
-        put: vi.fn().mockResolvedValue(undefined),
-        delete: vi.fn().mockResolvedValue(undefined)
-      } as any,
-    };
+    ({ app, env: mockEnv } = setupRouteContext('/analysis', analysisRoutes));
     statusStore = new AnalysisStatusStore(mockEnv.ANALYSIS_STATUS);
   });
 
   describe('POST /analysis/playlist/:id', () => {
     it('should start playlist analysis', async () => {
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       await statusStore.writeStatus('test-user-id', 'playlist1', {
@@ -943,12 +890,8 @@ describe('Analysis Routes', () => {
 
     it('writes queued status and enqueues the analysis job without running analysis inline', async () => {
       const analyzeSpy = vi.spyOn(AnalysisService.prototype, 'analyzePlaylist');
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -984,12 +927,8 @@ describe('Analysis Routes', () => {
         queued_at: '2026-06-19T00:00:00.000Z',
         progress: 0,
       });
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1012,12 +951,8 @@ describe('Analysis Routes', () => {
         progress: 100,
       });
       (mockEnv.CACHE_KV.get as any).mockResolvedValueOnce(null);
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1051,12 +986,8 @@ describe('Analysis Routes', () => {
           insights: [],
           errors: [],
         }));
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1093,12 +1024,8 @@ describe('Analysis Routes', () => {
         track_metadata_resolved_count: 2,
         enrichment_resolved_track_count: 1,
       }));
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1137,12 +1064,8 @@ describe('Analysis Routes', () => {
         track_metadata_resolved_count: 2,
         enrichment_resolved_track_count: 2,
       }));
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1179,12 +1102,8 @@ describe('Analysis Routes', () => {
         track_metadata_resolved_count: 2,
         enrichment_resolved_track_count: 2,
       }));
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ force_enrichment: true }),
       });
 
@@ -1209,15 +1128,9 @@ describe('Analysis Routes', () => {
         queued_at: '2026-06-19T00:00:00.000Z',
         progress: 0,
       });
-      const request = new Request(
-        'http://localhost/analysis/playlist/playlist1?force_enrichment=true',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer test-jwt-token',
-            'Content-Type': 'application/json',
-          },
-        },
+      const request = buildAuthenticatedRequest(
+        '/analysis/playlist/playlist1?force_enrichment=true',
+        { method: 'POST' },
       );
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1232,12 +1145,8 @@ describe('Analysis Routes', () => {
     });
 
     it('should return 400 for invalid playlist ID', async () => {
-      const request = new Request('http://localhost/analysis/playlist/', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1255,12 +1164,8 @@ describe('Analysis Routes', () => {
         progress: 100,
       });
 
-      const request = new Request('http://localhost/analysis/playlist/playlist1/status', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/status', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1273,12 +1178,8 @@ describe('Analysis Routes', () => {
     });
 
     it('should return 404 for non-existent analysis job', async () => {
-      const request = new Request('http://localhost/analysis/playlist/nonexistent/status', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/nonexistent/status', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1291,12 +1192,8 @@ describe('Analysis Routes', () => {
 
   describe('GET /analysis/playlist/:id/results', () => {
     it('should return analysis results', async () => {
-      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1349,12 +1246,8 @@ describe('Analysis Routes', () => {
         schema_version: '1.1',
       }));
 
-      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1384,12 +1277,8 @@ describe('Analysis Routes', () => {
         errors: [],
       }));
 
-      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1417,12 +1306,8 @@ describe('Analysis Routes', () => {
         schema_version: '1.0',
       }));
 
-      const request = new Request('http://localhost/analysis/playlist/playlist1/results', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1/results', {
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json'
-        }
       });
 
       const response = await app.request(request, undefined, mockEnv);
@@ -1437,12 +1322,8 @@ describe('Analysis Routes', () => {
 
   describe('DELETE /analysis/playlist/:id', () => {
     it('deletes user analysis results and legacy raw-enrichment key, not global per-track keys', async () => {
-      const request = new Request('http://localhost/analysis/playlist/playlist1', {
+      const request = buildAuthenticatedRequest('/analysis/playlist/playlist1', {
         method: 'DELETE',
-        headers: {
-          'Authorization': 'Bearer test-jwt-token',
-          'Content-Type': 'application/json',
-        },
       });
 
       const response = await app.request(request, undefined, mockEnv);

@@ -17,8 +17,8 @@ import { AnalysisJobService } from '../services/analysis-job';
 import { AnalysisStatusStore } from '../services/analysis-status-object';
 import { SpotifyService } from '../services/spotify';
 import { kvNamespace, envWithKv } from './helpers/kv';
+import { createReccoBeatsFetchMock, createSpotifyTrack } from './helpers/spotify';
 import type { AnalysisQueueMessage } from '../types/analysis-queue';
-import type { SpotifyTrack } from '../types/spotify';
 
 interface OpenApiDocument {
   paths: Record<string, unknown>;
@@ -61,35 +61,6 @@ function assertExampleKeysExist(example: unknown, actual: unknown, path: string)
   }
 }
 
-const track = (id: string): SpotifyTrack => ({
-  id,
-  name: `Track ${id}`,
-  artists: [
-    {
-      id: `artist-${id}`,
-      name: `Artist ${id}`,
-      external_urls: { spotify: `https://open.spotify.com/artist/artist-${id}` },
-      uri: `spotify:artist:artist-${id}`,
-    },
-  ],
-  album: {
-    id: `album-${id}`,
-    name: `Album ${id}`,
-    artists: [],
-    images: [],
-    release_date: '2026-01-01',
-    total_tracks: 1,
-    external_urls: { spotify: `https://open.spotify.com/album/${id}` },
-    uri: `spotify:album:${id}`,
-  },
-  duration_ms: 200000,
-  explicit: false,
-  popularity: 50,
-  external_urls: { spotify: `https://open.spotify.com/track/${id}` },
-  uri: `spotify:track:${id}`,
-  preview_url: null,
-});
-
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -101,52 +72,25 @@ describe('openapi.yaml AnalysisResultsResponse reconciliation', () => {
       total: 2,
       rawCount: 2,
       items: [
-        { added_by: null, track: track('track1') },
-        { added_by: null, track: track('track2') },
+        { added_by: null, track: createSpotifyTrack({ id: 'track1' }) },
+        { added_by: null, track: createSpotifyTrack({ id: 'track2' }) },
       ],
     });
     vi.spyOn(SpotifyService.prototype, 'getArtists').mockResolvedValue([]);
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname === '/v1/track') {
-        return new Response(
-          JSON.stringify({
-            content: [
-              {
-                id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
-                artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/artist-track1' }],
-                durationMs: 200000, isrc: 'ISRC1', popularity: 55,
-              },
-              {
-                id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
-                artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/artist-track2' }],
-                durationMs: 200000, popularity: 75,
-              },
-            ],
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      return new Response(
-        JSON.stringify({
-          content: [
-            {
-              id: 'r1', href: 'https://open.spotify.com/track/track1',
-              acousticness: 0.1, danceability: 0.2, energy: 0.3, instrumentalness: 0.1,
-              liveness: 0.1, loudness: -5, speechiness: 0.1, tempo: 100, valence: 0.4,
-              key: 0, mode: 1, isrc: 'ISRC1',
-            },
-            {
-              id: 'r2', href: 'https://open.spotify.com/track/track2',
-              acousticness: 0.2, danceability: 0.3, energy: 0.4, instrumentalness: 0.2,
-              liveness: 0.2, loudness: -6, speechiness: 0.2, tempo: 110, valence: 0.5,
-              key: 0, mode: 1,
-            },
-          ],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
+    const fetchMock = createReccoBeatsFetchMock({
+      trackMetadata: [
+        {
+          id: 'm1', href: 'https://open.spotify.com/track/track1', trackTitle: 'Track 1',
+          artists: [{ id: 'a1', name: 'Artist 1', href: 'https://open.spotify.com/artist/artist-track1' }],
+          durationMs: 200000, isrc: 'ISRC1', popularity: 55,
+        },
+        {
+          id: 'm2', href: 'https://open.spotify.com/track/track2', trackTitle: 'Track 2',
+          artists: [{ id: 'a2', name: 'Artist 2', href: 'https://open.spotify.com/artist/artist-track2' }],
+          durationMs: 200000, popularity: 75,
+        },
+      ],
     });
     vi.stubGlobal('fetch', fetchMock);
 
