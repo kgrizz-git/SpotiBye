@@ -48,75 +48,85 @@ describe('errorHandler discriminator strengthening (BL-6)', () => {
 
   const runRequest = () => runErrorRequest(app, env);
 
-  it('does not map a 3rd-party ValidationError to 400 (no code discriminator)', async () => {
-    // 3rd-party style: name is ValidationError but no code field
-    throwNamedError(app, 'ValidationError', 'something failed');
+  it.each([
+    {
+      title: 'does not map a 3rd-party ValidationError to 400 (no code discriminator)',
+      name: 'ValidationError',
+      message: 'something failed',
+      code: undefined as string | undefined,
+      status: 500,
+      errorCode: 'INTERNAL_ERROR',
+    },
+    {
+      title: 'maps ValidationError with code=SCHEMA_VALIDATION to 400 (regex discriminator)',
+      name: 'ValidationError',
+      message: 'schema validation failed',
+      code: 'SCHEMA_VALIDATION' as string | undefined,
+      status: 400,
+      errorCode: 'VALIDATION_ERROR',
+    },
+    {
+      title: 'does not map a 3rd-party UnauthorizedError without a code to 401',
+      name: 'UnauthorizedError',
+      message: 'auth failed',
+      code: undefined as string | undefined,
+      status: 500,
+      errorCode: 'INTERNAL_ERROR',
+    },
+    {
+      title: 'maps UnauthorizedError with code=UNAUTHORIZED to 401',
+      name: 'UnauthorizedError',
+      message: 'unauthorized',
+      code: 'UNAUTHORIZED' as string | undefined,
+      status: 401,
+      errorCode: 'UNAUTHORIZED',
+    },
+    {
+      title: 'does not map a 3rd-party ForbiddenError without a code to 403',
+      name: 'ForbiddenError',
+      message: 'forbidden',
+      code: undefined as string | undefined,
+      status: 500,
+      errorCode: 'INTERNAL_ERROR',
+    },
+    {
+      title: 'maps ForbiddenError with code=FORBIDDEN to 403',
+      name: 'ForbiddenError',
+      message: 'forbidden',
+      code: 'FORBIDDEN' as string | undefined,
+      status: 403,
+      errorCode: 'FORBIDDEN',
+    },
+    {
+      title: 'does not map a 3rd-party NotFoundError without a code to 404',
+      name: 'NotFoundError',
+      message: 'not found',
+      code: undefined as string | undefined,
+      status: 500,
+      errorCode: 'INTERNAL_ERROR',
+    },
+    {
+      title: 'maps NotFoundError with code=NOT_FOUND to 404',
+      name: 'NotFoundError',
+      message: 'not found',
+      code: 'NOT_FOUND' as string | undefined,
+      status: 404,
+      errorCode: 'NOT_FOUND',
+    },
+    {
+      title: 'falls back to 500 for plain Error (no name match)',
+      name: 'Error',
+      message: 'plain error',
+      code: undefined as string | undefined,
+      status: 500,
+      errorCode: 'INTERNAL_ERROR',
+    },
+  ])('$title', async ({ name, message, code, status, errorCode }) => {
+    throwNamedError(app, name, message, code);
 
-    const { status, body } = await runRequest();
-    expect(status).toBe(500);
-    expect(body.error.code).toBe('INTERNAL_ERROR');
-  });
-
-  it('maps ValidationError with code=SCHEMA_VALIDATION to 400 (regex discriminator)', async () => {
-    throwNamedError(app, 'ValidationError', 'schema validation failed', 'SCHEMA_VALIDATION');
-
-    const { status, body } = await runRequest();
-    expect(status).toBe(400);
-    expect(body.error.code).toBe('VALIDATION_ERROR');
-  });
-
-  it('does not map a 3rd-party UnauthorizedError without a code to 401', async () => {
-    throwNamedError(app, 'UnauthorizedError', 'auth failed');
-
-    const { status, body } = await runRequest();
-    expect(status).toBe(500);
-    expect(body.error.code).toBe('INTERNAL_ERROR');
-  });
-
-  it('maps UnauthorizedError with code=UNAUTHORIZED to 401', async () => {
-    throwNamedError(app, 'UnauthorizedError', 'unauthorized', 'UNAUTHORIZED');
-
-    const { status, body } = await runRequest();
-    expect(status).toBe(401);
-    expect(body.error.code).toBe('UNAUTHORIZED');
-  });
-
-  it('does not map a 3rd-party ForbiddenError without a code to 403', async () => {
-    throwNamedError(app, 'ForbiddenError', 'forbidden');
-
-    const { status } = await runRequest();
-    expect(status).toBe(500);
-  });
-
-  it('maps ForbiddenError with code=FORBIDDEN to 403', async () => {
-    throwNamedError(app, 'ForbiddenError', 'forbidden', 'FORBIDDEN');
-
-    const { status, body } = await runRequest();
-    expect(status).toBe(403);
-    expect(body.error.code).toBe('FORBIDDEN');
-  });
-
-  it('does not map a 3rd-party NotFoundError without a code to 404', async () => {
-    throwNamedError(app, 'NotFoundError', 'not found');
-
-    const { status } = await runRequest();
-    expect(status).toBe(500);
-  });
-
-  it('maps NotFoundError with code=NOT_FOUND to 404', async () => {
-    throwNamedError(app, 'NotFoundError', 'not found', 'NOT_FOUND');
-
-    const { status, body } = await runRequest();
-    expect(status).toBe(404);
-    expect(body.error.code).toBe('NOT_FOUND');
-  });
-
-  it('falls back to 500 for plain Error (no name match)', async () => {
-    throwNamedError(app, 'Error', 'plain error');
-
-    const { status, body } = await runRequest();
-    expect(status).toBe(500);
-    expect(body.error.code).toBe('INTERNAL_ERROR');
+    const { status: resStatus, body } = await runRequest();
+    expect(resStatus).toBe(status);
+    expect(body.error.code).toBe(errorCode);
   });
 });
 
