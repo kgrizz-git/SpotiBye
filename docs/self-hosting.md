@@ -1,0 +1,77 @@
+# Self-Hosting SpotiBye
+
+## Why Self-Host?
+
+Spotify only allows a small number of users on an unapproved developer app, and approval requires an already-large user base. Until a managed hosted option exists (which may be offered commercially later), each person runs their own Spotify app and backend. It takes about 15 minutes.
+
+You will run two pieces locally:
+
+- **Backend** — the Cloudflare Worker codebase, running on your machine via `wrangler dev` (no Cloudflare account needed; storage is emulated locally)
+- **Frontend** — the Python desktop app, pointed at your local backend
+
+## Prerequisites
+
+- Python 3.10+ with `venv`
+- Node 24 + npm (the repo pins this in `.nvmrc`)
+- A Spotify account (Free or Premium)
+- A Cloudflare account — only needed for the secondary Cloudflare-deploy path below
+
+## Step 1 — Create a Spotify App (5 min)
+
+1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in.
+2. **Create app**: give it a name (e.g. `SpotiBye-local`) and description, accept the terms.
+3. Open the app's **Settings**, and under **Redirect URIs** add exactly:
+   ```
+   http://127.0.0.1:8080/callback
+   ```
+   Use the IP literal `127.0.0.1` — Spotify no longer accepts `localhost` redirect URIs. Click **Add**, then **Save**.
+4. On the same Settings page, copy your **Client ID** and **Client Secret**. Keep the secret private.
+
+## Step 2 — Run the Backend Locally (5 min)
+
+```bash
+cd src/backend
+npm install
+cp .dev.vars.example .dev.vars
+```
+
+Edit `.dev.vars` and set the three values (this file is gitignored — never commit it):
+
+```ini
+SPOTIFY_CLIENT_ID="paste-from-spotify-dashboard"
+SPOTIFY_CLIENT_SECRET="paste-from-spotify-dashboard"
+JWT_SECRET="<output of: openssl rand -hex 32>"
+```
+
+Start it:
+
+```bash
+npm run dev
+```
+
+The backend serves at `http://localhost:8787` with KV storage and the analysis queue emulated on your machine.
+
+## Step 3 — Run the Frontend (5 min)
+
+From the repo root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+spotibye
+```
+
+In the app's backend selector, choose the **Localhost** preset, then **Login with Spotify**. Your browser opens Spotify's authorization page for *your* app; approve it and return to SpotiBye. Your playlists load and exports work end to end.
+
+## Secondary Path — Deploy the Backend to Cloudflare
+
+If you would rather run the backend in the cloud (your own Worker instead of localhost):
+
+1. Create a Cloudflare account and API token, then follow [`dev-docs/guides/build-and-deploy-guide.md`](../dev-docs/guides/build-and-deploy-guide.md).
+2. Set the Worker secrets (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `JWT_SECRET`) via `wrangler secret put`.
+3. Point the frontend at your Worker URL: set `SPOTIBYE_BACKEND_URL` (or use the Custom backend option in the app's backend selector).
+
+## Commercial Hosting
+
+A managed hosted version of SpotiBye may be offered later, which would remove the need to register your own Spotify app. Until then, self-hosting above is the supported path.

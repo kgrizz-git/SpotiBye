@@ -11,6 +11,7 @@
 | File | Purpose |
 |------|---------|
 | [`installation-instructions.md`](installation-instructions.md) | Install and launch the desktop app |
+| [`self-hosting.md`](self-hosting.md) | Run your own backend and Spotify app (required until a hosted option exists) |
 | [`configuration-options.md`](configuration-options.md) | User-configurable options and environment settings |
 | [`user-guide-cloud-backend.md`](user-guide-cloud-backend.md) | Using SpotiBye with the Cloudflare backend |
 

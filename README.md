@@ -25,6 +25,10 @@ Full instructions live in [`docs/`](docs/index.md):
 - [User guide](docs/user-guide-cloud-backend.md) — playlists, analysis, and exports
 - [Troubleshooting](docs/troubleshooting-network.md) and [connectivity FAQ](docs/faq-connectivity.md)
 
+## Self-Hosting
+
+Spotify only allows a small number of users on an unapproved developer app, so there are no public downloads yet — each person currently runs their own backend. [Self-host in about 15 minutes](docs/self-hosting.md): local backend first, Cloudflare deploy as a secondary path. A managed hosted version may be offered commercially later.
+
 ## How It Works
 
 - **Frontend** (`src/frontend/`) — Python desktop GUI built with Kivy/KivyMD
