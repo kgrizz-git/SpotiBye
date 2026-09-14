@@ -132,4 +132,8 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
     - Validating credentials before proceeding to deployment
     - Generating wrangler.toml configuration automatically
 
+- [ ] Add screenshots to README for the public release
+  - [ ] Redact Spotify username and any other personal data from source images (currently in a separate folder outside the repo)
+  - [ ] Copy redacted images into the repo and reference them from README
+
 See also: agent-first-retrofit, quality review/assessment
