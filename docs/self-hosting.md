@@ -24,7 +24,7 @@ You will run two pieces locally:
    ```
    http://127.0.0.1:8080/callback
    ```
-   Use the IP literal `127.0.0.1` — Spotify no longer accepts `localhost` redirect URIs. Click **Add**, then **Save**.
+   Use the IP literal `127.0.0.1` — the backend allowlist includes this exact URI. Click **Add**, then **Save**.
 4. On the same Settings page, copy your **Client ID** and **Client Secret**. Keep the secret private.
 
 ## Step 2 — Run the Backend Locally (5 min)
