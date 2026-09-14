@@ -2,14 +2,14 @@
 
 Export your Spotify playlists to **CSV**, **XLSX**, or **JSON** — with optional audio-feature analysis (tempo, key, danceability, energy, and more).
 
-SpotiBye is a desktop app: log in with Spotify, browse your playlists, analyze them, and export the results to a file. All Spotify API traffic goes through a secure cloud backend, so your credentials never leave your device.
+SpotiBye is a desktop app: log in with Spotify, browse your playlists, analyze them, and export the results to a file. All Spotify API traffic goes through a secure cloud backend — your Spotify password never touches the app, and client credentials live only on the backend.
 
 ## Features
 
 - **Playlist export** — save any playlist as CSV, XLSX, or JSON
 - **Playlist analysis** — per-track audio features (tempo, key, danceability, energy, valence, acousticness, instrumentalness, liveness, speechiness, loudness) with live progress
 - **Cloud backend** — fast, cached processing on Cloudflare Workers; resumable exports for multi-playlist exports
-- **Private by design** — Spotify OAuth 2.0 PKCE; tokens are managed server-side and never stored on disk in plaintext
+- **Private by design** — Spotify OAuth 2.0 PKCE; Spotify access and refresh tokens are managed server-side and never stored on your device (the app keeps only a backend-issued session token)
 
 ## Requirements
 
