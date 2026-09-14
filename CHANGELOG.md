@@ -27,6 +27,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Parameterized three similar HTTPException status-code tests in `src/backend/tests/error-middleware.test.ts` to resolve SonarCloud rule S5976.
 
 ### Security
+- Bumped `js-yaml` to 4.3.2 (`devDependencies` and `overrides`) to fix GHSA-2883-xcg3-v3hh (CVSS 7.5) flagged by OSV-Scanner.
 - TruffleHog full-history (schedule) scans use `--exclude-paths` for three test files whose `test_…` function names trigger the Lob detector false-positive (trufflesecurity/trufflehog#5184), silencing the recurring weekly CI failure. PR-diff scans stay unscoped so contributors cannot widen exclusions in the same PR.
 - Scoped GitHub Actions workflow permissions to minimum required: `build.yml` top-level `contents: write` moved to the `release` job; `deploy-production.yml` top-level `actions: write` removed entirely with `deployments: write` scoped to the `deploy-prod` job.
 - Corrected placement of `# NOSONAR: python:S5332` suppressions for intentional loopback HTTP connections in `backend_auth.py`, `backend_client.py`, and `backend_config.py` so SonarCloud recognizes them on the same line as the suppressed code.
