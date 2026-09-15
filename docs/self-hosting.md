@@ -70,7 +70,7 @@ If you would rather run the backend in the cloud (your own Worker instead of loc
 
 1. Create a Cloudflare account and API token, then follow [`dev-docs/guides/build-and-deploy-guide.md`](../dev-docs/guides/build-and-deploy-guide.md).
 2. Set the Worker secrets (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `JWT_SECRET`) via `wrangler secret put`.
-3. Configure `ALLOWED_REDIRECT_URIS` for your environment **before** deploying: `src/backend/routes/auth.ts` rejects any `redirect_uri` not present in that allowlist, so it must contain your frontend's exact callback URI — including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (The shipped production default only allows `https://app.spotibye.com`.)
+3. Configure `ALLOWED_REDIRECT_URIS` for your environment **before** deploying: `src/backend/routes/auth.ts` rejects any `redirect_uri` not present in that allowlist, so it must contain your frontend's exact callback URI — including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (The shipped production default only allows `https://app.spotibye.com`.) This is a `wrangler.toml` `[vars]` value, not a secret — set it in the `[env.production]` vars, not via `wrangler secret put`.
 4. Point the frontend at your Worker URL: set `SPOTIBYE_BACKEND_URL` (or use the Custom backend option in the app's backend selector).
 
 ## Commercial Hosting
