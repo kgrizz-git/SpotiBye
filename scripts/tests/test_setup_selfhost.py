@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import importlib.util
 import sys
 from pathlib import Path
@@ -85,7 +86,7 @@ def test_report_failure() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _fake_token_response(payload: dict) -> mock.MagicMock:
+def _fake_token_response(payload: dict[str, object]) -> mock.MagicMock:
     response = mock.MagicMock()
     response.read.return_value = __import__("json").dumps(payload).encode()
     response.__enter__.return_value = response
@@ -124,7 +125,7 @@ def test_validate_credentials_rejected() -> None:
     import urllib.error
 
     error = urllib.error.HTTPError(
-        "https://x", 401, "Unauthorized", {}, None
+        "https://x", 401, "Unauthorized", http.client.HTTPMessage(), None
     )
     with mock.patch.object(
         _mod.urllib.request, "urlopen", side_effect=error
@@ -138,7 +139,7 @@ def test_validate_credentials_bad_request() -> None:
     import urllib.error
 
     error = urllib.error.HTTPError(
-        "https://x", 400, "Bad Request", {}, None
+        "https://x", 400, "Bad Request", http.client.HTTPMessage(), None
     )
     with mock.patch.object(
         _mod.urllib.request, "urlopen", side_effect=error
