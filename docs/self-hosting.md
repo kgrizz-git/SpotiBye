@@ -2,7 +2,7 @@
 
 ## Why Self-Host?
 
-Spotify only allows a small number of users on an unapproved developer app, and approval requires an already-large user base. Until a managed hosted option exists (which may be offered commercially later), each person runs their own Spotify app and backend. It takes about 15 minutes.
+Spotify allows 5 users total (including you) on an unapproved developer app ([quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)), and approval requires an already-large user base. Until a managed hosted option exists (which may be offered commercially later), each person runs their own Spotify app and backend. It takes about 15 minutes.
 
 You will run two pieces locally:
 
@@ -13,7 +13,7 @@ You will run two pieces locally:
 
 - Python 3.10+ with `venv`
 - Node 24 + npm (the repo pins this in `.nvmrc`)
-- A Spotify account (Free or Premium)
+- A Spotify account with an active Premium subscription (Spotify requires the app owner to hold Premium for Development Mode apps — the app stops working if it lapses)
 - A Cloudflare account — only needed for the secondary Cloudflare-deploy path below
 
 ## Step 1 — Create a Spotify App (5 min)
@@ -67,6 +67,8 @@ In the app's backend selector, choose the **Localhost** preset, then **Login wit
 ## Secondary Path — Deploy the Backend to Cloudflare
 
 If you would rather run the backend in the cloud (your own Worker instead of localhost):
+
+Cloudflare's free tier covers personal use with room to spare (100,000 Worker requests/day, Workers KV and Queues included, no credit card required).
 
 1. Create a Cloudflare account and API token, then follow [`dev-docs/guides/build-and-deploy-guide.md`](../dev-docs/guides/build-and-deploy-guide.md).
 2. Set the Worker secrets (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `JWT_SECRET`) via `wrangler secret put`.
