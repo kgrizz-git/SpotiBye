@@ -90,8 +90,14 @@ cd src/backend
    wrangler kv namespace create SESSIONS_KV
    wrangler kv namespace create SESSIONS_KV --preview
    ```
-   Queues (`spotibye-analysis` / `spotibye-analysis-dlq`, plus `-dev` variants) are auto-provisioned on deploy when missing, so no manual queue creation is needed.
-3. Create your own config file `wrangler.selfhost.toml` (gitignored — never edit the tracked `wrangler.toml`): copy the repo's file, replace all four KV namespace IDs (production and preview for both `CACHE_KV` and `SESSIONS_KV`) with the ones from step 2, and set `ALLOWED_REDIRECT_URIS` to include your frontend's exact callback URI — including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (`src/backend/routes/auth.ts` rejects any `redirect_uri` absent from that allowlist, and the shipped default only allows `https://app.spotibye.com`.)
+   Queues must be created explicitly — deploy fails without them:
+   ```bash
+   wrangler queues create spotibye-analysis
+   wrangler queues create spotibye-analysis-dlq
+   wrangler queues create spotibye-analysis-dev
+   wrangler queues create spotibye-analysis-dev-dlq
+   ```
+3. Create your own config file `wrangler.selfhost.toml` (gitignored — never edit the tracked `wrangler.toml`): copy the repo's file from a clean checkout, replace all four KV namespace IDs (production and preview for both `CACHE_KV` and `SESSIONS_KV`) with the ones from step 2, and set `ALLOWED_REDIRECT_URIS` in the `[env.production]` vars block — **not** the top-level `[vars]`, which only applies to deploys without `--env` — to include your frontend's exact callback URI, including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (`src/backend/routes/auth.ts` rejects any `redirect_uri` absent from that allowlist, and the shipped default only allows `https://app.spotibye.com`.)
 4. Upload the three secrets against your config, scoped to your environment (replace `production` with `development` for a dev Worker):
    ```bash
    wrangler secret put SPOTIFY_CLIENT_ID --env production -c wrangler.selfhost.toml
@@ -117,7 +123,7 @@ Trust note: your friends' Spotify tokens live in *your* backend's storage — sh
 
 ## Troubleshooting
 
-- **Backend port busy (`http://localhost:8787`)** — another `wrangler dev` (or another app) is already on 8787. Stop it, or pass `--port` to `wrangler dev` and point the frontend's Localhost preset at the new port.
+- **Backend port busy (`http://localhost:8787`)** — another `wrangler dev` (or another app) is already on 8787. Stop it, or run `npx wrangler dev --port 8788` from `src/backend` and launch the frontend with `export SPOTIBYE_LOCALHOST_BACKEND_URL=http://localhost:8788` so the Localhost preset points at the new port.
 - **OAuth callback port busy (`:8080`)** — the frontend's local callback server needs port 8080. Free it, or set `SPOTIBYE_OAUTH_PORT` — but then you must also register the matching URI in Spotify's dashboard *and* in the backend allowlist.
 - **`DISALLOWED_REDIRECT_URI`** — the callback URI sent at login isn't in the backend's `ALLOWED_REDIRECT_URIS`. Compare the exact strings: Spotify dashboard entry vs backend value (`.dev.vars` locally, your `wrangler.selfhost.toml` on Cloudflare). Scheme, host, port, and path must all match.
 - **Login loops back to Spotify** — stale browser tokens from a previous app conflict with the new one. Clear site data for Spotify or use an incognito window.
