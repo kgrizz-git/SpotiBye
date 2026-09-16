@@ -261,10 +261,49 @@ def test_patch_kv_ids_unknown_binding_untouched() -> None:
     assert out == SAMPLE_TOML
 
 
+def test_patch_kv_ids_leaves_non_kv_sections() -> None:
+    text = """\
+# ALLOWED_REDIRECT_URIS = "commented"
+# KV Namespaces
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "old"
+preview_id = "oldprev"
+
+[[queues.producers]]
+binding = "ANALYSIS_QUEUE"
+queue = "spotibye-analysis"
+
+[[queues.consumers]]
+queue = "spotibye-analysis"
+dead_letter_queue = "spotibye-analysis-dlq"
+
+[[durable_objects.bindings]]
+name = "ANALYSIS_STATUS"
+
+[[migrations]]
+tag = "v1"
+"""
+    out = _mod.patch_kv_ids(text, {"CACHE_KV": ("n", "np")})
+    assert '"n"' in out and '"np"' in out
+    assert '"spotibye-analysis"' in out
+    assert '"spotibye-analysis-dlq"' in out
+    assert '"ANALYSIS_STATUS"' in out
+    assert 'tag = "v1"' in out
+    assert "# KV Namespaces" in out
+
+
 def test_patch_allowlist_replaces_all() -> None:
     out = _mod.patch_allowlist(SAMPLE_TOML, "http://127.0.0.1:8080/callback")
     assert "app.spotibye.com" not in out
     assert out.count("http://127.0.0.1:8080/callback") == 2
+
+
+def test_patch_allowlist_skips_comments() -> None:
+    text = '# ALLOWED_REDIRECT_URIS = "old"\nALLOWED_REDIRECT_URIS = "old"\n'
+    out = _mod.patch_allowlist(text, "new")
+    assert '# ALLOWED_REDIRECT_URIS = "old"' in out
+    assert 'ALLOWED_REDIRECT_URIS = "new"' in out
 
 
 def test_generate_selfhost_config_dry_run(tmp_path: Path) -> None:

@@ -325,7 +325,7 @@ def provision_kv_namespace(
     ok, output = run_wrangler(args, cwd=cwd)
     if not ok:
         return False, output
-    match = re.search(r"[0-9a-f]{32}", output)
+    match = re.search(r"[0-9a-f]{32}", output, re.IGNORECASE)
     if match is None:
         return False, "could not parse a namespace ID from wrangler output"
     return True, match.group(0)
@@ -366,7 +366,8 @@ def upload_secret(
     if ok:
         print(f"  [ok] uploaded secret {key} (--env {env})")
         return True
-    print(f"  [FAIL] uploading {key}: {output}")
+    # Never print wrangler output here: on failure it may echo the secret.
+    print(f"  [FAIL] uploading {key} (details redacted); try again.")
     return False
 
 
@@ -414,12 +415,24 @@ def patch_kv_ids(
 
 
 def patch_allowlist(toml_text: str, uris: str) -> str:
-    """Replace every ALLOWED_REDIRECT_URIS value with `uris`."""
-    return re.sub(
-        r'ALLOWED_REDIRECT_URIS\s*=\s*"[^"]*"',
-        f'ALLOWED_REDIRECT_URIS = "{uris}"',
-        toml_text,
-    )
+    """Replace every ALLOWED_REDIRECT_URIS value with `uris`.
+
+    Comment lines are left untouched; inline occurrences (e.g. inside
+    `vars = { ... }`) are replaced.
+    """
+    out: list[str] = []
+    for line in toml_text.splitlines():
+        if line.strip().startswith("#"):
+            out.append(line)
+            continue
+        out.append(
+            re.sub(
+                r'ALLOWED_REDIRECT_URIS\s*=\s*"[^"]*"',
+                f'ALLOWED_REDIRECT_URIS = "{uris}"',
+                line,
+            )
+        )
+    return "\n".join(out) + "\n"
 
 
 def generate_selfhost_config(
