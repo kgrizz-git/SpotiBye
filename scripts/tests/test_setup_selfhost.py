@@ -306,6 +306,18 @@ def test_patch_allowlist_skips_comments() -> None:
     assert 'ALLOWED_REDIRECT_URIS = "new"' in out
 
 
+def test_patch_allowlist_ignores_prefixed_names() -> None:
+    text = 'MY_ALLOWED_REDIRECT_URIS = "keep"\nALLOWED_REDIRECT_URIS = "old"\n'
+    out = _mod.patch_allowlist(text, "new")
+    assert 'MY_ALLOWED_REDIRECT_URIS = "keep"' in out
+    assert 'ALLOWED_REDIRECT_URIS = "new"' in out
+
+
+def test_patch_allowlist_backslash_uri_safe() -> None:
+    out = _mod.patch_allowlist('ALLOWED_REDIRECT_URIS = "old"', "C:\\x\\1")
+    assert out == 'ALLOWED_REDIRECT_URIS = "C:\\x\\1"\n'
+
+
 def test_generate_selfhost_config_dry_run(tmp_path: Path) -> None:
     target = tmp_path / "wrangler.selfhost.toml"
     assert _mod.generate_selfhost_config(
@@ -339,11 +351,29 @@ def test_generate_selfhost_config_refuses_overwrite(tmp_path: Path) -> None:
 
 def test_provision_kv_parses_id() -> None:
     with mock.patch.object(
-        _mod, "run_wrangler", return_value=(True, "id abcdef1234567890abcdef1234567890 done")
+        _mod, "run_wrangler", return_value=(True, 'id = "abcdef1234567890ABCDEF1234567890"')
     ):
         ok, value = _mod.provision_kv_namespace("CACHE_KV")
     assert ok
-    assert value == "abcdef1234567890abcdef1234567890"
+    assert value == "abcdef1234567890ABCDEF1234567890"
+
+
+def test_provision_kv_parses_preview_id() -> None:
+    with mock.patch.object(
+        _mod, "run_wrangler", return_value=(True, 'preview_id = "1234567890abcdef1234567890ABCDEF"')
+    ):
+        ok, value = _mod.provision_kv_namespace("CACHE_KV", preview=True)
+    assert ok
+    assert value == "1234567890abcdef1234567890ABCDEF"
+
+
+def test_provision_kv_ignores_noise() -> None:
+    with mock.patch.object(
+        _mod, "run_wrangler",
+        return_value=(True, "trace abcdef1234567890abcdef1234567890\nno assignment here"),
+    ):
+        ok, _ = _mod.provision_kv_namespace("CACHE_KV")
+    assert not ok
 
 
 def test_provision_kv_failure() -> None:

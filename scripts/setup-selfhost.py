@@ -325,10 +325,14 @@ def provision_kv_namespace(
     ok, output = run_wrangler(args, cwd=cwd)
     if not ok:
         return False, output
-    match = re.search(r"[0-9a-f]{32}", output, re.IGNORECASE)
+    match = re.search(
+        r'(?:id|preview_id)\s*=\s*"([a-fA-F0-9]{32})"',
+        output,
+        re.IGNORECASE,
+    )
     if match is None:
         return False, "could not parse a namespace ID from wrangler output"
-    return True, match.group(0)
+    return True, match.group(1)
 
 
 def create_queue(
@@ -427,8 +431,8 @@ def patch_allowlist(toml_text: str, uris: str) -> str:
             continue
         out.append(
             re.sub(
-                r'ALLOWED_REDIRECT_URIS\s*=\s*"[^"]*"',
-                f'ALLOWED_REDIRECT_URIS = "{uris}"',
+                r'\bALLOWED_REDIRECT_URIS\s*=\s*"[^"]*"',
+                lambda _match: f'ALLOWED_REDIRECT_URIS = "{uris}"',
                 line,
             )
         )
