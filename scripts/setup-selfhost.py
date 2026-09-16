@@ -181,11 +181,11 @@ def prompt_client_id() -> str:
 
 def prompt_client_secret() -> str:
     """Prompt for the Client Secret without echoing it. Never printed."""
-    value = getpass.getpass("  Spotify Client Secret (hidden): ").strip()
-    if not value:
+    while True:
+        value = getpass.getpass("  Spotify Client Secret (hidden): ").strip()
+        if value:
+            return value
         print("  Secret cannot be empty. Try again.")
-        return prompt_client_secret()
-    return value
 
 
 def validate_spotify_credentials(
@@ -209,10 +209,14 @@ def validate_spotify_credentials(
         with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
             payload = json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
-        if exc.code in (400, 401):
+        if exc.code == 401:
             return False, (
                 "Spotify rejected the credentials (invalid client). "
                 "Check the Client ID/Secret in the dashboard and try again."
+            )
+        if exc.code == 400:
+            return False, (
+                "Spotify rejected the request (bad request body); try again."
             )
         return False, f"Spotify returned HTTP {exc.code}; try again later."
     except (urllib.error.URLError, OSError, TimeoutError) as exc:

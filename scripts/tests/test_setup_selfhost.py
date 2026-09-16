@@ -134,8 +134,21 @@ def test_validate_credentials_rejected() -> None:
     assert "bad" not in message
 
 
-def test_validate_credentials_unreachable() -> None:
+def test_validate_credentials_bad_request() -> None:
     import urllib.error
+
+    error = urllib.error.HTTPError(
+        "https://x", 400, "Bad Request", {}, None
+    )
+    with mock.patch.object(
+        _mod.urllib.request, "urlopen", side_effect=error
+    ):
+        ok, message = _mod.validate_spotify_credentials("a" * 32, "bad")
+    assert not ok
+    assert "bad request body" in message
+
+
+def test_validate_credentials_unreachable() -> None:    import urllib.error
 
     with mock.patch.object(
         _mod.urllib.request,
