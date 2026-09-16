@@ -215,6 +215,145 @@ def test_write_dev_vars_force(tmp_path: object) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Cloudflare path (chunk C)
+# ---------------------------------------------------------------------------
+
+
+SAMPLE_TOML = """\
+name = "x"
+
+[vars]
+ALLOWED_REDIRECT_URIS = "https://app.spotibye.com"
+
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "oldid1"
+preview_id = "oldprev1"
+
+[[kv_namespaces]]
+binding = "SESSIONS_KV"
+id = "oldid2"
+preview_id = "oldprev2"
+
+[env.production]
+vars = { ALLOWED_REDIRECT_URIS = "https://app.spotibye.com" }
+
+[[env.production.kv_namespaces]]
+binding = "CACHE_KV"
+id = "oldid1"
+preview_id = "oldprev1"
+"""
+
+
+def test_patch_kv_ids_all_blocks() -> None:
+    ids = {"CACHE_KV": ("new1", "newp1"), "SESSIONS_KV": ("new2", "newp2")}
+    out = _mod.patch_kv_ids(SAMPLE_TOML, ids)
+    assert out.count('"new1"') == 2
+    assert out.count('"newp1"') == 2
+    assert out.count('"new2"') == 1
+    assert "oldid1" not in out
+    assert "oldprev2" not in out
+    assert 'binding = "CACHE_KV"' in out
+
+
+def test_patch_kv_ids_unknown_binding_untouched() -> None:
+    out = _mod.patch_kv_ids(SAMPLE_TOML, {"NOPE": ("a", "b")})
+    assert out == SAMPLE_TOML
+
+
+def test_patch_allowlist_replaces_all() -> None:
+    out = _mod.patch_allowlist(SAMPLE_TOML, "http://127.0.0.1:8080/callback")
+    assert "app.spotibye.com" not in out
+    assert out.count("http://127.0.0.1:8080/callback") == 2
+
+
+def test_generate_selfhost_config_dry_run(tmp_path: Path) -> None:
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert _mod.generate_selfhost_config(
+        Path("x"), target, {}, "http://127.0.0.1:8080/callback", dry_run=True
+    )
+    assert not target.exists()
+
+
+def test_generate_selfhost_config_writes(tmp_path: Path) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(SAMPLE_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    ids = {"CACHE_KV": ("n1", "np1"), "SESSIONS_KV": ("n2", "np2")}
+    assert _mod.generate_selfhost_config(
+        template, target, ids, "http://127.0.0.1:8080/callback"
+    )
+    text = target.read_text()
+    assert '"n1"' in text and "oldid1" not in text
+    assert "http://127.0.0.1:8080/callback" in text
+    assert "app.spotibye.com" not in text
+
+
+def test_generate_selfhost_config_refuses_overwrite(tmp_path: Path) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(SAMPLE_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    target.write_text("existing")
+    assert not _mod.generate_selfhost_config(template, target, {}, "u")
+    assert target.read_text() == "existing"
+
+
+def test_provision_kv_parses_id() -> None:
+    with mock.patch.object(
+        _mod, "run_wrangler", return_value=(True, "id abcdef1234567890abcdef1234567890 done")
+    ):
+        ok, value = _mod.provision_kv_namespace("CACHE_KV")
+    assert ok
+    assert value == "abcdef1234567890abcdef1234567890"
+
+
+def test_provision_kv_failure() -> None:
+    with mock.patch.object(
+        _mod, "run_wrangler", return_value=(False, "boom")
+    ):
+        ok, _ = _mod.provision_kv_namespace("CACHE_KV")
+    assert not ok
+
+
+def test_create_queue_exists_counts_as_success() -> None:
+    with mock.patch.object(
+        _mod, "run_wrangler", return_value=(False, "Queue already exists")
+    ):
+        ok, _ = _mod.create_queue("q")
+    assert ok
+
+
+def test_upload_secret_pipes_via_stdin(capsys: object) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_run(  # type: ignore[no-untyped-def]
+        cmd, **kwargs
+    ):
+        seen["cmd"] = cmd
+        seen["kwargs"] = kwargs
+
+        class P:
+            returncode = 0
+            stdout = "ok"
+            stderr = ""
+
+        return P()
+
+    with mock.patch.object(_mod.subprocess, "run", side_effect=fake_run):
+        assert _mod.upload_secret("K", "TOPSECRET", "production", "c.toml")
+    assert "TOPSECRET" not in " ".join(seen["cmd"])
+    assert seen["kwargs"]["input"] == b"TOPSECRET"
+    out = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert "TOPSECRET" not in out
+
+
+def test_upload_secret_dry_run(capsys: object) -> None:
+    assert _mod.upload_secret("K", "TOPSECRET", "production", "c", dry_run=True)
+    out = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert "TOPSECRET" not in out
+
+
+# ---------------------------------------------------------------------------
 # portals and probes
 # ---------------------------------------------------------------------------
 

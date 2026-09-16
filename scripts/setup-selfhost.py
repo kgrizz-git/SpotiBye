@@ -20,6 +20,7 @@ import argparse
 import base64
 import getpass
 import json
+import re
 import secrets
 import shutil
 import subprocess  # nosec B404 - subprocess is needed for tool checks
@@ -35,6 +36,7 @@ from pathlib import Path
 SPOTIFY_DASHBOARD_URL = "https://developer.spotify.com/dashboard"
 CLOUDFLARE_DASHBOARD_URL = "https://dash.cloudflare.com/"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
+SELFHOST_CONFIG_NAME = "wrangler.selfhost.toml"
 
 REQUIRED_PYTHON = (3, 10)
 REQUIRED_TOOLS = ("node", "npm", "npx", "openssl")
@@ -275,6 +277,174 @@ def write_dev_vars(
     except OSError:
         pass
     print(f"  Wrote {path} (mode 0600)")
+    return True
+
+
+def backend_dir() -> Path:
+    """Return the backend directory (src/backend under the repo root)."""
+    return repo_root() / "src" / "backend"
+
+
+def run_wrangler(
+    args: list[str],
+    cwd: Path | None = None,
+    secret_input: str | None = None,
+) -> tuple[bool, str]:
+    """Run a wrangler subcommand via npx. Secret goes via stdin, never argv.
+
+    Returns (ok, output). Output may contain IDs but never the secret:
+    callers must not print raw output when secret_input was provided.
+    """
+    cmd = ["npx", "wrangler", *args]
+    try:
+        proc = subprocess.run(  # noqa: S603 - argv list, no shell
+            cmd,
+            input=secret_input.encode() if secret_input is not None else None,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(cwd) if cwd is not None else None,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+    output = (proc.stdout + proc.stderr).strip()
+    return proc.returncode == 0, output
+
+
+def provision_kv_namespace(
+    binding: str, preview: bool = False, cwd: Path | None = None
+) -> tuple[bool, str]:
+    """Create a KV namespace, returning (ok, namespace-id-or-message).
+
+    The ID is extracted from wrangler's output; the message never
+    contains secrets (no secret is involved in this call).
+    """
+    args = ["kv", "namespace", "create", binding]
+    if preview:
+        args.append("--preview")
+    ok, output = run_wrangler(args, cwd=cwd)
+    if not ok:
+        return False, output
+    match = re.search(r"[0-9a-f]{32}", output)
+    if match is None:
+        return False, "could not parse a namespace ID from wrangler output"
+    return True, match.group(0)
+
+
+def create_queue(
+    name: str, cwd: Path | None = None
+) -> tuple[bool, str]:
+    """Create a queue; already-existing counts as success."""
+    ok, output = run_wrangler(["queues", "create", name], cwd=cwd)
+    if ok:
+        return True, f"queue {name} ready"
+    if "already exists" in output.lower():
+        return True, f"queue {name} already exists"
+    return False, output
+
+
+def upload_secret(
+    key: str,
+    value: str,
+    env: str,
+    config: str,
+    cwd: Path | None = None,
+    dry_run: bool = False,
+) -> bool:
+    """Pipe a secret into `wrangler secret put`. The value never hits argv.
+
+    Returns True on success. Nothing about the value is printed.
+    """
+    if dry_run:
+        print(f"  [dry-run] would upload secret {key} (--env {env})")
+        return True
+    ok, output = run_wrangler(
+        ["secret", "put", key, "--env", env, "-c", config],
+        cwd=cwd,
+        secret_input=value,
+    )
+    if ok:
+        print(f"  [ok] uploaded secret {key} (--env {env})")
+        return True
+    print(f"  [FAIL] uploading {key}: {output}")
+    return False
+
+
+def patch_kv_ids(
+    toml_text: str, ids: dict[str, tuple[str, str]]
+) -> str:
+    """Replace id/preview_id in every kv_namespaces block for known bindings.
+
+    `ids` maps binding name -> (id, preview_id). Unknown bindings are
+    left untouched. Returns the patched text.
+    """
+    out: list[str] = []
+    current_binding: str | None = None
+    in_kv_block = False
+    for line in toml_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[[") and "kv_namespaces" in stripped:
+            in_kv_block = True
+            current_binding = None
+            out.append(line)
+            continue
+        if stripped.startswith("[[") or (
+            stripped.startswith("[") and not stripped.startswith("[\"")
+        ):
+            in_kv_block = False
+            current_binding = None
+            out.append(line)
+            continue
+        if in_kv_block and stripped.startswith('binding = "'):
+            current_binding = stripped.split('"')[1]
+            out.append(line)
+            continue
+        if (
+            in_kv_block
+            and current_binding in ids
+            and re.match(r'^(id|preview_id)\s*=', stripped)
+        ):
+            key = "id" if stripped.startswith("id") else "preview_id"
+            value = ids[current_binding][0 if key == "id" else 1]
+            indent = line[: len(line) - len(line.lstrip())]
+            out.append(f'{indent}{key} = "{value}"')
+            continue
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def patch_allowlist(toml_text: str, uris: str) -> str:
+    """Replace every ALLOWED_REDIRECT_URIS value with `uris`."""
+    return re.sub(
+        r'ALLOWED_REDIRECT_URIS\s*=\s*"[^"]*"',
+        f'ALLOWED_REDIRECT_URIS = "{uris}"',
+        toml_text,
+    )
+
+
+def generate_selfhost_config(
+    template_path: Path,
+    output_path: Path,
+    kv_ids: dict[str, tuple[str, str]],
+    redirect_uris: str,
+    force: bool = False,
+    dry_run: bool = False,
+) -> bool:
+    """Write a per-user wrangler config. Never touches the tracked file."""
+    if dry_run:
+        print(f"  [dry-run] would write {output_path}")
+        return True
+    if output_path.exists() and not force:
+        print(
+            f"  {output_path} already exists. Re-run with --force to "
+            "overwrite, or edit it by hand."
+        )
+        return False
+    text = template_path.read_text(encoding="utf-8")
+    text = patch_kv_ids(text, kv_ids)
+    text = patch_allowlist(text, redirect_uris)
+    output_path.write_text(text, encoding="utf-8")
+    print(f"  Wrote {output_path}")
     return True
 
 
