@@ -324,13 +324,14 @@ def test_create_queue_exists_counts_as_success() -> None:
 
 
 def test_upload_secret_pipes_via_stdin(capsys: object) -> None:
-    seen: dict[str, object] = {}
+    seen_cmd: list[str] = []
+    seen_kwargs: dict[str, object] = {}
 
     def fake_run(  # type: ignore[no-untyped-def]
         cmd, **kwargs
     ):
-        seen["cmd"] = cmd
-        seen["kwargs"] = kwargs
+        seen_cmd.extend(cmd)
+        seen_kwargs.update(kwargs)
 
         class P:
             returncode = 0
@@ -341,8 +342,8 @@ def test_upload_secret_pipes_via_stdin(capsys: object) -> None:
 
     with mock.patch.object(_mod.subprocess, "run", side_effect=fake_run):
         assert _mod.upload_secret("K", "TOPSECRET", "production", "c.toml")
-    assert "TOPSECRET" not in " ".join(seen["cmd"])
-    assert seen["kwargs"]["input"] == b"TOPSECRET"
+    assert "TOPSECRET" not in " ".join(seen_cmd)
+    assert seen_kwargs["input"] == b"TOPSECRET"
     out = capsys.readouterr().out  # type: ignore[attr-defined]
     assert "TOPSECRET" not in out
 
