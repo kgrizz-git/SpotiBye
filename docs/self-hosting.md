@@ -18,6 +18,8 @@ You will run two pieces locally:
 
 ## Step 1 — Create a Spotify App (5 min)
 
+Your Spotify account must hold an active **Premium** subscription — Spotify requires the app owner to have Premium for Development Mode apps, and the app stops working if it lapses.
+
 1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in.
 2. **Create app**: give it a name (e.g. `SpotiBye-local`) and description, accept the terms.
 3. Open the app's **Settings**, and under **Redirect URIs** add exactly:
@@ -26,6 +28,9 @@ You will run two pieces locally:
    ```
    Use the IP literal `127.0.0.1` — the backend allowlist includes this exact URI. Click **Add**, then **Save**.
 4. On the same Settings page, copy your **Client ID** and **Client Secret**. Keep the secret private.
+5. Allowlist yourself (and anyone sharing your backend): **Settings → Users and Access → Add new user**, entering each person's name and Spotify email. Only allowlisted accounts can authorize — anyone else gets an error from Spotify's API on login.
+
+When you later log in through SpotiBye, Spotify asks you to approve read-only access (`user-read-private`, `user-read-email`, `playlist-read-private`, `playlist-read-collaborative`). The app cannot modify your playlists or see your password.
 
 ## Step 2 — Run the Backend Locally (5 min)
 
