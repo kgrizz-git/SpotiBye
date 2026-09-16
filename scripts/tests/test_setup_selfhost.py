@@ -424,7 +424,7 @@ def test_upload_secret_dry_run(capsys: object) -> None:
 
 
 # ---------------------------------------------------------------------------
-# portals and probes
+# portals
 # ---------------------------------------------------------------------------
 
 
@@ -432,13 +432,3 @@ def test_open_portal_dry_run_does_not_open_browser() -> None:
     with mock.patch.object(_mod.webbrowser, "open") as opener:
         _mod.open_portal("https://example.com", dry_run=True)
     opener.assert_not_called()
-
-
-def test_run_step_success() -> None:
-    ok, _ = _mod.run_step([sys.executable, "-c", "print('hi')"])
-    assert ok
-
-
-def test_run_step_failure() -> None:
-    ok, _ = _mod.run_step([sys.executable, "-c", "import sys; sys.exit(3)"])
-    assert not ok

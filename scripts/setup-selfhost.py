@@ -39,7 +39,7 @@ SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SELFHOST_CONFIG_NAME = "wrangler.selfhost.toml"
 
 REQUIRED_PYTHON = (3, 10)
-REQUIRED_TOOLS = ("node", "npm", "npx", "openssl")
+REQUIRED_TOOLS = ("node", "npm", "npx")
 
 
 @dataclass
@@ -110,8 +110,6 @@ def check_tool(name: str) -> PrereqResult:
         "node": "Install Node 24 (see .nvmrc): https://nodejs.org/",
         "npm": "npm ships with Node: https://nodejs.org/",
         "npx": "npx ships with Node: https://nodejs.org/",
-        "openssl": "macOS/Linux ship openssl; Windows: use Git Bash or "
-        "https://slproweb.com/products/Win32OpenSSL.html",
     }
     return PrereqResult(
         name=name, ok=False, hint=fixes.get(name, f"Install {name}.")
@@ -147,21 +145,6 @@ def open_portal(url: str, dry_run: bool = False) -> None:
         return
     webbrowser.open(url)
     print(f"  Opened in your browser: {url}")
-
-
-def run_step(cmd: list[str]) -> tuple[bool, str]:
-    """Run a read-only probe command, returning (ok, output)."""
-    try:
-        proc = subprocess.run(  # noqa: S603 - argv list, no shell
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return False, str(exc)
-    output = (proc.stdout + proc.stderr).strip()
-    return proc.returncode == 0, output
 
 
 def repo_root() -> Path:
@@ -495,7 +478,7 @@ def main(argv: list[str] | None = None) -> int:
         force=config.force, dry_run=config.dry_run,
     ):
         return 1
-    print("\nYou're ready: cd src/backend && npm run dev")
+    print("\nYou're ready: cd src/backend && npm install && npm run dev")
     return 0
 
 
