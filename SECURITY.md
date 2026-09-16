@@ -61,7 +61,7 @@ pre-commit run --all-files
 If you discover a security vulnerability, please:
 
 1. **DO NOT** open a public issue
-2. Email the maintainers directly with details
+2. Report it through a [private security advisory](https://github.com/kgrizz-git/SpotiBye/security/advisories/new) with details (Security tab → Advisories → Report a vulnerability)
 3. Allow time for assessment and patch before disclosure
 
 ## Security Hardening Checklist

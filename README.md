@@ -45,7 +45,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for layer contracts and data flow, and 
 
 ## Security
 
-See [`SECURITY.md`](SECURITY.md) for the security policy and the scanning tools enforced in CI. To report a vulnerability, please email the maintainers directly instead of opening a public issue.
+See [`SECURITY.md`](SECURITY.md) for the security policy and the scanning tools enforced in CI. To report a vulnerability, please use a [private security advisory](https://github.com/kgrizz-git/SpotiBye/security/advisories/new) instead of opening a public issue.
 
 ## Contributing
 
