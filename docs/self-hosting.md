@@ -90,7 +90,7 @@ Cloudflare's free tier covers personal use with room to spare (100,000 Worker re
    wrangler secret put SPOTIFY_CLIENT_SECRET --env production
    wrangler secret put JWT_SECRET --env production
    ```
-4. Create your own config file `src/backend/wrangler.selfhost.toml` (gitignored — never edit the tracked `wrangler.toml`): copy the repo's file, replace both KV namespace IDs with the ones from step 2, and set `ALLOWED_REDIRECT_URIS` to include your frontend's exact callback URI — including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (`src/backend/routes/auth.ts` rejects any `redirect_uri` absent from that allowlist, and the shipped default only allows `https://app.spotibye.com`.)
+4. Create your own config file `src/backend/wrangler.selfhost.toml` (gitignored — never edit the tracked `wrangler.toml`): copy the repo's file, replace all four KV namespace IDs (production and preview for both `CACHE_KV` and `SESSIONS_KV`) with the ones from step 2, and set `ALLOWED_REDIRECT_URIS` to include your frontend's exact callback URI — including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (`src/backend/routes/auth.ts` rejects any `redirect_uri` absent from that allowlist, and the shipped default only allows `https://app.spotibye.com`.)
 5. Deploy with your config and point the frontend at the Worker URL:
    ```bash
    wrangler deploy -c wrangler.selfhost.toml --env production
