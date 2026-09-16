@@ -148,7 +148,8 @@ def test_validate_credentials_bad_request() -> None:
     assert "bad request body" in message
 
 
-def test_validate_credentials_unreachable() -> None:    import urllib.error
+def test_validate_credentials_unreachable() -> None:
+    import urllib.error
 
     with mock.patch.object(
         _mod.urllib.request,
@@ -166,14 +167,11 @@ def test_generate_jwt_secret_format() -> None:
     assert first != second
 
 
-def test_build_dev_vars_content_keys(tmp_path: object) -> None:
-    from pathlib import Path
-
+def test_build_dev_vars_content_keys() -> None:
     content = _mod.build_dev_vars_content("id", "sec", "jwt")
     assert 'SPOTIFY_CLIENT_ID="id"' in content
     assert 'SPOTIFY_CLIENT_SECRET="sec"' in content
     assert 'JWT_SECRET="jwt"' in content
-    assert isinstance(tmp_path, Path)  # silence unused-fixture style check
 
 
 def test_write_dev_vars_dry_run_writes_nothing(
