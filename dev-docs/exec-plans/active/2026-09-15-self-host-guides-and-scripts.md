@@ -17,13 +17,13 @@
 ## Phase 1 — Guide gaps (docs only)
 
 - [ ] Spotify app registration detail: exact Redirect URI per mode (local loopback vs deployed Worker URL), where to find Client ID/Secret, and the read-only scope list above so users know what they are approving.
-- [ ] Cloudflare deploy path: expand beyond the pointer — account + API token permissions, creating KV namespaces and the analysis queue, `wrangler secret put` for the three secrets, `ALLOWED_REDIRECT_URIS` per environment, deploy commands for dev vs prod.
+- [ ] Cloudflare deploy path: expand beyond the pointer — account + API token permissions; provisioning via wrangler (`wrangler kv:namespace create` incl. `--preview`, queue creation) *before* deploy; `wrangler secret put` for the three secrets (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `JWT_SECRET`); `ALLOWED_REDIRECT_URIS` per environment as a `wrangler.toml` `[vars]` value (a committed var, never a `wrangler secret put` target); deploy commands for dev vs prod.
 - [ ] Frontend configuration: verify `docs/configuration-options.md` covers everything a self-hoster needs (backend URL env vars, Localhost/Custom presets); fill gaps and cross-link from `docs/self-hosting.md`.
-- [ ] Self-host troubleshooting section: port conflicts (8787/8080), `DISALLOWED_REDIRECT_URI` (allowlist vs Spotify dashboard mismatch), expired/revoked secrets, `wrangler dev` local-state reset.
+- [ ] Self-host troubleshooting section with explicit per-port entries — backend `http://localhost:8787` conflicts, OAuth callback `:8080` conflicts — plus `DISALLOWED_REDIRECT_URI` (allowlist vs Spotify dashboard mismatch), expired/revoked secrets, `wrangler dev` local-state reset.
 - [ ] Shared-backend-for-friends guide (Cloudflare path required — a localhost backend is not reachable from another machine):
   - [ ] Host: deploy the Worker, share the backend URL; friends point their frontend at it via `SPOTIBYE_BACKEND_URL` or the Custom backend option — no backend setup on their side.
-  - [ ] Spotify user cap still applies per app: the host must add each friend's Spotify account email under the Spotify app's User Management. Owner believes the development-mode cap is ~5 total including themselves — confirm the current Spotify limit during execution and state the verified number, not the guess.
-  - [ ] Redirect URIs: friends run the frontend locally, so the same loopback callback (`http://127.0.0.1:8080/callback`) must stay in both the Spotify app settings and `ALLOWED_REDIRECT_URIS`.
+  - [ ] Spotify user cap still applies per app: the host must add each friend's Spotify account email under the Spotify app's User Management. Working hypothesis per Spotify docs is 25 total including the owner — re-confirm the current limit during execution and state the verified number.
+  - [ ] Redirect URIs: friends run the frontend locally, so the loopback callback (`http://127.0.0.1:8080/callback`) must *replace* (not just append to) the shipped production default (`https://app.spotibye.com`) in the `[env.production]` vars, alongside the Spotify app settings entry.
   - [ ] Trust note: friends' Spotify tokens live in the host's backend storage — share only with people you trust.
 - [ ] Update `docs/index.md` and README links for any new pages.
 
@@ -41,8 +41,9 @@ Goal: a user who wants to run the backend registers their own Spotify app and ge
 - [ ] Implement (Python, stdlib only, lives in `scripts/`):
   - [ ] Open Spotify/Cloudflare portal URLs and collect credentials.
   - [ ] Validate credentials before writing anything (Spotify: auth URL construction/smoke check; Cloudflare: `wrangler whoami`-equivalent token check).
-  - [ ] Generate `src/backend/.dev.vars` (local path) and/or `wrangler.toml` env vars (Cloudflare path) from templates.
-  - [ ] Refuse to overwrite existing secrets without `--force`; ensure generated files stay gitignored.
+  - [ ] Provision Cloudflare resources via wrangler before deploy (KV namespaces incl. `--preview`, analysis queue); fail with actionable errors if provisioning fails.
+  - [ ] Generate `src/backend/.dev.vars` from the existing `src/backend/.dev.vars.example` template (local path). For the Cloudflare path, fill only `[vars]` from an explicit template file (path TBD in design) — never rewrite the whole `wrangler.toml`, so committed KV/queue/DO bindings are preserved. `ALLOWED_REDIRECT_URIS` is a var, never a `wrangler secret put` target.
+  - [ ] Refuse to overwrite existing secrets or an existing `wrangler.toml` `[vars]` block without `--force`; assert `.dev.vars` is gitignored (verify, don't assume) and ensure generated files stay gitignored.
 - [ ] Add tests for the script (arg parsing, validation, file generation with temp dirs, no-secret-leak assertions).
 - [ ] Wire into docs (`docs/self-hosting.md`, `docs/index.md`) and repo hooks if appropriate (never as a required gate).
 
