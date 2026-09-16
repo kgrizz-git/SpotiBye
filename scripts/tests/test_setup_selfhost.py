@@ -81,6 +81,128 @@ def test_report_failure() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Spotify credentials (chunk B)
+# ---------------------------------------------------------------------------
+
+
+def _fake_token_response(payload: dict) -> mock.MagicMock:
+    response = mock.MagicMock()
+    response.read.return_value = __import__("json").dumps(payload).encode()
+    response.__enter__.return_value = response
+    return response
+
+
+def test_prompt_client_id_accepts_valid() -> None:
+    with mock.patch("builtins.input", return_value="a" * 32):
+        assert _mod.prompt_client_id() == "a" * 32
+
+
+def test_prompt_client_id_rejects_then_accepts(capsys: object) -> None:
+    inputs = iter(["nope", "b" * 32])
+    with mock.patch("builtins.input", side_effect=lambda _: next(inputs)):
+        assert _mod.prompt_client_id() == "b" * 32
+    out = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert "doesn't look like" in out
+
+
+def test_prompt_client_secret_hidden() -> None:
+    with mock.patch.object(_mod.getpass, "getpass", return_value="s3cret"):
+        assert _mod.prompt_client_secret() == "s3cret"
+
+
+def test_validate_credentials_ok() -> None:
+    with mock.patch.object(
+        _mod.urllib.request, "urlopen",
+        return_value=_fake_token_response({"access_token": "tok"}),
+    ):
+        ok, message = _mod.validate_spotify_credentials("a" * 32, "secret")
+    assert ok
+    assert "secret" not in message
+
+
+def test_validate_credentials_rejected() -> None:
+    import urllib.error
+
+    error = urllib.error.HTTPError(
+        "https://x", 401, "Unauthorized", {}, None
+    )
+    with mock.patch.object(
+        _mod.urllib.request, "urlopen", side_effect=error
+    ):
+        ok, message = _mod.validate_spotify_credentials("a" * 32, "bad")
+    assert not ok
+    assert "bad" not in message
+
+
+def test_validate_credentials_unreachable() -> None:
+    import urllib.error
+
+    with mock.patch.object(
+        _mod.urllib.request,
+        "urlopen",
+        side_effect=urllib.error.URLError("down"),
+    ):
+        ok, _ = _mod.validate_spotify_credentials("a" * 32, "secret")
+    assert not ok
+
+
+def test_generate_jwt_secret_format() -> None:
+    first = _mod.generate_jwt_secret()
+    second = _mod.generate_jwt_secret()
+    assert len(first) == 64
+    assert first != second
+
+
+def test_build_dev_vars_content_keys(tmp_path: object) -> None:
+    from pathlib import Path
+
+    content = _mod.build_dev_vars_content("id", "sec", "jwt")
+    assert 'SPOTIFY_CLIENT_ID="id"' in content
+    assert 'SPOTIFY_CLIENT_SECRET="sec"' in content
+    assert 'JWT_SECRET="jwt"' in content
+    assert isinstance(tmp_path, Path)  # silence unused-fixture style check
+
+
+def test_write_dev_vars_dry_run_writes_nothing(
+    tmp_path: object, capsys: object
+) -> None:
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    target = tmp_path / ".dev.vars"  # type: ignore[operator]
+    assert _mod.write_dev_vars(
+        target, "id", "TOPSECRET", "jwt", dry_run=True
+    )
+    assert not target.exists()
+    out = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert "TOPSECRET" not in out
+
+
+def test_write_dev_vars_refuses_overwrite(
+    tmp_path: object, capsys: object
+) -> None:
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    target = tmp_path / ".dev.vars"  # type: ignore[operator]
+    target.write_text("existing")
+    assert not _mod.write_dev_vars(target, "id", "sec", "jwt")
+    assert target.read_text() == "existing"
+    out = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert "sec" not in out
+
+
+def test_write_dev_vars_force(tmp_path: object) -> None:
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    target = tmp_path / ".dev.vars"  # type: ignore[operator]
+    target.write_text("existing")
+    assert _mod.write_dev_vars(target, "id", "sec", "jwt", force=True)
+    assert "SPOTIFY_CLIENT_ID" in target.read_text()
+
+
+# ---------------------------------------------------------------------------
 # portals and probes
 # ---------------------------------------------------------------------------
 
