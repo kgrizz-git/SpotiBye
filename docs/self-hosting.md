@@ -75,10 +75,27 @@ If you would rather run the backend in the cloud (your own Worker instead of loc
 
 Cloudflare's free tier covers personal use with room to spare (100,000 Worker requests/day, Workers KV and Queues included, no credit card required).
 
-1. Create a Cloudflare account and API token, then follow [`dev-docs/guides/build-and-deploy-guide.md`](../dev-docs/guides/build-and-deploy-guide.md).
-2. Set the Worker secrets (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `JWT_SECRET`) via `wrangler secret put`.
-3. Configure `ALLOWED_REDIRECT_URIS` for your environment **before** deploying: `src/backend/routes/auth.ts` rejects any `redirect_uri` not present in that allowlist, so it must contain your frontend's exact callback URI — including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (The shipped production default only allows `https://app.spotibye.com`.) This is a `wrangler.toml` `[vars]` value, not a secret — set it in the `[env.production]` vars, not via `wrangler secret put`.
-4. Point the frontend at your Worker URL: set `SPOTIBYE_BACKEND_URL` (or use the Custom backend option in the app's backend selector).
+1. Create a Cloudflare account and log in locally (`wrangler login`), or create an API token with Workers deploy permissions and export it as `CLOUDFLARE_API_TOKEN`. Then follow [`dev-docs/guides/build-and-deploy-guide.md`](../dev-docs/guides/build-and-deploy-guide.md) for the full deploy reference.
+2. Provision your own resources (your Worker cannot use the IDs shipped in the repo's `wrangler.toml` — those belong to another account):
+   ```bash
+   wrangler kv namespace create CACHE_KV
+   wrangler kv namespace create CACHE_KV --preview
+   wrangler kv namespace create SESSIONS_KV
+   wrangler kv namespace create SESSIONS_KV --preview
+   ```
+   Queues (`spotibye-analysis` / `spotibye-analysis-dlq`, plus `-dev` variants) are created on first deploy if missing.
+3. Upload the three secrets, scoped to your environment (replace `production` with `development` for a dev Worker):
+   ```bash
+   wrangler secret put SPOTIFY_CLIENT_ID --env production
+   wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+   wrangler secret put JWT_SECRET --env production
+   ```
+4. Create your own config file `src/backend/wrangler.selfhost.toml` (gitignored — never edit the tracked `wrangler.toml`): copy the repo's file, replace both KV namespace IDs with the ones from step 2, and set `ALLOWED_REDIRECT_URIS` to include your frontend's exact callback URI — including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (`src/backend/routes/auth.ts` rejects any `redirect_uri` absent from that allowlist, and the shipped default only allows `https://app.spotibye.com`.)
+5. Deploy with your config and point the frontend at the Worker URL:
+   ```bash
+   wrangler deploy -c wrangler.selfhost.toml --env production
+   ```
+   Then set `SPOTIBYE_BACKEND_URL` (or use the Custom backend option in the app's backend selector).
 
 ## Commercial Hosting
 
