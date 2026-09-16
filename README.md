@@ -40,12 +40,12 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for layer contracts and data flow, and 
 
 - Developer docs start at [`dev-docs/README.md`](dev-docs/README.md); builds and deploys are covered in [`dev-docs/guides/build-and-deploy-guide.md`](dev-docs/guides/build-and-deploy-guide.md)
 - Backend: `cd src/backend && npm run test:run && npm run lint`
-- Frontend: `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v`
+- Frontend (with your Python environment active): `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 python -m pytest src/frontend/tests/ -v`
 - Quick check of everything: `./scripts/verify-all.sh` from the repo root
 
 ## Security
 
-See [`SECURITY.md`](SECURITY.md) for the security policy and the scanning tools enforced in CI. To report a vulnerability, please open a private security advisory instead of a public issue.
+See [`SECURITY.md`](SECURITY.md) for the security policy and the scanning tools enforced in CI. To report a vulnerability, please email the maintainers directly instead of opening a public issue.
 
 ## Contributing
 
