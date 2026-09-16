@@ -69,6 +69,22 @@ spotibye
 
 In the app's backend selector, choose the **Localhost** preset, then **Login with Spotify**. Your browser opens Spotify's authorization page for *your* app; approve it and return to SpotiBye. Your playlists load and exports work end to end.
 
+## Guided Setup (Recommended)
+
+The steps above can be driven by an interactive script that checks prerequisites, opens the right portal pages, validates your Spotify credentials before writing anything, and generates your local config:
+
+```bash
+python3 scripts/setup-selfhost.py
+```
+
+Useful flags:
+
+- `python3 scripts/setup-selfhost.py --check` — verify prerequisites only.
+- `python3 scripts/setup-selfhost.py --dry-run` — print what would happen without writing anything or opening browsers.
+- `python3 scripts/setup-selfhost.py --force` — allow overwriting an existing `src/backend/.dev.vars`.
+
+The script never prints secret values — prompts hide input, dry runs show redacted placeholders, and Cloudflare uploads pipe values via stdin. It currently automates the local path end to end (Spotify app credentials + `.dev.vars`); the Cloudflare helpers (KV provisioning, secret upload, per-user config generation) are implemented and tested but not yet wired into the interactive flow — follow the manual Cloudflare steps above for now.
+
 ## Secondary Path — Deploy the Backend to Cloudflare
 
 If you would rather run the backend in the cloud (your own Worker instead of localhost):
