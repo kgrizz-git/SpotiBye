@@ -40,6 +40,7 @@ SELFHOST_CONFIG_NAME = "wrangler.selfhost.toml"
 
 REQUIRED_PYTHON = (3, 10)
 REQUIRED_TOOLS = ("node", "npm", "npx")
+REQUIRED_NODE_MAJOR = 24
 
 
 @dataclass
@@ -116,10 +117,52 @@ def check_tool(name: str) -> PrereqResult:
     )
 
 
+def check_node_version() -> PrereqResult:
+    """Verify node exists and meets the pinned major version."""
+    if shutil.which("node") is None:
+        return PrereqResult(
+            name="node-version",
+            ok=False,
+            hint="Install Node 24 (see .nvmrc): https://nodejs.org/",
+        )
+    try:
+        proc = subprocess.run(  # noqa: S603 - argv list, no shell
+            ["node", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return PrereqResult(
+            name="node-version", ok=False, hint="Could not run node."
+        )
+    match = re.search(r"v(\d+)", proc.stdout.strip())
+    if match is None:
+        return PrereqResult(
+            name="node-version",
+            ok=False,
+            hint="Could not parse node version; reinstall Node 24.",
+        )
+    if int(match.group(1)) >= REQUIRED_NODE_MAJOR:
+        return PrereqResult(
+            name=f"node {proc.stdout.strip()}", ok=True
+        )
+    return PrereqResult(
+        name="node-version",
+        ok=False,
+        hint=(
+            f"Node {REQUIRED_NODE_MAJOR}+ required "
+            f"(found {proc.stdout.strip()}). "
+            "Install from https://nodejs.org/ (see .nvmrc)."
+        ),
+    )
+
+
 def check_prerequisites() -> list[PrereqResult]:
     """Run all prerequisite checks and return the results."""
     results = [check_python_version()]
     results.extend(check_tool(tool) for tool in REQUIRED_TOOLS)
+    results.append(check_node_version())
     return results
 
 
@@ -282,7 +325,7 @@ def run_wrangler(
     try:
         proc = subprocess.run(  # noqa: S603 - argv list, no shell
             cmd,
-            input=secret_input.encode() if secret_input is not None else None,
+            input=secret_input,
             capture_output=True,
             text=True,
             timeout=120,

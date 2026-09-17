@@ -61,6 +61,41 @@ def test_check_tool_missing_never_leaks() -> None:
     assert "secret" not in result.hint.lower()
 
 
+def _fake_proc(stdout: str) -> mock.MagicMock:
+    proc = mock.MagicMock()
+    proc.stdout = stdout
+    return proc
+
+
+def test_check_node_version_ok() -> None:
+    with (
+        mock.patch.object(_mod.shutil, "which", return_value="/x/node"),
+        mock.patch.object(
+            _mod.subprocess, "run", return_value=_fake_proc("v24.1.0\n")
+        ),
+    ):
+        result = _mod.check_node_version()
+    assert result.ok
+
+
+def test_check_node_version_too_old() -> None:
+    with (
+        mock.patch.object(_mod.shutil, "which", return_value="/x/node"),
+        mock.patch.object(
+            _mod.subprocess, "run", return_value=_fake_proc("v20.9.0\n")
+        ),
+    ):
+        result = _mod.check_node_version()
+    assert not result.ok
+    assert "24" in result.hint
+
+
+def test_check_node_version_missing() -> None:
+    with mock.patch.object(_mod.shutil, "which", return_value=None):
+        result = _mod.check_node_version()
+    assert not result.ok
+
+
 def test_check_python_version_current() -> None:
     assert _mod.check_python_version().ok
 
@@ -412,7 +447,7 @@ def test_upload_secret_pipes_via_stdin(capsys: object) -> None:
     with mock.patch.object(_mod.subprocess, "run", side_effect=fake_run):
         assert _mod.upload_secret("K", "TOPSECRET", "production", "c.toml")
     assert "TOPSECRET" not in " ".join(seen_cmd)
-    assert seen_kwargs["input"] == b"TOPSECRET"
+    assert seen_kwargs["input"] == "TOPSECRET"
     out = capsys.readouterr().out  # type: ignore[attr-defined]
     assert "TOPSECRET" not in out
 
