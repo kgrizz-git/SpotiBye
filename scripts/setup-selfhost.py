@@ -294,6 +294,8 @@ def write_dev_vars(
             "or edit it by hand."
         )
         return False
+    # codeql[py/clear-text-storage-sensitive-data]: writing the local secrets
+    # file is the feature; it is chmod 0600 and gitignored by design.
     path.write_text(
         build_dev_vars_content(client_id, client_secret, jwt_secret),
         encoding="utf-8",
