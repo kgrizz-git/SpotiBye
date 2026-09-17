@@ -40,7 +40,7 @@ npm install
 cp .dev.vars.example .dev.vars
 ```
 
-Edit `.dev.vars` and set the three values (this file is gitignored — never commit it):
+Edit `.dev.vars` and set the three values (this file holds secrets in cleartext by necessity — wrangler reads them as-is — so it is gitignored: never commit or share it):
 
 ```ini
 SPOTIFY_CLIENT_ID="paste-from-spotify-dashboard"

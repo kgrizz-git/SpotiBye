@@ -284,7 +284,11 @@ def write_dev_vars(
     force: bool = False,
     dry_run: bool = False,
 ) -> bool:
-    """Write .dev.vars unless it exists (without --force). Never prints values."""
+    """Write .dev.vars unless it exists (without --force). Never prints values.
+
+    The file necessarily holds secrets in cleartext (wrangler reads them
+    as literal env values); it is created mode 0600 and must stay gitignored.
+    """
     if dry_run:
         print(f"  [dry-run] would write {path} (values redacted)")
         return True
@@ -305,6 +309,11 @@ def write_dev_vars(
     except OSError:
         pass
     print(f"  Wrote {path} (mode 0600)")
+    print(
+        "  Note: this file holds your secrets in cleartext by necessity "
+        "(wrangler reads them as-is). It is gitignored — never commit "
+        "or share it."
+    )
     return True
 
 
