@@ -143,7 +143,7 @@ Trust note: your friends' Spotify tokens live in *your* backend's storage — sh
 - **OAuth callback port busy (`:8080`)** — the frontend's local callback server needs port 8080. Free it, or set `SPOTIBYE_OAUTH_PORT` — but then you must also register the matching URI in Spotify's dashboard *and* in the backend allowlist.
 - **`DISALLOWED_REDIRECT_URI`** — the callback URI sent at login isn't in the backend's `ALLOWED_REDIRECT_URIS` (the `ALLOWED_REDIRECT_URIS` vars in `wrangler.toml` locally, your `wrangler.selfhost.toml` on Cloudflare). Compare the exact strings: Spotify dashboard entry vs backend value. Scheme, host, port, and path must all match.
 - **Login loops back to Spotify** — stale browser tokens from a previous app conflict with the new one. Clear site data for Spotify or use an incognito window.
-- **Expired or revoked secrets** — a rotated Spotify Client Secret or revoked Cloudflare token fails with auth errors on next use. Re-copy the value into `.dev.vars` (local) or re-run `wrangler secret put` (Cloudflare) and restart/redeploy.
+- **Expired or revoked secrets** — a rotated Spotify Client Secret or revoked Cloudflare token fails with auth errors on next use. Re-copy the value into `.dev.vars` (local) or re-run `npx wrangler secret put` (Cloudflare) and restart/redeploy.
 - **`wrangler dev` behaving oddly** — local emulation state can go stale. Stop it, delete `.wrangler/` under `src/backend`, and restart.
 
 ## Commercial Hosting
