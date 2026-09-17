@@ -114,7 +114,7 @@ cd src/backend
    wrangler queues create spotibye-analysis-dev-dlq
    ```
 3. Create your own config file: copy the tracked `src/backend/wrangler.toml` to `src/backend/wrangler.selfhost.toml` (gitignored — never edit the tracked file itself), replace every KV namespace ID occurrence with the new IDs from step 2 — `id` and `preview_id` for `CACHE_KV` and `SESSIONS_KV` in the top-level, `[env.development]`, and `[env.production]` blocks (12 slots, 4 distinct new IDs) — and set `ALLOWED_REDIRECT_URIS` in the `[env.production]` vars block — **not** the top-level `[vars]`, which only applies to deploys without `--env` — to include your frontend's exact callback URI, including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (`src/backend/routes/auth.ts` rejects any `redirect_uri` absent from that allowlist, and the shipped default only allows `https://app.spotibye.com`.)
-4. Upload the three secrets against your config, scoped to your environment (replace `production` with `development` for a dev Worker):
+4. Upload the three secrets against your config, scoped to your environment (replace `production` with `development` for a dev Worker). On a brand-new account, run the step-5 deploy once first so the Worker exists, then upload secrets:
    ```bash
    wrangler secret put SPOTIFY_CLIENT_ID --env production -c wrangler.selfhost.toml
    wrangler secret put SPOTIFY_CLIENT_SECRET --env production -c wrangler.selfhost.toml
@@ -141,7 +141,7 @@ Trust note: your friends' Spotify tokens live in *your* backend's storage — sh
 
 - **Backend port busy (`http://localhost:8787`)** — another `wrangler dev` (or another app) is already on 8787. Stop it, or run `npx wrangler dev --port 8788` from `src/backend` and launch the frontend with `export SPOTIBYE_LOCALHOST_BACKEND_URL=http://localhost:8788` so the Localhost preset points at the new port.
 - **OAuth callback port busy (`:8080`)** — the frontend's local callback server needs port 8080. Free it, or set `SPOTIBYE_OAUTH_PORT` — but then you must also register the matching URI in Spotify's dashboard *and* in the backend allowlist.
-- **`DISALLOWED_REDIRECT_URI`** — the callback URI sent at login isn't in the backend's `ALLOWED_REDIRECT_URIS`. Compare the exact strings: Spotify dashboard entry vs backend value (`.dev.vars` locally, your `wrangler.selfhost.toml` on Cloudflare). Scheme, host, port, and path must all match.
+- **`DISALLOWED_REDIRECT_URI`** — the callback URI sent at login isn't in the backend's `ALLOWED_REDIRECT_URIS` (the `ALLOWED_REDIRECT_URIS` vars in `wrangler.toml` locally, your `wrangler.selfhost.toml` on Cloudflare). Compare the exact strings: Spotify dashboard entry vs backend value. Scheme, host, port, and path must all match.
 - **Login loops back to Spotify** — stale browser tokens from a previous app conflict with the new one. Clear site data for Spotify or use an incognito window.
 - **Expired or revoked secrets** — a rotated Spotify Client Secret or revoked Cloudflare token fails with auth errors on next use. Re-copy the value into `.dev.vars` (local) or re-run `wrangler secret put` (Cloudflare) and restart/redeploy.
 - **`wrangler dev` behaving oddly** — local emulation state can go stale. Stop it, delete `.wrangler/` under `src/backend`, and restart.
