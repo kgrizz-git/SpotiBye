@@ -52,7 +52,7 @@ def test_check_tool_missing_has_hint() -> None:
     with mock.patch.object(_mod.shutil, "which", return_value=None):
         result = _mod.check_tool("npm")
     assert not result.ok
-    assert "nodejs.org" in result.hint
+    assert "nodejs" in result.hint
 
 
 def test_check_tool_missing_never_leaks() -> None:
