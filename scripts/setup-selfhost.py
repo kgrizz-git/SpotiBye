@@ -191,7 +191,7 @@ def validate_spotify_credentials(
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310 # nosemgrep - URL is the hardcoded SPOTIFY_TOKEN_URL constant; user input only in header/body
             payload = json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
         if exc.code == 401:
