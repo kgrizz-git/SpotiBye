@@ -18,13 +18,16 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import getpass
 import json
+import os
 import re
 import secrets
 import shutil
 import subprocess  # nosec B404 - subprocess is needed for tool checks
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -287,7 +290,12 @@ def write_dev_vars(
     """Write .dev.vars unless it exists (without --force). Never prints values.
 
     The file necessarily holds secrets in cleartext (wrangler reads them
-    as literal env values); it is created mode 0600 and must stay gitignored.
+    as literal env values); it is created owner-only and must stay gitignored.
+
+    The content is written to a temp file first and atomically moved into
+    place, so the target is never exposed with default permissions and is
+    never left truncated. On Windows, Python cannot set owner-only ACLs,
+    so the file is written and the user is warned to restrict it by hand.
     """
     if dry_run:
         print(f"  [dry-run] would write {path} (values redacted)")
@@ -299,21 +307,52 @@ def write_dev_vars(
         )
         return False
     # codeql[py/clear-text-storage-sensitive-data]: writing the local secrets
-    # file is the feature; it is chmod 0600 and gitignored by design.
-    path.write_text(
-        build_dev_vars_content(client_id, client_secret, jwt_secret),
-        encoding="utf-8",
-    )
+    # file is the feature; it is owner-only restricted and gitignored by design.
     try:
-        path.chmod(0o600)
-    except OSError:
-        pass
-    print(f"  Wrote {path} (mode 0600)")
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+        )
+    except OSError as exc:
+        print(f"  [FAIL] could not stage {path}: {exc}")
+        return False
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(
+                build_dev_vars_content(client_id, client_secret, jwt_secret)
+            )
+        restricted = restrict_to_owner(tmp_name)
+        os.replace(tmp_name, path)
+    except OSError as exc:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        print(f"  [FAIL] could not write {path}: {exc}")
+        return False
+    if restricted:
+        print(f"  Wrote {path} (mode 0600)")
+    else:
+        print(f"  Wrote {path}")
+        print(
+            "  Warning: could not restrict this file to owner-only "
+            "automatically (Windows). Right-click → Properties → Security "
+            "to limit access, and never commit or share it."
+        )
     print(
         "  Note: this file holds your secrets in cleartext by necessity "
         "(wrangler reads them as-is). It is gitignored — never commit "
         "or share it."
     )
+    return True
+
+
+def restrict_to_owner(tmp_name: str) -> bool:
+    """Restrict a staged file to owner-only access. Returns True on success.
+
+    POSIX: chmod 0600 (failures propagate as OSError). Windows: Python
+    cannot set owner-only ACLs, so this reports False and the caller warns.
+    """
+    if os.name == "nt":
+        return False
+    os.chmod(tmp_name, 0o600)
     return True
 
 

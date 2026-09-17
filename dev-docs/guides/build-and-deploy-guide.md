@@ -144,9 +144,9 @@ Required CI/CD secrets:
 Worker runtime secrets (set with Wrangler):
 ```bash
 cd src/backend
-wrangler secret put SPOTIFY_CLIENT_ID
-wrangler secret put SPOTIFY_CLIENT_SECRET
-wrangler secret put JWT_SECRET
+npx wrangler secret put SPOTIFY_CLIENT_ID
+npx wrangler secret put SPOTIFY_CLIENT_SECRET
+npx wrangler secret put JWT_SECRET
 ```
 
 ## 5) Versioning and Changelog

@@ -239,14 +239,27 @@ def test_write_dev_vars_refuses_overwrite(
     assert "sec" not in out
 
 
-def test_write_dev_vars_force(tmp_path: object) -> None:
-    from pathlib import Path
-
-    assert isinstance(tmp_path, Path)
-    target = tmp_path / ".dev.vars"  # type: ignore[operator]
+def test_write_dev_vars_force(tmp_path: Path) -> None:
+    target = tmp_path / ".dev.vars"
     target.write_text("existing")
     assert _mod.write_dev_vars(target, "id", "sec", "jwt", force=True)
     assert "SPOTIFY_CLIENT_ID" in target.read_text()
+
+
+def test_write_dev_vars_owner_only(tmp_path: Path) -> None:
+    import os
+    import stat
+
+    if os.name == "nt":
+        import pytest
+
+        pytest.skip("POSIX-only permission check")
+    target = tmp_path / ".dev.vars"
+    assert _mod.write_dev_vars(target, "id", "sec", "jwt")
+    mode = stat.S_IMODE(target.stat().st_mode)
+    assert mode == 0o600
+    leftovers = list(tmp_path.glob(".dev.vars.*.tmp"))
+    assert leftovers == []
 
 
 # ---------------------------------------------------------------------------

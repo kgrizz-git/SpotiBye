@@ -91,7 +91,7 @@ If you would rather run the backend in the cloud (your own Worker instead of loc
 
 Cloudflare's free tier covers personal use with room to spare (100,000 Worker requests/day, Workers KV and Queues included, no credit card required).
 
-1. Create a Cloudflare account and log in locally (`wrangler login`), or create an API token with Workers deploy permissions and export it as `CLOUDFLARE_API_TOKEN`. Then follow [`dev-docs/guides/build-and-deploy-guide.md`](../dev-docs/guides/build-and-deploy-guide.md) for the full deploy reference.
+1. Create a Cloudflare account and log in locally (`npx wrangler login`), or create an API token with Workers deploy permissions and export it as `CLOUDFLARE_API_TOKEN`. Then follow [`dev-docs/guides/build-and-deploy-guide.md`](../dev-docs/guides/build-and-deploy-guide.md) for the full deploy reference.
 
 All `wrangler` commands below run from `src/backend`:
 
@@ -101,28 +101,28 @@ cd src/backend
 
 2. Provision your own KV namespaces (your Worker cannot use the IDs shipped in the repo's `wrangler.toml` — those belong to another account):
    ```bash
-   wrangler kv namespace create CACHE_KV
-   wrangler kv namespace create CACHE_KV --preview
-   wrangler kv namespace create SESSIONS_KV
-   wrangler kv namespace create SESSIONS_KV --preview
+   npx wrangler kv namespace create CACHE_KV
+   npx wrangler kv namespace create CACHE_KV --preview
+   npx wrangler kv namespace create SESSIONS_KV
+   npx wrangler kv namespace create SESSIONS_KV --preview
    ```
    Queues must be created explicitly — deploy fails without them:
    ```bash
-   wrangler queues create spotibye-analysis
-   wrangler queues create spotibye-analysis-dlq
-   wrangler queues create spotibye-analysis-dev
-   wrangler queues create spotibye-analysis-dev-dlq
+   npx wrangler queues create spotibye-analysis
+   npx wrangler queues create spotibye-analysis-dlq
+   npx wrangler queues create spotibye-analysis-dev
+   npx wrangler queues create spotibye-analysis-dev-dlq
    ```
 3. Create your own config file: copy the tracked `src/backend/wrangler.toml` to `src/backend/wrangler.selfhost.toml` (gitignored — never edit the tracked file itself), replace every KV namespace ID occurrence with the new IDs from step 2 — `id` and `preview_id` for `CACHE_KV` and `SESSIONS_KV` in the top-level, `[env.development]`, and `[env.production]` blocks (12 slots, 4 distinct new IDs) — and set `ALLOWED_REDIRECT_URIS` in the `[env.production]` vars block — **not** the top-level `[vars]`, which only applies to deploys without `--env` — to include your frontend's exact callback URI, including the default `http://127.0.0.1:8080/callback` when the desktop app talks to your Worker. (`src/backend/routes/auth.ts` rejects any `redirect_uri` absent from that allowlist, and the shipped default only allows `https://app.spotibye.com`.)
 4. Upload the three secrets against your config, scoped to your environment (replace `production` with `development` for a dev Worker). On a brand-new account, run the step-5 deploy once first so the Worker exists, then upload secrets:
    ```bash
-   wrangler secret put SPOTIFY_CLIENT_ID --env production -c wrangler.selfhost.toml
-   wrangler secret put SPOTIFY_CLIENT_SECRET --env production -c wrangler.selfhost.toml
-   wrangler secret put JWT_SECRET --env production -c wrangler.selfhost.toml
+   npx wrangler secret put SPOTIFY_CLIENT_ID --env production -c wrangler.selfhost.toml
+   npx wrangler secret put SPOTIFY_CLIENT_SECRET --env production -c wrangler.selfhost.toml
+   npx wrangler secret put JWT_SECRET --env production -c wrangler.selfhost.toml
    ```
 5. Deploy with your config and point the frontend at the Worker URL:
    ```bash
-   wrangler deploy -c wrangler.selfhost.toml --env production
+   npx wrangler deploy -c wrangler.selfhost.toml --env production
    ```
    Then set `SPOTIBYE_BACKEND_URL` (or use the Custom backend option in the app's backend selector).
 
