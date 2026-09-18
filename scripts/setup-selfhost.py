@@ -309,8 +309,6 @@ def write_dev_vars(
             "or edit it by hand."
         )
         return False
-    # codeql[py/clear-text-storage-sensitive-data]: writing the local secrets
-    # file is the feature; it is owner-only restricted and gitignored by design.
     try:
         fd, tmp_name = tempfile.mkstemp(
             dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
@@ -320,6 +318,8 @@ def write_dev_vars(
         return False
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            # codeql[py/clear-text-storage-sensitive-data]: writing the local
+            # secrets file is the feature; owner-only restricted, gitignored.
             handle.write(
                 build_dev_vars_content(client_id, client_secret, jwt_secret)
             )

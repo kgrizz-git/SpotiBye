@@ -365,7 +365,12 @@ def test_patch_allowlist_replaces_production_only() -> None:
     # production one is replaced.
     out = _mod.patch_allowlist(SAMPLE_TOML, "http://127.0.0.1:8080/callback")
     assert out.count("http://127.0.0.1:8080/callback") == 1
-    assert "https://app.spotibye.com" in out
+    top_level = [
+        line
+        for line in out.splitlines()
+        if line.startswith("ALLOWED_REDIRECT_URIS")
+    ]
+    assert top_level == ['ALLOWED_REDIRECT_URIS = "https://app.spotibye.com"']
 
 
 PROD_SCOPED_TOML = """\
