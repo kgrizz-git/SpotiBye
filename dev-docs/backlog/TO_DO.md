@@ -120,17 +120,17 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
   - [ ] Decide what history, issues, and release artifacts must be retained
   - [ ] Document the migration decision before creating a new repository
 
-- [ ] Consider releasing as public open-source with instructions on how users can set up their own backend
-  - [ ] Document Cloudflare account setup and Workers deployment
-  - [ ] Document Spotify Developer application registration and API credentials
-  - [ ] Create setup guide for backend configuration (environment variables, secrets)
-  - [ ] Create frontend configuration guide (pointing to user's own backend)
+- [x] Consider releasing as public open-source with instructions on how users can set up their own backend (shipped in PR #9; plan `dev-docs/exec-plans/active/2026-09-15-self-host-guides-and-scripts.md`)
+  - [x] Document Cloudflare account setup and Workers deployment (`docs/self-hosting.md` Cloudflare path)
+  - [x] Document Spotify Developer application registration and API credentials (`docs/self-hosting.md` Step 1)
+  - [x] Create setup guide for backend configuration (environment variables, secrets) (`docs/self-hosting.md` Steps 2–3)
+  - [x] Create frontend configuration guide (pointing to user's own backend) (`docs/self-hosting.md` Step 3 + `docs/configuration-options.md` cross-link)
   - [ ] Evaluate if a hosted backend option should be offered for users who don't want to self-host
-  - [ ] Write and package an interactive setup script that walks users through:
+  - [x] Write and package an interactive setup script that walks users through (`scripts/setup-selfhost.py` + tests; local path fully interactive, Cloudflare helpers tested but not yet wired — see plan gaps):
     - Opening URLs in browser for Cloudflare and Spotify developer portals
     - Pasting API keys/tokens into local environment file
     - Validating credentials before proceeding to deployment
-    - Generating wrangler.toml configuration automatically
+    - Generating per-user wrangler config (`wrangler.selfhost.toml`) instead of rewriting the tracked `wrangler.toml` (amended from the original "Generating wrangler.toml configuration automatically" wording, which would have clobbered committed bindings)
 
 - [ ] Add screenshots to README for the public release
   - [ ] Redact Spotify username and any other personal data from source images (currently in a separate folder outside the repo)
