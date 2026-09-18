@@ -210,6 +210,25 @@ def test_build_dev_vars_content_keys() -> None:
     assert 'JWT_SECRET="jwt"' in content
 
 
+def test_build_dev_vars_content_escapes_quotes() -> None:
+    content = _mod.build_dev_vars_content("id", 'a"b\\c', "jwt")
+    assert 'SPOTIFY_CLIENT_SECRET="a\\"b\\\\c"' in content
+
+
+def test_patch_kv_ids_skips_commented_lines() -> None:
+    text = (
+        "[[kv_namespaces]]\n"
+        'binding = "CACHE_KV"\n'
+        '# id = "commented"\n'
+        'id = "old"\n'
+        'preview_id = "oldprev"\n'
+    )
+    out = _mod.patch_kv_ids(text, {"CACHE_KV": ("n", "np")})
+    assert '# id = "commented"' in out
+    assert 'id = "n"' in out
+    assert 'preview_id = "np"' in out
+
+
 def test_write_dev_vars_dry_run_writes_nothing(
     tmp_path: object, capsys: object
 ) -> None:

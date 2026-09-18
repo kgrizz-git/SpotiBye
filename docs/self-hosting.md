@@ -22,7 +22,7 @@ Your Spotify account must hold an active **Premium** subscription — Spotify re
 
 1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in.
 2. **Create app**: give it a name (e.g. `SpotiBye-local`) and description, accept the terms.
-3. Open the app's **Settings**, and under **Redirect URIs** add exactly:
+3. Open the app's **Settings**, and under **Redirect URIs** add at least:
    ```
    http://127.0.0.1:8080/callback
    ```
@@ -83,7 +83,7 @@ Useful flags:
 - `python3 scripts/setup-selfhost.py --dry-run` — print what would happen without writing anything or opening browsers (still collects and live-checks your Spotify credentials).
 - `python3 scripts/setup-selfhost.py --force` — allow overwriting an existing `src/backend/.dev.vars`.
 
-The script never prints secret values — prompts hide input, dry runs show redacted placeholders, and Cloudflare uploads pipe values via stdin. It currently automates the local path end to end (Spotify app credentials + `.dev.vars`); the Cloudflare helpers (KV provisioning, secret upload, per-user config generation) are implemented and tested but not yet wired into the interactive flow — follow the manual Cloudflare steps above for now.
+The script never prints secret values — prompts hide input, dry runs show redacted placeholders, and Cloudflare uploads pipe values via stdin. It currently automates the local path end to end (Spotify app credentials + `.dev.vars`); the Cloudflare helpers (KV provisioning, secret upload, per-user config generation) are implemented and tested but not yet wired into the interactive flow — follow the manual Cloudflare steps above for now. For backend URL environment variables and the Localhost/Custom presets, see [configuration options](configuration-options.md).
 
 ## Secondary Path — Deploy the Backend to Cloudflare
 
