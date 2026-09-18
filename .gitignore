@@ -32,6 +32,7 @@ docs/api_key_security.md
 .dev.vars
 .dev.vars.*
 !src/backend/.dev.vars.example
+src/backend/wrangler.selfhost.toml
 
 # VSCode
 .vscode/
