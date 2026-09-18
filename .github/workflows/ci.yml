@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   # Only run on PRs to main/develop and pushes to these branches
   push:
