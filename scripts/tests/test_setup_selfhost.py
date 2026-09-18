@@ -342,28 +342,59 @@ tag = "v1"
 
 
 def test_patch_allowlist_replaces_all() -> None:
+    # SAMPLE_TOML has top-level and [env.production] entries; only the
+    # production one is replaced.
     out = _mod.patch_allowlist(SAMPLE_TOML, "http://127.0.0.1:8080/callback")
-    assert "app.spotibye.com" not in out
-    assert out.count("http://127.0.0.1:8080/callback") == 2
+    assert out.count("http://127.0.0.1:8080/callback") == 1
+    assert "https://app.spotibye.com" in out
+
+
+PROD_SCOPED_TOML = """\
+[vars]
+ALLOWED_REDIRECT_URIS = "top"
+
+[env.development]
+vars = { ALLOWED_REDIRECT_URIS = "dev" }
+
+[env.production]
+vars = { ALLOWED_REDIRECT_URIS = "prod" }
+"""
+
+
+def test_patch_allowlist_only_production() -> None:
+    out = _mod.patch_allowlist(PROD_SCOPED_TOML, "new")
+    assert 'ALLOWED_REDIRECT_URIS = "top"' in out
+    assert 'ALLOWED_REDIRECT_URIS = "dev"' in out
+    assert 'ALLOWED_REDIRECT_URIS = "new"' in out
+    assert out.count('"new"') == 1
 
 
 def test_patch_allowlist_skips_comments() -> None:
-    text = '# ALLOWED_REDIRECT_URIS = "old"\nALLOWED_REDIRECT_URIS = "old"\n'
+    text = (
+        '[env.production]\n'
+        '# ALLOWED_REDIRECT_URIS = "old"\n'
+        'ALLOWED_REDIRECT_URIS = "old"\n'
+    )
     out = _mod.patch_allowlist(text, "new")
     assert '# ALLOWED_REDIRECT_URIS = "old"' in out
     assert 'ALLOWED_REDIRECT_URIS = "new"' in out
 
 
 def test_patch_allowlist_ignores_prefixed_names() -> None:
-    text = 'MY_ALLOWED_REDIRECT_URIS = "keep"\nALLOWED_REDIRECT_URIS = "old"\n'
+    text = (
+        '[env.production]\n'
+        'MY_ALLOWED_REDIRECT_URIS = "keep"\n'
+        'ALLOWED_REDIRECT_URIS = "old"\n'
+    )
     out = _mod.patch_allowlist(text, "new")
     assert 'MY_ALLOWED_REDIRECT_URIS = "keep"' in out
     assert 'ALLOWED_REDIRECT_URIS = "new"' in out
 
 
 def test_patch_allowlist_backslash_uri_safe() -> None:
-    out = _mod.patch_allowlist('ALLOWED_REDIRECT_URIS = "old"', "C:\\x\\1")
-    assert out == 'ALLOWED_REDIRECT_URIS = "C:\\x\\1"\n'
+    text = '[env.production]\nALLOWED_REDIRECT_URIS = "old"\n'
+    out = _mod.patch_allowlist(text, "C:\\x\\1")
+    assert out == '[env.production]\nALLOWED_REDIRECT_URIS = "C:\\x\\1"\n'
 
 
 def test_generate_selfhost_config_dry_run(tmp_path: Path) -> None:
@@ -385,7 +416,8 @@ def test_generate_selfhost_config_writes(tmp_path: Path) -> None:
     text = target.read_text()
     assert '"n1"' in text and "oldid1" not in text
     assert "http://127.0.0.1:8080/callback" in text
-    assert "app.spotibye.com" not in text
+    # top-level entry preserved; only [env.production] is rewritten
+    assert 'ALLOWED_REDIRECT_URIS = "https://app.spotibye.com"' in text
 
 
 def test_generate_selfhost_config_refuses_overwrite(tmp_path: Path) -> None:

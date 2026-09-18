@@ -495,14 +495,21 @@ def patch_kv_ids(
 
 
 def patch_allowlist(toml_text: str, uris: str) -> str:
-    """Replace every ALLOWED_REDIRECT_URIS value with `uris`.
+    """Replace the ALLOWED_REDIRECT_URIS value in [env.production] only.
 
-    Comment lines are left untouched; inline occurrences (e.g. inside
-    `vars = { ... }`) are replaced.
+    Top-level [vars], [env.development], comments, and unrelated lines are
+    preserved: production deploys (`wrangler deploy --env production`) read
+    only the [env.production] block.
     """
     out: list[str] = []
+    in_production = False
     for line in toml_text.splitlines():
-        if line.strip().startswith("#"):
+        stripped = line.strip()
+        if stripped.startswith("[") and not stripped.startswith("[["):
+            in_production = stripped == "[env.production]"
+            out.append(line)
+            continue
+        if line.strip().startswith("#") or not in_production:
             out.append(line)
             continue
         out.append(
