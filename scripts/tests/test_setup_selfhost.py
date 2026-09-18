@@ -341,7 +341,7 @@ tag = "v1"
     assert "# KV Namespaces" in out
 
 
-def test_patch_allowlist_replaces_all() -> None:
+def test_patch_allowlist_replaces_production_only() -> None:
     # SAMPLE_TOML has top-level and [env.production] entries; only the
     # production one is replaced.
     out = _mod.patch_allowlist(SAMPLE_TOML, "http://127.0.0.1:8080/callback")

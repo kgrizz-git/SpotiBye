@@ -37,9 +37,7 @@ from pathlib import Path
 
 
 SPOTIFY_DASHBOARD_URL = "https://developer.spotify.com/dashboard"
-CLOUDFLARE_DASHBOARD_URL = "https://dash.cloudflare.com/"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
-SELFHOST_CONFIG_NAME = "wrangler.selfhost.toml"
 
 REQUIRED_PYTHON = (3, 10)
 REQUIRED_TOOLS = ("node", "npm", "npx")

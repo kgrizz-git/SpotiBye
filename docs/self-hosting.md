@@ -28,7 +28,7 @@ Your Spotify account must hold an active **Premium** subscription — Spotify re
    ```
    Use the IP literal `127.0.0.1` — the backend allowlist includes this exact URI. Click **Add**, then **Save**.
 4. On the same Settings page, copy your **Client ID** and **Client Secret**. Keep the secret private.
-5. Allowlist yourself (and anyone sharing your backend): **Settings → Users and Access → Add new user**, entering each person's name and Spotify email. Only allowlisted accounts can authorize — anyone else gets an error from Spotify's API on login.
+5. Allowlist yourself (and anyone sharing your backend): **Settings → Users and Access → Add new user**, entering each person's name and Spotify email. Only allowlisted accounts can use the app — anyone else can still complete Spotify login, but every API request then fails with a 403.
 
 When you later log in through SpotiBye, Spotify asks you to approve read-only access (`user-read-private`, `user-read-email`, `playlist-read-private`, `playlist-read-collaborative`). The app cannot modify your playlists or see your password.
 
@@ -71,7 +71,7 @@ In the app's backend selector, choose the **Localhost** preset, then **Login wit
 
 ## Guided Setup (Recommended)
 
-The steps above can be driven by an interactive script that checks prerequisites, opens the right portal pages, validates your Spotify credentials before writing anything, and generates your local config:
+The steps above can be driven by an interactive script that checks prerequisites, opens the Spotify Developer Dashboard, validates your Spotify credentials before writing anything, and generates your local config:
 
 ```bash
 python3 scripts/setup-selfhost.py
@@ -80,7 +80,7 @@ python3 scripts/setup-selfhost.py
 Useful flags:
 
 - `python3 scripts/setup-selfhost.py --check` — verify prerequisites only.
-- `python3 scripts/setup-selfhost.py --dry-run` — print what would happen without writing anything or opening browsers.
+- `python3 scripts/setup-selfhost.py --dry-run` — print what would happen without writing anything or opening browsers (still collects and live-checks your Spotify credentials).
 - `python3 scripts/setup-selfhost.py --force` — allow overwriting an existing `src/backend/.dev.vars`.
 
 The script never prints secret values — prompts hide input, dry runs show redacted placeholders, and Cloudflare uploads pipe values via stdin. It currently automates the local path end to end (Spotify app credentials + `.dev.vars`); the Cloudflare helpers (KV provisioning, secret upload, per-user config generation) are implemented and tested but not yet wired into the interactive flow — follow the manual Cloudflare steps above for now.
