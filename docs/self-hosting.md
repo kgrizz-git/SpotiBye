@@ -28,7 +28,7 @@ Your Spotify account must hold an active **Premium** subscription — Spotify re
    ```
    Use the IP literal `127.0.0.1` — the backend allowlist includes this exact URI. Click **Add**, then **Save**.
 4. On the same Settings page, copy your **Client ID** and **Client Secret**. Keep the secret private.
-5. Allowlist yourself (and anyone sharing your backend): **Settings → Users and Access → Add new user**, entering each person's name and Spotify email. Only allowlisted accounts can use the app — anyone else can still complete Spotify login, but every API request then fails with a 403.
+5. Allowlist yourself (and anyone sharing your backend): **Settings → Users and Access → Add new user**, entering each person's name and Spotify email. Only allowlisted accounts can use the app — anyone else can still complete Spotify login, but every request requiring Spotify data then fails with a 403.
 
 When you later log in through SpotiBye, Spotify asks you to approve read-only access (`user-read-private`, `user-read-email`, `playlist-read-private`, `playlist-read-collaborative`). The app cannot modify your playlists or see your password.
 
