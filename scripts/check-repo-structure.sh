@@ -82,6 +82,9 @@ if [ -f "docs/index.md" ]; then
 fi
 
 # Warn when current top-level developer docs are not discoverable from the developer index.
+# Subdirectories (assessments/, investigations/, refactor-assessments/, exec-plans/)
+# are indexed at directory level with a curated selection of notes, so only
+# top-level files require a per-file link — mirrors check_docs_hygiene.py.
 if [ -f "dev-docs/README.md" ]; then
   while IFS= read -r file; do
     rel=${file#dev-docs/}
@@ -93,7 +96,7 @@ if [ -f "dev-docs/README.md" ]; then
     if ! grep -Fq "$rel" dev-docs/README.md; then
       warn "$file is not linked from dev-docs/README.md"
     fi
-  done < <(find dev-docs -maxdepth 2 -type f -name "*.md" | sort)
+  done < <(find dev-docs -maxdepth 1 -type f -name "*.md" | sort)
 fi
 
 for w in "${WARNINGS[@]}"; do
