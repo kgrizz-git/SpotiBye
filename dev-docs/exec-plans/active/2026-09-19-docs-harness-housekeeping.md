@@ -25,9 +25,9 @@ This PR introduces the same-PR housekeeping contract, so the contract cannot hav
 
 ## Phase 0 — Baseline (evidence, persisted)
 
-- [ ] Write baseline to `dev-docs/investigations/2026-09-19-docs-harness-baseline.md`: count `[x] done` lines in `TO_DO.md`, duplicate `###` sections in `CHANGELOG.md` Unreleased (`CHANGELOG.md:7-173` has Added x2, Fixed x3, Changed x3), stale `tech-debt-tracker.md` Opens, unindexed `dev-docs/*.md` root files.
-- [ ] Include the plan↔TODO↔index cross-reference table in the baseline note (known mismatches at plan creation: `2026-09-15-self-host` in TO_DO but missing from `active/README.md`; `2026-07-22-reduce-minutes` in README but no TO_DO backlink; `2026-07-05`/`2026-07-06` in README but already completed/moved).
-- [ ] Confirm `scripts/check-repo-structure.sh` current checks as the enforcement baseline.
+- [x] Write baseline to `dev-docs/investigations/2026-09-19-docs-harness-baseline.md`: count `[x] done` lines in `TO_DO.md`, duplicate `###` sections in `CHANGELOG.md` Unreleased (`CHANGELOG.md:7-173` has Added x2, Fixed x3, Changed x3), stale `tech-debt-tracker.md` Opens, unindexed `dev-docs/*.md` root files.
+- [x] Include the plan↔TODO↔index cross-reference table in the baseline note (known mismatches at plan creation: `2026-09-15-self-host` in TO_DO but missing from `active/README.md`; `2026-07-22` backlink verified present in TO_DO:118 — plan text was stale, see baseline note §5; `2026-07-05`/`2026-07-06` in README but already completed/moved).
+- [x] Confirm `scripts/check-repo-structure.sh` current checks as the enforcement baseline.
 
 ## Phase 1 — TO_DO becomes active-only + plan-linkage rule
 
@@ -38,7 +38,7 @@ This PR introduces the same-PR housekeeping contract, so the contract cannot hav
 
 ## Phase 2 — Maintenance log for under-the-hood work
 
-- [ ] Create `dev-docs/backlog/maintenance-log.md` (append-only). Schema per entry: `## YYYY-MM-DD — <short outcome>` + `PR: #NN` + `Scope: <area>` + one-line outcome. Start the file with one seed entry in that exact format so executors copy it.
+- [x] Create `dev-docs/backlog/maintenance-log.md` (append-only). Schema per entry: `## YYYY-MM-DD — <short outcome>` + `PR: #NN` + `Scope: <area>` + one-line outcome. Start the file with one seed entry in that exact format so executors copy it.
 - [ ] Audit `CLAUDE.md` drift vs `AGENTS.md` (known: basedpyright scope, localhost note, changelog exemption, plan-linkage rule), then amend the Changelog Rule in the `AGENTS.md` source: internal-only changes MUST log in `maintenance-log.md` and MUST NOT go in `CHANGELOG.md`. `CLAUDE.md` inherits via the Phase 6 generator — never hand-edit generated content.
 - [ ] Seed maintenance-log with the internal-only subset of the migrated TO_DO done-lines + tech-debt Done rows.
 - [ ] Index maintenance-log in `dev-docs/README.md` backlog table.
