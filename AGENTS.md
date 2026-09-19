@@ -2,6 +2,7 @@
 
 > This is the entry point for AI coding agents (Copilot, Codex, etc.) working in this repository.
 > Keep this file short. Follow the pointers to find deeper context.
+> On any conflict between entry-point guidance files (`AGENTS.md`, `CLAUDE.md`, index READMEs), this file wins.
 >
 > **Claude Code users:** see [`CLAUDE.md`](CLAUDE.md) for a focused entry point.
 
@@ -42,8 +43,10 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 - Third-party API/platform reference notes go in `dev-docs/references/`.
 - Short-lived investigations, audits, and working notes go in `dev-docs/investigations/` or `dev-docs/assessments/`.
 - Before creating a new doc, check `docs/index.md`, `dev-docs/README.md`, and `rg` for an existing page to update.
-- Do not leave completed plans in `active/`, and do not create new root-level `plans/` files. (Enforced by pre-commit hook.)
+- Do not leave completed plans in `active/`, and do not create new root-level `plans/` files. (Checked by pre-commit hook — warn-only until the hygiene gate flips to errors.)
 - IDE security rules live in `.cursor/rules/` only. `.windsurf/rules/` and `.qwen/` have been removed and are gitignored.
+- Same-PR housekeeping (Definition of Done): completing a plan in the same PR also requires a `CHANGELOG.md` or `dev-docs/backlog/maintenance-log.md` entry, removal or update of the linked `TO_DO.md` line, moving the plan to `dev-docs/exec-plans/completed/`, and updating both index READMEs.
+- Plan ↔ `TO_DO.md` linkage (asymmetric): every active exec-plan must have a backlink in `TO_DO.md`. A `TO_DO.md` entry without a plan is allowed for small items.
 
 ---
 
@@ -55,8 +58,12 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 4. Cache keys are namespaced: `<user_id>:<resource_type>:<identifier>`
 5. No `console.log` in non-test backend code — use structured logging
 6. No bare `except:` in Python — always name the exception type
+7. No hand-rolled helpers — check `utils/` / existing services first; extract on second use
+8. Layer boundaries are enforced mechanically — fix violations before merging, don't defer them
+9. Types over raw dicts — interfaces/`type` in TS, `TypedDict`/dataclasses in Python at layer boundaries
+10. Docs live in the repo — decisions, quirks, and conventions discussed elsewhere must be captured in versioned files
 
-Full list: [dev-docs/guides/golden-principles.md](dev-docs/guides/golden-principles.md)
+Full list with rationale: [dev-docs/guides/golden-principles.md](dev-docs/guides/golden-principles.md)
 
 ---
 
@@ -70,6 +77,8 @@ For context-heavy analysis tasks, use sub-agents to prevent context rot:
 - Behavior evaluation: invoke evaluator (activates on "evaluate this change", "verify behavior", "does this satisfy")
 
 Sub-agents return condensed findings with citations, keeping parent context clean.
+
+Skills (progressive disclosure) live in `.skills/` — check for a skill matching the task (e.g. Spotify API, Cloudflare Worker, testing, export formats, dependency analysis, security) before improvising.
 
 ## Context Budget
 
@@ -98,7 +107,7 @@ npm run lint            # eslint
 KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v
 
 # Type checking (also enforced as a pre-push hook)
-.venv/bin/basedpyright src/frontend src/shared --level error
+.venv/bin/basedpyright src/frontend src/shared scripts --level error
 ```
 
 ---
@@ -137,6 +146,8 @@ Changelog updates are not required for internal-only changes, such as:
 - Test-only changes
 - Documentation-only updates that do not change product behavior
 - CI/internal tooling changes with no user-facing impact
+
+Internal-only changes must be logged in `dev-docs/backlog/maintenance-log.md` and must not go in `CHANGELOG.md`.
 
 ---
 

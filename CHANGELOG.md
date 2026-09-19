@@ -22,17 +22,11 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Expanded the playlist analysis popup's "Audio Features" section from 5 to all 9 ReccoBeats audio features (adds instrumentalness, liveness, speechiness, loudness), plus a musical key/mode row (e.g. "C major") when at least 2 tracks have a valid key/mode. Valence is now shown as a human-readable mood label (Melancholic/Somber/Neutral/Cheerful/Euphoric) instead of a raw percentage. Added a "ReccoBeats Metadata" section (ISRC coverage count, popularity range) from a new `GET /v1/track` fetch, and a partial-failure banner listing which enrichment sources (Spotify artists, ReccoBeats audio features, ReccoBeats track metadata) failed for a given analysis, since ReccoBeats enrichment is always best-effort and analysis still completes without it.
 - Backend analysis results now include `errors` (always present; empty on full success) and `schema_version`, and a 24h raw-ReccoBeats-enrichment cache shared across users for the same playlist (namespaced by playlist only, not user, since the data is playlist-derived) to avoid duplicate fetches. Cached analysis results whose `schema_version` is missing or older than the server's are treated as stale: `GET .../results` purges them and returns 404, and a subsequent `POST` enqueues a fresh job automatically.
 
-### Fixed
-- Corrected a dead-code bug in `scripts/check-dependencies.py` where the return value was always 0 regardless of `all_passed` (the `--ci` exit path was already handled by `sys.exit(1)`).
-- Fixed remaining Python `logger.error()` calls inside `except` blocks to use `logger.exception()` so SonarCloud rule S8572 is satisfied; the initial migration to lazy `%s` formatting left several error-level calls that should include traceback context.
-- Parameterized three similar HTTPException status-code tests in `src/backend/tests/error-middleware.test.ts` to resolve SonarCloud rule S5976.
-
-### Security
-- Bumped `js-yaml` to 4.3.2 (`devDependencies` and `overrides`) to fix GHSA-2883-xcg3-v3hh (CVSS 7.5) flagged by OSV-Scanner.
-- TruffleHog full-history (schedule) scans use `--exclude-paths` for three test files whose `test_…` function names trigger the Lob detector false-positive (trufflesecurity/trufflehog#5184), silencing the recurring weekly CI failure. PR-diff scans stay unscoped so contributors cannot widen exclusions in the same PR.
-- Scoped GitHub Actions workflow permissions to minimum required: `build.yml` top-level `contents: write` moved to the `release` job; `deploy-production.yml` top-level `actions: write` removed entirely with `deployments: write` scoped to the `deploy-prod` job.
-- Corrected placement of `# NOSONAR: python:S5332` suppressions for intentional loopback HTTP connections in `backend_auth.py`, `backend_client.py`, and `backend_config.py` so SonarCloud recognizes them on the same line as the suppressed code.
-- Reconciled Python dependency declarations for deterministic builds (SonarCloud S8565/S8544): dropped the unused `pandas` and `openpyxl` dependencies and pinned `requests==2.34.1` in both `pyproject.toml` and `requirements.txt` so the `pip install -e ".[development]"` (ci.yml) and `pip install -r requirements.txt` (build.yml) paths agree. Added `# NOSONAR(S8541)`/`# NOSONAR(S6505)` at the Kivy/KivyMD `pip install` sites (build.yml, ci.yml, setup-hooks.sh) documenting the intentional tradeoff: Kivy/KivyMD require Linux source compilation, so `--only-binary` would break the build. Documented these and the path-traversal (S8707) and workflow-permission (S8233) fixes in `SECURITY.md`.
+- Added live backend deployment metadata to `/health`, metadata-aware Wrangler deploy wrappers, and a `scripts/backend-deploy-status.sh` helper so agents and developers can tell whether backend changes need deployment.
+- `BackendCacheManager.clear_file(filename)` and `clear_cache_glob(pattern)` helpers that automatically apply the env-hash prefix; these replace the previous pattern of passing raw globs to `clear_cache`.
+- Backend tests: `tests/analysis-job.test.ts` (3 cases for stale-snapshot prevention), `tests/auth-middleware.test.ts` (concurrent refresh deduplication), `tests/error-middleware.test.ts` (9 cases for error discriminator strengthening), `tests/spotify-validation.test.ts` (10 cases for `parsePlaylistItems` and typed wrappers).
+- Frontend tests: `tests/test_main_screen_logout.py` (7 cases for download signature and missing-logout logging), `tests/test_main_screen_cache.py` (7 cases for env-hash-scoped cache clearing), 11 new `TestIsValidBackendUrl` cases in `test_configuration.py`.
+- Test helper: `src/backend/tests/helpers/kv.ts` (`kvNamespace` + `envWithKv` factories) shared by `analysis-queue.test.ts`, `auth-middleware.test.ts`, and `analysis-job.test.ts`.
 
 ### Changed
 - CI/CD cost reductions: removed dead Dependabot directory scans, cancelled superseded CI runs, dropped duplicate backend tests from the Deploy Backend PR path, and consolidated Security Scan from 6 parallel jobs into one sequential job (PR checks now show a single **Security Scan** status).
@@ -52,7 +46,28 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Added `[key: string]: string | number` index signature to `ExportTrack` so dynamic header-keyed access in CSV, XLSX, and lite-XLSX renderers no longer requires unsafe casts.
 - Refactored `services/export.ts` (1,186 lines) into focused modules: `export-types`, `export-cursor`, `export-job-state`, `export-assemble`, `export-collect`, `export-assembly`, `export-xlsx`, `export-xlsx-lite`, `export-csv`, `export-json`, `export-tracks`, `export-format-helpers`. The `ExportService` class is now a thin facade with static and instance delegating methods — no change to the public API, call sites, or output formats. Added unit tests for all extracted pure functions.
 
+- Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.
+- Refactored `MainScreen` to extract pure logic (filenames, sort/filter) and stabilize job state, reducing technical debt and improving testability.
+- Hardened backend npm dependencies by upgrading Wrangler, Workers types, and TypeScript ESLint, replacing SheetJS `xlsx` usage with ExcelJS, and overriding vulnerable transitive `esbuild` and `uuid` releases until upstream packages publish patched dependency ranges.
+- Optimized GitHub Actions workflows to reduce redundant CI runs by 40-60% while maintaining full test coverage on protected branches
+  - CI now runs only on main/develop/WIP branches instead of all branches
+  - Security scans run only on PRs (not duplicate push events) with weekly baseline scans
+  - Language-specific security jobs (Bandit, npm audit) skip when irrelevant files change
+  - Deployment workflows skip redundant test runs when CI already validated the code
+  - Streamlined dependency review to single job, removing duplicates
+- `BackendClient.health_check` now catches `Exception` (in addition to `BackendAPIError`) and returns a documented three-state `status` value: `healthy` | `unhealthy` | `error`. Callers should branch on `result.get("status") == "healthy"`.
+- Renamed the custom `TimeoutError` to `NetworkTimeoutError` to avoid shadowing the Python builtin.
+- `BackendClient.download_export`, `download_batch_export`, and `download_export_job` now share a single `_download_file(endpoint, timeout, failure_prefix)` helper for auth/trace/error-parse logic.
+- `export-tracks.ts` functions (`buildPlaylistMetadata`, `calculateTotalDurationMs`, `mapTrackForExport`, `buildExportTracks`, `loadAudioFeaturesMap`) are now fully typed — all `any` parameters replaced with `SpotifyPlaylist | undefined`, `SpotifyPlaylistTrackItem[]`, `SpotifyTrack`, `SpotifyAudioFeatures | null | undefined`, and `Map<string, SpotifyAudioFeatures>`. Added `followers?: { total: number }` to `SpotifyPlaylist` (present on `GET /playlists/{id}` responses).
+- `perform_logout` now logs an error and returns gracefully when the running App lacks a `logout` method (instead of silently no-oping). Dev/test app mocks are no longer broken.
+- `Optional[callable]` annotations in `BackendMainScreenAdapter` upgraded to `Optional[Callable[..., Any]]` with the `Callable` import added.
+- Replaced `'as unknown as T'` casts in `spotify.ts` (`getAudioFeatures`, `getArtist`, `getMultipleAudioFeatures`) with typed wrappers that perform runtime shape checks and throw on invalid input.
+
 ### Fixed
+- Corrected a dead-code bug in `scripts/check-dependencies.py` where the return value was always 0 regardless of `all_passed` (the `--ci` exit path was already handled by `sys.exit(1)`).
+- Fixed remaining Python `logger.error()` calls inside `except` blocks to use `logger.exception()` so SonarCloud rule S8572 is satisfied; the initial migration to lazy `%s` formatting left several error-level calls that should include traceback context.
+- Parameterized three similar HTTPException status-code tests in `src/backend/tests/error-middleware.test.ts` to resolve SonarCloud rule S5976.
+
 - Saved backend endpoint selections now use atomic local writes and gracefully ignore malformed, inaccessible, or no-longer-valid selection files. Backend URL validation also accepts IPv4 and IPv6 addresses while rejecting embedded credentials.
 - Excel XLSX table names now use `crypto.randomUUID()` instead of `Math.random()` for uniqueness suffixes (Sonar typescript:S2245).
 - Default staging directory (`SPOTIBYE_TEMP_DIR`) now uses the user-private `~/.spotibye_cache/temp_exports` path instead of world-writable `/tmp/spotibye_exports` (Sonar python:S5443). Cache/temp dirs are created with owner-only permissions when the OS allows it.
@@ -114,62 +129,24 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed `clear_all_cache` showing a "Cache Cleared" popup without actually clearing the cache — the function now delegates to `screen.backend_adapter.cache_manager.clear_cache(None)`.
 - Fixed default `clear_cache()` glob (`*.json`) deleting the user's auth token and backend-selection config; the default pattern is now `{env_hash}_*.json` (env-hash-prefixed data files only). Auth tokens and selection are preserved.
 
-### Added
-- Added live backend deployment metadata to `/health`, metadata-aware Wrangler deploy wrappers, and a `scripts/backend-deploy-status.sh` helper so agents and developers can tell whether backend changes need deployment.
-- `BackendCacheManager.clear_file(filename)` and `clear_cache_glob(pattern)` helpers that automatically apply the env-hash prefix; these replace the previous pattern of passing raw globs to `clear_cache`.
-- Backend tests: `tests/analysis-job.test.ts` (3 cases for stale-snapshot prevention), `tests/auth-middleware.test.ts` (concurrent refresh deduplication), `tests/error-middleware.test.ts` (9 cases for error discriminator strengthening), `tests/spotify-validation.test.ts` (10 cases for `parsePlaylistItems` and typed wrappers).
-- Frontend tests: `tests/test_main_screen_logout.py` (7 cases for download signature and missing-logout logging), `tests/test_main_screen_cache.py` (7 cases for env-hash-scoped cache clearing), 11 new `TestIsValidBackendUrl` cases in `test_configuration.py`.
-- Test helper: `src/backend/tests/helpers/kv.ts` (`kvNamespace` + `envWithKv` factories) shared by `analysis-queue.test.ts`, `auth-middleware.test.ts`, and `analysis-job.test.ts`.
-
-### Changed
-- Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.
-- Refactored `MainScreen` to extract pure logic (filenames, sort/filter) and stabilize job state, reducing technical debt and improving testability.
-- Hardened backend npm dependencies by upgrading Wrangler, Workers types, and TypeScript ESLint, replacing SheetJS `xlsx` usage with ExcelJS, and overriding vulnerable transitive `esbuild` and `uuid` releases until upstream packages publish patched dependency ranges.
-- Optimized GitHub Actions workflows to reduce redundant CI runs by 40-60% while maintaining full test coverage on protected branches
-  - CI now runs only on main/develop/WIP branches instead of all branches
-  - Security scans run only on PRs (not duplicate push events) with weekly baseline scans
-  - Language-specific security jobs (Bandit, npm audit) skip when irrelevant files change
-  - Deployment workflows skip redundant test runs when CI already validated the code
-  - Streamlined dependency review to single job, removing duplicates
-- `BackendClient.health_check` now catches `Exception` (in addition to `BackendAPIError`) and returns a documented three-state `status` value: `healthy` | `unhealthy` | `error`. Callers should branch on `result.get("status") == "healthy"`.
-- Renamed the custom `TimeoutError` to `NetworkTimeoutError` to avoid shadowing the Python builtin.
-- `BackendClient.download_export`, `download_batch_export`, and `download_export_job` now share a single `_download_file(endpoint, timeout, failure_prefix)` helper for auth/trace/error-parse logic.
-- `export-tracks.ts` functions (`buildPlaylistMetadata`, `calculateTotalDurationMs`, `mapTrackForExport`, `buildExportTracks`, `loadAudioFeaturesMap`) are now fully typed — all `any` parameters replaced with `SpotifyPlaylist | undefined`, `SpotifyPlaylistTrackItem[]`, `SpotifyTrack`, `SpotifyAudioFeatures | null | undefined`, and `Map<string, SpotifyAudioFeatures>`. Added `followers?: { total: number }` to `SpotifyPlaylist` (present on `GET /playlists/{id}` responses).
-- `perform_logout` now logs an error and returns gracefully when the running App lacks a `logout` method (instead of silently no-oping). Dev/test app mocks are no longer broken.
-- `Optional[callable]` annotations in `BackendMainScreenAdapter` upgraded to `Optional[Callable[..., Any]]` with the `Callable` import added.
-- Replaced `'as unknown as T'` casts in `spotify.ts` (`getAudioFeatures`, `getArtist`, `getMultipleAudioFeatures`) with typed wrappers that perform runtime shape checks and throw on invalid input.
-
-### Fixed
 - Fixed frontend verification so the script recognizes the repo-level `.venv` and no longer emits a misleading missing-virtualenv warning.
 - Fixed backend authentication integration tests to match the current OAuth redirect/state flow used by the frontend client and authenticator.
 - Fixed backend cache explorer startup to use the current backend URL configuration API instead of the removed `BackendConfig` class.
 - Fixed backend cache statistics in frontend mode so playlist and file counts reflect environment-scoped cache files instead of incorrectly reporting zero items.
 - Fixed cache explorer playlist inspection so expired cache entries no longer crash detailed cache loading with `dictionary changed size during iteration`.
 - Fixed the visible cache explorer Close button in backend mode so it dismisses the popup that is actually open.
+
+### Security
+- Bumped `js-yaml` to 4.3.2 (`devDependencies` and `overrides`) to fix GHSA-2883-xcg3-v3hh (CVSS 7.5) flagged by OSV-Scanner.
+- TruffleHog full-history (schedule) scans use `--exclude-paths` for three test files whose `test_…` function names trigger the Lob detector false-positive (trufflesecurity/trufflehog#5184), silencing the recurring weekly CI failure. PR-diff scans stay unscoped so contributors cannot widen exclusions in the same PR.
+- Scoped GitHub Actions workflow permissions to minimum required: `build.yml` top-level `contents: write` moved to the `release` job; `deploy-production.yml` top-level `actions: write` removed entirely with `deployments: write` scoped to the `deploy-prod` job.
+- Corrected placement of `# NOSONAR: python:S5332` suppressions for intentional loopback HTTP connections in `backend_auth.py`, `backend_client.py`, and `backend_config.py` so SonarCloud recognizes them on the same line as the suppressed code.
+- Reconciled Python dependency declarations for deterministic builds (SonarCloud S8565/S8544): dropped the unused `pandas` and `openpyxl` dependencies and pinned `requests==2.34.1` in both `pyproject.toml` and `requirements.txt` so the `pip install -e ".[development]"` (ci.yml) and `pip install -r requirements.txt` (build.yml) paths agree. Added `# NOSONAR(S8541)`/`# NOSONAR(S6505)` at the Kivy/KivyMD `pip install` sites (build.yml, ci.yml, setup-hooks.sh) documenting the intentional tradeoff: Kivy/KivyMD require Linux source compilation, so `--only-binary` would break the build. Documented these and the path-traversal (S8707) and workflow-permission (S8233) fixes in `SECURITY.md`.
 
 ### Removed
 - Dead `calculateAverageAudioFeatures` from `services/analysis.ts` (no callers).
 - Unused `export_id` parameter from `BackendClient.download_export`, `BackendMainScreenAdapter.download_export`, and the call site at `main_screen_export.py:496`.
 - Unused `playlist` parameter from `_build_backend_output_path` (orchestrator + `MainScreen` delegation).
-
-### Changed
-- Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.
-- Refactored `MainScreen` to extract pure logic (filenames, sort/filter) and stabilize job state, reducing technical debt and improving testability.
-- Hardened backend npm dependencies by upgrading Wrangler, Workers types, and TypeScript ESLint, replacing SheetJS `xlsx` usage with ExcelJS, and overriding vulnerable transitive `esbuild` and `uuid` releases until upstream packages publish patched dependency ranges.
-- Optimized GitHub Actions workflows to reduce redundant CI runs by 40-60% while maintaining full test coverage on protected branches
-  - CI now runs only on main/develop/WIP branches instead of all branches
-  - Security scans run only on PRs (not duplicate push events) with weekly baseline scans
-  - Language-specific security jobs (Bandit, npm audit) skip when irrelevant files change
-  - Deployment workflows skip redundant test runs when CI already validated the code
-  - Streamlined dependency review to single job, removing duplicates
-
-### Fixed
-- Fixed frontend verification so the script recognizes the repo-level `.venv` and no longer emits a misleading missing-virtualenv warning.
-- Fixed backend authentication integration tests to match the current OAuth redirect/state flow used by the frontend client and authenticator.
-- Fixed backend cache explorer startup to use the current backend URL configuration API instead of the removed `BackendConfig` class.
-- Fixed backend cache statistics in frontend mode so playlist and file counts reflect environment-scoped cache files instead of incorrectly reporting zero items.
-- Fixed cache explorer playlist inspection so expired cache entries no longer crash detailed cache loading with `dictionary changed size during iteration`.
-- Fixed the visible cache explorer Close button in backend mode so it dismisses the popup that is actually open.
 
 ## [0.1.5] - 2026-03-19
 

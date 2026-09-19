@@ -1,23 +1,112 @@
 # CLAUDE.md
 
-> Claude Code entry point for SpotiBye. Focused subset of `AGENTS.md` — see that file for Copilot/Codex conventions.
+> Claude Code entry point for SpotiBye. Generated from `AGENTS.md`;
+> on any conflict, `AGENTS.md` wins. Do not hand-edit — edit `AGENTS.md`
+> and re-run `scripts/compile_claude_md.py`.
+
+## Claude-specific notes
+
+- **Sub-agents:** invoke by name from `.claude/sub-agents/` when the task
+  matches an available specialist (architecture, dependency, test coverage,
+  security, behavior evaluation).
+- **Skills:** progressive-disclosure skill dirs live in `.skills/` (same as
+  other agents).
+
+<!-- GENERATED FROM AGENTS.md — DO NOT HAND-EDIT. Edit AGENTS.md and re-run scripts/compile_claude_md.py instead. -->
+
+# AGENTS.md
+
+> This is the entry point for AI coding agents (Copilot, Codex, etc.) working in this repository.
+> Keep this file short. Follow the pointers to find deeper context.
+> On any conflict between entry-point guidance files (`AGENTS.md`, `CLAUDE.md`, index READMEs), this file wins.
+>
+> You are reading the Claude Code entry point (generated from `AGENTS.md`; see the header above).
+
+---
+
+## What is SpotiBye?
+
+SpotiBye is a desktop application that lets users export their Spotify playlists to CSV, Excel, or JSON files. It consists of:
+
+- **Frontend** — Python desktop GUI built with Kivy/KivyMD (`src/frontend/`)
+- **Backend** — Cloudflare Worker written in TypeScript using Hono (`src/backend/`)
+- **Auth flow** — Spotify OAuth 2.0 PKCE, tokens managed by the backend
+
+Users log in with Spotify, the backend exchanges tokens, and the frontend calls backend API routes to fetch playlists and trigger exports.
 
 ---
 
 ## Navigation
 
-- **Code map:** [dev-docs/code-map.md](dev-docs/code-map.md) — file index, Mermaid diagrams, role of every source file
+- **Start here:** [dev-docs/code-map.md](dev-docs/code-map.md) — file index, Mermaid diagrams, and role of every source file
 - **Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md) — layer contracts, data flow, domain breakdown
 - **User docs:** [docs/index.md](docs/index.md) — end-user documentation map
 - **Developer docs:** [dev-docs/README.md](dev-docs/README.md) — contributor, agent, architecture, plan, and reference map
-- **ReccoBeats API:** [dev-docs/reccobeats-api-contract.md](dev-docs/reccobeats-api-contract.md) — live response shapes, Spotify join via `href`, batch omission semantics
-- **Sub-agents:** [.claude/sub-agents/](.claude/sub-agents/) — architecture-analyst, dependency-analyst, test-coverage-analyst, security-scanner, evaluator
+- **Dependency graph:** [dev-docs/dependency-graph.json](dev-docs/dependency-graph.json) — machine-readable import graph for impact analysis
+- **ReccoBeats API (live shapes, join keys, omission semantics):** [dev-docs/reccobeats-api-contract.md](dev-docs/reccobeats-api-contract.md) — read before changing analysis enrichment, export audio features, or per-track caching
+
+---
+
+## Plans and Documentation Conventions
+
+- `docs/` is for end-user documentation only: installation, configuration, usage, FAQ, and troubleshooting.
+- `dev-docs/` is for developer, maintainer, and agent-facing material: architecture notes, implementation plans, references, investigations, assessments, and backlog.
+- New implementation plans go in `dev-docs/exec-plans/active/YYYY-MM-DD-topic.md`.
+- Plans must use checkbox steps (`- [ ]`) and executors must mark steps complete (`- [x]`) as work is completed.
+- If a plan comes from `dev-docs/backlog/TO_DO.md`, keep that TODO linked while active and remove it from the file when the plan is finished.
+- Completed or superseded plans move to `dev-docs/exec-plans/completed/` and must be indexed in `dev-docs/exec-plans/completed/README.md`.
+- Design decisions that should remain durable go in `dev-docs/architecture/design-decisions/`.
+- Third-party API/platform reference notes go in `dev-docs/references/`.
+- Short-lived investigations, audits, and working notes go in `dev-docs/investigations/` or `dev-docs/assessments/`.
+- Before creating a new doc, check `docs/index.md`, `dev-docs/README.md`, and `rg` for an existing page to update.
+- Do not leave completed plans in `active/`, and do not create new root-level `plans/` files. (Checked by pre-commit hook — warn-only until the hygiene gate flips to errors.)
+- IDE security rules live in `.cursor/rules/` only. `.windsurf/rules/` and `.qwen/` have been removed and are gitignored.
+- Same-PR housekeeping (Definition of Done): completing a plan in the same PR also requires a `CHANGELOG.md` or `dev-docs/backlog/maintenance-log.md` entry, removal or update of the linked `TO_DO.md` line, moving the plan to `dev-docs/exec-plans/completed/`, and updating both index READMEs.
+- Plan ↔ `TO_DO.md` linkage (asymmetric): every active exec-plan must have a backlink in `TO_DO.md`. A `TO_DO.md` entry without a plan is allowed for small items.
+
+---
+
+## Key Principles
+
+1. Parse data shapes at boundaries — never pass raw, unvalidated API responses between layers
+2. All Spotify API calls go through `services/spotify.ts` only
+3. Export cursors are always persisted before any destructive step
+4. Cache keys are namespaced: `<user_id>:<resource_type>:<identifier>`
+5. No `console.log` in non-test backend code — use structured logging
+6. No bare `except:` in Python — always name the exception type
+7. No hand-rolled helpers — check `utils/` / existing services first; extract on second use
+8. Layer boundaries are enforced mechanically — fix violations before merging, don't defer them
+9. Types over raw dicts — interfaces/`type` in TS, `TypedDict`/dataclasses in Python at layer boundaries
+10. Docs live in the repo — decisions, quirks, and conventions discussed elsewhere must be captured in versioned files
+
+Full list with rationale: [dev-docs/guides/golden-principles.md](dev-docs/guides/golden-principles.md)
+
+---
+
+## Sub-Agents
+
+For context-heavy analysis tasks, use sub-agents to prevent context rot:
+- Architecture analysis: invoke architecture-analyst (activates on "analyze architecture", "layer violations")
+- Dependency impact: invoke dependency-analyst (activates on "impact", "dependencies")
+- Test coverage: invoke test-coverage-analyst (activates on "test coverage", "coverage gaps")
+- Security scanning: invoke security-scanner (activates on "security", "vulnerability")
+- Behavior evaluation: invoke evaluator (activates on "evaluate this change", "verify behavior", "does this satisfy")
+
+Sub-agents return condensed findings with citations, keeping parent context clean.
+
+Skills (progressive disclosure) live in `.skills/` — check for a skill matching the task (e.g. Spotify API, Cloudflare Worker, testing, export formats, dependency analysis, security) before improvising.
+
+## Context Budget
+
+On complex multi-step tasks, plan for partial completion: finish each step to a clean stopping point (tests passing, no broken imports) before moving to the next. If context is filling up, stop at the current clean state and summarize what remains rather than rushing to finish.
 
 ---
 
 ## Running Tests & Verification
 
 **Quick verification:** Run `./scripts/verify-all.sh` from repo root (silent on success, errors only on failure)
+
+**Localhost-dependent tests:** The frontend verification suite makes loopback HTTP calls. If a sandboxed `./scripts/verify-all.sh` run fails with `Operation not permitted` while connecting to `localhost`, rerun the same command with local-network access (`require_escalated`) before treating the failures as test regressions.
 
 **Node version:** Backend CI runs on Node 24 LTS (pinned in `.nvmrc`, with matching `@types/node@^24`). With nvm/fnm shell integration, the version switches automatically on `cd`; without it, run `nvm use` first. CI's Node 24 environment is the source of truth — if you are on a different local Node, push to a branch and let CI verify.
 
@@ -34,49 +123,52 @@ npm run lint            # eslint
 KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v
 
 # Type checking (also enforced as a pre-push hook)
-.venv/bin/basedpyright src/frontend src/shared --level error
+.venv/bin/basedpyright src/frontend src/shared scripts --level error
 ```
 
 ---
 
-## Key Principles
+## Backend Deployments
 
-1. Parse data shapes at boundaries — never pass raw, unvalidated API responses between layers
-2. All Spotify API calls go through `services/spotify.ts` only
-3. Export cursors are always persisted before any destructive step
-4. Cache keys are namespaced: `<user_id>:<resource_type>:<identifier>`
-5. No `console.log` in non-test backend code — use structured logging
-6. No bare `except:` in Python — always name the exception type
+Before saying backend changes are deployed, or when asked whether backend deployment is needed, run:
 
-Full list: [dev-docs/guides/golden-principles.md](dev-docs/guides/golden-principles.md)
+```bash
+./scripts/backend-deploy-status.sh <backend-url>
+```
 
----
+Use the production or development Worker URL that matches the question. If `Needs Deployment: YES`, tell the user which committed or uncommitted backend/workflow files differ from the live `release_sha` and ask before deploying. Treat `src/backend/.deployed-commit.json` as a local cache only; the live `/health` metadata is the source of truth.
 
-## Plans & Docs Placement
-
-- `docs/` is for end-user documentation only.
-- `dev-docs/` is for developer, maintainer, and agent-facing material.
-- New implementation plans → `dev-docs/exec-plans/active/YYYY-MM-DD-topic.md` (checkbox steps, mark complete as you go)
-- Completed plans → move to `dev-docs/exec-plans/completed/` and index in its `README.md`
-- Design decisions → `dev-docs/architecture/design-decisions/`
-- Third-party API references → `dev-docs/references/`
-- Short-lived investigations and audits → `dev-docs/investigations/` or `dev-docs/assessments/`
-- Before creating a new doc, check `docs/index.md`, `dev-docs/README.md`, and run `rg "<topic>" dev-docs docs`
-
----
-
-## Sub-Agent Activation
-
-For context-heavy analysis, delegate to sub-agents to keep parent context clean:
-
-- **Architecture analysis** — invoke `architecture-analyst` (triggers on "analyze architecture", "layer violations")
-- **Dependency impact** — invoke `dependency-analyst` (triggers on "impact", "dependencies")
-- **Test coverage** — invoke `test-coverage-analyst` (triggers on "test coverage", "coverage gaps")
-- **Security** — invoke `security-scanner` (triggers on "security", "vulnerability")
-- **Behavior evaluation** — invoke `evaluator` (triggers on "evaluate this change", "verify behavior")
+Run the script from a fresh local checkout of the target branch, normally `main` after pulling. Detached HEADs, stale branches, and feature branches can make the `release_sha..HEAD` comparison look different from the deployment branch.
 
 ---
 
 ## Changelog Rule
 
 Any user-visible change must update `CHANGELOG.md` in the same PR.
+
+User-visible changes include:
+- New features or removed features
+- Bug fixes that alter behavior
+- UI and UX changes users can notice
+- Build and distribution changes that affect delivered artifacts
+
+Changelog updates should:
+- Add concise bullet points under the correct unreleased or release version section
+- Use sections such as Added, Changed, Fixed, and Known Issues as appropriate
+- Keep entries focused on outcomes and user impact
+
+Changelog updates are not required for internal-only changes, such as:
+- Refactors with no user-visible behavior changes
+- Test-only changes
+- Documentation-only updates that do not change product behavior
+- CI/internal tooling changes with no user-facing impact
+
+Internal-only changes must be logged in `dev-docs/backlog/maintenance-log.md` and must not go in `CHANGELOG.md`.
+
+---
+
+## PR Conventions
+
+- PRs should change one logical thing. Split changes > ~400 lines.
+- Every PR description must state what changed and why.
+- Architecture violations caught by linters must be fixed before merging.

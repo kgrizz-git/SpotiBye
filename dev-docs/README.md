@@ -81,6 +81,7 @@ Plan rules:
 - New implementation plans go in `dev-docs/exec-plans/active/YYYY-MM-DD-topic.md`.
 - Plans must use checkbox steps (`- [ ]`) and executors must mark steps complete (`- [x]`) as work is completed.
 - Completed or superseded plans move to `dev-docs/exec-plans/completed/` and must be indexed in [`exec-plans/completed/README.md`](exec-plans/completed/README.md).
+- Housekeeping follows the canonical rule in [`AGENTS.md`](../AGENTS.md) (same-PR Definition of Done + asymmetric plan↔`TO_DO.md` linkage); this index does not restate it.
 
 ## Investigations and Assessments
 
@@ -96,6 +97,7 @@ Current notes:
 |------|---------|
 | [`2026-06-22-backend-deployment-tracking.md`](2026-06-22-backend-deployment-tracking.md) | Backend deployment tracking notes |
 | [`2026-06-26-reccobeats-wiring-assessment.md`](2026-06-26-reccobeats-wiring-assessment.md) | ReccoBeats wiring assessment |
+| [`investigations/2026-09-19-docs-harness-baseline.md`](investigations/2026-09-19-docs-harness-baseline.md) | Docs harness baseline: TO_DO done count, CHANGELOG duplicates, tech-debt staleness, unindexed files, plan↔TODO↔index mismatches |
 | [`agent-first-retrofit-guide.md`](agent-first-retrofit-guide.md) | Historical agent-first repository retrofit guide |
 | [`backend-analysis-routes.md`](backend-analysis-routes.md) | Backend route analysis |
 | [`bug-fix-plan-2026-06-15.md`](bug-fix-plan-2026-06-15.md) | Historical bug-fix plan |
@@ -117,4 +119,5 @@ Date-prefix new tactical notes as `YYYY-MM-DD-topic.md`. Investigation notes old
 |------|---------|
 | [`backlog/TO_DO.md`](backlog/TO_DO.md) | Developer backlog |
 | [`backlog/tech-debt-tracker.md`](backlog/tech-debt-tracker.md) | Structured technical debt log |
+| [`backlog/maintenance-log.md`](backlog/maintenance-log.md) | Internal-only housekeeping log (not for user-visible changes) |
 | [`archive/old-docs-backup/`](archive/old-docs-backup/) | Historical docs kept for reference only |
