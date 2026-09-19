@@ -28,6 +28,7 @@ INTERVAL=2
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUTFILE="tmp/trace-${PLAYLIST_ID}-${STAMP}.jsonl"
+mkdir -p tmp
 
 auth=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
 

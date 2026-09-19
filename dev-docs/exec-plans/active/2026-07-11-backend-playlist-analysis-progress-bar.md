@@ -504,10 +504,12 @@ remain queued/processing at stale values.
   - ReccoBeats returning empty `content` for new tracks;
   - invalid/null Spotify artist names in playlist items.
 
-  2026-09-19: no separate manual procedure needed — run the live-trace
-  runbook above against this playlist. The status trace plus the results
-  summary (genre bucket count, per-source errors) answer all four capture
-  items in one command.
+  2026-09-19: no separate manual procedure needed for the fixed-verdict — run
+  the live-trace runbook above against this playlist. The status trace plus
+  the results summary prove genres render with partial warnings instead of
+  the old wipe. Per-ID detail (exact 404 artist IDs, per-endpoint row counts)
+  is not in the summary; the full results payload is saved to
+  `tmp/results-*.json` for any deeper inspection.
 - [x] **Make Spotify artist genre lookup tolerant of individual 404s.**
   Add a failing backend test in `src/backend/tests/analysis.test.ts` where one
   artist metadata request rejects with `HTTP 404` and another succeeds with
