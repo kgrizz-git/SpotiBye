@@ -31,17 +31,17 @@ This PR introduces the same-PR housekeeping contract, so the contract cannot hav
 
 ## Phase 1 — TO_DO becomes active-only + plan-linkage rule
 
-- [ ] Rewrite `dev-docs/backlog/TO_DO.md` header: active work only, no completed items retained; every active plan linked from a TODO line; small items may exist without a plan.
-- [ ] Define done = log + delete: user-visible → `CHANGELOG.md` Unreleased; internal-only → new `maintenance-log.md` (Phase 2); plan-backed items → also move plan to `completed/` + index, same PR.
-- [ ] Define `in progress YYYY-MM-DD` / `NEEDS REVIEW` semantics: date = last confirmed state; `in progress` >14d without a commit link is triageable.
-- [ ] Migrate existing `[x] done` lines out of `TO_DO.md` (to CHANGELOG if missing, else to maintenance-log seed) and delete them from the file.
+- [x] Rewrite `dev-docs/backlog/TO_DO.md` header: active work only, no completed items retained; every active plan linked from a TODO line; small items may exist without a plan.
+- [x] Define done = log + delete: user-visible → `CHANGELOG.md` Unreleased; internal-only → new `maintenance-log.md` (Phase 2); plan-backed items → also move plan to `completed/` + index, same PR.
+- [x] Define `in progress YYYY-MM-DD` / `NEEDS REVIEW` semantics: date = last confirmed state; `in progress` >14d without a commit link is triageable.
+- [x] Migrate existing `[x] done` lines out of `TO_DO.md` (to CHANGELOG if missing, else to maintenance-log seed) and delete them from the file.
 
 ## Phase 2 — Maintenance log for under-the-hood work
 
 - [x] Create `dev-docs/backlog/maintenance-log.md` (append-only). Schema per entry: `## YYYY-MM-DD — <short outcome>` + `PR: #NN` + `Scope: <area>` + one-line outcome. Start the file with one seed entry in that exact format so executors copy it.
-- [ ] Audit `CLAUDE.md` drift vs `AGENTS.md` (known: basedpyright scope, localhost note, changelog exemption, plan-linkage rule), then amend the Changelog Rule in the `AGENTS.md` source: internal-only changes MUST log in `maintenance-log.md` and MUST NOT go in `CHANGELOG.md`. `CLAUDE.md` inherits via the Phase 6 generator — never hand-edit generated content.
-- [ ] Seed maintenance-log with the internal-only subset of the migrated TO_DO done-lines + tech-debt Done rows.
-- [ ] Index maintenance-log in `dev-docs/README.md` backlog table.
+- [x] Audit `CLAUDE.md` drift vs `AGENTS.md` (known: basedpyright scope, localhost note, changelog exemption, plan-linkage rule), then amend the Changelog Rule in the `AGENTS.md` source: internal-only changes MUST log in `maintenance-log.md` and MUST NOT go in `CHANGELOG.md`. `CLAUDE.md` inherits via the Phase 6 generator — never hand-edit generated content.
+- [x] Seed maintenance-log with the internal-only subset of the migrated TO_DO done-lines + tech-debt Done rows.
+- [x] Index maintenance-log in `dev-docs/README.md` backlog table.
 
 ## Phase 3 — Same-PR housekeeping contract
 
