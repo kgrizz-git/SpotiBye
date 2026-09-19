@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-19
 **Branch:** `chore/docs-harness-housekeeping`
-**Status:** draft v3 — kilo reviewer feedback incorporated; entry-point canonicalization (Phase 6) added
+**Status:** draft v4 — kilo + agy reviewer feedback incorporated; Phase 6 rewritten as generate-don't-point
 **Backlog link:** `dev-docs/backlog/TO_DO.md` → "Docs harness housekeeping" entry under Repo Cleanup & DevOps (added 2026-09-19; this plan satisfies its own asymmetric plan↔TODO rule)
 
 ## Goal
@@ -19,9 +19,9 @@ Two owner constraints (normative for this plan):
 - No behavior/code changes to frontend/backend. Docs, guidance, and mechanical guardrail scripts only.
 - No retroactive rewrite of released CHANGELOG sections (`[0.1.x]`). Only squash/dedupe `Unreleased`.
 
-## Bootstrap exemption
+## Bootstrap exemption (one-time authorship ordering, not a recurring mechanism)
 
-This PR introduces the same-PR housekeeping contract, so it cannot itself fully satisfy it (the rule did not exist when the work started). This one bootstrap PR is explicitly exempt from the "housekeeping in the same PR that introduces the rule" circularity: it creates the TO_DO entry, the plan, and the guidance + enforcement in a single PR, and records the exemption here. All subsequent PRs follow the contract.
+This PR introduces the same-PR housekeeping contract, so the contract cannot have governed its own authorship: the TO_DO entry, the plan draft, and the reviewer rounds were necessarily written before the rule text existed. This is recorded here once as authorship ordering within a single bootstrap PR — not as a "first step" exemption CI could ever evaluate (pre-commit only sees the final tree). All subsequent PRs follow the contract with no exemption.
 
 ## Phase 0 — Baseline (evidence, persisted)
 
@@ -39,33 +39,35 @@ This PR introduces the same-PR housekeeping contract, so it cannot itself fully 
 ## Phase 2 — Maintenance log for under-the-hood work
 
 - [ ] Create `dev-docs/backlog/maintenance-log.md` (append-only). Schema per entry: `## YYYY-MM-DD — <short outcome>` + `PR: #NN` + `Scope: <area>` + one-line outcome. Start the file with one seed entry in that exact format so executors copy it.
-- [ ] Audit `CLAUDE.md` Plans/Changelog sections before amending (it currently duplicates `AGENTS.md` wording with drift); then amend Changelog Rule in `AGENTS.md` / `CLAUDE.md`: internal-only changes MUST log in `maintenance-log.md` and MUST NOT go in `CHANGELOG.md`.
+- [ ] Audit `CLAUDE.md` drift vs `AGENTS.md` (known: basedpyright scope, localhost note, changelog exemption, plan-linkage rule), then amend the Changelog Rule in the `AGENTS.md` source: internal-only changes MUST log in `maintenance-log.md` and MUST NOT go in `CHANGELOG.md`. `CLAUDE.md` inherits via the Phase 6 generator — never hand-edit generated content.
 - [ ] Seed maintenance-log with the internal-only subset of the migrated TO_DO done-lines + tech-debt Done rows.
 - [ ] Index maintenance-log in `dev-docs/README.md` backlog table.
 
 ## Phase 3 — Same-PR housekeeping contract
 
-- [ ] Add "Definition of Done (same PR)" checklist to `AGENTS.md` Plans section + `dev-docs/README.md` Plan rules: code/tests + CHANGELOG or maintenance-log entry + TODO line removed/updated + plan moved to `completed/` + both README indexes updated.
+- [ ] Add "Definition of Done (same PR)" checklist with canonical wording in `AGENTS.md` Plans section: code/tests + CHANGELOG or maintenance-log entry + TODO line removed/updated + plan moved to `completed/` + both README indexes updated. `dev-docs/README.md` points at it; `CLAUDE.md` inherits it via the Phase 6 generator.
 - [ ] State the asymmetric linkage explicitly: active plan without a TODO link = violation; TODO without a plan = allowed.
 - [ ] Update `dev-docs/exec-plans/active/README.md` intro to point at the TODO-backlink requirement.
 
-## Phase 4 — Mechanical enforcement in `check-repo-structure.sh`
+## Phase 4 — Mechanical enforcement (Python for new cross-file checks)
 
-- [ ] Warn (then error after transition): `[x].*done` lingering in `TO_DO.md`; `active/*.md` fully-checked but not moved; `active/README.md` disagreeing with `active/*.md`; duplicate `###` headings in CHANGELOG Unreleased; active plan with no backlink in `TO_DO.md`.
-- [ ] Warn: active plan untouched >30d; `in progress` TODO >14d without update; `dev-docs` file unindexed; `investigations/` note >60d without triage decision.
+Bash stays for the existing `check-repo-structure.sh` checks. All new cross-file checks go in a Python script following the `scripts/check_file_lengths.py` precedent (`pathlib` + `re` — bash markdown parsing is too brittle for index/backlink validation).
+
+- [ ] New Python check warns (then errors after transition): `[x].*done` lingering in `TO_DO.md`; `active/*.md` fully-checked but not moved; `active/README.md` disagreeing with `active/*.md`; duplicate `###` headings in CHANGELOG Unreleased; active plan with no backlink in `TO_DO.md`; generated `CLAUDE.md` out of sync with its source (see Phase 6).
+- [ ] New Python check warns: active plan untouched >30d; `in progress` TODO >14d without update; `dev-docs` file unindexed; `investigations/` note >60d without triage decision.
 - [ ] Keep new checks warn-only until the next release tag after merge (concrete gate, not an open "transition window"); record the tag in the plan when flipped to error.
-- [ ] Rule carve-out: a plan may create its own TO_DO entry as its first step (as this plan did) — that satisfies the asymmetric linkage from creation, not retroactively.
+- [ ] Rule carve-out: a plan satisfies the asymmetric linkage if its TO_DO entry is authored anywhere inside the same bootstrap PR that creates it (as this plan did) — authorship ordering, not a CI-evaluated sequence.
 
-## Phase 6 — Entry-point canonicalization (AGENTS canonical, others point)
+## Phase 6 — Entry-point canonicalization (generate, don't point)
 
-Owner decision 2026-09-19: `CLAUDE.md` etc. mostly point to `AGENTS.md` instead of duplicating it. Execute with the Phases 1–3 guidance batch (numbered last only to avoid renumber churn).
+Agy review overturned the v3 pointer model: Claude auto-loads `CLAUDE.md` but does not traverse markdown links, so pointer-stripped entry points lose their guardrails and an `AGENTS.md`-side precedence line is unenforceable from outside the context window. Execute with the Phases 1–3 guidance batch (numbered last only to avoid renumber churn).
 
-- [ ] Add precedence line to `AGENTS.md`: on any conflict between entry-point guidance files, `AGENTS.md` wins.
-- [ ] Fix known drifts once, in `AGENTS.md` only: basedpyright scope gains `scripts` (match `.pre-commit-config.yaml:192`); keep localhost/`require_escalated` retry note; full Changelog Rule with internal-only exemption; TODO-removal + asymmetric plan↔TODO rule.
-- [ ] Strip `CLAUDE.md` duplicates → keep Claude-specific deltas only (sub-agent dir paths, invocation mechanism) + pointer to `AGENTS.md` for verification, principles, plans, changelog, deploy, PR conventions. Record an explicit keep-or-drop decision for the quick-verify snippet (highest-frequency need; either verbatim or pure pointer, not a paraphrase).
-- [ ] `dev-docs/README.md` Plan rules block → pointer to the canonical `AGENTS.md` wording, not a paraphrase. `TO_DO.md` header → same one-liner.
-- [ ] Add skills + sub-agents pointer block to both entry points (dir path + when to use); surface golden-principles 7–10 titles in entry points with details behind the link; `CLAUDE.md` gets pointers (not copies) for backend-deploy check and PR conventions.
-- [ ] Enforcement simplification: `check-repo-structure.sh` checks the canonical `AGENTS.md` block only, not cross-file consistency.
+- [ ] `AGENTS.md` is the single source of truth. Fix known drifts once, there: basedpyright scope gains `scripts` (match `.pre-commit-config.yaml:192`); keep localhost/`require_escalated` retry note; full Changelog Rule with internal-only exemption; TODO-removal + asymmetric plan↔TODO rule; precedence line as a backstop (not the primary mechanism).
+- [ ] Add a pre-commit hook that compiles `CLAUDE.md` from the `AGENTS.md` source, injecting the Claude-specific deltas at the top (sub-agent dir paths, invocation mechanism). Zero human drift plus full eager context loading — no link traversal required.
+- [ ] Mark `CLAUDE.md` as generated (header marker: do not hand-edit; edit the source + template instead). The hook fails the commit when the generated file is out of sync, the same way formatting hooks do.
+- [ ] Decide the generator's content policy explicitly and record it: full-fidelity compile vs trimmed subset. Default to full-fidelity unless the compiled size forces a trim; any trim is an allowlist recorded in the hook config, never ad-hoc paraphrase.
+- [ ] `dev-docs/README.md` Plan rules block → pointer to the canonical `AGENTS.md` wording (READMEs are not auto-loaded agent context, so a pointer is safe there). `TO_DO.md` header → same one-liner.
+- [ ] Fold into the compile: skills + sub-agents pointer block (dir path + when to use), golden-principles 7–10 titles with details behind the link, backend-deploy check, PR conventions.
 
 ## Phase 5 — One-time garden pass (same branch, separate commits)
 
@@ -81,5 +83,6 @@ Owner decision 2026-09-19: `CLAUDE.md` etc. mostly point to `AGENTS.md` instead 
 - [ ] `maintenance-log.md` exists, indexed, and seeded; guidance forbids internal entries in CHANGELOG.
 - [ ] Same-PR DoD + asymmetric plan↔TODO rule present in `AGENTS.md`, `CLAUDE.md` (short form), and `dev-docs/README.md`.
 - [ ] Structure script enforces (or warns with release-tagged flip) the new rules; garden pass clears baseline drift.
-- [ ] Entry-point canonicalization done: no paraphrased duplicates of plan/changelog/verify rules across `AGENTS.md` / `CLAUDE.md` / `dev-docs/README.md`; `CLAUDE.md` diff vs `AGENTS.md` shows only deltas + pointers; precedence line present.
-- [ ] Kilo reviewer feedback addressed: (1) self-violation fixed via TO_DO entry + first-step carve-out, (2) bootstrap exemption recorded, (3) Phase 0 persists to a baseline note with cross-reference table, (4) CHANGELOG merge strategy specified, (5) `check-repo-structure.sh` gaps enumerated against current lines, (6) CLAUDE.md audit step added, (7) maintenance-log schema + seed specified, (8) warn→error gate tied to next release tag.
+- [ ] Entry-point canonicalization done: `CLAUDE.md` carries a generated-file marker and is byte-identical to hook output (in-sync check green); no hand-maintained paraphrased duplicates of plan/changelog/verify rules; generator trim policy (if any) recorded in hook config.
+- [ ] Kilo reviewer feedback addressed: (1) self-violation fixed via TO_DO entry + authorship-ordering carve-out, (2) bootstrap exemption recorded as one-time ordering, (3) Phase 0 persists to a baseline note with cross-reference table, (4) CHANGELOG merge strategy specified, (5) enforcement gaps enumerated against current script lines, (6) CLAUDE.md audit step added, (7) maintenance-log schema + seed specified, (8) warn→error gate tied to next release tag.
+- [ ] Agy reviewer feedback addressed: (1) pointer model replaced with hook-compiled generation (eager context preserved), (2) new cross-file checks assigned to Python not bash, (3) bootstrap carve-out reworded as authorship ordering, not a CI-evaluated sequence.
