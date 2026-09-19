@@ -25,7 +25,7 @@ This PR introduces the same-PR housekeeping contract, so the contract cannot hav
 
 ## Phase 0 — Baseline (evidence, persisted)
 
-- [x] Write baseline to `dev-docs/investigations/2026-09-19-docs-harness-baseline.md`: count `[x] done` lines in `TO_DO.md`, duplicate `###` sections in `CHANGELOG.md` Unreleased (`CHANGELOG.md:7-173` has Added x2, Fixed x3, Changed x3), stale `tech-debt-tracker.md` Opens, unindexed `dev-docs/*.md` root files.
+- [x] Write baseline to `dev-docs/investigations/2026-09-19-docs-harness-baseline.md`: count `[x] done` lines in `TO_DO.md`, duplicate `###` sections in `CHANGELOG.md` Unreleased (`CHANGELOG.md:7-173` has Added x2, Fixed x4, Changed x3 — Fixed count corrected from x3 during the garden pass), stale `tech-debt-tracker.md` Opens, unindexed `dev-docs/*.md` root files.
 - [x] Include the plan↔TODO↔index cross-reference table in the baseline note (known mismatches at plan creation: `2026-09-15-self-host` in TO_DO but missing from `active/README.md`; `2026-07-22` backlink verified present in TO_DO:118 — plan text was stale, see baseline note §5; `2026-07-05`/`2026-07-06` in README but already completed/moved).
 - [x] Confirm `scripts/check-repo-structure.sh` current checks as the enforcement baseline.
 
@@ -45,9 +45,9 @@ This PR introduces the same-PR housekeeping contract, so the contract cannot hav
 
 ## Phase 3 — Same-PR housekeeping contract
 
-- [ ] Add "Definition of Done (same PR)" checklist with canonical wording in `AGENTS.md` Plans section: code/tests + CHANGELOG or maintenance-log entry + TODO line removed/updated + plan moved to `completed/` + both README indexes updated. `dev-docs/README.md` points at it; `CLAUDE.md` inherits it via the Phase 6 generator.
-- [ ] State the asymmetric linkage explicitly: active plan without a TODO link = violation; TODO without a plan = allowed.
-- [ ] Update `dev-docs/exec-plans/active/README.md` intro to point at the TODO-backlink requirement.
+- [x] Add "Definition of Done (same PR)" checklist with canonical wording in `AGENTS.md` Plans section: code/tests + CHANGELOG or maintenance-log entry + TODO line removed/updated + plan moved to `completed/` + both README indexes updated. `dev-docs/README.md` points at it; `CLAUDE.md` inherits it via the Phase 6 generator.
+- [x] State the asymmetric linkage explicitly: active plan without a TODO link = violation; TODO without a plan = allowed.
+- [x] Update `dev-docs/exec-plans/active/README.md` intro to point at the TODO-backlink requirement.
 
 ## Phase 4 — Mechanical enforcement (Python for new cross-file checks)
 
@@ -81,7 +81,7 @@ Agy review overturned the v3 pointer model: Claude auto-loads `CLAUDE.md` but do
 
 - [ ] `TO_DO.md` contains zero `[x]` completed items; header states active-only + log-then-delete.
 - [ ] `maintenance-log.md` exists, indexed, and seeded; guidance forbids internal entries in CHANGELOG.
-- [ ] Same-PR DoD + asymmetric plan↔TODO rule present in `AGENTS.md`, `CLAUDE.md` (short form), and `dev-docs/README.md`.
+- [ ] Same-PR DoD + asymmetric plan↔TODO rule present in `AGENTS.md`, the hook-compiled full-fidelity `CLAUDE.md`, and `dev-docs/README.md` (pointer).
 - [ ] Structure script enforces (or warns with release-tagged flip) the new rules; garden pass clears baseline drift.
 - [ ] Entry-point canonicalization done: `CLAUDE.md` carries a generated-file marker and is byte-identical to hook output (in-sync check green); no hand-maintained paraphrased duplicates of plan/changelog/verify rules; generator trim policy (if any) recorded in hook config.
 - [ ] Kilo reviewer feedback addressed: (1) self-violation fixed via TO_DO entry + authorship-ordering carve-out, (2) bootstrap exemption recorded as one-time ordering, (3) Phase 0 persists to a baseline note with cross-reference table, (4) CHANGELOG merge strategy specified, (5) enforcement gaps enumerated against current script lines, (6) CLAUDE.md audit step added, (7) maintenance-log schema + seed specified, (8) warn→error gate tied to next release tag.

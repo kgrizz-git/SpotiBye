@@ -81,6 +81,7 @@ Plan rules:
 - New implementation plans go in `dev-docs/exec-plans/active/YYYY-MM-DD-topic.md`.
 - Plans must use checkbox steps (`- [ ]`) and executors must mark steps complete (`- [x]`) as work is completed.
 - Completed or superseded plans move to `dev-docs/exec-plans/completed/` and must be indexed in [`exec-plans/completed/README.md`](exec-plans/completed/README.md).
+- Housekeeping follows the canonical rule in [`AGENTS.md`](../AGENTS.md) (same-PR Definition of Done + asymmetric plan↔`TO_DO.md` linkage); this index does not restate it.
 
 ## Investigations and Assessments
 

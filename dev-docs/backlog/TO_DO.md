@@ -1,6 +1,6 @@
 # To-Do List
 
-Active work only; no completed items retained here. Done = log + delete: user-visible outcomes go to `CHANGELOG.md` Unreleased, internal-only work goes to `dev-docs/backlog/maintenance-log.md`, and plan-backed items move to `dev-docs/exec-plans/completed/` in the same PR. Every active exec-plan has a backlink from a TO_DO entry; small items may exist without a plan.
+Active work only; no completed items retained here. Done = log + delete: user-visible outcomes go to `CHANGELOG.md` Unreleased, internal-only work goes to `dev-docs/backlog/maintenance-log.md`, and plan-backed items move to `dev-docs/exec-plans/completed/` in the same PR. Every active exec-plan has a backlink from a TO_DO entry; small items may exist without a plan. `in progress YYYY-MM-DD` = last confirmed state; `NEEDS REVIEW` = needs a second pair of eyes before proceeding. Staleness is flagged by `scripts/check_docs_hygiene.py` (warn-only).
 
 ## Playlist Analysis — End-to-End
 

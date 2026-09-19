@@ -1,6 +1,6 @@
 # Active Execution Plans
 
-> Plans currently in progress. Move a plan to `../completed/` when it is fully executed and all references are updated.
+> Plans currently in progress. Move a plan to `../completed/` when it is fully executed and all references are updated. Each active plan must have a backlink in `dev-docs/backlog/TO_DO.md` (asymmetric linkage, see `AGENTS.md`).
 
 | Plan | Description | Started |
 |------|-------------|---------|

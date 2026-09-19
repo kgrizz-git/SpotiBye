@@ -105,8 +105,9 @@ repos:
         pass_filenames: true
         stages: [pre-commit]
 
-      # Generated-file sync: CLAUDE.md is compiled from AGENTS.md (warn-only
-      # until the docs-harness release-tag gate flips hygiene to errors).
+      # Generated-file sync: CLAUDE.md is compiled from AGENTS.md.
+      # Unlike the warn-only hygiene checks below, this hook fails the commit
+      # when the generated file is stale (same as formatting hooks).
       - id: claude-md-sync
         name: CLAUDE.md in sync with AGENTS.md
         description: Fail when the generated CLAUDE.md is stale; regenerate with scripts/compile_claude_md.py

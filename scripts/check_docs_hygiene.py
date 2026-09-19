@@ -117,6 +117,9 @@ def check_claude_sync() -> None:
 
 
 def check_staleness() -> None:
+    # NOTE: file mtime drives the >30d/>60d checks, so warnings flap across
+    # branch switches and fresh checkouts. Acceptable for warn-only mode;
+    # revisit (e.g. git log dates) if these ever become errors.
     now = time.time()
     for plan in active_plans():
         age_days = (now - plan.stat().st_mtime) / 86400
