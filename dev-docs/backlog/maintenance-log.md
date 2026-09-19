@@ -86,3 +86,10 @@ PR: #11
 Scope: `dev-docs/investigations/2026-09-19-docs-harness-baseline.md`
 
 Appended §6 to baseline note with per-note triage recommendations for root `dev-docs/*.md` files older than 60 days (`2026-06-22-backend-deployment-tracking.md`, `2026-06-26-reccobeats-wiring-assessment.md`). Did not mass-move files.
+
+## 2026-09-19 — Retired stale PR#20 split-dependabot plan
+
+PR: #12
+Scope: `dev-docs/backlog/TO_DO.md`, `dev-docs/exec-plans/`
+
+Retired the PR#20 dev-dependency split item (PR never existed post-migration; goal landed piecemeal via PRs #2, #3, #7 + flat-config migration). Kept 2 verified residuals as plain TO_DO one-liners (npm overrides watch, `index.ts` wiring decision); moved plan to `completed/` with index updates.
