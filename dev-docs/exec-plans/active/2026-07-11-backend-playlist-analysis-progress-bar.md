@@ -449,7 +449,14 @@ remain queued/processing at stale values.
   7 skipped, `basedpyright --level error` clean, `./scripts/verify-all.sh`
   green on main. No sandbox blocks observed.
 
-- [ ] **Run live development-worker verification.**
+- [x] **Run live development-worker verification.**
+  2026-09-19 result (dev `e96f00a`, playlist `5X8lN5fZSrLnXzFtDEUwb9`,
+  `scripts/trace-analysis-progress.sh`): raw status reads advanced
+  `queued:0 → processing:50 → processing:75 → completed:100` — real
+  intermediate values, no stuck-at-zero staleness. DO-backed status confirmed
+  live. Popup-bar advancement from real status follows from the verified
+  wiring (`reccobeats_backend.py:232-234` + `AnalysisTask`); terminal-log
+  shape matches the trace timeline.
   Deploy to the development Worker only after local tests pass. Repeat the
   previous raw status trace against the development Worker and confirm:
   - raw `/analysis/playlist/:id/status` responses advance through intermediate
@@ -476,7 +483,15 @@ remain queued/processing at stale values.
 
 ## Analysis Data Coverage Phase (Same PR)
 
-- [ ] **Add a targeted backend diagnostic for the NPR playlist behavior.**
+- [x] **Add a targeted backend diagnostic for the NPR playlist behavior.**
+  2026-09-19 result (live trace, same run as above): genre sections PRESENT
+  (`genre buckets: 15`) with a partial-availability warning (`resolved 24 of
+  40 artists; 16 failed`) instead of the old all-or-nothing wipe — tolerant
+  404 handling confirmed fixed live. New live finding: ReccoBeats
+  audio-features + track-metadata both hit the Workers subrequest limit on
+  this large playlist (`Too many subrequests by single Worker invocation`),
+  so enrichment was Spotify-only this run; feeds the existing TO_DO fan-out
+  item (distribute batches for >40-artist playlists).
   Use playlist `5X8lN5fZSrLnXzFtDEUwb9` only as a manual/live diagnostic, not as a
   committed fixture that depends on external services. Capture:
   - total Spotify playlist items and usable track IDs;
@@ -597,9 +612,9 @@ remain queued/processing at stale values.
   that updates as progress changes. (verified 2026-09-19: `reccobeats_backend.py:232-234` sends `f"Analyzing playlist... {progress}%"` on every advancing update; `AnalysisTask._set_progress` writes it to the label)
 - [x] Backend progress reporting no longer has a single long ReccoBeats stall:
   raw status writes include intermediate, monotonic values between `65` and `85`. (verified 2026-09-19: `analysis.ts:158-174` shared tracker with `lastEmitted` guard; backend test asserts monotonic + strictly-between values)
-- [ ] In the target development Worker environment, raw status reads advance
+- [x] In the target development Worker environment, raw status reads advance
   through real intermediate values instead of staying at `queued:0` until
-  `completed:100`.
+  `completed:100`. (verified live 2026-09-19: `queued:0 → processing:50 → processing:75 → completed:100`)
 - [x] If KV status reads are stale in the target environment, the UI still shows a
   bounded in-progress state instead of appearing frozen at `0%`, without claiming
   completion before the backend reports `completed`. This is temporary fallback
