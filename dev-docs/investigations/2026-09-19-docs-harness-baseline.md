@@ -92,13 +92,13 @@ existing rows.
 
 ## 6. Aging investigations triage recommendations (as of 2026-09-19)
 
-> Cutoff: 60 days before 2026-09-19 = 2026-07-20. Files with explicit date prefixes older than the cutoff are listed below with a per-note recommendation. No files were mass-moved.
+> Cutoff: 60 days before 2026-09-19 = 2026-07-21. Files with explicit date prefixes strictly older than the cutoff (dated ≤2026-07-20) are listed below with a per-note recommendation. No files were mass-moved.
 
 | File | Age | Recommendation | Rationale |
 |------|-----|----------------|-----------|
 | `2026-07-05-reccobeats-enrichment-gaps.md` | 76 days | **Archive** | Header states "Resolved: 2026-07-09" and "Kept for historical context." All gaps closed; kept for reference only. |
 | `2026-07-07-reccobeats-ui-mockup.md` | 74 days | **Archive** | UI mockup for completed plan `2026-07-07-reccobeats-enrichment-integration.md`. Implementation is done; mockup is historical. |
-| `2026-07-09-reccobeats-enrichment-failure.md` | 71 days | **Archive** | Header states "Resolved — root cause identified and fixed locally." Historical record of a fixed bug. |
+| `2026-07-09-reccobeats-enrichment-failure.md` | 72 days | **Archive** | Header states "Resolved — root cause identified and fixed locally." Historical record of a fixed bug. |
 
 ### Root `dev-docs/*.md` files older than 60 days (correction: already indexed)
 
@@ -111,7 +111,7 @@ existing rows.
 
 | File | Age | Recommendation | Rationale |
 |------|-----|----------------|-----------|
-| `2026-06-22-backend-deployment-tracking.md` | 88 days | **Keep** | Backend deployment tracking is ongoing operational reference; still relevant. |
+| `2026-06-22-backend-deployment-tracking.md` | 89 days | **Keep** | Backend deployment tracking is ongoing operational reference; still relevant. |
 | `2026-06-26-reccobeats-wiring-assessment.md` | 85 days | **Keep** | Indexed in `dev-docs/README.md` current-notes; still the authoritative wiring assessment. (Correction: not linked from `AGENTS.md`, which points only at `reccobeats-api-contract.md`.) |
 
 ---

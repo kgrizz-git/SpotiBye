@@ -54,35 +54,35 @@ Added frontend tests for token expiration handling (`BackendAPIError` error_code
 
 ## 2026-09-19 — Triage 5 stale tech-debt rows closed
 
-PR: n/a
+PR: #11
 Scope: `dev-docs/backlog/tech-debt-tracker.md`
 
 Closed 5 stale Open rows with verified tree evidence: #4 bare `except:` (absent in `src/frontend/`), #5 legacy directories (absent from tree), #6 no-restricted-imports (migrated to flat `eslint.config.mjs`), #8 No CI (`.github/workflows/` present), #9 reccobeats mock (`reccobeats.ts` removed; real integration via `reccobeats-track-cache.ts` + `analysis.ts`). Moved to Done table with resolution date 2026-09-19.
 
 ## 2026-09-19 — Changelog Unreleased duplicate-heading squash
 
-PR: n/a
+PR: #11
 Scope: `CHANGELOG.md`
 
 Squashed 11 duplicate `### ` headings in `[Unreleased]` into single Added/Changed/Fixed/Security/Removed sections (order: Added → Changed → Fixed → Security → Removed). Concatenated all bullets under each surviving heading without rewriting bullet text, then removed 15 exact-duplicate bullet lines (pre-existing repeats across the old duplicate sections, e.g. the GitHub Actions optimization block). Verified zero remaining intra-section duplicate bullets and `### ` count 11 to 5 in the Unreleased block.
 
 ## 2026-09-19 — Active plan index sync in exec-plans/active/README.md
 
-PR: n/a
+PR: #11
 Scope: `dev-docs/exec-plans/active/README.md`
 
 Removed completed 2026-07-05/2026-07-06 rows; added missing active rows for 2026-07-07-file-length, 2026-07-09-split-dependabot, 2026-09-15-self-host, 2026-09-19-docs-harness-housekeeping. Descriptions copied from plan file titles/intros.
 
 ## 2026-09-19 — Verified alleged unindexed root dev-docs files
 
-PR: n/a
+PR: #11
 Scope: `dev-docs/README.md`
 
 Baseline §4 had listed `bug-fix-plan-2026-06-15.md` and `bug-review-2026-06-15-112416.md` as unindexed strays; verification showed both were already indexed in the current-notes table. No change needed; baseline §4 corrected.
 
 ## 2026-09-19 — Record aging-investigation triage recommendations
 
-PR: n/a
+PR: #11
 Scope: `dev-docs/investigations/2026-09-19-docs-harness-baseline.md`
 
 Appended §6 to baseline note with per-note triage recommendations for root `dev-docs/*.md` files older than 60 days (`2026-06-22-backend-deployment-tracking.md`, `2026-06-26-reccobeats-wiring-assessment.md`). Did not mass-move files.

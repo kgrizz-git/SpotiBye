@@ -60,6 +60,8 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 - [ ] Audit duplicate code candidates and create focused follow-up plans
 - [ ] Review outdated docs now that `docs/` and `dev-docs/` are split
 - [ ] Docs harness housekeeping: TO_DO active-only lifecycle, maintenance log, same-PR gardening ([plan](../exec-plans/active/2026-09-19-docs-harness-housekeeping.md)) — **in progress 2026-09-19**
+- [ ] Harden `scripts/check_docs_hygiene.py` `check_plan_backlinks` to parse Markdown link destinations and require a normalized `exec-plans/active/<name>.md` destination instead of substring `stem in todo` (CodeRabbit PR #11 follow-up; no false-positive exists today)
+- [ ] Extend `scripts/check_docs_hygiene.py` with a `completed/README.md` sync check mirroring `check_active_readme_sync` (CodeRabbit PR #11 follow-up; needs a distinct link pattern for categorized tables and `superpowers/`/`superseded/` subdirs)
 - [ ] Audit `.gitignore` vs tracked files (venv, node_modules, caches, IDE, `.DS_Store`; verify `.github/` and `.skills/` tracking)
 - [ ] Decide on default window size and placement
 - [ ] Verify release build pipeline
