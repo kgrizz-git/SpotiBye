@@ -71,11 +71,11 @@ Agy review overturned the v3 pointer model: Claude auto-loads `CLAUDE.md` but do
 
 ## Phase 5 — One-time garden pass (same branch, separate commits)
 
-- [ ] Squash `CHANGELOG.md` Unreleased duplicate sections into single Added/Changed/Fixed/Security/Removed (merge strategy: concatenate bullets under one heading each, preserving order Added → Changed → Fixed → Security → Removed; no bullet text rewritten, only heading dedupe). Verify with `grep -c '^### ' CHANGELOG.md` before/after on the Unreleased block.
-- [ ] Sync `exec-plans/active/README.md` with actual `active/*.md` (remove completed 2026-07-05/2026-07-06 entries; add missing 2026-07-07, 2026-07-09, 2026-09-15 or move them if done).
-- [ ] Triage `tech-debt-tracker.md` Opens (close `#8 No CI`, re-verify `#9 reccobeats mock`, etc.); move resolutions to Done + maintenance-log.
-- [ ] Triage root `dev-docs/*.md` strays: index, move, or archive. Triage >60d investigations: promote to guides/references/design-decisions, archive, or delete.
-- [ ] Verify: `./scripts/verify-all.sh` + `scripts/check-repo-structure.sh` clean (warnings triaged or recorded).
+- [x] Squash `CHANGELOG.md` Unreleased duplicate sections into single Added/Changed/Fixed/Security/Removed (merge strategy: concatenate bullets under one heading each, preserving order Added → Changed → Fixed → Security → Removed; no bullet text rewritten, only heading dedupe). Verify with `grep -c '^### ' CHANGELOG.md` before/after on the Unreleased block.
+- [x] Sync `exec-plans/active/README.md` with actual `active/*.md` (remove completed 2026-07-05/2026-07-06 entries; add missing 2026-07-07, 2026-07-09, 2026-09-15 or move them if done).
+- [x] Triage `tech-debt-tracker.md` Opens (close `#8 No CI`, re-verify `#9 reccobeats mock`, etc.); move resolutions to Done + maintenance-log.
+- [x] Triage root `dev-docs/*.md` strays: index, move, or archive. Triage >60d investigations: promote to guides/references/design-decisions, archive, or delete.
+- [x] Verify: `./scripts/verify-all.sh` + `scripts/check-repo-structure.sh` clean (warnings triaged or recorded).
 
 ## Acceptance
 

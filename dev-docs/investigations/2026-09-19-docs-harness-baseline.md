@@ -52,14 +52,12 @@ One Done row exists: #10 (legacy plans migrated, 2026-06-19).
 
 ## 4. Unindexed `dev-docs/*.md` root files
 
-Files in `dev-docs/*.md` that are not listed in `dev-docs/README.md`:
-
-| File | Status |
-|------|--------|
-| `bug-fix-plan-2026-06-15.md` | Unindexed |
-| `bug-review-2026-06-15-112416.md` | Unindexed |
-
-All other root `dev-docs/*.md` files are referenced from the README Entry Points, References, or Current notes tables. `README.md` itself is the index and is not self-referenced.
+Correction 2026-09-19 (garden pass): the two files originally listed here
+(`bug-fix-plan-2026-06-15.md`, `bug-review-2026-06-15-112416.md`) were
+verified to be already indexed in the `dev-docs/README.md` current-notes
+table. There are no unindexed root `dev-docs/*.md` files. The initial
+miscount came from matching on bare filenames instead of the table's
+existing rows.
 
 ---
 
@@ -89,6 +87,32 @@ All other root `dev-docs/*.md` files are referenced from the README Entry Points
 ### Enforcement baseline
 
 `scripts/check-repo-structure.sh` current checks (line-by-line grep of the script) constitute the enforcement baseline for this plan. No changes to that script are in scope for Chunk 1.
+
+---
+
+## 6. Aging investigations triage recommendations (as of 2026-09-19)
+
+> Cutoff: 60 days before 2026-09-19 = 2026-07-20. Files with explicit date prefixes older than the cutoff are listed below with a per-note recommendation. No files were mass-moved.
+
+| File | Age | Recommendation | Rationale |
+|------|-----|----------------|-----------|
+| `2026-07-05-reccobeats-enrichment-gaps.md` | 76 days | **Archive** | Header states "Resolved: 2026-07-09" and "Kept for historical context." All gaps closed; kept for reference only. |
+| `2026-07-07-reccobeats-ui-mockup.md` | 74 days | **Archive** | UI mockup for completed plan `2026-07-07-reccobeats-enrichment-integration.md`. Implementation is done; mockup is historical. |
+| `2026-07-09-reccobeats-enrichment-failure.md` | 71 days | **Archive** | Header states "Resolved — root cause identified and fixed locally." Historical record of a fixed bug. |
+
+### Root `dev-docs/*.md` files older than 60 days (correction: already indexed)
+
+| File | Age | Action taken | Rationale |
+|------|-----|--------------|-----------|
+| `bug-fix-plan-2026-06-15.md` | ~96 days | **None — already indexed** | Pre-existing row in `dev-docs/README.md` current-notes; the §4 "unindexed" claim was a miscount, corrected above. |
+| `bug-review-2026-06-15-112416.md` | ~96 days | **None — already indexed** | Same as sibling file. |
+
+### Root `dev-docs/*.md` files already indexed but older than 60 days
+
+| File | Age | Recommendation | Rationale |
+|------|-----|----------------|-----------|
+| `2026-06-22-backend-deployment-tracking.md` | 88 days | **Keep** | Backend deployment tracking is ongoing operational reference; still relevant. |
+| `2026-06-26-reccobeats-wiring-assessment.md` | 85 days | **Keep** | Referenced from `AGENTS.md` and `CLAUDE.md` ReccoBeats entry point; still the authoritative wiring assessment. |
 
 ---
 
