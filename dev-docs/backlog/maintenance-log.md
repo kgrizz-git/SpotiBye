@@ -100,3 +100,10 @@ PR: #13
 Scope: `scripts/check-repo-structure.sh`
 
 Narrowed the dev-docs README linkage check from `maxdepth 2` to `maxdepth 1`: subdir notes are indexed at directory level with a curated selection (per `dev-docs/README.md`), matching `check_docs_hygiene.py`. Silenced 17 false-positive unlinked-note warnings.
+
+## 2026-09-19 — Progress-bar plan close-out pass
+
+PR: #14
+Scope: `dev-docs/exec-plans/active/2026-07-11-backend-playlist-analysis-progress-bar.md`, `dev-docs/backlog/TO_DO.md`
+
+Re-ran all runnable verifications green (backend 855 tests, lint 0 errors; frontend 257 passed; pyright clean); checked 2 verification + 4 acceptance boxes with tree evidence; re-dated TO_DO to `in progress 2026-09-19`. Left: live dev-worker trace, NPR diagnostic run-or-drop, optional cancellation.
