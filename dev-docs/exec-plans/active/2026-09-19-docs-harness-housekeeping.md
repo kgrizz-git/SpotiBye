@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-19
 **Branch:** `chore/docs-harness-housekeeping`
-**Status:** draft v4 — kilo + agy reviewer feedback incorporated; Phase 6 rewritten as generate-don't-point
+**Status:** draft v5 — all reviewer rounds incorporated (kilo + agy plan reviews; cursor + kilo branch reviews; kimi pre-PR review; deepseek PR review)
 **Backlog link:** `dev-docs/backlog/TO_DO.md` → "Docs harness housekeeping" entry under Repo Cleanup & DevOps (added 2026-09-19; this plan satisfies its own asymmetric plan↔TODO rule)
 
 ## Goal

@@ -15,7 +15,7 @@
 - **#1 (2026-09-19):** `set()` signature now uses `value: unknown` instead of `any` (verified at `src/backend/services/cache.ts:18`). The "should be generic `<T>`" aspect remains open.
 - **#2 (2026-09-19):** Hand-rolled JWT remains the only Workers-compatible option; clock-skew and revocation gaps are documented inline at `src/backend/services/jwt.ts:8-11`. Acceptable as a platform constraint until Workers supports a standard library.
 - **#3 (2026-09-19):** `console.error` is still used extensively in `src/backend/` source files (65 `console.error` + 12 `console.log` matches in non-test files, verified via grep). `src/backend/utils/logger.ts:11` still delegates to `console.error`. Migration to structured logging is pending.
-- **#7 (2026-09-19):** No Python layer-boundary structural test found in `src/frontend/tests/` (only `test_main_screen_search_sort_ui.py` and Kivy UI tests exist). Backend has `architecture.test.ts`; frontend equivalent not yet implemented.
+- **#7 (2026-09-19):** No Python layer-boundary structural test found among the 39 test files in `src/frontend/tests/`. Backend has `architecture.test.ts`; frontend equivalent not yet implemented.
 
 ---
 

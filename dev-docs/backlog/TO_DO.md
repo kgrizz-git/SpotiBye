@@ -46,10 +46,10 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] After the warning count is near zero, consider promoting the test override from `warn` to `error`
 - [ ] Split the dependabot dev-dependency bundle in PR #20 into safe, individually-mergeable bumps, easiest/highest-priority first ([plan](../exec-plans/active/2026-07-09-split-dependabot-dev-deps-pr20.md)) — **NEEDS REVIEW**
   - [ ] Track/remove `esbuild` and `uuid` npm overrides in `src/backend/package.json` once upstream ships patched releases
- - [ ] Architecturally resolve the `src/backend/index.ts` routes/middleware imports (previously masked by a mis-scoped `no-restricted-imports` exemption)
-   - [ ] Background: `index.ts` is the Worker entry point and wires `./routes/*` and `./middleware/*` directly. The `eslint.config.mjs` override `files: ['index.ts']` never matched `src/backend/index.ts`, so these imports were unlinted until a real edit surfaced them.
-   - [ ] Decide whether the entry point should keep wiring routes/middleware (and the override glob should be `**/index.ts`), or whether route wiring belongs in a dedicated bootstrap module so `index.ts` stays thin.
-   - [ ] If keeping the wiring in `index.ts`, widen the ESLint override glob to `**/index.ts` (the current interim fix) and document the intent.
+  - [ ] Architecturally resolve the `src/backend/index.ts` routes/middleware imports (previously masked by a mis-scoped `no-restricted-imports` exemption)
+    - [ ] Background: `index.ts` is the Worker entry point and wires `./routes/*` and `./middleware/*` directly. The `eslint.config.mjs` override `files: ['index.ts']` never matched `src/backend/index.ts`, so these imports were unlinted until a real edit surfaced them.
+    - [ ] Decide whether the entry point should keep wiring routes/middleware (and the override glob should be `**/index.ts`), or whether route wiring belongs in a dedicated bootstrap module so `index.ts` stays thin.
+    - [ ] If keeping the wiring in `index.ts`, widen the ESLint override glob to `**/index.ts` (the current interim fix) and document the intent.
 - [ ] Add a pre-commit hook that checks for code files over 700 lines and doc files over 300 lines and gives a warning unless the file is in an exempted list ([plan](../exec-plans/active/2026-07-07-file-length-pre-commit-hook-plan.md))
 - [ ] Apply the shared test helpers (`tests/helpers/spotify.ts`, `tests/helpers/hono.ts`) to `export*.test.ts` — same `track()`/request-builder patterns, not on the Sonar hotspot list yet
 
