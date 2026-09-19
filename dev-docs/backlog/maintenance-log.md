@@ -15,7 +15,7 @@
 PR: n/a (bootstrap entry; landed via docs-harness housekeeping branch)
 Scope: docs-harness
 
-Captured baseline evidence for docs harness housekeeping: 39 `[x]` done lines in TO_DO.md, 3 duplicate `###` sections in CHANGELOG Unreleased, 9 stale Open rows in tech-debt-tracker.md, 2 unindexed root `dev-docs/*.md` files, and the plan↔TODO↔index cross-reference mismatches. Persisted to `dev-docs/investigations/2026-09-19-docs-harness-baseline.md`.
+Captured baseline evidence for docs harness housekeeping: 39 `[x]` done lines in TO_DO.md, duplicate `###` headings in CHANGELOG Unreleased (Added×2, Changed×3, Fixed×4), 9 stale Open rows in tech-debt-tracker.md, 2 unindexed root `dev-docs/*.md` files, and the plan↔TODO↔index cross-reference mismatches. Persisted to `dev-docs/investigations/2026-09-19-docs-harness-baseline.md`.
 
 ## 2026-06-19 — Legacy plans migrated to exec-plans/completed/legacy
 

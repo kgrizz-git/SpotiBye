@@ -53,21 +53,21 @@ This PR introduces the same-PR housekeeping contract, so the contract cannot hav
 
 Bash stays for the existing `check-repo-structure.sh` checks. All new cross-file checks go in a Python script following the `scripts/check_file_lengths.py` precedent (`pathlib` + `re` — bash markdown parsing is too brittle for index/backlink validation).
 
-- [ ] New Python check warns (then errors after transition): `[x].*done` lingering in `TO_DO.md`; `active/*.md` fully-checked but not moved; `active/README.md` disagreeing with `active/*.md`; duplicate `###` headings in CHANGELOG Unreleased; active plan with no backlink in `TO_DO.md`; generated `CLAUDE.md` out of sync with its source (see Phase 6).
-- [ ] New Python check warns: active plan untouched >30d; `in progress` TODO >14d without update; `dev-docs` file unindexed; `investigations/` note >60d without triage decision.
-- [ ] Keep new checks warn-only until the next release tag after merge (concrete gate, not an open "transition window"); record the tag in the plan when flipped to error.
+- [x] New Python check warns (then errors after transition): `[x].*done` lingering in `TO_DO.md`; `active/*.md` fully-checked but not moved; `active/README.md` disagreeing with `active/*.md`; duplicate `###` headings in CHANGELOG Unreleased; active plan with no backlink in `TO_DO.md`; generated `CLAUDE.md` out of sync with its source (see Phase 6).
+- [x] New Python check warns: active plan untouched >30d; `in progress` TODO >14d without update; `dev-docs` file unindexed; `investigations/` note >60d without triage decision.
+- [ ] Record the release tag in the plan when the warn-only gate flips to error (future: next release tag after merge).
 - [ ] Rule carve-out: a plan satisfies the asymmetric linkage if its TO_DO entry is authored anywhere inside the same bootstrap PR that creates it (as this plan did) — authorship ordering, not a CI-evaluated sequence.
 
 ## Phase 6 — Entry-point canonicalization (generate, don't point)
 
 Agy review overturned the v3 pointer model: Claude auto-loads `CLAUDE.md` but does not traverse markdown links, so pointer-stripped entry points lose their guardrails and an `AGENTS.md`-side precedence line is unenforceable from outside the context window. Execute with the Phases 1–3 guidance batch (numbered last only to avoid renumber churn).
 
-- [ ] `AGENTS.md` is the single source of truth. Fix known drifts once, there: basedpyright scope gains `scripts` (match `.pre-commit-config.yaml:192`); keep localhost/`require_escalated` retry note; full Changelog Rule with internal-only exemption; TODO-removal + asymmetric plan↔TODO rule; precedence line as a backstop (not the primary mechanism).
-- [ ] Add a pre-commit hook that compiles `CLAUDE.md` from the `AGENTS.md` source, injecting the Claude-specific deltas at the top (sub-agent dir paths, invocation mechanism). Zero human drift plus full eager context loading — no link traversal required.
-- [ ] Mark `CLAUDE.md` as generated (header marker: do not hand-edit; edit the source + template instead). The hook fails the commit when the generated file is out of sync, the same way formatting hooks do.
-- [ ] Decide the generator's content policy explicitly and record it: full-fidelity compile vs trimmed subset. Default to full-fidelity unless the compiled size forces a trim; any trim is an allowlist recorded in the hook config, never ad-hoc paraphrase.
-- [ ] `dev-docs/README.md` Plan rules block → pointer to the canonical `AGENTS.md` wording (READMEs are not auto-loaded agent context, so a pointer is safe there). `TO_DO.md` header → same one-liner.
-- [ ] Fold into the compile: skills + sub-agents pointer block (dir path + when to use), golden-principles 7–10 titles with details behind the link, backend-deploy check, PR conventions.
+- [x] `AGENTS.md` is the single source of truth. Fix known drifts once, there: basedpyright scope gains `scripts` (match `.pre-commit-config.yaml:192`); keep localhost/`require_escalated` retry note; full Changelog Rule with internal-only exemption; TODO-removal + asymmetric plan↔TODO rule; precedence line as a backstop (not the primary mechanism).
+- [x] Add a pre-commit hook that compiles `CLAUDE.md` from the `AGENTS.md` source, injecting the Claude-specific deltas at the top (sub-agent dir paths, invocation mechanism). Zero human drift plus full eager context loading — no link traversal required.
+- [x] Mark `CLAUDE.md` as generated (header marker: do not hand-edit; edit the source + template instead). The hook fails the commit when the generated file is out of sync, the same way formatting hooks do.
+- [x] Decide the generator's content policy explicitly and record it: full-fidelity compile vs trimmed subset. Default to full-fidelity unless the compiled size forces a trim; any trim is an allowlist recorded in the hook config, never ad-hoc paraphrase.
+- [x] `dev-docs/README.md` Plan rules block → pointer to the canonical `AGENTS.md` wording (READMEs are not auto-loaded agent context, so a pointer is safe there). `TO_DO.md` header → same one-liner.
+- [x] Fold into the compile: skills + sub-agents pointer block (dir path + when to use), golden-principles 7–10 titles with details behind the link, backend-deploy check, PR conventions.
 
 ## Phase 5 — One-time garden pass (same branch, separate commits)
 

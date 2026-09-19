@@ -105,6 +105,25 @@ repos:
         pass_filenames: true
         stages: [pre-commit]
 
+      # Generated-file sync: CLAUDE.md is compiled from AGENTS.md (warn-only
+      # until the docs-harness release-tag gate flips hygiene to errors).
+      - id: claude-md-sync
+        name: CLAUDE.md in sync with AGENTS.md
+        description: Fail when the generated CLAUDE.md is stale; regenerate with scripts/compile_claude_md.py
+        entry: .venv/bin/python scripts/compile_claude_md.py --check
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Docs hygiene (warn-only until the docs-harness release-tag gate).
+      - id: docs-hygiene
+        name: Docs hygiene warnings
+        description: Warn on TO_DO/index/CHANGELOG drift (exit 0 until gate flips to errors)
+        entry: .venv/bin/python scripts/check_docs_hygiene.py
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
   # Pre-push hooks - longer running checks
   # These run before git push, not on every commit
 

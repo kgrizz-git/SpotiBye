@@ -21,7 +21,7 @@ All 39 are candidates for migration under the `done = log + delete` rule (Phase 
 | Section | Occurrences | Lines |
 |---------|-------------|-------|
 | `### Added` | 2 | 9, 117 |
-| `### Fixed` | 3 | 25, 55, 166 |
+| `### Fixed` | 4 | 25, 55, 142, 166 |
 | `### Changed` | 3 | 37, 124, 155 |
 | `### Security` | 1 | 30 |
 | `### Removed` | 1 | 150 |
