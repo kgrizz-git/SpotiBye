@@ -107,6 +107,7 @@ Each top-level checkbox should be one shippable outcome. Use nested checkboxes f
 - [ ] Remove stale references to `src/spotify_playlist_exporter_v2/`
 - [ ] Audit duplicate code candidates and create focused follow-up plans
 - [ ] Review outdated docs now that `docs/` and `dev-docs/` are split
+- [ ] Docs harness housekeeping: TO_DO active-only lifecycle, maintenance log, same-PR gardening ([plan](../exec-plans/active/2026-09-19-docs-harness-housekeeping.md)) — **in progress 2026-09-19**
 - [ ] Audit `.gitignore` vs tracked files (venv, node_modules, caches, IDE, `.DS_Store`; verify `.github/` and `.skills/` tracking)
 - [ ] Decide on default window size and placement
 - [ ] Verify release build pipeline
