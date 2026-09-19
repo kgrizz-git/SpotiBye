@@ -53,7 +53,13 @@ def read_agents() -> str:
 
 
 def build_claude_md(agents_body: str) -> str:
-    return CLAUDE_SPECIFIC_HEADER + agents_body
+    # The AGENTS.md source contains a pointer for Claude users to CLAUDE.md.
+    # Inside the compiled CLAUDE.md that link is circular, so rewrite it.
+    body = agents_body.replace(
+        "> **Claude Code users:** see [`CLAUDE.md`](CLAUDE.md) for a focused entry point.",
+        "> You are reading the Claude Code entry point (generated from `AGENTS.md`; see the header above).",
+    )
+    return CLAUDE_SPECIFIC_HEADER + body
 
 
 def write_claude_md(content: str) -> None:

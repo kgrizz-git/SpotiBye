@@ -4,7 +4,7 @@
 > One entry per completed PR or internal housekeeping action. Schema:
 >
 >     ## YYYY-MM-DD — <short outcome>
->     PR: #NN
+>     PR: #NN (or `PR: n/a` with a reason for bootstrap/predated entries)
 >     Scope: <area>
 >     <one-line outcome>
 

@@ -20,7 +20,7 @@
 > Keep this file short. Follow the pointers to find deeper context.
 > On any conflict between entry-point guidance files (`AGENTS.md`, `CLAUDE.md`, index READMEs), this file wins.
 >
-> **Claude Code users:** see [`CLAUDE.md`](CLAUDE.md) for a focused entry point.
+> You are reading the Claude Code entry point (generated from `AGENTS.md`; see the header above).
 
 ---
 

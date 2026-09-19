@@ -112,7 +112,13 @@ def check_claude_sync() -> None:
     marker_at = claude.find("<!-- GENERATED")
     body = claude[marker_at:].split("\n", 1)[1] if "\n" in claude[marker_at:] else ""
     agents = AGENTS_PATH.read_text(encoding="utf-8")
-    if body.lstrip("\n") != agents:
+    # Mirror compile_claude_md.py: the self-referential CLAUDE.md pointer is
+    # rewritten at compile time, so apply the same transform before comparing.
+    expected = agents.replace(
+        "> **Claude Code users:** see [`CLAUDE.md`](CLAUDE.md) for a focused entry point.",
+        "> You are reading the Claude Code entry point (generated from `AGENTS.md`; see the header above).",
+    )
+    if body.lstrip("\n") != expected:
         warn("CLAUDE.md body differs from AGENTS.md — re-run scripts/compile_claude_md.py")
 
 
