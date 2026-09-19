@@ -93,3 +93,10 @@ PR: #12
 Scope: `dev-docs/backlog/TO_DO.md`, `dev-docs/exec-plans/`
 
 Retired the PR#20 dev-dependency split item (PR never existed post-migration; goal landed piecemeal via PRs #2, #3, #7 + flat-config migration). Kept 2 verified residuals as plain TO_DO one-liners (npm overrides watch, `index.ts` wiring decision); moved plan to `completed/` with index updates.
+
+## 2026-09-19 — Scoped dev-docs README link check to top-level files
+
+PR: #13
+Scope: `scripts/check-repo-structure.sh`
+
+Narrowed the dev-docs README linkage check from `maxdepth 2` to `maxdepth 1`: subdir notes are indexed at directory level with a curated selection (per `dev-docs/README.md`), matching `check_docs_hygiene.py`. Silenced 17 false-positive unlinked-note warnings.
