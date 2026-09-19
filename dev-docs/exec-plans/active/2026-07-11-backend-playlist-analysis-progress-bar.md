@@ -458,6 +458,17 @@ remain queued/processing at stale values.
   - the popup progress bar advances from real backend status, not the synthetic
     fallback.
 
+  2026-09-19 runbook (owner-run; needs dev deploy + Bearer session token):
+  run `./scripts/backend-deploy-status.sh <dev-backend-url>` first (deploy if
+  stale), then `scripts/trace-analysis-progress.sh <backend-url>
+  <bearer-token> <playlist-id>` (token comes from the app's Spotify login;
+  pass as an argument, never a file). The script POSTs a fresh job
+  (`force_enrichment=1`), polls status every 2s into `tmp/trace-*.jsonl`, and
+  on completion saves `tmp/results-*.json` plus a genre/error summary. Pass =
+  intermediate progress values in the trace ending at `completed:100`. For NPR
+  confirmation, run it against `5X8lN5fZSrLnXzFtDEUwb9` and check
+  `genre buckets > 0` in the summary.
+
 - [x] **Update docs and changelog.**
   Update `CHANGELOG.md` and any backend API notes that describe analysis status
   storage. If this plan remains active after the first progress-bar UI phase,
@@ -477,6 +488,11 @@ remain queued/processing at stale values.
   - one Spotify artist 404 aborting the entire genre phase;
   - ReccoBeats returning empty `content` for new tracks;
   - invalid/null Spotify artist names in playlist items.
+
+  2026-09-19: no separate manual procedure needed — run the live-trace
+  runbook above against this playlist. The status trace plus the results
+  summary (genre bucket count, per-source errors) answer all four capture
+  items in one command.
 - [x] **Make Spotify artist genre lookup tolerant of individual 404s.**
   Add a failing backend test in `src/backend/tests/analysis.test.ts` where one
   artist metadata request rejects with `HTTP 404` and another succeeds with

@@ -107,3 +107,5 @@ PR: #14
 Scope: `dev-docs/exec-plans/active/2026-07-11-backend-playlist-analysis-progress-bar.md`, `dev-docs/backlog/TO_DO.md`
 
 Re-ran all runnable verifications green (backend 855 tests, lint 0 errors; frontend 257 passed; pyright clean); checked 2 verification + 4 acceptance boxes with tree evidence; re-dated TO_DO to `in progress 2026-09-19`. Left: live dev-worker trace, NPR diagnostic run-or-drop, optional cancellation.
+
+Follow-up on PR #14: added `scripts/trace-analysis-progress.sh` (one-command live trace: fresh job + 2s status poll to `tmp/*.jsonl` + results/genre summary) and an owner runbook in the plan step; the NPR run is folded into the same command (trace `5X8lN5fZSrLnXzFtDEUwb9`, check `genre buckets > 0`). Cancellation logged as a TO_DO follow-up instead of implemented.
