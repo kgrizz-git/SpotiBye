@@ -467,14 +467,15 @@ remain queued/processing at stale values.
 
   2026-09-19 runbook (owner-run; needs dev deploy + Bearer session token):
   run `./scripts/backend-deploy-status.sh <dev-backend-url>` first (deploy if
-  stale), then `scripts/trace-analysis-progress.sh <backend-url>
-  <bearer-token> <playlist-id>` (token comes from the app's Spotify login;
-  pass as an argument, never a file). The script POSTs a fresh job
-  (`force_enrichment=1`), polls status every 2s into `tmp/trace-*.jsonl`, and
-  on completion saves `tmp/results-*.json` plus a genre/error summary. Pass =
-  intermediate progress values in the trace ending at `completed:100`. For NPR
-  confirmation, run it against `5X8lN5fZSrLnXzFtDEUwb9` and check
-  `genre buckets > 0` in the summary.
+  stale), then `TRACE_BEARER_TOKEN=<token> scripts/trace-analysis-progress.sh
+  <backend-url> <playlist-id>` (token comes from the app's Spotify login;
+  env/piped/prompted only — never an argument, never a file). The script
+  POSTs a fresh job (`force_enrichment=1`), polls status every 2s into a
+  unique per-run dir (`tmp/trace-run-*/trace.jsonl`), and on completion saves
+  `results.json` plus a genre/error summary. Pass = intermediate progress
+  values in the trace ending at `completed:100`. For NPR confirmation, run it
+  against `5X8lN5fZSrLnXzFtDEUwb9` and check `genre buckets > 0` in the
+  summary.
 
 - [x] **Update docs and changelog.**
   Update `CHANGELOG.md` and any backend API notes that describe analysis status
@@ -484,10 +485,12 @@ remain queued/processing at stale values.
 ## Analysis Data Coverage Phase (Same PR)
 
 - [x] **Add a targeted backend diagnostic for the NPR playlist behavior.**
-  2026-09-19 result (live trace, same run as above): genre sections PRESENT
-  (`genre buckets: 15`) with a partial-availability warning (`resolved 24 of
-  40 artists; 16 failed`) instead of the old all-or-nothing wipe — tolerant
-  404 handling confirmed fixed live. New live finding: ReccoBeats
+  2026-09-19 result (live trace, same run as above): backend returned genre
+  data (`genre buckets: 15`) with a partial-availability warning
+  (`resolved 24 of 40 artists; 16 failed`) instead of the old all-or-nothing
+  wipe — tolerant 404 handling confirmed fixed live. (Popup rendering of that
+  payload is covered by `test_backend_playlist_card_analysis.py`, not by this
+  trace.) New live finding: ReccoBeats
   audio-features + track-metadata both hit the Workers subrequest limit on
   this large playlist (`Too many subrequests by single Worker invocation`),
   so enrichment was Spotify-only this run; feeds the existing TO_DO fan-out

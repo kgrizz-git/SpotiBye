@@ -7,30 +7,64 @@ set -euo pipefail
 # inspected for the 65->85 ReccoBeats stall / queued:0 staleness symptoms.
 #
 # Usage:
-#   scripts/trace-analysis-progress.sh <backend-url> <bearer-token> <playlist-id> [max-seconds]
+#   scripts/trace-analysis-progress.sh <backend-url> <playlist-id> [max-seconds]
 #
-#   <bearer-token> is a backend session token (Authorization: Bearer ...),
-#   obtained via the app's Spotify login flow — it is passed as an argument so
-#   it never lands in a file. Trace output goes to tmp/ (gitignored).
+#   The backend session token (Authorization: Bearer ...) is NEVER passed as an
+#   argument (it would leak via ps / shell history). Provide it via the
+#   TRACE_BEARER_TOKEN env var, a pipe on stdin, or an interactive prompt.
+#   Obtain it from the app's Spotify login flow, e.g.:
+#     TRACE_BEARER_TOKEN="$(python3 -c "import json,os; print(json.load(open(os.path.expanduser('~/.spotibye_cache/backend_token_<hash>.json')))['token'])")" \
+#       scripts/trace-analysis-progress.sh <backend-url> <playlist-id>
+#
+#   Trace output goes to a unique per-run directory under tmp/ (gitignored).
 #
 # Needs: curl, python3.
 
-if [ "$#" -lt 3 ]; then
-  echo "Usage: $0 <backend-url> <bearer-token> <playlist-id> [max-seconds]" >&2
+if [ "$#" -lt 2 ]; then
+  echo "Usage: $0 <backend-url> <playlist-id> [max-seconds]" >&2
   exit 2
 fi
 
 BACKEND_URL="${1%/}"
-TOKEN="$2"
-PLAYLIST_ID="$3"
-MAX_SECONDS="${4:-120}"
+case "${BACKEND_URL}" in
+  https://*) ;;
+  http://localhost*|http://127.0.0.1*|http://\[::1\]*|http://\[::1\]:*) ;;
+  *)
+    echo "Error: BACKEND_URL must be https (http allowed only for localhost/127.0.0.1/::1): ${BACKEND_URL}" >&2
+    exit 2
+    ;;
+esac
+PLAYLIST_ID="$2"
+MAX_SECONDS="${3:-120}"
 INTERVAL=2
 
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-OUTFILE="tmp/trace-${PLAYLIST_ID}-${STAMP}.jsonl"
-mkdir -p tmp
+# Bearer token from protected runtime input only — never argv.
+if [ -z "${TRACE_BEARER_TOKEN:-}" ]; then
+  if [ -t 0 ]; then
+    read -rsp "Bearer token: " TRACE_BEARER_TOKEN
+    echo
+  else
+    IFS= read -r TRACE_BEARER_TOKEN || true
+  fi
+fi
+if [ -z "${TRACE_BEARER_TOKEN:-}" ]; then
+  echo "Error: no bearer token (set TRACE_BEARER_TOKEN, pipe it on stdin, or run interactively)" >&2
+  exit 2
+fi
 
-auth=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
+# Pass the token to curl via a 0600 config file (keeps it out of ps output);
+# remove it on exit.
+CURL_CFG="$(mktemp -t spotibye-trace-curl-XXXXXX)"
+chmod 600 "${CURL_CFG}"
+printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' "${TRACE_BEARER_TOKEN}" > "${CURL_CFG}"
+unset TRACE_BEARER_TOKEN
+trap 'rm -f "${CURL_CFG}"' EXIT
+
+mkdir -p tmp
+RUN_DIR="$(mktemp -d tmp/trace-run-XXXXXX)"
+OUTFILE="${RUN_DIR}/trace.jsonl"
+
+auth=(-K "${CURL_CFG}")
 
 echo "POST fresh job (force_enrichment=1)..."
 curl -fsS --max-time 30 "${auth[@]}" -X POST \
@@ -58,7 +92,7 @@ if printf '%s' "${summary:-}" | grep -q "^completed:"; then
   echo "Fetching final results..."
   results="$(curl -fsS --max-time 30 "${auth[@]}" \
     "${BACKEND_URL}/analysis/playlist/${PLAYLIST_ID}/results" || echo '{}')"
-  printf '%s' "${results}" > "tmp/results-${PLAYLIST_ID}-${STAMP}.json"
+  printf '%s' "${results}" > "${RUN_DIR}/results.json"
   printf '%s' "${results}" | python3 -c "
 import json,sys
 d = json.load(sys.stdin).get('data', {})
