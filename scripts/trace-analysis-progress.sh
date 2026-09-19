@@ -28,7 +28,7 @@ fi
 BACKEND_URL="${1%/}"
 case "${BACKEND_URL}" in
   https://*) ;;
-  http://localhost*|http://127.0.0.1*|http://\[::1\]*|http://\[::1\]:*) ;;
+  http://localhost|http://localhost[:/?#]*|http://127.0.0.1|http://127.0.0.1[:/?#]*|http://\[::1\]|http://\[::1\][:/?#]*) ;;
   *)
     echo "Error: BACKEND_URL must be https (http allowed only for localhost/127.0.0.1/::1): ${BACKEND_URL}" >&2
     exit 2
@@ -55,10 +55,10 @@ fi
 # Pass the token to curl via a 0600 config file (keeps it out of ps output);
 # remove it on exit.
 CURL_CFG="$(mktemp -t spotibye-trace-curl-XXXXXX)"
+trap 'rm -f "${CURL_CFG}"' EXIT
 chmod 600 "${CURL_CFG}"
 printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' "${TRACE_BEARER_TOKEN}" > "${CURL_CFG}"
 unset TRACE_BEARER_TOKEN
-trap 'rm -f "${CURL_CFG}"' EXIT
 
 mkdir -p tmp
 RUN_DIR="$(mktemp -d tmp/trace-run-XXXXXX)"
