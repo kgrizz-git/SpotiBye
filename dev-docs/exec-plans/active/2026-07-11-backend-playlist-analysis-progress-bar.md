@@ -425,7 +425,7 @@ remain queued/processing at stale values.
 
   If the compatibility date changes, also run any existing Worker integration
   tests that exercise auth, export, and analysis routes.
-- [ ] **Run frontend verification.**
+- [x] **Run frontend verification.**
   Run:
 
   ```bash
@@ -443,6 +443,11 @@ remain queued/processing at stale values.
   pytest suite still needs an unsandboxed rerun because the sandbox blocks
   existing localhost-socket tests; the escalation attempt was rejected by the
   approval system's usage limit.
+
+  2026-09-19 close-out: cleared — backend `npm run test:run` 92 files / 855
+  tests pass, `npm run lint` 0 errors; frontend full suite 257 passed /
+  7 skipped, `basedpyright --level error` clean, `./scripts/verify-all.sh`
+  green on main. No sandbox blocks observed.
 
 - [ ] **Run live development-worker verification.**
   Deploy to the development Worker only after local tests pass. Repeat the
@@ -517,7 +522,12 @@ remain queued/processing at stale values.
   - ReccoBeats low coverage is shown as a coverage note;
   - "No genre data available" is neutral when genres are unavailable, not a
     blocker for audio features.
-- [ ] **Run verification for the data coverage phase.**
+- [x] **Run verification for the data coverage phase.**
+  2026-09-19 close-out: backend `npm run test:run` (92 files / 855 tests)
+  and `npm run lint` (0 errors) pass; focused
+  `test_backend_playlist_card_analysis.py` + `test_reccobeats_backend.py` +
+  `test_analysis_task.py` + `test_analysis_mixin.py` (52 tests) pass; full
+  frontend suite (257 passed / 7 skipped) and pyright clean.
   Run:
 
   ```bash
@@ -567,10 +577,10 @@ remain queued/processing at stale values.
 - [x] Opening a playlist analysis popup shows a live progress bar that advances
   during backend analysis, including a temporary bounded fallback when KV status
   reads are stale.
-- [ ] The status label shows a meaningful message (e.g. "Analyzing playlist... 42%")
-  that updates as progress changes.
-- [ ] Backend progress reporting no longer has a single long ReccoBeats stall:
-  raw status writes include intermediate, monotonic values between `65` and `85`.
+- [x] The status label shows a meaningful message (e.g. "Analyzing playlist... 42%")
+  that updates as progress changes. (verified 2026-09-19: `reccobeats_backend.py:232-234` sends `f"Analyzing playlist... {progress}%"` on every advancing update; `AnalysisTask._set_progress` writes it to the label)
+- [x] Backend progress reporting no longer has a single long ReccoBeats stall:
+  raw status writes include intermediate, monotonic values between `65` and `85`. (verified 2026-09-19: `analysis.ts:158-174` shared tracker with `lastEmitted` guard; backend test asserts monotonic + strictly-between values)
 - [ ] In the target development Worker environment, raw status reads advance
   through real intermediate values instead of staying at `queued:0` until
   `completed:100`.
@@ -578,9 +588,9 @@ remain queued/processing at stale values.
   bounded in-progress state instead of appearing frozen at `0%`, without claiming
   completion before the backend reports `completed`. This is temporary fallback
   behavior until the Durable Object status phase is complete.
-- [ ] Completed and failed analysis states are visually distinguishable from the
-  in-progress state.
-- [ ] Cached analyses still render instantly with no progress-bar regressions.
+- [x] Completed and failed analysis states are visually distinguishable from the
+  in-progress state. (verified 2026-09-19: `_update_progress_widgets` sets "Analysis complete" + hides bar; `_handle_error_state` sets "Analysis unavailable: {error}" + hides bar — text-distinguished per the Kivy no-color constraint)
+- [x] Cached analyses still render instantly with no progress-bar regressions. (verified 2026-09-19: completed-with-results path returns immediately; full frontend suite + popup tests green)
 
 ## Follow-ups (not in this plan)
 

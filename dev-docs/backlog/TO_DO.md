@@ -4,7 +4,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 ## Playlist Analysis — End-to-End
 
-- [ ] Add visual progress indicator for playlist analysis ([plan](../exec-plans/active/2026-07-11-backend-playlist-analysis-progress-bar.md)) — **in progress 2026-07-11**
+- [ ] Add visual progress indicator for playlist analysis ([plan](../exec-plans/active/2026-07-11-backend-playlist-analysis-progress-bar.md)) — **in progress 2026-09-19** (close-out pass: all verifiable items green; left: live dev-worker trace, NPR diagnostic run-or-drop, optional cancellation)
   - [ ] Make backend report granular progress across ReccoBeats batches (replace single `emitWarmKeepaliveOnce`)
   - [ ] Wire `analysis_task` progress into the frontend state
   - [ ] Render in-progress, completed, and failed states in the UI
