@@ -59,7 +59,7 @@ Users log in with Spotify, the backend exchanges tokens, and the frontend calls 
 - Third-party API/platform reference notes go in `dev-docs/references/`.
 - Short-lived investigations, audits, and working notes go in `dev-docs/investigations/` or `dev-docs/assessments/`.
 - Before creating a new doc, check `docs/index.md`, `dev-docs/README.md`, and `rg` for an existing page to update.
-- Do not leave completed plans in `active/`, and do not create new root-level `plans/` files. (Enforced by pre-commit hook.)
+- Do not leave completed plans in `active/`, and do not create new root-level `plans/` files. (Checked by pre-commit hook — warn-only until the hygiene gate flips to errors.)
 - IDE security rules live in `.cursor/rules/` only. `.windsurf/rules/` and `.qwen/` have been removed and are gitignored.
 - Same-PR housekeeping (Definition of Done): completing a plan in the same PR also requires a `CHANGELOG.md` or `dev-docs/backlog/maintenance-log.md` entry, removal or update of the linked `TO_DO.md` line, moving the plan to `dev-docs/exec-plans/completed/`, and updating both index READMEs.
 - Plan ↔ `TO_DO.md` linkage (asymmetric): every active exec-plan must have a backlink in `TO_DO.md`. A `TO_DO.md` entry without a plan is allowed for small items.

@@ -64,7 +64,7 @@ Closed 5 stale Open rows with verified tree evidence: #4 bare `except:` (absent 
 PR: n/a
 Scope: `CHANGELOG.md`
 
-Squashed 11 duplicate `### ` headings in `[Unreleased]` into single Added/Changed/Fixed/Security/Removed sections (order: Added → Changed → Fixed → Security → Removed). Concatenated all bullets under each surviving heading without rewriting bullet text. Verified `### ` count dropped from 11 to 5 in the Unreleased block.
+Squashed 11 duplicate `### ` headings in `[Unreleased]` into single Added/Changed/Fixed/Security/Removed sections (order: Added → Changed → Fixed → Security → Removed). Concatenated all bullets under each surviving heading without rewriting bullet text, then removed 15 exact-duplicate bullet lines (pre-existing repeats across the old duplicate sections, e.g. the GitHub Actions optimization block). Verified zero remaining intra-section duplicate bullets and `### ` count 11 to 5 in the Unreleased block.
 
 ## 2026-09-19 — Active plan index sync in exec-plans/active/README.md
 

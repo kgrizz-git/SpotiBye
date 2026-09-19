@@ -63,16 +63,6 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - `Optional[callable]` annotations in `BackendMainScreenAdapter` upgraded to `Optional[Callable[..., Any]]` with the `Callable` import added.
 - Replaced `'as unknown as T'` casts in `spotify.ts` (`getAudioFeatures`, `getArtist`, `getMultipleAudioFeatures`) with typed wrappers that perform runtime shape checks and throw on invalid input.
 
-- Hardened backend playlist analysis by queueing large analysis jobs with retry-safe status updates instead of relying on request-scoped background work.
-- Refactored `MainScreen` to extract pure logic (filenames, sort/filter) and stabilize job state, reducing technical debt and improving testability.
-- Hardened backend npm dependencies by upgrading Wrangler, Workers types, and TypeScript ESLint, replacing SheetJS `xlsx` usage with ExcelJS, and overriding vulnerable transitive `esbuild` and `uuid` releases until upstream packages publish patched dependency ranges.
-- Optimized GitHub Actions workflows to reduce redundant CI runs by 40-60% while maintaining full test coverage on protected branches
-  - CI now runs only on main/develop/WIP branches instead of all branches
-  - Security scans run only on PRs (not duplicate push events) with weekly baseline scans
-  - Language-specific security jobs (Bandit, npm audit) skip when irrelevant files change
-  - Deployment workflows skip redundant test runs when CI already validated the code
-  - Streamlined dependency review to single job, removing duplicates
-
 ### Fixed
 - Corrected a dead-code bug in `scripts/check-dependencies.py` where the return value was always 0 regardless of `all_passed` (the `--ci` exit path was already handled by `sys.exit(1)`).
 - Fixed remaining Python `logger.error()` calls inside `except` blocks to use `logger.exception()` so SonarCloud rule S8572 is satisfied; the initial migration to lazy `%s` formatting left several error-level calls that should include traceback context.
@@ -138,13 +128,6 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed tkinter screen-size detection leaking a hidden root window on exception by using try/finally to always call `root.destroy()`.
 - Fixed `clear_all_cache` showing a "Cache Cleared" popup without actually clearing the cache — the function now delegates to `screen.backend_adapter.cache_manager.clear_cache(None)`.
 - Fixed default `clear_cache()` glob (`*.json`) deleting the user's auth token and backend-selection config; the default pattern is now `{env_hash}_*.json` (env-hash-prefixed data files only). Auth tokens and selection are preserved.
-
-- Fixed frontend verification so the script recognizes the repo-level `.venv` and no longer emits a misleading missing-virtualenv warning.
-- Fixed backend authentication integration tests to match the current OAuth redirect/state flow used by the frontend client and authenticator.
-- Fixed backend cache explorer startup to use the current backend URL configuration API instead of the removed `BackendConfig` class.
-- Fixed backend cache statistics in frontend mode so playlist and file counts reflect environment-scoped cache files instead of incorrectly reporting zero items.
-- Fixed cache explorer playlist inspection so expired cache entries no longer crash detailed cache loading with `dictionary changed size during iteration`.
-- Fixed the visible cache explorer Close button in backend mode so it dismisses the popup that is actually open.
 
 - Fixed frontend verification so the script recognizes the repo-level `.venv` and no longer emits a misleading missing-virtualenv warning.
 - Fixed backend authentication integration tests to match the current OAuth redirect/state flow used by the frontend client and authenticator.

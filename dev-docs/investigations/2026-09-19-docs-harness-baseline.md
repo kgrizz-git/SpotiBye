@@ -112,7 +112,7 @@ existing rows.
 | File | Age | Recommendation | Rationale |
 |------|-----|----------------|-----------|
 | `2026-06-22-backend-deployment-tracking.md` | 88 days | **Keep** | Backend deployment tracking is ongoing operational reference; still relevant. |
-| `2026-06-26-reccobeats-wiring-assessment.md` | 85 days | **Keep** | Referenced from `AGENTS.md` and `CLAUDE.md` ReccoBeats entry point; still the authoritative wiring assessment. |
+| `2026-06-26-reccobeats-wiring-assessment.md` | 85 days | **Keep** | Indexed in `dev-docs/README.md` current-notes; still the authoritative wiring assessment. (Correction: not linked from `AGENTS.md`, which points only at `reccobeats-api-contract.md`.) |
 
 ---
 
