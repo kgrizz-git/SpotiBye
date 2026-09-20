@@ -149,27 +149,27 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 - [ ] Measure: instrument per-phase subrequest counts on a large playlist
   (reuse `scripts/trace-analysis-progress.sh` + worker logs) to fix the
   fan-out threshold and chunk sizing with data, not guesses.
-- [ ] Add `AnalysisChunkMessage` Zod type + tests (valid single, valid chunk,
+- [x] Add `AnalysisChunkMessage` Zod type + tests (valid single, valid chunk,
   reject malformed; old messages still validate).
-- [ ] Define chunk-result key format + merge-function contract (pure function
+- [x] Define chunk-result key format + merge-function contract (pure function
   signature first, implementation in Phase 2).
 
 ## Phase 1 — Chunking (POST path)
 
-- [ ] Enumerate tracks, compute threshold decision, init DO countdown, then
+- [x] Enumerate tracks, compute threshold decision, init DO countdown, then
   `sendBatch` N chunk messages or 1 legacy message (compensating failed-write
   on send failure — see Design). `force_enrichment` clears the per-track cache
   ONCE at POST time before enqueue; chunks carry `force_resolve` (lookup
   skip) with `force_clear: false`. Small playlists: zero behavior change
   (assert with existing tests + new threshold-boundary tests).
-- [ ] Tests: threshold boundaries, chunk coverage (every track in exactly one
+- [x] Tests: threshold boundaries, chunk coverage (every track in exactly one
   chunk), legacy-shape passthrough, force split (single pre-enqueue clear,
   no per-chunk deletes, export invalidation in finalize), send-failure
   countdown cancel.
 
 ## Phase 2 — Batch worker + finalize
 
-- [ ] Split the shared `force` boolean into `force_resolve` (lookup skip +
+- [x] Split the shared `force` boolean into `force_resolve` (lookup skip +
   refetch) and `force_clear` (deleteKnownKeys) through
   `resolveAudioFeatures`/`resolveTrackMetadata`
   (`reccobeats-track-cache.ts:161-191`) and the `analysis.ts:177-180` call
@@ -177,38 +177,38 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   `force_resolve: true` still calls `deleteKnownKeys` and races sibling
   absent-sentinel writes. Existing single-message callers pass both true
   (behavior unchanged); chunk workers pass resolve-only.
-- [ ] Batch worker: verify `job_id` against DO status first (short-circuit on
+- [x] Batch worker: verify `job_id` against DO status first (short-circuit on
   mismatch OR terminal status before any KV touch); process one chunk (artist slice +
   ReccoBeats groups for its tracks); write partial keyed by
   `(job_id, chunk_id)`; update shared DO progress band; register
   success/failure in the DO countdown exactly once; ack semantics per
   Track D (failure marker written before DLQ).
-- [ ] Finalize (inline, ONLY the worker whose atomic `registerChunkResult`
+- [x] Finalize (inline, ONLY the worker whose atomic `registerChunkResult`
   returns `isFinalizer`): collect partials with bounded missing-key retries,
   merge, write results + terminal status (owns ALL terminal writes,
   including `failed`), run export-prefix invalidation when the job-level
   force flag is set. Failure markers or unrecovered missing chunks fail the
   job naming them.
-- [ ] Tests: merge unit tests (averages weighting, genre sums, error union,
+- [x] Tests: merge unit tests (averages weighting, genre sums, error union,
   version-max + uniformity assertion), idempotent redelivery, stale `job_id`
   short-circuit, failure-marker countdown completion, DLQ propagation,
   missing-partial retry-then-fail.
 
 ## Phase 3 — Verification + rollout
 
-- [ ] `cd src/backend && npm run test:run && npm run lint`; existing Track D
+- [x] `cd src/backend && npm run test:run && npm run lint`; existing Track D
   tests green unchanged.
 - [ ] Live dev trace on the NPR playlist via `scripts/trace-analysis-progress.sh`:
   ReccoBeats sections present (no subrequest errors), progress advances.
-- [ ] CHANGELOG entry (user-visible: large playlists now fully enrich).
+- [x] CHANGELOG entry (user-visible: large playlists now fully enrich).
 - [ ] Same-PR housekeeping: plan → `completed/`, indexes, TO_DO line removed.
 
 ## Acceptance
 
-- [ ] Playlists ≤ threshold: byte-identical behavior (all existing tests pass
+- [x] Playlists ≤ threshold: byte-identical behavior (all existing tests pass
   unmodified).
 - [ ] NPR-scale playlist on dev: full enrichment, no subrequest-limit errors,
   monotonic progress.
-- [ ] Batch redelivery never double-counts; chunk DLQ fails the job loudly.
-- [ ] Track D semantics (ack/retry/DLQ/auth/stale-job) covered by tests for
+- [x] Batch redelivery never double-counts; chunk DLQ fails the job loudly.
+- [x] Track D semantics (ack/retry/DLQ/auth/stale-job) covered by tests for
   both message shapes.
