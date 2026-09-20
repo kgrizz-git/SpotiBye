@@ -17,10 +17,10 @@ from ..services.enrichment_status import (
 from .backend_playlist_card_utils import _describe_error_source, _mood_label
 
 
-def _small_label(text, color=(0.75, 0.75, 0.75, 1), height=dp(18)):
+def _small_label(text, color=(0.75, 0.75, 0.75, 1), height=dp(22)):
     return Label(
         text=text,
-        font_size=dp(11),
+        font_size=dp(14),
         color=color,
         halign="left",
         text_size=(dp(420), None),
@@ -29,16 +29,24 @@ def _small_label(text, color=(0.75, 0.75, 0.75, 1), height=dp(18)):
     )
 
 
+def _spacer(height=dp(8)):
+    return Label(
+        text="",
+        size_hint_y=None,
+        height=height,
+    )
+
+
 def _section_header(text):
     return Label(
         text=text,
-        font_size=dp(12),
+        font_size=dp(17),
         bold=True,
         color=(0.88, 0.88, 0.88, 1),
         halign="left",
         text_size=(dp(420), None),
         size_hint_y=None,
-        height=dp(22),
+        height=dp(28),
     )
 
 
@@ -133,6 +141,7 @@ def _render_genre_distribution(
 ) -> None:
     """Render genre distribution section."""
     genre_dist = results.get("genre_distribution") or results.get("genres") or {}
+    analysis_container.add_widget(_spacer())
     analysis_container.add_widget(_section_header("Genre Distribution:"))
     if genre_dist and isinstance(genre_dist, dict):
         entries = []
@@ -167,6 +176,7 @@ def _render_artist_analysis(
     """Render artist analysis section."""
     artists_data = results.get("artists") or {}
     if artists_data:
+        analysis_container.add_widget(_spacer())
         analysis_container.add_widget(_section_header("Artist Analysis:"))
 
         unique_artists = artists_data.get("unique_artists", 0)
@@ -272,6 +282,7 @@ def _render_audio_features(
     audio_features = results.get("audio_features") or {}
     averages = audio_features.get("averages") or {}
     if averages:
+        analysis_container.add_widget(_spacer())
         analysis_container.add_widget(_section_header("Audio Features:"))
 
         _render_audio_features_percentage_row(
@@ -311,6 +322,7 @@ def _render_reccobeats_metadata(
     """Render ReccoBeats metadata section."""
     reccobeats_metadata = results.get("reccobeats_metadata") or {}
     if reccobeats_metadata:
+        analysis_container.add_widget(_spacer())
         analysis_container.add_widget(_section_header("ReccoBeats Metadata:"))
         isrc_available = reccobeats_metadata.get("isrc_available", 0)
         total_tracks = (playlist_data.get("tracks") or {}).get("total", 0)
@@ -384,4 +396,5 @@ __all__ = [
     "_render_audio_features_key_mode",
     "_render_audio_features_track_count",
     "_render_reccobeats_metadata",
+    "_spacer",
 ]
