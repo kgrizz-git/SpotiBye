@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.frontend.services.backend_client import BackendAPIError
-from src.frontend.services.reccobeats_backend import ReccoBeatsBackendService
+from src.frontend.services.reccobeats_backend import (
+    ReccoBeatsBackendService,
+    analysis_phase_label,
+)
 from src.frontend.utils.network_utils import NetworkError, ServerError
 
 # ---------------------------------------------------------------------------
@@ -237,9 +240,13 @@ class TestStaleResultsRecovery:
             result = service.analyze_playlist("playlist-1", analysis_task=analysis_task)
 
         assert result["status"] == "completed"
-        analysis_task.update_progress.assert_any_call(0, "Analyzing playlist... 0%")
-        analysis_task.update_progress.assert_any_call(20, "Analyzing playlist... 20%")
-        analysis_task.update_progress.assert_any_call(65, "Analyzing playlist... 65%")
+        analysis_task.update_progress.assert_any_call(0, "Starting analysis... 0%")
+        analysis_task.update_progress.assert_any_call(
+            20, "Fetching Spotify tracks & artists... 20%"
+        )
+        analysis_task.update_progress.assert_any_call(
+            65, "Enriching audio features (ReccoBeats)... 65%"
+        )
         analysis_task.update_progress.assert_called_with(100, "Analysis complete")
         analysis_task.update_synthetic_progress.assert_not_called()
 
@@ -250,7 +257,7 @@ class TestStaleResultsRecovery:
 
         assert result["status"] == "completed"
         analysis_task.update_synthetic_progress.assert_any_call(
-            5.0, "Analyzing playlist..."
+            5.0, "Starting analysis..."
         )
         synthetic_elapsed_values = [
             c.args[0] for c in analysis_task.update_synthetic_progress.call_args_list
@@ -374,3 +381,17 @@ class TestStaleResultsRecovery:
         assert result is None
         assert backend_client.get_analysis_results.call_count == 2
         sleep_mock.assert_called_once_with(0.5)
+
+
+class TestAnalysisPhaseLabel:
+    """Progress bands mirror the backend's emission points (see helper docstring)."""
+
+    def test_phase_boundaries(self) -> None:
+        assert analysis_phase_label(0) == "Starting analysis"
+        assert analysis_phase_label(10) == "Starting analysis"
+        assert analysis_phase_label(20) == "Fetching Spotify tracks & artists"
+        assert analysis_phase_label(64) == "Fetching Spotify tracks & artists"
+        assert analysis_phase_label(65) == "Enriching audio features (ReccoBeats)"
+        assert analysis_phase_label(85) == "Enriching audio features (ReccoBeats)"
+        assert analysis_phase_label(86) == "Finalizing insights"
+        assert analysis_phase_label(100) == "Finalizing insights"

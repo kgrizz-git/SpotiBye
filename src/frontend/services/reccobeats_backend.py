@@ -29,6 +29,26 @@ RESULTS_FETCH_ATTEMPTS = 14
 RESULTS_FETCH_RETRY_DELAY_SECONDS = 5.0
 
 
+def analysis_phase_label(progress: int) -> str:
+    """Human-readable phase for a backend analysis progress value.
+
+    The backend reports bare percentages; the bands below mirror its
+    emission points (src/backend/services/analysis-job.ts: job accepted
+    at 10, fan-out seed at 20, completion at 100;
+    src/backend/services/analysis.ts: Spotify fetch below 65, ReccoBeats
+    enrichment 65-85, merge/finalize above 85). Keep in sync if the
+    backend bands change — the durable fix is a backend-emitted phase
+    field on the status payload.
+    """
+    if progress < 20:
+        return "Starting analysis"
+    if progress < 65:
+        return "Fetching Spotify tracks & artists"
+    if progress <= 85:
+        return "Enriching audio features (ReccoBeats)"
+    return "Finalizing insights"
+
+
 class ReccoBeatsBackendService:
     """
     ReccoBeats service using Cloudflare Worker backend.
@@ -240,7 +260,8 @@ class ReccoBeatsBackendService:
                             f"progress: {progress}%"
                         )
                         analysis_task.update_synthetic_progress(
-                            elapsed, "Analyzing playlist..."
+                            elapsed,
+                            f"{analysis_phase_label(last_reported_progress or 0)}...",
                         )
                     else:
                         if (
@@ -248,7 +269,8 @@ class ReccoBeatsBackendService:
                             or progress > last_reported_progress
                         ):
                             analysis_task.update_progress(
-                                progress, f"Analyzing playlist... {progress}%"
+                                progress,
+                                f"{analysis_phase_label(progress)}... {progress}%",
                             )
                             stale_progress_since = now
                         elif stale_progress_since is None:
@@ -427,6 +449,7 @@ def get_reccobeats_api() -> ReccoBeatsAPI:
 __all__ = [
     "ReccoBeatsBackendService",
     "ReccoBeatsAPI",
+    "analysis_phase_label",
     "get_reccobeats_service",
     "get_reccobeats_api",
 ]
