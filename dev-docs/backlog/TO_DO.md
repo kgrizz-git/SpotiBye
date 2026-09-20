@@ -5,6 +5,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 ## Playlist Analysis — End-to-End
 
 - [ ] Fan-out backstop gap: if the status-store round-trip throws between a finalizer grant and the backstop write, the consumer swallows it and acks (DeepSeek PR #16 follow-up). Consider failing open (retry instead of ack) so the grant path re-runs.
+- [ ] Bound the analysis-results retry sleep by remaining `max_wait_time` in `reccobeats_backend.py` (DeepSeek PR #18 note; overshoot is ~6s near timeout)
   - [ ] Preserve existing Track D queue behavior
   - [ ] Split work into distributed batches for playlists with more than 40 artists per Worker invocation
   - [ ] Add backend tests for batch fan-out and aggregation

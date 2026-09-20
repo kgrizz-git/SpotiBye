@@ -102,18 +102,11 @@ class TestStaleResultsRecovery:
     def _service(self, backend_client: MagicMock) -> ReccoBeatsBackendService:
         return ReccoBeatsBackendService(backend_client=backend_client)
 
-    def test_reposts_once_and_returns_fresh_results_on_stale_completion(
+    def test_transient_not_found_recovers_without_reposting(
         self, patched_cache_manager: MagicMock
     ) -> None:
-        backend_client = MagicMock()
-        backend_client.analyze_playlist.side_effect = [
-            {"job_id": "job-old"},
-            {"job_id": "job-new"},
-        ]
-        backend_client.get_analysis_status.return_value = {
-            "status": "completed",
-            "progress": 100,
-        }
+        """A 404 right after completed is usually KV lag, not staleness."""
+        backend_client = make_backend_client()
         fresh_results = {"schema_version": "1.1", "status": "completed"}
         backend_client.get_analysis_results.side_effect = [
             BackendAPIError(
@@ -125,14 +118,16 @@ class TestStaleResultsRecovery:
         ]
 
         service = self._service(backend_client)
-        result = service.analyze_playlist("playlist-1")
+        with patch(
+            "src.frontend.services.reccobeats_backend.time.sleep"
+        ) as sleep_mock:
+            result = service.analyze_playlist("playlist-1")
 
         assert result == fresh_results
-        patched_cache_manager.clear_file.assert_called_once_with(
-            "analysis_playlist-1.json"
-        )
-        assert backend_client.analyze_playlist.call_count == 2
+        assert backend_client.analyze_playlist.call_count == 1
         assert backend_client.get_analysis_results.call_count == 2
+        sleep_mock.assert_called_once()
+        patched_cache_manager.clear_file.assert_not_called()
 
     def test_deletes_and_reposts_once_when_completed_results_have_reccobeats_errors(
         self, patched_cache_manager: MagicMock
@@ -286,19 +281,45 @@ class TestStaleResultsRecovery:
             status_code=404,
             error_code="ANALYSIS_RESULTS_NOT_FOUND",
         )
-        backend_client.get_analysis_results.side_effect = [stale_error, stale_error]
+        # Persistent 404s: every fetch attempt misses, so each completed poll
+        # exhausts the retry budget (4 attempts) before the repost decision.
+        backend_client.get_analysis_results.side_effect = [stale_error] * 8
 
         service = self._service(backend_client)
         # `analyze_playlist` is wrapped in `@handle_network_errors`, which
         # converts a non-5xx/429/0 `BackendAPIError` into a generic
         # `NetworkError` by the time it reaches the caller.
-        with pytest.raises(NetworkError):
+        with (
+            patch("src.frontend.services.reccobeats_backend.time.sleep"),
+            pytest.raises(NetworkError),
+        ):
             service.analyze_playlist("playlist-1")
 
-        # First stale result triggers exactly one re-post; the second stale
-        # result (from the re-posted job) is not retried again.
+        # First persistent 404 triggers exactly one re-post; the second
+        # persistent 404 (from the re-posted job) is not retried again.
         assert backend_client.analyze_playlist.call_count == 2
-        assert backend_client.get_analysis_results.call_count == 2
+        assert backend_client.get_analysis_results.call_count == 8
+
+    def test_cancelled_retry_wait_returns_empty_without_reposting(
+        self, patched_cache_manager: MagicMock, analysis_task: MagicMock
+    ) -> None:
+        backend_client = make_backend_client()
+        backend_client.get_analysis_results.side_effect = BackendAPIError(
+            "Analysis results not found",
+            status_code=404,
+            error_code="ANALYSIS_RESULTS_NOT_FOUND",
+        )
+        # Cancellation is checked in analyze_playlist, at the top of the
+        # poll loop, before the fetch, and once more per retry.
+        analysis_task.is_cancelled.side_effect = [False, False, False, True]
+
+        service = self._service(backend_client)
+        with patch("src.frontend.services.reccobeats_backend.time.sleep"):
+            result = service.analyze_playlist("playlist-1", analysis_task=analysis_task)
+
+        assert result == {}
+        assert backend_client.analyze_playlist.call_count == 1
+        assert backend_client.get_analysis_results.call_count == 1
 
     def test_non_stale_error_propagates_without_reposting(self) -> None:
         backend_client = make_backend_client()

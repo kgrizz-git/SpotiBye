@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 
 SYNTHETIC_PROGRESS_STALE_AFTER_SECONDS = 5.0
 
+# A freshly-completed job's results can lag status in KV (replication delay),
+# so a 404 immediately after "completed" usually means "not visible yet", not
+# "stale cache". Retry the fetch before concluding the analysis must be rerun.
+RESULTS_FETCH_ATTEMPTS = 4
+RESULTS_FETCH_RETRY_DELAY_SECONDS = 2.0
+
 
 class ReccoBeatsBackendService:
     """
@@ -155,7 +161,15 @@ class ReccoBeatsBackendService:
                 if analysis_task:
                     analysis_task.update_progress(100, "Analysis complete")
                 try:
-                    results = self.backend_client.get_analysis_results(playlist_id)
+                    results = self._fetch_analysis_results_with_retry(
+                        playlist_id, analysis_task
+                    )
+                    if results is None:
+                        raise BackendAPIError(
+                            "Analysis results not found",
+                            status_code=404,
+                            error_code="ANALYSIS_RESULTS_NOT_FOUND",
+                        )
                     if (
                         has_retriable_reccobeats_errors(results)
                         and not self._reposted_on_reccobeats_error
@@ -181,9 +195,10 @@ class ReccoBeatsBackendService:
                         or self._reposted_on_stale
                     ):
                         raise
-                    # The backend purges stale (pre-schema-bump) results on GET,
-                    # so a "completed" status with no results means the cached
-                    # analysis is stale. Invalidate the local cache and
+                    # The fetch above already retried through KV replication lag,
+                    # so a persistent NOT_FOUND means the cached analysis is
+                    # genuinely stale (the backend purges pre-schema-bump
+                    # results on GET). Invalidate the local cache and
                     # re-trigger analysis once — the backend's POST stale-check
                     # will enqueue a fresh job since the KV status/results were
                     # already deleted by the GET above.
@@ -248,6 +263,37 @@ class ReccoBeatsBackendService:
                 time.sleep(poll_interval)
 
         raise NetworkTimeoutError(f"Analysis timed out after {max_wait_time} seconds")
+
+    def _fetch_analysis_results_with_retry(
+        self, playlist_id: str, analysis_task: Optional[Any] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch completed results, tolerating KV replication lag.
+
+        Returns the results dict, or None when the backend still reports
+        ANALYSIS_RESULTS_NOT_FOUND after all attempts. Any other error
+        propagates immediately; cancellation aborts the wait.
+        """
+        for attempt in range(RESULTS_FETCH_ATTEMPTS):
+            if analysis_task and analysis_task.is_cancelled():
+                logger.info("Analysis cancelled by user")
+                return {}
+            try:
+                return self.backend_client.get_analysis_results(playlist_id)
+            except BackendAPIError as e:
+                if e.error_code != "ANALYSIS_RESULTS_NOT_FOUND":
+                    raise
+                if attempt + 1 >= RESULTS_FETCH_ATTEMPTS:
+                    return None
+                logger.debug(
+                    "Analysis results not yet visible for %s (attempt %d/%d); "
+                    "retrying after %.1fs",
+                    playlist_id,
+                    attempt + 1,
+                    RESULTS_FETCH_ATTEMPTS,
+                    RESULTS_FETCH_RETRY_DELAY_SECONDS,
+                )
+                time.sleep(RESULTS_FETCH_RETRY_DELAY_SECONDS)
+        return None
 
     @handle_network_errors
     def get_playlist_for_analysis(
