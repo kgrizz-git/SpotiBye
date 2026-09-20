@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 from src.frontend.utils.analysis_task import AnalysisTask
@@ -56,3 +57,31 @@ def test_synthetic_progress_rises_caps_below_completion_and_never_moves_backward
         task.update_progress(100, "Analysis complete")
         assert progress_bar.value == 100
         assert status_label.text == "Analysis complete"
+
+
+def test_cancel_marks_task_cancelled() -> None:
+    task = AnalysisTask(_Widget(), _Widget())
+
+    assert not task.is_cancelled()
+    task.cancel()
+    assert task.is_cancelled()
+
+
+def test_queued_callback_after_cancel_does_not_touch_widgets() -> None:
+    progress_bar = _Widget()
+    status_label = _Widget()
+    task = AnalysisTask(progress_bar, status_label)
+    callbacks: list[Any] = []
+
+    with patch(
+        "src.frontend.utils.analysis_task.Clock.schedule_once",
+        side_effect=lambda callback, *args, **kwargs: callbacks.append(callback),
+    ):
+        task.update_progress(50, "Halfway")
+
+    task.cancel()
+    for callback in callbacks:
+        callback(0)
+
+    assert progress_bar.value == 0
+    assert status_label.text == ""

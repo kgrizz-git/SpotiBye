@@ -12,7 +12,16 @@ re-reading them off self.content at runtime. The @mainthread-decorated
 _update_analysis_ui marshals all widget mutations back to the Kivy main
 thread. The popup content attributes exist before the worker runs because
 _show_detailed_playlist_window creates them synchronously before spawning
-the thread.
+the thread. The AnalysisTask is constructed on the UI thread in
+_start_analysis_worker; dismissing the popup calls task.cancel() from the UI
+thread while the worker only reads is_cancelled() (plain bool flag store,
+atomic under the GIL). A cancelled worker returns before any UI update, and
+_update_analysis_ui re-checks cancellation plus current-task identity at
+execution time on the main thread (same thread as dismiss/refresh), closing
+the check-then-act race across the @mainthread boundary — dismissed or
+superseded runs never mutate detached or reassigned widgets. Refresh
+supersedes the running task (old task cancelled in _start_analysis_worker),
+so only the latest worker can reach UI updates.
 
 Depends on kivy, threading, .backend_playlist_card_utils,
 ..screens.adapter_mixins.analysis.
@@ -51,6 +60,7 @@ class PlaylistCardAnalysisPopupMixin:
 
     playlist_data: Any = None
     _detailed_popup: Optional[Any] = None
+    _analysis_task: Optional[Any] = None
 
     def show_detailed_playlist_window(self) -> None:
         if self._detailed_popup and self._detailed_popup.parent:
@@ -67,11 +77,23 @@ class PlaylistCardAnalysisPopupMixin:
             overlay_color=(0, 0, 0, 0.5),
             content=content,
         )
+        self._detailed_popup.bind(on_dismiss=self._cancel_analysis_task)
         self._detailed_popup.open()
 
         playlist_id = self.playlist_data.get("id")
         if playlist_id:
             self._start_analysis_worker(playlist_id, content)
+
+    def _cancel_analysis_task(self, *_args: Any) -> None:
+        """Stop local analysis polling when the popup is dismissed.
+
+        Only stops frontend waiting/polling: the backend Worker job keeps
+        running server-side and may later write status and results to KV.
+        """
+        task = self._analysis_task
+        self._analysis_task = None
+        if task is not None:
+            task.cancel()
 
     def _build_analysis_popup_content(self) -> BoxLayout:
         root = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(12))
@@ -371,6 +393,15 @@ class PlaylistCardAnalysisPopupMixin:
             )
         )
 
+        analysis_task = AnalysisTask(progress_bar, status_label)
+        # Owned by the UI thread and reachable from _cancel_analysis_task;
+        # the worker only reads is_cancelled() (bool store is GIL-atomic).
+        # Refresh flows supersede the running task: cancel it so the old
+        # worker returns before any UI update instead of racing the new one.
+        previous_task = self._analysis_task
+        self._analysis_task = analysis_task
+        if previous_task is not None:
+            previous_task.cancel()
         threading.Thread(
             target=self._load_analysis_worker,
             args=(
@@ -382,6 +413,7 @@ class PlaylistCardAnalysisPopupMixin:
                 enrichment_label,
                 force_reanalyze,
                 refresh_tracks,
+                analysis_task,
             ),
             daemon=True,
         ).start()
@@ -416,11 +448,19 @@ class PlaylistCardAnalysisPopupMixin:
         enrichment_label: Label,
         force_reanalyze: bool = False,
         refresh_tracks: bool = False,
+        analysis_task: Optional[Any] = None,
     ) -> None:
+        task = (
+            analysis_task
+            if analysis_task is not None
+            else AnalysisTask(progress_bar, status_label)
+        )
         try:
             app = App.get_running_app()
             adapter = getattr(app, "backend_adapter", None)
             if adapter is None:
+                if task.is_cancelled():
+                    return
                 self._update_analysis_ui(
                     analysis_container,
                     duration_label,
@@ -429,22 +469,27 @@ class PlaylistCardAnalysisPopupMixin:
                     progress_bar,
                     status_label,
                     enrichment_label,
+                    analysis_task=task,
                 )
                 return
 
-            analysis_task = AnalysisTask(progress_bar, status_label)
             if refresh_tracks and hasattr(adapter, "refresh_playlist_tracks"):
                 analysis = adapter.refresh_playlist_tracks(
-                    playlist_id, analysis_task=analysis_task
+                    playlist_id, analysis_task=task
                 )
             elif force_reanalyze and hasattr(adapter, "force_reanalyze_playlist"):
                 analysis = adapter.force_reanalyze_playlist(
-                    playlist_id, analysis_task=analysis_task
+                    playlist_id, analysis_task=task
                 )
             else:
                 analysis = adapter.analyze_playlist(
-                    playlist_id, analysis_task=analysis_task
+                    playlist_id, analysis_task=task
                 )
+            if task.is_cancelled():
+                # Dismissed while working: skip UI updates on detached widgets.
+                # Backend job keeps running server-side (see _cancel_analysis_task).
+                logger.debug("BackendPlaylistCard: analysis cancelled, skipping UI update")
+                return
             self._update_analysis_ui(
                 analysis_container,
                 duration_label,
@@ -453,8 +498,13 @@ class PlaylistCardAnalysisPopupMixin:
                 progress_bar,
                 status_label,
                 enrichment_label,
+                analysis_task=task,
             )
         except Exception as exc:
+            if task.is_cancelled():
+                # Dismissed while failing: no error UI on detached widgets.
+                logger.debug("BackendPlaylistCard: analysis cancelled during error: %s", exc)
+                return
             logger.warning("BackendPlaylistCard: analysis load error: %s", exc)
             self._update_analysis_ui(
                 analysis_container,
@@ -464,6 +514,7 @@ class PlaylistCardAnalysisPopupMixin:
                 progress_bar,
                 status_label,
                 enrichment_label,
+                analysis_task=task,
             )
 
     @mainthread
@@ -473,10 +524,23 @@ class PlaylistCardAnalysisPopupMixin:
         duration_label: Label,
         analysis: Optional[dict[str, Any]],
         error: Optional[str],
-        progress_bar: Optional[ProgressBar] = None,
+        progress_bar: ProgressBar | None = None,
         status_label: Optional[Label] = None,
         enrichment_label: Optional[Label] = None,
+        analysis_task: Any = None,
     ) -> None:
+        if analysis_task is not None and (
+            analysis_task.is_cancelled()
+            or (
+                self._analysis_task is not None
+                and analysis_task is not self._analysis_task
+            )
+        ):
+            # Execution-time guard: the worker's pre-check can race dismiss
+            # or refresh across the @mainthread boundary. This runs on the
+            # main thread — same thread as dismiss/refresh — so a dismissed
+            # or superseded run never mutates detached or reassigned widgets.
+            return
         render_analysis_popup_content(
             analysis_container=analysis_container,
             duration_label=duration_label,
