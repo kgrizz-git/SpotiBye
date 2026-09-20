@@ -105,6 +105,7 @@ export class AnalysisStatusObject {
         expected: body.expected,
         received: {},
         finalizerClaimedAt: null,
+        finalizerClaimedBy: null,
         created_at: new Date().toISOString(),
       };
       await this.state.storage.put(fanoutKey(body.job_id), state);
@@ -141,17 +142,24 @@ export class AnalysisStatusObject {
         let isFinalizer = false;
         if (received >= state.expected) {
           const status = await txn.get<AnalysisStatusRecord>(STATUS_KEY);
+          const claimNow = (): void => {
+            state.finalizerClaimedAt = new Date().toISOString();
+            state.finalizerClaimedBy = body.chunk_id;
+            isFinalizer = true;
+          };
           if (!state.finalizerClaimedAt) {
-            state.finalizerClaimedAt = new Date().toISOString();
-            isFinalizer = true;
-          } else if (
-            !isTerminalStatus(status) &&
-            Date.now() - Date.parse(state.finalizerClaimedAt) > FINALIZER_LEASE_MS
-          ) {
-            // Stuck-finalizer recovery: claim expired without terminal
-            // status, so re-claim and re-run finalize (lease, no watchdog).
-            state.finalizerClaimedAt = new Date().toISOString();
-            isFinalizer = true;
+            claimNow();
+          } else if (!isTerminalStatus(status)) {
+            if (state.finalizerClaimedBy === body.chunk_id) {
+              // Same chunk re-registering (finalizer's own redelivery after
+              // a crash or finalize exception): re-grant so finalize re-runs
+              // instead of wedging on an uncompleted claim.
+              claimNow();
+            } else if (Date.now() - Date.parse(state.finalizerClaimedAt) > FINALIZER_LEASE_MS) {
+              // Stuck-finalizer recovery: claim expired without terminal
+              // status, so re-claim and re-run finalize (lease, no watchdog).
+              claimNow();
+            }
           }
         }
         await txn.put(fanoutKey(body.job_id), state);
@@ -343,6 +351,7 @@ export function createAnalysisStatusNamespaceStub(): AnalysisStatusNamespace {
               expected: body.expected,
               received: {},
               finalizerClaimedAt: null,
+              finalizerClaimedBy: null,
               created_at: new Date().toISOString(),
             };
             fanouts.set(key, state);
@@ -373,15 +382,21 @@ export function createAnalysisStatusNamespaceStub(): AnalysisStatusNamespace {
             if (received >= state.expected) {
               const status = stores.get(name);
               const terminal = status?.status === 'completed' || status?.status === 'failed';
+              const claimNow = (): void => {
+                state.finalizerClaimedAt = new Date().toISOString();
+                state.finalizerClaimedBy = body.chunk_id;
+                isFinalizer = true;
+              };
               if (!state.finalizerClaimedAt) {
-                state.finalizerClaimedAt = new Date().toISOString();
-                isFinalizer = true;
-              } else if (
-                !terminal &&
-                Date.now() - Date.parse(state.finalizerClaimedAt) > FINALIZER_LEASE_MS
-              ) {
-                state.finalizerClaimedAt = new Date().toISOString();
-                isFinalizer = true;
+                claimNow();
+              } else if (!terminal) {
+                if (state.finalizerClaimedBy === body.chunk_id) {
+                  claimNow();
+                } else if (
+                  Date.now() - Date.parse(state.finalizerClaimedAt) > FINALIZER_LEASE_MS
+                ) {
+                  claimNow();
+                }
               }
             }
             return Response.json({

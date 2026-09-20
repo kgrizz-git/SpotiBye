@@ -49,8 +49,9 @@ unchanged. Preserve every Track D queue behavior.
 
 Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 
-- **Chunking (POST path):** after Spotify track enumeration (cheap: paginated
-  reads only), decide single vs fan-out. Fan-out threshold: unique artists
+- **Chunking (worker-side seed, not POST):** the seed message's worker
+  enumerates tracks (session/token context already exists; keeps POST latency
+  flat), then decides single vs fan-out. Fan-out threshold: unique artists
   > 40 OR estimated subrequests > 40 (leave headroom under the 50 limit;
   exact budget math is Phase 0). Chunks split by track groups sized so one
   batch message (Spotify artist slice + ReccoBeats audio + metadata for its
@@ -111,13 +112,15 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   `job_id`s.
 - **KV read-after-write:** partials live in KV (DO 128KB value limits rule
   out storing them there). Finalize lists expected chunk keys; any missing
-  key is retried bounded (3 × 2s) then fails the job naming the missing
-  chunks.
+  key is retried bounded (3 × 750ms — KV propagation is millisecond-scale;
+  total worst case ~2.25s keeps tests under timeout) then fails the job naming
+  the missing chunks.
 - **Finalize:** merge partials (sum genre buckets, recompute audio-feature
   averages weighted by track count, union errors with per-chunk source tags).
   `schema_version`: all chunks run the same deployed code so versions are
-  uniform — finalize takes the max, asserts uniformity (warn + log on
-  mismatch), and existing bump rules apply to producers unchanged. Write KV
+  uniform — finalize takes the max and throws on mismatch, failing the job
+  loudly (a mid-flight deploy race must not merge across versions silently),
+  and existing bump rules apply to producers unchanged. Write KV
   results + terminal DO status. Idempotent: batch writes keyed by
   `(job_id, chunk_id)`; re-delivered batch messages overwrite identical
   partials and re-register (claim already taken → return); the
@@ -154,12 +157,12 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 - [x] Define chunk-result key format + merge-function contract (pure function
   signature first, implementation in Phase 2).
 
-## Phase 1 — Chunking (POST path)
+## Phase 1 — Chunking (worker-side seed)
 
 - [x] Enumerate tracks, compute threshold decision, init DO countdown, then
   `sendBatch` N chunk messages or 1 legacy message (compensating failed-write
   on send failure — see Design). `force_enrichment` clears the per-track cache
-  ONCE at POST time before enqueue; chunks carry `force_resolve` (lookup
+  ONCE at seed time before enqueue; chunks carry `force_resolve` (lookup
   skip) with `force_clear: false`. Small playlists: zero behavior change
   (assert with existing tests + new threshold-boundary tests).
 - [x] Tests: threshold boundaries, chunk coverage (every track in exactly one

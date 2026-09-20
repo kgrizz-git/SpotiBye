@@ -386,6 +386,12 @@ export class AnalysisJobService {
       merged.audioFeatures,
       merged.trackMetadata
     );
+    // Re-check immediately before the results write: a newer job may have
+    // taken over (or terminal state arrived) while partials were collected.
+    const fresh = await this.statusStore.getStatus(message.user_id, message.playlist_id);
+    if (!fresh || fresh.job_id !== message.job_id || fresh.status === 'completed' || fresh.status === 'failed') {
+      return;
+    }
     const now = new Date().toISOString();
     const result: AnalysisResult = {
       job_id: message.job_id,
@@ -422,6 +428,35 @@ export class AnalysisJobService {
       message.playlist_id,
       message.job_id
     );
+  }
+
+  /**
+   * Backstop for a wedged fan-out: the chunk set is complete but no terminal
+   * status was ever written (finalizer path died past redelivery). Writes
+   * terminal `failed` naming the stuck job. Returns true when it acted.
+   * No-op unless the set is complete AND the status is non-terminal.
+   */
+  async failStuckFinalize(message: AnalysisChunkMessage): Promise<boolean> {
+    const countdown = await this.statusStore.getFanoutCountdown(
+      message.user_id,
+      message.playlist_id,
+      message.job_id
+    );
+    if (!countdown || Object.keys(countdown.received).length < countdown.expected) {
+      return false;
+    }
+    const current = await this.statusStore.getStatus(message.user_id, message.playlist_id);
+    if (!current || current.job_id !== message.job_id) {
+      return false;
+    }
+    if (current.status === 'completed' || current.status === 'failed') {
+      return false;
+    }
+    await this.markFailed(
+      message,
+      new Error(`Fan-out finalizer never completed job ${message.job_id}.`)
+    );
+    return true;
   }
 
   async markFailed(message: AnalysisQueueMessage, error: unknown): Promise<void> {
@@ -481,10 +516,14 @@ export class AnalysisJobService {
 
   private async writeStatusMerged(
     message: AnalysisQueueMessage,
-    partial: Partial<AnalysisStatusRecord>,
+    partial: Partial<AnalysisStatusRecord>
   ): Promise<void> {
     const latest = await this.statusStore.getStatus(message.user_id, message.playlist_id);
     if (!latest) return; // Defensive, status record should always exist
+    // Never clobber another job's status, and never regress a terminal
+    // state: superseded chunks and late redeliveries stop here.
+    if (latest.job_id !== message.job_id) return;
+    if (latest.status === 'completed' || latest.status === 'failed') return;
     await this.writeStatus(message, {
       ...latest,
       ...partial,

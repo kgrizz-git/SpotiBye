@@ -29,6 +29,8 @@ export interface FanoutCountdownState {
   received: Record<string, 'ok' | 'failed'>;
   /** ISO timestamp of the finalizer claim, or null when unclaimed. */
   finalizerClaimedAt: string | null;
+  /** Chunk holding the finalizer claim (for same-chunk re-grant). */
+  finalizerClaimedBy: string | null;
   created_at: string;
 }
 

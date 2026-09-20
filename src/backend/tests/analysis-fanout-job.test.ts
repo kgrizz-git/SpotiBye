@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import worker from '../index';
 import { AnalysisJobService } from '../services/analysis-job';
 import { AnalysisService } from '../services/analysis';
 import { SpotifyService } from '../services/spotify';
+import { AuthRequiredException } from '../types/errors';
 import { AnalysisStatusStore } from '../services/analysis-status-object';
 import { chunkResultKey, fanoutTracksKey } from '../services/analysis-fanout';
 import { createSpotifyArtist, createSpotifyTrack } from './helpers/spotify';
@@ -281,17 +283,17 @@ describe('finalizer lease recovery', () => {  it('re-claims finalize after the l
       const env = envWithKv(kvNamespace(), sessionsKv());
       const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
       await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
-      await statusStore.initFanoutCountdown('user-1', 'playlist-1', 'job-1', 1);
-
+      await statusStore.initFanoutCountdown('user-1', 'playlist-1', 'job-1', 2);
+      await statusStore.registerChunkResult('user-1', 'playlist-1', 'job-1', 'job-1#0', true);
       const first = await statusStore.registerChunkResult(
-        'user-1', 'playlist-1', 'job-1', 'job-1#0', true
+        'user-1', 'playlist-1', 'job-1', 'job-1#1', true
       );
       expect(first.isFinalizer).toBe(true);
-      // Simulate the crash: no terminal write. Redelivery within lease: no claim.
-      const again = await statusStore.registerChunkResult(
+      // Another chunk re-registering within the lease: no claim (holder differs).
+      const within = await statusStore.registerChunkResult(
         'user-1', 'playlist-1', 'job-1', 'job-1#0', true
       );
-      expect(again.isFinalizer).toBe(false);
+      expect(within.isFinalizer).toBe(false);
       // Past the 5-minute lease with status still non-terminal: re-claim.
       vi.setSystemTime(new Date('2026-09-19T00:06:01Z'));
       const recovered = await statusStore.registerChunkResult(
@@ -398,5 +400,181 @@ describe('end-to-end fan-out on a large playlist', () => {
     expect(result.audio_features?.track_count).toBe(N);
     expect(result.genre_distribution?.pop?.count).toBe(N);
     expect(result.errors).toEqual([]);
+  });
+});
+
+describe('finalizer wedge backstops', () => {
+  it('same-chunk redelivery re-grants the claim when status is non-terminal', async () => {
+    const env = envWithKv(kvNamespace(), sessionsKv());
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
+    await statusStore.initFanoutCountdown('user-1', 'playlist-1', 'job-1', 1);
+
+    const first = await statusStore.registerChunkResult(
+      'user-1', 'playlist-1', 'job-1', 'job-1#0', true
+    );
+    expect(first.isFinalizer).toBe(true);
+    // Finalizer's own redelivery (crash mid-finalize, no terminal write):
+    // same chunk + non-terminal status re-grants instead of wedging.
+    const redelivery = await statusStore.registerChunkResult(
+      'user-1', 'playlist-1', 'job-1', 'job-1#0', true
+    );
+    expect(redelivery.isFinalizer).toBe(true);
+  });
+
+  it('failStuckFinalize forces terminal failed only for complete non-terminal sets', async () => {
+    const env = envWithKv(kvNamespace(), sessionsKv());
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
+    await statusStore.initFanoutCountdown('user-1', 'playlist-1', 'job-1', 1);
+    const service = new AnalysisJobService(env);
+
+    // Incomplete set: no-op.
+    expect(await service.failStuckFinalize(chunkMessage())).toBe(false);
+
+    await statusStore.registerChunkResult('user-1', 'playlist-1', 'job-1', 'job-1#0', true);
+    expect(await service.failStuckFinalize(chunkMessage())).toBe(true);
+    const status = await statusStore.getStatus('user-1', 'playlist-1');
+    expect(status?.status).toBe('failed');
+    expect(status?.error).toContain('finalizer never completed');
+
+    // Already terminal: no-op.
+    expect(await service.failStuckFinalize(chunkMessage())).toBe(false);
+  });
+
+  it('sendBatch failure cancels the countdown and fails visibly', async () => {
+    const cacheKv = kvNamespace();
+    const env = envWithKv(cacheKv, sessionsKv());
+    (env as { ANALYSIS_QUEUE: unknown }).ANALYSIS_QUEUE = {
+      send: vi.fn(),
+      sendBatch: vi.fn(async () => {
+        throw new Error('queue down');
+      }),
+    };
+    const tracks: { id: string; artists: { id: string }[] }[] = Array.from(
+      { length: 12 },
+      (_, i) => ({ id: `t${i}`, artists: [{ id: `a${i}` }] })
+    );
+    mockAnalysis({
+      list: { tracks, artistIds: tracks.map((t) => t.artists[0].id) },
+    });
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
+    const service = new AnalysisJobService(env);
+
+    await expect(service.process(singleMessage())).rejects.toThrow('queue down');
+    expect(
+      await statusStore.getFanoutCountdown('user-1', 'playlist-1', 'job-1')
+    ).toBeNull();
+    const status = await statusStore.getStatus('user-1', 'playlist-1');
+    expect(status?.status).toBe('failed');
+    expect(status?.error).toContain('enqueue aborted');
+  });
+
+  it('superseded merged writes never clobber the new job', async () => {
+    const cacheKv = kvNamespace();
+    const env = envWithKv(cacheKv, sessionsKv());
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
+    const service = new AnalysisJobService(env);
+    const reads: string[] = [];
+
+    vi.spyOn(AnalysisService.prototype, 'analyzeChunk').mockImplementation(
+      async (
+        _playlistId: string,
+        chunkId: string,
+        trackIds: string[],
+        _artistIds: string[],
+        options?: { forceResolve?: boolean; onProgress?: (p: number) => Promise<void> }
+      ) => {
+        await options?.onProgress?.(70);
+        return {
+          chunk_id: chunkId,
+          track_ids: trackIds,
+          artistData: [],
+          audioFeatures: [],
+          trackMetadata: [],
+          errors: [],
+          audioFeaturesResolvedCount: 0,
+          trackMetadataResolvedCount: 0,
+          enrichmentResolvedTrackCount: 0,
+          schema_version: '1.1',
+        };
+      }
+    );
+    // First read (stale check) sees job-1; the merged-write read sees job-2.
+    const spy = vi
+      .spyOn(AnalysisStatusStore.prototype, 'getStatus')
+      .mockImplementation(async () => {
+        reads.push('r');
+        if (reads.length === 1) {
+          return queuedStatus();
+        }
+        return { ...queuedStatus(), job_id: 'job-2' };
+      });
+    try {
+      await service.processChunk(chunkMessage());
+    } finally {
+      spy.mockRestore();
+    }
+    const status = await statusStore.getStatus('user-1', 'playlist-1');
+    expect(status?.job_id).toBe('job-1');
+    expect(status?.progress).toBe(0);
+  });
+});
+
+describe('queue consumer chunk paths', () => {
+  function batchOf(body: unknown, attempts: number) {
+    const ack = vi.fn();
+    const retry = vi.fn();
+    return {
+      batch: { messages: [{ body, attempts, ack, retry }] } as never,
+      ack,
+      retry,
+    };
+  }
+
+  it('chunk auth failure registers a marker, skips terminal status, and acks', async () => {
+    const cacheKv = kvNamespace();
+    const env = envWithKv(cacheKv, sessionsKv());
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
+    await statusStore.initFanoutCountdown('user-1', 'playlist-1', 'job-1', 1);
+    vi.spyOn(AnalysisService.prototype, 'analyzeChunk').mockRejectedValue(
+      new AuthRequiredException('revoked')
+    );
+
+    const { batch, ack, retry } = batchOf(chunkMessage(), 0);
+    await worker.queue(batch, env, {} as never);
+
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(retry).not.toHaveBeenCalled();
+    const countdown = await statusStore.getFanoutCountdown('user-1', 'playlist-1', 'job-1');
+    expect(countdown?.received).toEqual({ 'job-1#0': 'failed' });
+    const status = await statusStore.getStatus('user-1', 'playlist-1');
+    expect(status?.status).not.toBe('completed');
+    expect(status?.status).not.toBe('failed');
+  });
+
+  it('exhausted chunk with a complete set forces terminal failed', async () => {
+    const cacheKv = kvNamespace();
+    const env = envWithKv(cacheKv, sessionsKv());
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
+    await statusStore.initFanoutCountdown('user-1', 'playlist-1', 'job-1', 1);
+    // Countdown complete (chunk registered ok) but no terminal status:
+    // the wedged-finalizer shape the backstop exists for.
+    await statusStore.registerChunkResult('user-1', 'playlist-1', 'job-1', 'job-1#0', true);
+    vi.spyOn(AnalysisService.prototype, 'analyzeChunk').mockRejectedValue(
+      new Error('transient')
+    );
+
+    const { batch, ack } = batchOf(chunkMessage(), 3);
+    await worker.queue(batch, env, {} as never);
+
+    expect(ack).toHaveBeenCalledTimes(1);
+    const status = await statusStore.getStatus('user-1', 'playlist-1');
+    expect(status?.status).toBe('failed');
+    expect(status?.error).toContain('finalizer');
   });
 });

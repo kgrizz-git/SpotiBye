@@ -129,6 +129,9 @@ export default {
           try {
             if (isChunk) {
               await jobService.registerChunkFailure(body as AnalysisChunkMessage, error);
+              // Wedged-finalizer backstop: complete set but no terminal
+              // status (finalizer died past redelivery) → terminal failed.
+              await jobService.failStuckFinalize(body as AnalysisChunkMessage);
             } else {
               await jobService.markFailed(body, error);
             }
