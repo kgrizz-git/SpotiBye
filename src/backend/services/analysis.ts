@@ -4,6 +4,7 @@ import { ReccoBeatsTrackCacheService } from './reccobeats-track-cache';
 import { logger } from '../utils/logger';
 import { ANALYSIS_SCHEMA_VERSION, MUSIC_KEYS } from '../utils/constants';
 import type { SpotifyArtistFull, SpotifyTrack, SpotifyPlaylistTrackItem } from '../types/spotify';
+import type { AnalysisChunkPartial } from './analysis-fanout';
 import type {
   AnalysisResult,
   AudioFeatureAverages,
@@ -38,22 +39,7 @@ export class AnalysisService {
       logger.info('Fetching playlist tracks', { playlistId });
       await onProgress?.(20);
 
-      // Get all playlist tracks, paginating by raw page size to correctly
-      // advance offsets past local/unavailable items.
-      const allItems: typeof tracksData.items = [];
-      let offset = 0;
-      const limit = 100;
-      let tracksData: Awaited<ReturnType<typeof spotifyService.getPlaylistTracks>>;
-      do {
-        tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
-        allItems.push(...tracksData.items);
-        offset += limit;
-      } while (tracksData.rawCount === limit && offset < tracksData.total);
-
-      // Normalize items: handle both .track (old) and .item (Feb-2026 shape)
-      const tracks = allItems
-        .map((item: SpotifyPlaylistTrackItem) => item.track ?? item.item)
-        .filter((t): t is SpotifyTrack => t?.id !== undefined);
+      const tracks = await this.fetchAllPlaylistTracks(spotifyService, playlistId);
 
       // Collect unique artist IDs and fetch full artist objects (for genre data)
       const artistIdSet = new Set<string>();
@@ -78,6 +64,8 @@ export class AnalysisService {
         errors,
         onProgress,
         options.forceEnrichment === true
+          ? { forceResolve: true, forceClear: true }
+          : {}
       );
 
       logger.info('Generating insights from metadata', { playlistId });
@@ -114,6 +102,90 @@ export class AnalysisService {
   }
 
   /**
+   * Enumerate all usable tracks plus the full artist-ID set (public for the
+   * fan-out path, which decides chunking before any enrichment runs).
+   */
+  async listPlaylistTracks(
+    playlistId: string
+  ): Promise<{ tracks: SpotifyTrack[]; artistIds: string[] }> {
+    const spotifyService = new SpotifyService(this.accessToken);
+    const tracks = await this.fetchAllPlaylistTracks(spotifyService, playlistId);
+    const artistIdSet = new Set<string>();
+    for (const track of tracks) {
+      for (const artist of track.artists ?? []) {
+        if (artist.id) artistIdSet.add(artist.id);
+      }
+    }
+    return { tracks, artistIds: [...artistIdSet] };
+  }
+
+  /**
+   * Analyze one fan-out chunk: artist metadata for the chunk's artists plus
+   * ReccoBeats enrichment for its tracks. Chunks always run resolve-only
+   * (POST clears once); callers pass forceResolve for lookup-skip parity.
+   */
+  async analyzeChunk(
+    playlistId: string,
+    chunkId: string,
+    trackIds: string[],
+    artistIds: string[],
+    options: { forceResolve?: boolean; onProgress?: (progress: number) => Promise<void> } = {}
+  ): Promise<AnalysisChunkPartial> {
+    const errors: Array<{ source: string; message: string }> = [];
+    const spotifyService = new SpotifyService(this.accessToken);
+    // Chunk sizing guarantees ≤40 artists, so the silent 40-cap in
+    // fetchSpotifyArtistsForGenres never triggers on the chunk path.
+    const artistData = await this.fetchSpotifyArtistsForGenres(
+      spotifyService,
+      artistIds,
+      playlistId,
+      errors
+    );
+    const enrichment = await this.fetchReccoBeatsEnrichment(
+      playlistId,
+      trackIds,
+      errors,
+      options.onProgress,
+      { forceResolve: options.forceResolve === true, forceClear: false }
+    );
+    return {
+      chunk_id: chunkId,
+      track_ids: [...new Set(trackIds.filter(Boolean))],
+      artistData,
+      audioFeatures: enrichment.audioFeatures,
+      trackMetadata: enrichment.trackMetadata,
+      errors,
+      audioFeaturesResolvedCount: enrichment.audioFeaturesResolvedCount,
+      trackMetadataResolvedCount: enrichment.trackMetadataResolvedCount,
+      enrichmentResolvedTrackCount: enrichment.enrichmentResolvedTrackCount,
+      schema_version: ANALYSIS_SCHEMA_VERSION,
+    };
+  }
+
+  /** Track enumeration shared by the single path and fan-out listing. */
+  private async fetchAllPlaylistTracks(
+    spotifyService: SpotifyService,
+    playlistId: string
+  ): Promise<SpotifyTrack[]> {
+    // Get all playlist tracks, paginating by raw page size to correctly
+    // advance offsets past local/unavailable items.
+    const allItems: SpotifyPlaylistTrackItem[] = [];
+    let offset = 0;
+    const limit = 100;
+    let tracksData: Awaited<ReturnType<typeof spotifyService.getPlaylistTracks>>;
+    do {
+      tracksData = await spotifyService.getPlaylistTracks(playlistId, limit, offset);
+      allItems.push(...tracksData.items);
+      offset += limit;
+    } while (tracksData.rawCount === limit && offset < tracksData.total);
+
+    // Normalize items: handle both .track (old) and .item (Feb-2026 shape)
+    return allItems
+      .map((item: SpotifyPlaylistTrackItem) => item.track ?? item.item)
+      .filter((t): t is SpotifyTrack => t?.id !== undefined);
+  }
+
+  /**
    * Resolves ReccoBeats audio features + track metadata via the global
    * per-track cache (best-effort — failures are recorded in `errors`).
    * Endpoint writes are independent: metadata failure must not discard
@@ -124,7 +196,7 @@ export class AnalysisService {
     trackIds: string[],
     errors: Array<{ source: string; message: string }>,
     onProgress?: (progress: number) => Promise<void>,
-    forceEnrichment = false
+    force: { forceResolve?: boolean; forceClear?: boolean } = {}
   ): Promise<{
     audioFeatures: ReccoBeatsAudioFeature[];
     trackMetadata: ReccoBeatsTrackMetadata[];
@@ -151,7 +223,8 @@ export class AnalysisService {
     logger.info('Resolving ReccoBeats enrichment via per-track cache', {
       playlistId,
       trackCount: uniqueTrackCount,
-      forceEnrichment,
+      forceResolve: force.forceResolve === true,
+      forceClear: force.forceClear === true,
     });
 
     const trackCache = new ReccoBeatsTrackCacheService(this.cache);
@@ -175,7 +248,8 @@ export class AnalysisService {
     await onProgress?.(75);
 
     const resolveOpts = {
-      force: forceEnrichment,
+      forceResolve: force.forceResolve,
+      forceClear: force.forceClear,
       onGroupComplete: emitEnrichmentProgress,
     };
 
@@ -339,7 +413,8 @@ export class AnalysisService {
     }
   }
 
-  private async generatePlaylistInsights(
+  /** Shared insight assembly for the single path and fan-out finalize. */
+  async generatePlaylistInsights(
     tracks: SpotifyTrack[],
     artistData: SpotifyArtistFull[] = [],
     reccoBeatsAudioFeatures: ReccoBeatsAudioFeature[] = [],
