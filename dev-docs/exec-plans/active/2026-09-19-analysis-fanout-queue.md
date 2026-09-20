@@ -2,7 +2,8 @@
 
 **Date:** 2026-09-19
 **Branch:** `docs/fanout-queue-plan` (plan only; no code)
-**Status:** draft v1 — for review (kilo + agy)
+**Status:** draft v2 — revised per kilo + agy reviews (v1 used a racy KV
+countdown; v2 uses a DO atomic countdown — see Resolved decisions)
 **Backlog link:** `dev-docs/backlog/TO_DO.md` → "Refactor playlist analysis to fan-out queue architecture for large playlists"
 
 ## Goal
@@ -59,28 +60,53 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 - **Aggregation:** each batch worker writes its partial result to a
   chunk-result key and merges progress into the shared DO status record
   (per-chunk progress band, monotonic guard shared with the existing
-  tracker). A finalize step runs when all `chunk_count` partials exist
-  (KV-countdown checked after each batch write — last-writer triggers
-  finalize inline; no delayed-message barrier, no new queue).
+  tracker). Completion is tracked by an atomic countdown in the same DO
+  (strongly consistent — no KV get-then-set race): each worker registers
+  success or failure exactly once; the worker that observes the count reach
+  zero runs finalize inline. Finalize is idempotent via a terminal-status
+  guard (a second trigger — redelivery race — sees `completed`/`failed` and
+  returns). A delayed finalize *message* was rejected: queue ordering is not
+  guaranteed, so it could run before chunks complete.
+- **Chunk failure:** a batch worker that exhausts retries writes a
+  `failed` marker for its chunk into the DO (same atomic countdown path)
+  before the message DLQs — otherwise the countdown hangs and finalize never
+  runs. Finalize seeing any failure marker fails the job naming the failed
+  chunks (no silent partial success).
+- **Stale jobs:** every chunk worker reads DO status first and short-circuits
+  on `job_id` mismatch before touching KV; the DO rejects progress writes
+  for superseded `job_id`s.
+- **KV read-after-write:** partials live in KV (DO 128KB value limits rule
+  out storing them there). Finalize lists expected chunk keys; any missing
+  key is retried bounded (3 × 2s) then fails the job naming the missing
+  chunks.
 - **Finalize:** merge partials (sum genre buckets, recompute audio-feature
-  averages weighted by track count, union errors with per-chunk source tags,
-  preserve `schema_version` bump rules), write KV results + terminal DO
-  status. Idempotent: batch writes keyed by `(job_id, chunk_id)`;
-  re-delivered batch messages overwrite identical partials; finalize guarded
-  by terminal-status check.
+  averages weighted by track count, union errors with per-chunk source tags).
+  `schema_version`: all chunks run the same deployed code so versions are
+  uniform — finalize takes the max, asserts uniformity (warn + log on
+  mismatch), and existing bump rules apply to producers unchanged. Write KV
+  results + terminal DO status. Idempotent: batch writes keyed by
+  `(job_id, chunk_id)`; re-delivered batch messages overwrite identical
+  partials; inline finalize re-entry hits the terminal-status guard.
 - **Failure semantics per batch:** same as Track D (3 attempts → DLQ +
-  `markFailed`). If any chunk DLQs, the job fails with a partial-coverage
-  error naming the failed chunks (no silent partial success).
+  `markFailed`, plus the DO failure marker above so the countdown completes).
 - **Small-playlist fast path:** below threshold, byte-identical behavior to
   today (single message, same code path as now — not a parallel
   implementation).
 
-## Open questions (for reviewers)
+## Resolved decisions (from kilo + agy v1 reviews)
 
-1. Inline last-writer finalize vs delayed finalize message — is the KV-countdown race acceptable (two batch workers finishing simultaneously), or is an explicit finalize message safer?
-2. Threshold: static (>40 artists OR estimated subrequests >40) vs dynamic per-run budget accounting?
-3. Chunk-result keys in KV vs DO — KV is fine (eventual consistency OK for
-   partials; DO reserved for live status)?
+1. **Finalize mechanism: DO atomic countdown, inline finalize.** Rejected KV
+   get-then-set countdown (simultaneous finishers double-merge) and rejected
+   delayed finalize message (queue ordering not guaranteed — could run before
+   chunks complete). The DO owns an atomic remaining-counter; the worker that
+   observes zero runs finalize inline, guarded by the terminal-status check.
+2. **Threshold: static** (`unique artists > 40 OR estimated subrequests >
+   40`) calibrated from Phase 0 measurements; dynamic per-run accounting only
+   if static proves wrong at scale. Predictable and testable.
+3. **Partials in KV, countdown in DO.** DO 128KB value limits rule out
+   storing partials there; KV eventual consistency is handled by bounded
+   finalize retries. DO stays small (status + counter + failure markers) to
+   keep call volume bounded.
 
 ## Phase 0 — Budget math + message types
 
@@ -95,20 +121,30 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 ## Phase 1 — Chunking (POST path)
 
 - [ ] Enumerate tracks, compute threshold decision, enqueue N chunk messages
-  or 1 legacy message. Small playlists: zero behavior change (assert with
-  existing tests + new threshold-boundary tests).
+  or 1 legacy message. `force_enrichment` clears the per-track cache ONCE at
+  POST time before enqueue (never per-chunk) and the flag propagates on every
+  chunk message for worker-behavior parity. Small playlists: zero behavior
+  change (assert with existing tests + new threshold-boundary tests).
 - [ ] Tests: threshold boundaries, chunk coverage (every track in exactly one
-  chunk), legacy-shape passthrough.
+  chunk), legacy-shape passthrough, force flag present on all chunks with a
+  single pre-enqueue clear.
 
 ## Phase 2 — Batch worker + finalize
 
-- [ ] Batch worker: process one chunk (artist slice + ReccoBeats groups for
-  its tracks), write partial, update shared DO progress band, ack semantics
-  per Track D.
-- [ ] Finalize: merge partials, write results + terminal status, idempotent
-  re-entry, chunk-DLQ → job failure with named chunks.
-- [ ] Tests: merge unit tests (averages weighting, genre sums, error union),
-  idempotent redelivery, finalize-triggered-once, DLQ propagation.
+- [ ] Batch worker: verify `job_id` against DO status first (short-circuit on
+  mismatch before any KV touch); process one chunk (artist slice +
+  ReccoBeats groups for its tracks); write partial keyed by
+  `(job_id, chunk_id)`; update shared DO progress band; register
+  success/failure in the DO countdown exactly once; ack semantics per
+  Track D (failure marker written before DLQ).
+- [ ] Finalize (inline, last-counter worker): re-check terminal status,
+  collect partials with bounded missing-key retries, merge, write results +
+  terminal status; failure markers or unrecovered missing chunks fail the job
+  naming them.
+- [ ] Tests: merge unit tests (averages weighting, genre sums, error union,
+  version-max + uniformity assertion), idempotent redelivery, stale `job_id`
+  short-circuit, failure-marker countdown completion, DLQ propagation,
+  missing-partial retry-then-fail.
 
 ## Phase 3 — Verification + rollout
 
