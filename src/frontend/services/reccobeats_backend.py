@@ -19,11 +19,14 @@ logger = logging.getLogger(__name__)
 
 SYNTHETIC_PROGRESS_STALE_AFTER_SECONDS = 5.0
 
-# A freshly-completed job's results can lag status in KV (replication delay),
-# so a 404 immediately after "completed" usually means "not visible yet", not
-# "stale cache". Retry the fetch before concluding the analysis must be rerun.
-RESULTS_FETCH_ATTEMPTS = 4
-RESULTS_FETCH_RETRY_DELAY_SECONDS = 2.0
+# A freshly-completed job's results can miss in KV right after "completed":
+# replication lag plus KV edge-caching of the negative lookup for the full
+# default cacheTtl (60s; CacheService.get passes no options). So a 404
+# immediately after completion usually means "not visible yet", not "stale
+# cache". Poll through that window before concluding the analysis must be
+# rerun: 14 attempts x 5s covers the 60s negative-cache window with margin.
+RESULTS_FETCH_ATTEMPTS = 14
+RESULTS_FETCH_RETRY_DELAY_SECONDS = 5.0
 
 
 class ReccoBeatsBackendService:

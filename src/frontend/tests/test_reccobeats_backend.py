@@ -281,9 +281,10 @@ class TestStaleResultsRecovery:
             status_code=404,
             error_code="ANALYSIS_RESULTS_NOT_FOUND",
         )
-        # Persistent 404s: every fetch attempt misses, so each completed poll
-        # exhausts the retry budget (4 attempts) before the repost decision.
-        backend_client.get_analysis_results.side_effect = [stale_error] * 8
+        # Persistent 404s: every fetch attempt misses (e.g. a poisoned KV
+        # negative cache), so each completed poll exhausts the retry budget
+        # (14 attempts) before the repost decision.
+        backend_client.get_analysis_results.side_effect = [stale_error] * 28
 
         service = self._service(backend_client)
         # `analyze_playlist` is wrapped in `@handle_network_errors`, which
@@ -298,7 +299,7 @@ class TestStaleResultsRecovery:
         # First persistent 404 triggers exactly one re-post; the second
         # persistent 404 (from the re-posted job) is not retried again.
         assert backend_client.analyze_playlist.call_count == 2
-        assert backend_client.get_analysis_results.call_count == 8
+        assert backend_client.get_analysis_results.call_count == 28
 
     def test_cancelled_retry_wait_returns_empty_without_reposting(
         self, patched_cache_manager: MagicMock, analysis_task: MagicMock
@@ -333,3 +334,5 @@ class TestStaleResultsRecovery:
             service.analyze_playlist("playlist-1")
 
         assert backend_client.analyze_playlist.call_count == 1
+        # Non-404 errors skip the retry loop entirely.
+        assert backend_client.get_analysis_results.call_count == 1
