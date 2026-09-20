@@ -301,6 +301,84 @@ class TestAnalysisPopupRendering:
         assert captured["playlist_id"] == "playlist-1"
         assert captured["analysis_task"] is not None
 
+    def test_show_binds_dismiss_to_cancel(self, monkeypatch) -> None:
+        card = _card()
+        opened: list[bool] = []
+
+        class FakePopup(_FakeWidget):
+            def open(self) -> None:
+                opened.append(True)
+
+        monkeypatch.setattr(analysis_popup_module, "Popup", FakePopup)
+        monkeypatch.setattr(
+            card, "_start_analysis_worker", lambda *args, **kwargs: None
+        )
+
+        card.show_detailed_playlist_window()
+
+        assert opened == [True]
+        assert (
+            card._detailed_popup.bound_events["on_dismiss"]
+            == card._cancel_analysis_task
+        )
+
+    def test_cancel_analysis_task_cancels_and_clears(self) -> None:
+        card = _card()
+        calls: list[bool] = []
+
+        class FakeTask:
+            def cancel(self) -> None:
+                calls.append(True)
+
+        card._analysis_task = FakeTask()
+        card._cancel_analysis_task()
+
+        assert calls == [True]
+        assert card._analysis_task is None
+
+    def test_cancel_analysis_task_without_task_is_noop(self) -> None:
+        card = _card()
+
+        card._cancel_analysis_task()
+
+        assert card._analysis_task is None
+
+    def test_worker_skips_ui_update_when_cancelled(self, monkeypatch) -> None:
+        from src.frontend.utils.analysis_task import AnalysisTask
+
+        card = _card()
+        adapter = _FakeWidget()
+        adapter.analyze_playlist = cast(
+            Any, lambda *_args, **_kwargs: {"status": "completed"}
+        )
+        app = _FakeWidget(backend_adapter=adapter)
+        monkeypatch.setattr(
+            analysis_popup_module.App,
+            "get_running_app",
+            lambda: app,
+            raising=False,
+        )
+        ui_updates: list[bool] = []
+        monkeypatch.setattr(
+            card,
+            "_update_analysis_ui",
+            lambda *args, **kwargs: ui_updates.append(True),
+        )
+
+        task = AnalysisTask(_FakeWidget(), _FakeWidget())
+        task.cancel()
+        card._load_analysis_worker(
+            "playlist-1",
+            cast("BoxLayout", cast(Any, _FakeWidget())),
+            cast("Label", cast(Any, _FakeWidget(text=""))),
+            cast(Any, _FakeWidget()),
+            cast(Any, _FakeWidget(text="")),
+            cast(Any, _FakeWidget(text="")),
+            analysis_task=task,
+        )
+
+        assert ui_updates == []
+
     def test_worker_force_reanalyze_uses_force_adapter_method(
         self, monkeypatch
     ) -> None:

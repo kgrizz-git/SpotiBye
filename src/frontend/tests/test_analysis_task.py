@@ -56,3 +56,11 @@ def test_synthetic_progress_rises_caps_below_completion_and_never_moves_backward
         task.update_progress(100, "Analysis complete")
         assert progress_bar.value == 100
         assert status_label.text == "Analysis complete"
+
+
+def test_cancel_marks_task_cancelled() -> None:
+    task = AnalysisTask(_Widget(), _Widget())
+
+    assert not task.is_cancelled()
+    task.cancel()
+    assert task.is_cancelled()

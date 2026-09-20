@@ -318,12 +318,21 @@ remain queued/processing at stale values.
   status label visible with the error text and set the progress bar to a stable
   value such as `100` or hide it; do not rely on unsupported `ProgressBar` color
   changes.
-- [ ] **(Optional) Cancellation.** Wire the popup's existing close/cancel affordance
+- [x] **(Optional) Cancellation.** Wire the popup's existing close/cancel affordance
   to `task.cancel()` so an in-flight analysis can be stopped; `reccobeats_backend.py`
   already checks `analysis_task.is_cancelled()` in the poll loop and at entry.
   Document in code comments or user-facing behavior that this only stops local
   waiting/polling; the backend Worker job keeps running and may later write status
   and results to KV.
+
+  2026-09-19 implementation (sufficiency review: kilo + agy): there was no
+  explicit close button (`auto_dismiss=True` only), so `on_dismiss` is bound to
+  `_cancel_analysis_task` in `show_detailed_playlist_window`; the task is
+  constructed on the UI thread in `_start_analysis_worker`, stored as
+  `self._analysis_task`, and passed to the worker, which returns before any UI
+  update once cancelled (covers success and error paths). Thread-safety noted
+  in the module docstring. Tests: dismiss binding, cancel-and-clear, noop
+  without task, worker-skips-UI. CHANGELOG progress-bar bullet extended.
 - [x] **Update `CHANGELOG.md`.** Add a concise user-visible entry noting that
   playlist analysis now shows live progress during backend/ReccoBeats analysis.
 
