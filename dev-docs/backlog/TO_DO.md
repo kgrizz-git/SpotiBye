@@ -6,6 +6,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 - [ ] Fan-out backstop gap: if the status-store round-trip throws between a finalizer grant and the backstop write, the consumer swallows it and acks (DeepSeek PR #16 follow-up). Consider failing open (retry instead of ack) so the grant path re-runs.
 - [ ] Add an explicit Cancel button to the analysis progress UI (today cancel is only via dismissing the details window; wire to the existing `task.cancel()` polling-stop path — backend job keeps running server-side, there is no kill-the-job API)
+- [ ] Size analysis-section labels from `texture_size` instead of fixed heights so long lines (Top Artists, ·-joined audio rows) wrap instead of overflowing at 14sp (Kimi PR #21 follow-up; pre-existing fixed-height pattern, more likely to show at larger type)
 - [ ] Explore optional user-choice client-side ReccoBeats fetch
   - [ ] Treat as a future enhancement, not a blocker for the current ReccoBeats failure fix
   - [ ] Make it opt-in: a visible "Retry enrichment from this device" action only when backend enrichment is still incomplete
