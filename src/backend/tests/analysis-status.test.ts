@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { AnalysisStatusStore, createAnalysisStatusNamespaceStub } from '../services/analysis-status-object';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  AnalysisStatusObject,
+  AnalysisStatusStore,
+  createAnalysisStatusNamespaceStub,
+} from '../services/analysis-status-object';
 import type { AnalysisStatusRecord } from '../types/analysis-queue';
+import type { FanoutCountdownState } from '../types/analysis-queue';
 
 describe('AnalysisStatusStore', () => {
   it('returns the latest status immediately after a merge write', async () => {
@@ -48,5 +53,61 @@ describe('AnalysisStatusStore', () => {
 
     expect(await store.getStatus('user-1', 'playlist-1')).toBeNull();
     expect(await store.getStatus('user-1', 'playlist-2')).toEqual(status('playlist-2'));
+  });
+});
+
+describe('AnalysisStatusObject alarm', () => {
+  function fakeState(entries: [string, FanoutCountdownState][]) {
+    const store = new Map(entries);
+    const deleted: string[] = [];
+    let alarmAt: number | null = null;
+    const state = {
+      storage: {
+        list: vi.fn(async () => new Map(store)),
+        delete: vi.fn(async (key: string) => {
+          deleted.push(key);
+          store.delete(key);
+        }),
+        setAlarm: vi.fn(async (when: number) => {
+          alarmAt = when;
+        }),
+      },
+    };
+    return { state, deleted, alarmAt: () => alarmAt, store };
+  }
+
+  function countdown(createdAt: string): FanoutCountdownState {
+    return {
+      expected: 2,
+      received: {},
+      finalizerClaimedAt: null,
+      finalizerClaimedBy: null,
+      created_at: createdAt,
+    };
+  }
+
+  it('deletes expired entries and reschedules while live entries remain', async () => {
+    const old = new Date(Date.now() - 25 * 3600 * 1000).toISOString();
+    const fresh = new Date().toISOString();
+    const { state, deleted, alarmAt, store } = fakeState([
+      ['fanout:old', countdown(old)],
+      ['fanout:fresh', countdown(fresh)],
+    ]);
+
+    await new AnalysisStatusObject(state as never).alarm();
+
+    expect(deleted).toEqual(['fanout:old']);
+    expect([...store.keys()]).toEqual(['fanout:fresh']);
+    expect(alarmAt()).toBeGreaterThan(Date.now());
+  });
+
+  it('does not reschedule when nothing remains', async () => {
+    const old = new Date(Date.now() - 25 * 3600 * 1000).toISOString();
+    const { state, deleted, alarmAt } = fakeState([['fanout:old', countdown(old)]]);
+
+    await new AnalysisStatusObject(state as never).alarm();
+
+    expect(deleted).toEqual(['fanout:old']);
+    expect(alarmAt()).toBeNull();
   });
 });

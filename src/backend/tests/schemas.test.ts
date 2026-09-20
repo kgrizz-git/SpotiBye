@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SessionDataSchema } from '../validation/schemas/session';
-import { AnalysisQueueMessagePayloadSchema } from '../validation/schemas/queue';
+import { AnalysisQueueMessagePayloadSchema, parseQueuePayload } from '../validation/schemas/queue';
 import { safeParseSession } from '../middleware/auth';
 
 describe('SessionDataSchema', () => {
@@ -70,5 +70,60 @@ describe('AnalysisQueueMessagePayloadSchema', () => {
     if (result.success) {
       expect(result.data.force_enrichment).toBe(true);
     }
+  });
+});
+
+describe('parseQueuePayload', () => {
+  const base = {
+    job_id: '11111111-1111-4111-8111-111111111111',
+    playlist_id: 'playlist1',
+    user_id: 'user-1',
+    session_id: 'session-1',
+    enqueued_at: new Date().toISOString(),
+  };
+
+  it('routes chunk bodies to the chunk schema without stripping coordinates', () => {
+    const parsed = parseQueuePayload({
+      ...base,
+      chunk_id: 'job-1#0',
+      chunk_index: 0,
+      chunk_count: 3,
+      track_ids: ['t1', 't2'],
+      artist_ids: ['a1'],
+    });
+    expect(parsed.kind).toBe('chunk');
+    if (parsed.kind === 'chunk') {
+      expect(parsed.payload.chunk_id).toBe('job-1#0');
+      expect(parsed.payload.track_ids).toEqual(['t1', 't2']);
+    }
+  });
+
+  it('rejects chunk bodies with empty track_ids', () => {
+    const parsed = parseQueuePayload({
+      ...base,
+      chunk_id: 'job-1#0',
+      chunk_index: 0,
+      chunk_count: 3,
+      track_ids: [],
+      artist_ids: [],
+    });
+    expect(parsed.kind).toBe('invalid');
+  });
+
+  it('rejects chunk bodies with negative index', () => {
+    const parsed = parseQueuePayload({
+      ...base,
+      chunk_id: 'job-1#0',
+      chunk_index: -1,
+      chunk_count: 3,
+      track_ids: ['t1'],
+      artist_ids: ['a1'],
+    });
+    expect(parsed.kind).toBe('invalid');
+  });
+
+  it('keeps legacy single messages on the single path', () => {
+    const parsed = parseQueuePayload(base);
+    expect(parsed.kind).toBe('single');
   });
 });

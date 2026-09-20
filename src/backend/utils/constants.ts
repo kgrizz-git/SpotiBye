@@ -31,3 +31,9 @@ export const RECCOBEATS_KV_CONCURRENCY = 25;
  * the fallback when that var is unset.
  */
 export const ANALYSIS_RESULTS_TTL_SECONDS = 86400;
+
+/**
+ * TTL for fan-out job state (track snapshot + chunk partials). Bounds the
+ * lifetime of orphaned countdowns/partials if a job dies mid-flight.
+ */
+export const FANOUT_STATE_TTL_SECONDS = 3600;

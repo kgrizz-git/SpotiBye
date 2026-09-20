@@ -74,6 +74,38 @@ describe('AnalysisJobService stale-snapshot prevention', () => {
     expect(updateMs).toBeGreaterThanOrEqual(startMs);
   });
 
+  it('retains stored progress when a merged update regresses', async () => {
+    const cacheKv = kvNamespace();
+    const sessionsKv = kvNamespace({
+      'session-1': {
+        user_id: 'user-1',
+        access_token: 'fresh-token',
+        refresh_token: 'refresh-token',
+        expires_at: Date.now() + 3_600_000,
+      },
+    });
+
+    vi.spyOn(AnalysisService.prototype, 'analyzePlaylist').mockImplementation(
+      async (playlistId, userId, jobId, onProgress) => {
+        if (onProgress) {
+          await onProgress(60);
+          await onProgress(50);
+        }
+        throw new Error('Spotify API Error');
+      }
+    );
+
+    const env = envWithKv(cacheKv, sessionsKv);
+    const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
+    await statusStore.writeStatus('user-1', 'playlist-1', queuedStatus());
+    const service = new AnalysisJobService(env);
+    await expect(service.process(analysisMessage)).rejects.toThrow('Spotify API Error');
+
+    const status = await statusStore.getStatus('user-1', 'playlist-1');
+    expect(status?.status).toBe('retrying');
+    expect(status?.progress).toBe(60);
+  });
+
   it('preserves progress callback data in the completion write', async () => {
     const cacheKv = kvNamespace();
     const sessionsKv = kvNamespace({

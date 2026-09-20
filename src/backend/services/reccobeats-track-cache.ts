@@ -6,8 +6,9 @@
  * cache misses. Shared across users under `global:reccobeats:*` keys (GP#4
  * exception — see golden-principles.md).
  *
- * Inputs: Spotify track ID lists + optional `{ force }` to clear positive and
- * absent keys before refetch.
+ * Inputs: Spotify track ID lists + optional force flags: `forceResolve`
+ * skips the cache lookup and refetches, `forceClear` additionally deletes
+ * positive and absent keys first. Legacy `{ force: true }` means both.
  * Outputs: merged `Map<spotifyTrackId, row>` of positive hits plus counters
  * (`resolvedIds` / `absentIds` / `unresolvedIds`). Callers must not re-fetch
  * misses themselves.
@@ -87,8 +88,25 @@ function uniqueSortedTrackIds(trackIds: string[]): string[] {
 }
 
 /** Stable coalesce key for ≤30-ID batches (deterministic join). */
-function coalesceKey(endpoint: ReccoBeatsEndpoint, force: boolean, sortedIds: string[]): string {
-  return `${endpoint}:${force ? 'force:' : ''}${sortedIds.join(',')}`;
+function coalesceKey(
+  endpoint: ReccoBeatsEndpoint,
+  forceResolve: boolean,
+  forceClear: boolean,
+  sortedIds: string[]
+): string {
+  return `${endpoint}:r${forceResolve ? 1 : 0}c${forceClear ? 1 : 0}:${sortedIds.join(',')}`;
+}
+
+/** Split legacy `{ force }` (both) from explicit resolve/clear flags. */
+export function splitForceFlags(options: {
+  force?: boolean;
+  forceResolve?: boolean;
+  forceClear?: boolean;
+}): { forceResolve: boolean; forceClear: boolean } {
+  return {
+    forceResolve: options.forceResolve ?? options.force === true,
+    forceClear: options.forceClear ?? options.force === true,
+  };
 }
 
 export function audioFeaturesCacheKey(spotifyTrackId: string): string {
@@ -160,12 +178,14 @@ export class ReccoBeatsTrackCacheService {
 
   async resolveAudioFeatures(
     trackIds: string[],
-    options: { force?: boolean; onGroupComplete?: () => Promise<void> } = {}
+    options: { force?: boolean; forceResolve?: boolean; forceClear?: boolean; onGroupComplete?: () => Promise<void> } = {}
   ): Promise<ReccoBeatsResolveResult<ReccoBeatsAudioFeature>> {
+    const { forceResolve, forceClear } = splitForceFlags(options);
     return this.resolveEndpoint(
       'audio-features',
       trackIds,
-      options.force === true,
+      forceResolve,
+      forceClear,
       isReccoBeatsAudioFeature,
       audioFeaturesCacheKey,
       absentAudioFeaturesCacheKey,
@@ -176,12 +196,14 @@ export class ReccoBeatsTrackCacheService {
 
   async resolveTrackMetadata(
     trackIds: string[],
-    options: { force?: boolean; onGroupComplete?: () => Promise<void> } = {}
+    options: { force?: boolean; forceResolve?: boolean; forceClear?: boolean; onGroupComplete?: () => Promise<void> } = {}
   ): Promise<ReccoBeatsResolveResult<ReccoBeatsTrackMetadata>> {
+    const { forceResolve, forceClear } = splitForceFlags(options);
     return this.resolveEndpoint(
       'track-metadata',
       trackIds,
-      options.force === true,
+      forceResolve,
+      forceClear,
       isReccoBeatsTrackMetadata,
       trackMetadataCacheKey,
       absentTrackMetadataCacheKey,
@@ -190,10 +212,23 @@ export class ReccoBeatsTrackCacheService {
     );
   }
 
+  /**
+   * Delete positive + absent keys for the given IDs on both endpoints.
+   * POST-side of the force split: runs exactly once before fan-out enqueue;
+   * chunk workers never call this (resolve-only).
+   */
+  async clearTrackKeys(trackIds: string[]): Promise<void> {
+    const uniqueIds = uniqueSortedTrackIds(trackIds);
+    if (uniqueIds.length === 0) return;
+    await this.deleteKnownKeys(uniqueIds, audioFeaturesCacheKey, absentAudioFeaturesCacheKey);
+    await this.deleteKnownKeys(uniqueIds, trackMetadataCacheKey, absentTrackMetadataCacheKey);
+  }
+
   private async resolveEndpoint<T extends { href?: string }>(
     endpoint: ReccoBeatsEndpoint,
     trackIds: string[],
-    force: boolean,
+    forceResolve: boolean,
+    forceClear: boolean,
     isRow: (row: unknown) => row is T,
     positiveKey: KeyFn,
     absentKey: KeyFn,
@@ -208,7 +243,7 @@ export class ReccoBeatsTrackCacheService {
       };
     }
 
-    const key = coalesceKey(endpoint, force, uniqueIds);
+    const key = coalesceKey(endpoint, forceResolve, forceClear, uniqueIds);
     const existing = inFlight.get(key);
     if (existing) {
       return existing as Promise<ReccoBeatsResolveResult<T>>;
@@ -217,7 +252,8 @@ export class ReccoBeatsTrackCacheService {
     const promise = this.resolveEndpointUncoalesced(
       endpoint,
       uniqueIds,
-      force,
+      forceResolve,
+      forceClear,
       isRow,
       positiveKey,
       absentKey,
@@ -234,18 +270,19 @@ export class ReccoBeatsTrackCacheService {
   private async resolveEndpointUncoalesced<T extends { href?: string }>(
     endpoint: ReccoBeatsEndpoint,
     uniqueIds: string[],
-    force: boolean,
+    forceResolve: boolean,
+    forceClear: boolean,
     isRow: (row: unknown) => row is T,
     positiveKey: KeyFn,
     absentKey: KeyFn,
     fetchBatch: (batchIds: string[]) => Promise<{ bySpotifyId: Map<string, T>; unparseableCount: number }>,
     onGroupComplete?: () => Promise<void>
   ): Promise<ReccoBeatsResolveResult<T>> {
-    if (force) {
+    if (forceClear) {
       await this.deleteKnownKeys(uniqueIds, positiveKey, absentKey);
     }
 
-    const lookup = await this.lookupCachedIds(uniqueIds, force, isRow, positiveKey, absentKey);
+    const lookup = await this.lookupCachedIds(uniqueIds, forceResolve, isRow, positiveKey, absentKey);
     const fetchResult = await this.fetchAndCacheMisses(
       endpoint,
       lookup,
@@ -263,7 +300,8 @@ export class ReccoBeatsTrackCacheService {
 
     logger.info('ReccoBeats track-cache resolve complete', {
       endpoint,
-      force,
+      forceResolve,
+      forceClear,
       requested: uniqueIds.length,
       hits: lookup.bySpotifyId.size,
       absents: lookup.absentIds.size,
