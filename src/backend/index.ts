@@ -8,9 +8,9 @@ import { exportRoutes } from './routes/export';
 import { errorHandler } from './middleware/error';
 import { envValidationMiddleware } from './middleware/env';
 import { AnalysisJobService } from './services/analysis-job';
-import type { AnalysisQueueMessage } from './types/analysis-queue';
+import type { AnalysisChunkMessage, AnalysisQueueMessage } from './types/analysis-queue';
 import type { Env } from './types/env';
-import { AnalysisQueueMessagePayloadSchema } from './validation/schemas/queue';
+import { parseQueuePayload } from './validation/schemas/queue';
 import { NonRetryableError } from './types/errors';
 export { AnalysisStatusObject } from './services/analysis-status-object';
 
@@ -79,24 +79,29 @@ export default {
     const jobService = new AnalysisJobService(env);
 
     for (const message of batch.messages) {
-      const payloadResult = AnalysisQueueMessagePayloadSchema.safeParse(message.body);
-      if (!payloadResult.success) {
+      const parsed = parseQueuePayload(message.body);
+      if (parsed.kind === 'invalid') {
         console.error(JSON.stringify({
           event: 'QUEUE_INVALID_MESSAGE_BODY',
-          job_id: message.body?.job_id ?? null,
-          errors: payloadResult.error.flatten(),
+          job_id: (message.body as { job_id?: unknown } | null)?.job_id ?? null,
+          errors: parsed.errors,
         }));
         message.ack();
         continue;
       }
 
       const body = {
-        ...payloadResult.data,
+        ...parsed.payload,
         attempt: message.attempts,
       };
+      const isChunk = parsed.kind === 'chunk';
 
       try {
-        await jobService.process(body);
+        if (isChunk) {
+          await jobService.processChunk(body as AnalysisChunkMessage);
+        } else {
+          await jobService.process(body);
+        }
         console.error(JSON.stringify({ event: 'QUEUE_JOB_COMPLETED', job_id: body.job_id }));
         message.ack();
       } catch (error) {
@@ -106,7 +111,15 @@ export default {
           (error as { code?: string }).code === 'NON_RETRYABLE';
 
         if (isNonRetryable) {
-          try { await jobService.markFailed(body, error); } catch { /* swallow KV failure */ }
+          try {
+            if (isChunk) {
+              // Chunk paths never write terminal status (finalize owns it):
+              // only register the failure marker so the countdown completes.
+              await jobService.registerChunkFailure(body as AnalysisChunkMessage, error);
+            } else {
+              await jobService.markFailed(body, error);
+            }
+          } catch { /* swallow status failure */ }
           message.ack();
           continue;
         }
@@ -114,7 +127,11 @@ export default {
         console.error(JSON.stringify({ event: 'QUEUE_JOB_FAILED', job_id: body.job_id, attempt: message.attempts }));
         if (message.attempts >= 3) {
           try {
-            await jobService.markFailed(body, error);
+            if (isChunk) {
+              await jobService.registerChunkFailure(body as AnalysisChunkMessage, error);
+            } else {
+              await jobService.markFailed(body, error);
+            }
           } catch (markFailedError) {
             const err = markFailedError as Error;
             console.error(JSON.stringify({
