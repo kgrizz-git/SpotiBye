@@ -2,8 +2,8 @@
 
 **Date:** 2026-09-19
 **Branch:** `docs/fanout-queue-plan` (plan only; no code)
-**Status:** draft v3 — revised per DeepSeek v2 review (atomic finalize claim,
-terminal-write ownership, POST atomicity — see Resolved decisions)
+**Status:** draft v4 — revised per DeepSeek v3 review (finalizer lease,
+force-param split, POST-atomicity hardening)
 **Backlog link:** `dev-docs/backlog/TO_DO.md` → "Refactor playlist analysis to fan-out queue architecture for large playlists"
 
 ## Goal
@@ -61,8 +61,9 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   working; consumer routes on presence of `chunk_id`).
 - **POST atomicity:** initialize the DO countdown FIRST (expected count,
   `created_at`), then enqueue all chunk messages with ONE `sendBatch`. If the
-  batch send throws, a compensating DO cancel op moves the countdown to
-  terminal `aborted` so nothing hangs. Residual crash-window (die between
+  batch send throws, a compensating DO op writes terminal user-visible
+  `failed` (reason `fan-out enqueue aborted` — a valid `AnalysisJobStatus`,
+  no type change) and resets the countdown so nothing hangs. Residual crash-window (die between
   init and send) is accepted: countdowns are keyed per `job_id`, orphaned
   ones never trigger finalize (no workers run), and a DO alarm deletes
   countdown state older than 24h. POST retries mint a fresh `job_id`.
@@ -83,9 +84,16 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   caller that completes the set — the finalizer claim is the atomic
   transition itself, never a post-register zero-read plus status pre-check
   (a redelivered message re-registering after finalize finds the claim taken
-  and returns). The finalizer runs finalize inline. A delayed finalize
-  *message* was rejected: queue ordering is not guaranteed, so it could run
-  before chunks complete.
+  and returns). The claim carries a timestamp: if the set is complete, the
+  status is still non-terminal, and the claim is older than a 5-minute lease
+  (finalizer crashed mid-finalize), a subsequent registration re-claims and
+  re-runs finalize — stuck-finalize recovery without a watchdog process.
+  The atomicity mechanism is explicit: ONE Durable Object SQLite storage
+  transaction (`transactionSync` where the logic is synchronous, else
+  `transaction()`) — DO awaits can interleave across events, so a bare
+  read-modify-write is NOT sufficient. The finalizer runs finalize inline.
+  A delayed finalize *message* was rejected: queue ordering is not
+  guaranteed, so it could run before chunks complete.
 - **Chunk failure:** a batch worker that exhausts retries registers `failed`
   for its chunk via the same atomic op before the message DLQs — otherwise
   the countdown hangs and finalize never runs. Chunk markers are
@@ -97,8 +105,10 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   markFailed+acks: on chunk messages it must register the failure marker
   first.
 - **Stale jobs:** every chunk worker reads DO status first and short-circuits
-  on `job_id` mismatch before touching KV; the DO rejects progress writes
-  for superseded `job_id`s.
+  on `job_id` mismatch OR terminal status (`completed`/`failed` — covers
+  chunks sent by a partially-successful batch after a same-`job_id` cancel)
+  before touching KV; the DO rejects progress writes for superseded
+  `job_id`s.
 - **KV read-after-write:** partials live in KV (DO 128KB value limits rule
   out storing them there). Finalize lists expected chunk keys; any missing
   key is retried bounded (3 × 2s) then fails the job naming the missing
@@ -147,8 +157,8 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 ## Phase 1 — Chunking (POST path)
 
 - [ ] Enumerate tracks, compute threshold decision, init DO countdown, then
-  `sendBatch` N chunk messages or 1 legacy message (compensating cancel on
-  send failure — see Design). `force_enrichment` clears the per-track cache
+  `sendBatch` N chunk messages or 1 legacy message (compensating failed-write
+  on send failure — see Design). `force_enrichment` clears the per-track cache
   ONCE at POST time before enqueue; chunks carry `force_resolve` (lookup
   skip) with `force_clear: false`. Small playlists: zero behavior change
   (assert with existing tests + new threshold-boundary tests).
@@ -159,8 +169,16 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 
 ## Phase 2 — Batch worker + finalize
 
+- [ ] Split the shared `force` boolean into `force_resolve` (lookup skip +
+  refetch) and `force_clear` (deleteKnownKeys) through
+  `resolveAudioFeatures`/`resolveTrackMetadata`
+  (`reccobeats-track-cache.ts:161-191`) and the `analysis.ts:177-180` call
+  sites, including the coalesce key. Without this, a chunk with
+  `force_resolve: true` still calls `deleteKnownKeys` and races sibling
+  absent-sentinel writes. Existing single-message callers pass both true
+  (behavior unchanged); chunk workers pass resolve-only.
 - [ ] Batch worker: verify `job_id` against DO status first (short-circuit on
-  mismatch before any KV touch); process one chunk (artist slice +
+  mismatch OR terminal status before any KV touch); process one chunk (artist slice +
   ReccoBeats groups for its tracks); write partial keyed by
   `(job_id, chunk_id)`; update shared DO progress band; register
   success/failure in the DO countdown exactly once; ack semantics per
