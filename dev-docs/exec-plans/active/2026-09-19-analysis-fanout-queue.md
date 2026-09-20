@@ -2,8 +2,8 @@
 
 **Date:** 2026-09-19
 **Branch:** `docs/fanout-queue-plan` (plan only; no code)
-**Status:** draft v2 — revised per kilo + agy reviews (v1 used a racy KV
-countdown; v2 uses a DO atomic countdown — see Resolved decisions)
+**Status:** draft v3 — revised per DeepSeek v2 review (atomic finalize claim,
+terminal-write ownership, POST atomicity — see Resolved decisions)
 **Backlog link:** `dev-docs/backlog/TO_DO.md` → "Refactor playlist analysis to fan-out queue architecture for large playlists"
 
 ## Goal
@@ -30,7 +30,9 @@ unchanged. Preserve every Track D queue behavior.
 - No frontend polling/status changes (DO status record already supports
   intermediate progress; frontend already renders it).
 - No export-format or per-track-cache-key changes.
-- No DO schema changes.
+- No changes to the live status *record shape* (the countdown, failure
+  markers, and finalizer claim are new DO-side state alongside it, not
+  status fields).
 
 ## Constraints (normative)
 
@@ -57,21 +59,43 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   chunk_index, chunk_count, track_ids[] }` — new Zod-validated type next to
   `AnalysisQueueMessage` (extend, don't break: old single-message shape keeps
   working; consumer routes on presence of `chunk_id`).
+- **POST atomicity:** initialize the DO countdown FIRST (expected count,
+  `created_at`), then enqueue all chunk messages with ONE `sendBatch`. If the
+  batch send throws, a compensating DO cancel op moves the countdown to
+  terminal `aborted` so nothing hangs. Residual crash-window (die between
+  init and send) is accepted: countdowns are keyed per `job_id`, orphaned
+  ones never trigger finalize (no workers run), and a DO alarm deletes
+  countdown state older than 24h. POST retries mint a fresh `job_id`.
+- **`force_enrichment` split (no contradiction):** the flag fans out into two
+  distinct behaviors. POST-with-force runs `deleteKnownKeys` for ALL
+  enumerated track IDs exactly once, then enqueues. Chunk messages carry
+  `force_resolve: true` (skip lookup, refetch their IDs) with
+  `force_clear: false` — chunk workers MUST NOT call `deleteKnownKeys`
+  (nothing left to delete; keeps sibling absent-sentinel writes safe).
+  Finalize performs the post-success export-prefix invalidation (today's
+  `analysis-job.ts:86` behavior) when the job-level force flag is set.
 - **Aggregation:** each batch worker writes its partial result to a
   chunk-result key and merges progress into the shared DO status record
   (per-chunk progress band, monotonic guard shared with the existing
-  tracker). Completion is tracked by an atomic countdown in the same DO
-  (strongly consistent — no KV get-then-set race): each worker registers
-  success or failure exactly once; the worker that observes the count reach
-  zero runs finalize inline. Finalize is idempotent via a terminal-status
-  guard (a second trigger — redelivery race — sees `completed`/`failed` and
-  returns). A delayed finalize *message* was rejected: queue ordering is not
-  guaranteed, so it could run before chunks complete.
-- **Chunk failure:** a batch worker that exhausts retries writes a
-  `failed` marker for its chunk into the DO (same atomic countdown path)
-  before the message DLQs — otherwise the countdown hangs and finalize never
-  runs. Finalize seeing any failure marker fails the job naming the failed
-  chunks (no silent partial success).
+  tracker). Completion is tracked by an atomic countdown in the same DO:
+  each worker calls ONE `registerChunkResult(job_id, chunk_id, ok)` op that
+  records success/failure AND returns `isFinalizer` only to the single
+  caller that completes the set — the finalizer claim is the atomic
+  transition itself, never a post-register zero-read plus status pre-check
+  (a redelivered message re-registering after finalize finds the claim taken
+  and returns). The finalizer runs finalize inline. A delayed finalize
+  *message* was rejected: queue ordering is not guaranteed, so it could run
+  before chunks complete.
+- **Chunk failure:** a batch worker that exhausts retries registers `failed`
+  for its chunk via the same atomic op before the message DLQs — otherwise
+  the countdown hangs and finalize never runs. Chunk markers are
+  NON-terminal: the legacy `markFailed` terminal status write must NOT run
+  on chunk paths (it would poison finalize's view); finalize alone owns the
+  terminal `completed`/`failed` write, naming failed chunks. EVERY terminal
+  path registers a marker — including the `AUTH_REQUIRED`/`NON_RETRYABLE`
+  fast path in the consumer (`index.ts:108-111`), which today only
+  markFailed+acks: on chunk messages it must register the failure marker
+  first.
 - **Stale jobs:** every chunk worker reads DO status first and short-circuits
   on `job_id` mismatch before touching KV; the DO rejects progress writes
   for superseded `job_id`s.
@@ -86,7 +110,9 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   mismatch), and existing bump rules apply to producers unchanged. Write KV
   results + terminal DO status. Idempotent: batch writes keyed by
   `(job_id, chunk_id)`; re-delivered batch messages overwrite identical
-  partials; inline finalize re-entry hits the terminal-status guard.
+  partials and re-register (claim already taken → return); the
+  terminal-status check remains as a backstop only, not the finalizer
+  election.
 - **Failure semantics per batch:** same as Track D (3 attempts → DLQ +
   `markFailed`, plus the DO failure marker above so the countdown completes).
 - **Small-playlist fast path:** below threshold, byte-identical behavior to
@@ -120,14 +146,16 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 
 ## Phase 1 — Chunking (POST path)
 
-- [ ] Enumerate tracks, compute threshold decision, enqueue N chunk messages
-  or 1 legacy message. `force_enrichment` clears the per-track cache ONCE at
-  POST time before enqueue (never per-chunk) and the flag propagates on every
-  chunk message for worker-behavior parity. Small playlists: zero behavior
-  change (assert with existing tests + new threshold-boundary tests).
+- [ ] Enumerate tracks, compute threshold decision, init DO countdown, then
+  `sendBatch` N chunk messages or 1 legacy message (compensating cancel on
+  send failure — see Design). `force_enrichment` clears the per-track cache
+  ONCE at POST time before enqueue; chunks carry `force_resolve` (lookup
+  skip) with `force_clear: false`. Small playlists: zero behavior change
+  (assert with existing tests + new threshold-boundary tests).
 - [ ] Tests: threshold boundaries, chunk coverage (every track in exactly one
-  chunk), legacy-shape passthrough, force flag present on all chunks with a
-  single pre-enqueue clear.
+  chunk), legacy-shape passthrough, force split (single pre-enqueue clear,
+  no per-chunk deletes, export invalidation in finalize), send-failure
+  countdown cancel.
 
 ## Phase 2 — Batch worker + finalize
 
@@ -137,10 +165,12 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   `(job_id, chunk_id)`; update shared DO progress band; register
   success/failure in the DO countdown exactly once; ack semantics per
   Track D (failure marker written before DLQ).
-- [ ] Finalize (inline, last-counter worker): re-check terminal status,
-  collect partials with bounded missing-key retries, merge, write results +
-  terminal status; failure markers or unrecovered missing chunks fail the job
-  naming them.
+- [ ] Finalize (inline, ONLY the worker whose atomic `registerChunkResult`
+  returns `isFinalizer`): collect partials with bounded missing-key retries,
+  merge, write results + terminal status (owns ALL terminal writes,
+  including `failed`), run export-prefix invalidation when the job-level
+  force flag is set. Failure markers or unrecovered missing chunks fail the
+  job naming them.
 - [ ] Tests: merge unit tests (averages weighting, genre sums, error union,
   version-max + uniformity assertion), idempotent redelivery, stale `job_id`
   short-circuit, failure-marker countdown completion, DLQ propagation,
