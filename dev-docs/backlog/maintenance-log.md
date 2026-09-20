@@ -100,3 +100,16 @@ PR: #13
 Scope: `scripts/check-repo-structure.sh`
 
 Narrowed the dev-docs README linkage check from `maxdepth 2` to `maxdepth 1`: subdir notes are indexed at directory level with a curated selection (per `dev-docs/README.md`), matching `check_docs_hygiene.py`. Silenced 17 false-positive unlinked-note warnings.
+
+## 2026-09-19 — Progress-bar plan close-out pass
+
+PR: #14
+Scope: `dev-docs/exec-plans/active/2026-07-11-backend-playlist-analysis-progress-bar.md`, `dev-docs/backlog/TO_DO.md`
+
+Re-ran all runnable verifications green (backend 855 tests, lint 0 errors; frontend 257 passed; pyright clean); checked 2 verification + 4 acceptance boxes with tree evidence; re-dated TO_DO to `in progress 2026-09-19`. Left: live dev-worker trace, NPR diagnostic run-or-drop, optional cancellation.
+
+Follow-up on PR #14: added `scripts/trace-analysis-progress.sh` (one-command live trace: fresh job + 2s status poll to `tmp/*.jsonl` + results/genre summary) and an owner runbook in the plan step; the NPR run is folded into the same command (trace `5X8lN5fZSrLnXzFtDEUwb9`, check `genre buckets > 0`). Cancellation logged as a TO_DO follow-up instead of implemented.
+
+Live-trace result 2026-09-19 (dev `e96f00a`, NPR `5X8lN5fZSrLnXzFtDEUwb9`): status advanced `queued:0 → processing:50 → processing:75 → completed:100` (DO-backed reads confirmed, no staleness); genres present (15 buckets, 24/40 artists, tolerant-404 fix confirmed live). Live finding: ReccoBeats enrichment hit the Workers subrequest limit on this large playlist — feeds the existing fan-out TO_DO item. Remaining plan box: optional cancellation only.
+
+CodeRabbit hardening on PR #14: trace script takes the bearer token via env/pipe/prompt only (curl `-K` 0600 config + trap cleanup, never argv); BACKEND_URL must be https except loopback; per-run `mktemp -d` dir under `tmp/`; plan claim narrowed to backend payload (rendering covered by popup tests).

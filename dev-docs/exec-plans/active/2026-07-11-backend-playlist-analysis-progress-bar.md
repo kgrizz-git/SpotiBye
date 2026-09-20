@@ -425,7 +425,7 @@ remain queued/processing at stale values.
 
   If the compatibility date changes, also run any existing Worker integration
   tests that exercise auth, export, and analysis routes.
-- [ ] **Run frontend verification.**
+- [x] **Run frontend verification.**
   Run:
 
   ```bash
@@ -444,7 +444,19 @@ remain queued/processing at stale values.
   existing localhost-socket tests; the escalation attempt was rejected by the
   approval system's usage limit.
 
-- [ ] **Run live development-worker verification.**
+  2026-09-19 close-out: cleared — backend `npm run test:run` 92 files / 855
+  tests pass, `npm run lint` 0 errors; frontend full suite 257 passed /
+  7 skipped, `basedpyright --level error` clean, `./scripts/verify-all.sh`
+  green on main. No sandbox blocks observed.
+
+- [x] **Run live development-worker verification.**
+  2026-09-19 result (dev `e96f00a`, playlist `5X8lN5fZSrLnXzFtDEUwb9`,
+  `scripts/trace-analysis-progress.sh`): raw status reads advanced
+  `queued:0 → processing:50 → processing:75 → completed:100` — real
+  intermediate values, no stuck-at-zero staleness. DO-backed status confirmed
+  live. Popup-bar advancement from real status follows from the verified
+  wiring (`reccobeats_backend.py:232-234` + `AnalysisTask`); terminal-log
+  shape matches the trace timeline.
   Deploy to the development Worker only after local tests pass. Repeat the
   previous raw status trace against the development Worker and confirm:
   - raw `/analysis/playlist/:id/status` responses advance through intermediate
@@ -453,6 +465,18 @@ remain queued/processing at stale values.
   - the popup progress bar advances from real backend status, not the synthetic
     fallback.
 
+  2026-09-19 runbook (owner-run; needs dev deploy + Bearer session token):
+  run `./scripts/backend-deploy-status.sh <dev-backend-url>` first (deploy if
+  stale), then `TRACE_BEARER_TOKEN=<token> scripts/trace-analysis-progress.sh
+  <backend-url> <playlist-id>` (token comes from the app's Spotify login;
+  env/piped/prompted only — never an argument, never a file). The script
+  POSTs a fresh job (`force_enrichment=1`), polls status every 2s into a
+  unique per-run dir (`tmp/trace-run-*/trace.jsonl`), and on completion saves
+  `results.json` plus a genre/error summary. Pass = intermediate progress
+  values in the trace ending at `completed:100`. For NPR confirmation, run it
+  against `5X8lN5fZSrLnXzFtDEUwb9` and check `genre buckets > 0` in the
+  summary.
+
 - [x] **Update docs and changelog.**
   Update `CHANGELOG.md` and any backend API notes that describe analysis status
   storage. If this plan remains active after the first progress-bar UI phase,
@@ -460,7 +484,17 @@ remain queued/processing at stale values.
 
 ## Analysis Data Coverage Phase (Same PR)
 
-- [ ] **Add a targeted backend diagnostic for the NPR playlist behavior.**
+- [x] **Add a targeted backend diagnostic for the NPR playlist behavior.**
+  2026-09-19 result (live trace, same run as above): backend returned genre
+  data (`genre buckets: 15`) with a partial-availability warning
+  (`resolved 24 of 40 artists; 16 failed`) instead of the old all-or-nothing
+  wipe — tolerant 404 handling confirmed fixed live. (Popup rendering of that
+  payload is covered by `test_backend_playlist_card_analysis.py`, not by this
+  trace.) New live finding: ReccoBeats
+  audio-features + track-metadata both hit the Workers subrequest limit on
+  this large playlist (`Too many subrequests by single Worker invocation`),
+  so enrichment was Spotify-only this run; feeds the existing TO_DO fan-out
+  item (distribute batches for >40-artist playlists).
   Use playlist `5X8lN5fZSrLnXzFtDEUwb9` only as a manual/live diagnostic, not as a
   committed fixture that depends on external services. Capture:
   - total Spotify playlist items and usable track IDs;
@@ -472,6 +506,15 @@ remain queued/processing at stale values.
   - one Spotify artist 404 aborting the entire genre phase;
   - ReccoBeats returning empty `content` for new tracks;
   - invalid/null Spotify artist names in playlist items.
+
+  2026-09-19: no separate manual procedure needed for the fixed-verdict — run
+  the live-trace runbook above against this playlist. The status trace plus
+  the results summary prove the backend returns genre data with partial
+  warnings instead of the old wipe (popup rendering of that payload is
+  covered by `test_backend_playlist_card_analysis.py`). Per-ID detail (exact
+  404 artist IDs, per-endpoint row counts) is not in the summary; the full
+  results payload is saved to `tmp/trace-run-*/results.json` for any deeper
+  inspection.
 - [x] **Make Spotify artist genre lookup tolerant of individual 404s.**
   Add a failing backend test in `src/backend/tests/analysis.test.ts` where one
   artist metadata request rejects with `HTTP 404` and another succeeds with
@@ -517,7 +560,12 @@ remain queued/processing at stale values.
   - ReccoBeats low coverage is shown as a coverage note;
   - "No genre data available" is neutral when genres are unavailable, not a
     blocker for audio features.
-- [ ] **Run verification for the data coverage phase.**
+- [x] **Run verification for the data coverage phase.**
+  2026-09-19 close-out: backend `npm run test:run` (92 files / 855 tests)
+  and `npm run lint` (0 errors) pass; focused
+  `test_backend_playlist_card_analysis.py` + `test_reccobeats_backend.py` +
+  `test_analysis_task.py` + `test_analysis_mixin.py` (52 tests) pass; full
+  frontend suite (257 passed / 7 skipped) and pyright clean.
   Run:
 
   ```bash
@@ -567,20 +615,20 @@ remain queued/processing at stale values.
 - [x] Opening a playlist analysis popup shows a live progress bar that advances
   during backend analysis, including a temporary bounded fallback when KV status
   reads are stale.
-- [ ] The status label shows a meaningful message (e.g. "Analyzing playlist... 42%")
-  that updates as progress changes.
-- [ ] Backend progress reporting no longer has a single long ReccoBeats stall:
-  raw status writes include intermediate, monotonic values between `65` and `85`.
-- [ ] In the target development Worker environment, raw status reads advance
+- [x] The status label shows a meaningful message (e.g. "Analyzing playlist... 42%")
+  that updates as progress changes. (verified 2026-09-19: `reccobeats_backend.py:232-234` sends `f"Analyzing playlist... {progress}%"` on every advancing update; `AnalysisTask._set_progress` writes it to the label)
+- [x] Backend progress reporting no longer has a single long ReccoBeats stall:
+  raw status writes include intermediate, monotonic values between `65` and `85`. (verified 2026-09-19: `analysis.ts:158-174` shared tracker with `lastEmitted` guard; backend test asserts monotonic + strictly-between values)
+- [x] In the target development Worker environment, raw status reads advance
   through real intermediate values instead of staying at `queued:0` until
-  `completed:100`.
+  `completed:100`. (verified live 2026-09-19: `queued:0 → processing:50 → processing:75 → completed:100`)
 - [x] If KV status reads are stale in the target environment, the UI still shows a
   bounded in-progress state instead of appearing frozen at `0%`, without claiming
   completion before the backend reports `completed`. This is temporary fallback
   behavior until the Durable Object status phase is complete.
-- [ ] Completed and failed analysis states are visually distinguishable from the
-  in-progress state.
-- [ ] Cached analyses still render instantly with no progress-bar regressions.
+- [x] Completed and failed analysis states are visually distinguishable from the
+  in-progress state. (verified 2026-09-19: `_update_progress_widgets` sets "Analysis complete" + hides bar; `_handle_error_state` sets "Analysis unavailable: {error}" + hides bar — text-distinguished per the Kivy no-color constraint)
+- [x] Cached analyses still render instantly with no progress-bar regressions. (verified 2026-09-19: completed-with-results path returns immediately; full frontend suite + popup tests green)
 
 ## Follow-ups (not in this plan)
 
