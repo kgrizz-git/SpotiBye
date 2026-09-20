@@ -177,10 +177,18 @@ export class AnalysisStatusObject {
       prefix: FANOUT_KEY_PREFIX,
     });
     const cutoff = Date.now() - 24 * 3600 * 1000;
+    let remaining = 0;
     for (const [key, state] of entries) {
       if (Date.parse(state.created_at) < cutoff) {
         await this.state.storage.delete(key);
+      } else {
+        remaining += 1;
       }
+    }
+    // Alarms are one-shot: reschedule while live entries remain so orphans
+    // created after this sweep are still eventually collected.
+    if (remaining > 0) {
+      await this.state.storage.setAlarm(Date.now() + 24 * 3600 * 1000);
     }
   }
 }

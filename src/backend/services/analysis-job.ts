@@ -531,9 +531,18 @@ export class AnalysisJobService {
     // state: superseded chunks and late redeliveries stop here.
     if (latest.job_id !== message.job_id) return;
     if (latest.status === 'completed' || latest.status === 'failed') return;
+    // Progress never moves backwards through merged writes: concurrent chunk
+    // bands interleave, so retain the stored value on regression (and never
+    // let an absent progress clobber a stored one).
+    const incoming = partial.progress;
+    const progress =
+      typeof incoming === 'number' && typeof latest.progress === 'number'
+        ? Math.max(latest.progress, incoming)
+        : (incoming ?? latest.progress);
     await this.writeStatus(message, {
       ...latest,
       ...partial,
+      progress,
       updated_at: new Date().toISOString()
     });
   }
