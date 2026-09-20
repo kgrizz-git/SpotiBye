@@ -449,6 +449,7 @@ def get_reccobeats_api() -> ReccoBeatsAPI:
 __all__ = [
     "ReccoBeatsBackendService",
     "ReccoBeatsAPI",
+    "analysis_phase_label",
     "get_reccobeats_service",
     "get_reccobeats_api",
 ]
