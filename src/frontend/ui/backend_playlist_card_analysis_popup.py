@@ -15,8 +15,9 @@ _show_detailed_playlist_window creates them synchronously before spawning
 the thread. The AnalysisTask is constructed on the UI thread in
 _start_analysis_worker; dismissing the popup calls task.cancel() from the UI
 thread while the worker only reads is_cancelled() (plain bool flag store,
-atomic under the GIL). A cancelled worker returns before any UI update, so
-detached widgets are never touched after dismiss.
+atomic under the GIL). A cancelled worker returns before any UI update;
+refresh supersedes the running task (old task cancelled in
+_start_analysis_worker), so only the latest worker can reach UI updates.
 
 Depends on kivy, threading, .backend_playlist_card_utils,
 ..screens.adapter_mixins.analysis.
@@ -391,8 +392,12 @@ class PlaylistCardAnalysisPopupMixin:
         analysis_task = AnalysisTask(progress_bar, status_label)
         # Owned by the UI thread and reachable from _cancel_analysis_task;
         # the worker only reads is_cancelled() (bool store is GIL-atomic).
-        # Refresh flows overwrite it; a superseded worker keeps its own ref.
+        # Refresh flows supersede the running task: cancel it so the old
+        # worker returns before any UI update instead of racing the new one.
+        previous_task = self._analysis_task
         self._analysis_task = analysis_task
+        if previous_task is not None:
+            previous_task.cancel()
         threading.Thread(
             target=self._load_analysis_worker,
             args=(

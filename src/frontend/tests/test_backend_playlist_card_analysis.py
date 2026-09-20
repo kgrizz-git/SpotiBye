@@ -379,6 +379,63 @@ class TestAnalysisPopupRendering:
 
         assert ui_updates == []
 
+    def test_worker_skips_no_backend_ui_when_cancelled(
+        self, monkeypatch
+    ) -> None:
+        from src.frontend.utils.analysis_task import AnalysisTask
+
+        card = _card()
+        app = _FakeWidget()
+        monkeypatch.setattr(
+            analysis_popup_module.App,
+            "get_running_app",
+            lambda: app,
+            raising=False,
+        )
+        ui_updates: list[bool] = []
+        monkeypatch.setattr(
+            card,
+            "_update_analysis_ui",
+            lambda *args, **kwargs: ui_updates.append(True),
+        )
+
+        task = AnalysisTask(_FakeWidget(), _FakeWidget())
+        task.cancel()
+        card._load_analysis_worker(
+            "playlist-1",
+            cast("BoxLayout", cast(Any, _FakeWidget())),
+            cast("Label", cast(Any, _FakeWidget(text=""))),
+            cast(Any, _FakeWidget()),
+            cast(Any, _FakeWidget(text="")),
+            cast(Any, _FakeWidget(text="")),
+            analysis_task=task,
+        )
+
+        assert ui_updates == []
+
+    def test_refresh_cancels_superseded_task(self, monkeypatch) -> None:
+        card = _card()
+        content = card._build_analysis_popup_content()
+        cancelled: list[bool] = []
+
+        class FakeTask:
+            def cancel(self) -> None:
+                cancelled.append(True)
+
+            def is_cancelled(self) -> bool:
+                return bool(cancelled)
+
+        old_task = FakeTask()
+        card._analysis_task = old_task
+        monkeypatch.setattr(
+            card, "_load_analysis_worker", lambda *args, **kwargs: None
+        )
+
+        card._start_analysis_worker("playlist-1", _as_box_layout(content))
+
+        assert cancelled == [True]
+        assert card._analysis_task is not old_task
+
     def test_worker_force_reanalyze_uses_force_adapter_method(
         self, monkeypatch
     ) -> None:
