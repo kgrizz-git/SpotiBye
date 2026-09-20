@@ -115,7 +115,15 @@ export default {
             if (isChunk) {
               // Chunk paths never write terminal status (finalize owns it):
               // only register the failure marker so the countdown completes.
-              await jobService.registerChunkFailure(body as AnalysisChunkMessage, error);
+              // If this call carried the finalizer grant, no finalize will
+              // run — force the stuck-job backstop instead of wedging.
+              const registration = await jobService.registerChunkFailure(
+                body as AnalysisChunkMessage,
+                error
+              );
+              if (registration.isFinalizer) {
+                await jobService.failStuckFinalize(body as AnalysisChunkMessage);
+              }
             } else {
               await jobService.markFailed(body, error);
             }
@@ -128,10 +136,15 @@ export default {
         if (message.attempts >= 3) {
           try {
             if (isChunk) {
-              await jobService.registerChunkFailure(body as AnalysisChunkMessage, error);
-              // Wedged-finalizer backstop: complete set but no terminal
-              // status (finalizer died past redelivery) → terminal failed.
-              await jobService.failStuckFinalize(body as AnalysisChunkMessage);
+              const registration = await jobService.registerChunkFailure(
+                body as AnalysisChunkMessage,
+                error
+              );
+              // Wedged-finalizer backstop, only on a discarded grant: complete
+              // set but no terminal status (finalizer died past redelivery).
+              if (registration.isFinalizer) {
+                await jobService.failStuckFinalize(body as AnalysisChunkMessage);
+              }
             } else {
               await jobService.markFailed(body, error);
             }

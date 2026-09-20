@@ -104,12 +104,16 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
   path registers a marker — including the `AUTH_REQUIRED`/`NON_RETRYABLE`
   fast path in the consumer (`index.ts:108-111`), which today only
   markFailed+acks: on chunk messages it must register the failure marker
-  first.
+  first. If that registration carries the finalizer grant (the completing
+  failure — e.g. session revoked mid-fan-out), the consumer runs the
+  stuck-finalizer backstop instead of acking into a wedge: complete set +
+  non-terminal status forces terminal `failed` naming the stuck job.
 - **Stale jobs:** every chunk worker reads DO status first and short-circuits
   on `job_id` mismatch OR terminal status (`completed`/`failed` — covers
   chunks sent by a partially-successful batch after a same-`job_id` cancel)
-  before touching KV; the DO rejects progress writes for superseded
-  `job_id`s.
+  before touching KV; merged status writes are guarded the same way
+  (`job_id` match + non-terminal) so superseded chunks never clobber the
+  new job, and finalize re-checks before the results write.
 - **KV read-after-write:** partials live in KV (DO 128KB value limits rule
   out storing them there). Finalize lists expected chunk keys; any missing
   key is retried bounded (3 × 750ms — KV propagation is millisecond-scale;

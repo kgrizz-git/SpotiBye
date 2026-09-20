@@ -11,6 +11,7 @@ import {
   type TrackArtistIndex,
 } from './analysis-fanout';
 import { AnalysisStatusStore } from './analysis-status-object';
+import type { RegisterChunkResponse } from './analysis-status-object';
 import { CacheService } from './cache';
 import { ReccoBeatsTrackCacheService } from './reccobeats-track-cache';
 import { SpotifyAuthService } from './spotify-auth';
@@ -303,12 +304,17 @@ export class AnalysisJobService {
 
   /**
    * Register a chunk failure marker (non-terminal) so the DO countdown
-   * completes even when the message DLQs. Terminal status stays owned by
-   * finalizeJob. Safe to call repeatedly: first registration wins.
+   * completes even when the message DLQs. Returns the registration: callers
+   * that discard a finalizer grant must run the stuck-finalizer backstop,
+   * or the job wedges with no terminal write. Terminal status stays owned
+   * by finalizeJob. Safe to call repeatedly: first registration wins.
    */
-  async registerChunkFailure(message: AnalysisChunkMessage, error: unknown): Promise<void> {
+  async registerChunkFailure(
+    message: AnalysisChunkMessage,
+    error: unknown
+  ): Promise<RegisterChunkResponse> {
     const detail = error instanceof Error ? error.message : String(error);
-    await this.statusStore.registerChunkResult(
+    const registration = await this.statusStore.registerChunkResult(
       message.user_id,
       message.playlist_id,
       message.job_id,
@@ -319,6 +325,7 @@ export class AnalysisJobService {
       error: `Chunk ${message.chunk_id} failed: ${detail}`,
       updated_at: new Date().toISOString(),
     });
+    return registration;
   }
 
   /**

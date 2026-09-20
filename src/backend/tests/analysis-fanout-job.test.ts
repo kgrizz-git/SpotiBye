@@ -534,7 +534,7 @@ describe('queue consumer chunk paths', () => {
     };
   }
 
-  it('chunk auth failure registers a marker, skips terminal status, and acks', async () => {
+  it('chunk auth failure on the completing chunk forces terminal failed', async () => {
     const cacheKv = kvNamespace();
     const env = envWithKv(cacheKv, sessionsKv());
     const statusStore = new AnalysisStatusStore(env.ANALYSIS_STATUS);
@@ -547,13 +547,15 @@ describe('queue consumer chunk paths', () => {
     const { batch, ack, retry } = batchOf(chunkMessage(), 0);
     await worker.queue(batch, env, {} as never);
 
+    // Session revoked mid-fan-out: the discarded finalizer grant must not
+    // wedge the job — backstop forces terminal failed instead of hanging.
     expect(ack).toHaveBeenCalledTimes(1);
     expect(retry).not.toHaveBeenCalled();
     const countdown = await statusStore.getFanoutCountdown('user-1', 'playlist-1', 'job-1');
     expect(countdown?.received).toEqual({ 'job-1#0': 'failed' });
     const status = await statusStore.getStatus('user-1', 'playlist-1');
-    expect(status?.status).not.toBe('completed');
-    expect(status?.status).not.toBe('failed');
+    expect(status?.status).toBe('failed');
+    expect(status?.error).toContain('finalizer');
   });
 
   it('exhausted chunk with a complete set forces terminal failed', async () => {
