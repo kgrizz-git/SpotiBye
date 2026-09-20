@@ -336,3 +336,29 @@ class TestStaleResultsRecovery:
         assert backend_client.analyze_playlist.call_count == 1
         # Non-404 errors skip the retry loop entirely.
         assert backend_client.get_analysis_results.call_count == 1
+
+    def test_retry_sleep_is_bounded_by_remaining_wait_budget(
+        self, patched_cache_manager: MagicMock
+    ) -> None:
+        backend_client = make_backend_client()
+        backend_client.get_analysis_results.side_effect = BackendAPIError(
+            "Analysis results not found",
+            status_code=404,
+            error_code="ANALYSIS_RESULTS_NOT_FOUND",
+        )
+
+        service = self._service(backend_client)
+        with (
+            patch(
+                "src.frontend.services.reccobeats_backend.time.time",
+                side_effect=[299.5, 300.5],
+            ),
+            patch("src.frontend.services.reccobeats_backend.time.sleep") as sleep_mock,
+        ):
+            result = service._fetch_analysis_results_with_retry(
+                "playlist-1", None, 300, 0.0
+            )
+
+        assert result is None
+        assert backend_client.get_analysis_results.call_count == 2
+        sleep_mock.assert_called_once_with(0.5)
