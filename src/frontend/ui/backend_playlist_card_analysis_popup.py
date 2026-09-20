@@ -381,17 +381,9 @@ class PlaylistCardAnalysisPopupMixin:
         else:
             status_label.text = "Analyzing playlist..."
         analysis_container.clear_widgets()
-        analysis_container.add_widget(
-            Label(
-                text=status_label.text,
-                font_size=dp(11),
-                color=(0.75, 0.55, 0.15, 1),
-                halign="left",
-                text_size=(dp(420), None),
-                size_hint_y=None,
-                height=dp(18),
-            )
-        )
+        # NOTE: no static status snapshot is added here. The live status_label
+        # (bound to the AnalysisTask below) is the single progress message;
+        # a frozen copy would duplicate it forever (it never updates).
 
         analysis_task = AnalysisTask(progress_bar, status_label)
         # Owned by the UI thread and reachable from _cancel_analysis_task;
