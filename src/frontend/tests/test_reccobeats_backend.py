@@ -350,11 +350,20 @@ class TestStaleResultsRecovery:
             error_code="ANALYSIS_RESULTS_NOT_FOUND",
         )
 
+        # NOTE: time.time is patched on the global time module, which the
+        # logging package also calls when emitting records. Script by call
+        # count (not a fixed list) so captured log records cannot exhaust it.
+        calls = []
+
+        def fake_time() -> float:
+            calls.append(1)
+            return 299.5 if len(calls) == 1 else 300.5
+
         service = self._service(backend_client)
         with (
             patch(
                 "src.frontend.services.reccobeats_backend.time.time",
-                side_effect=[299.5, 300.5],
+                side_effect=fake_time,
             ),
             patch("src.frontend.services.reccobeats_backend.time.sleep") as sleep_mock,
         ):
