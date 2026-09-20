@@ -5,6 +5,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 ## Playlist Analysis — End-to-End
 
 - [ ] Fan-out backstop gap: if the status-store round-trip throws between a finalizer grant and the backstop write, the consumer swallows it and acks (DeepSeek PR #16 follow-up). Consider failing open (retry instead of ack) so the grant path re-runs.
+- [ ] Add an explicit Cancel button to the analysis progress UI (today cancel is only via dismissing the details window; wire to the existing `task.cancel()` polling-stop path — backend job keeps running server-side, there is no kill-the-job API)
 - [ ] Explore optional user-choice client-side ReccoBeats fetch
   - [ ] Treat as a future enhancement, not a blocker for the current ReccoBeats failure fix
   - [ ] Make it opt-in: a visible "Retry enrichment from this device" action only when backend enrichment is still incomplete

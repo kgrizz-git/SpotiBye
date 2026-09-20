@@ -30,6 +30,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Test helper: `src/backend/tests/helpers/kv.ts` (`kvNamespace` + `envWithKv` factories) shared by `analysis-queue.test.ts`, `auth-middleware.test.ts`, and `analysis-job.test.ts`.
 
 ### Changed
+- Analysis progress messages now name the current phase (Spotify track fetch vs ReccoBeats enrichment vs finalizing) based on the backend's progress bands, instead of a static "Analyzing playlist..." label.
 - CI/CD cost reductions: removed dead Dependabot directory scans, cancelled superseded CI runs, dropped duplicate backend tests from the Deploy Backend PR path, and consolidated Security Scan from 6 parallel jobs into one sequential job (PR checks now show a single **Security Scan** status).
 - Backend npm overrides: `brace-expansion` 1.1.16 / 2.1.2 / 5.0.7 and `sharp` ^0.35.3 (transitive via exceljs/eslint/miniflare) to clear high-severity OSV findings that blocked push.
 - `include_audio_features` on export requests now means **include ReccoBeats per-track enrichment** (not Spotify `/audio-features`). The frontend enables it by default for single, batch, and resumable exports. Removed dead `SpotifyService.getAudioFeatures`/`getMultipleAudioFeatures` and `GET /spotify/tracks/:id/audio-features`.
