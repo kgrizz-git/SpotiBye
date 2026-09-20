@@ -15,9 +15,13 @@ _show_detailed_playlist_window creates them synchronously before spawning
 the thread. The AnalysisTask is constructed on the UI thread in
 _start_analysis_worker; dismissing the popup calls task.cancel() from the UI
 thread while the worker only reads is_cancelled() (plain bool flag store,
-atomic under the GIL). A cancelled worker returns before any UI update;
-refresh supersedes the running task (old task cancelled in
-_start_analysis_worker), so only the latest worker can reach UI updates.
+atomic under the GIL). A cancelled worker returns before any UI update, and
+_update_analysis_ui re-checks cancellation plus current-task identity at
+execution time on the main thread (same thread as dismiss/refresh), closing
+the check-then-act race across the @mainthread boundary — dismissed or
+superseded runs never mutate detached or reassigned widgets. Refresh
+supersedes the running task (old task cancelled in _start_analysis_worker),
+so only the latest worker can reach UI updates.
 
 Depends on kivy, threading, .backend_playlist_card_utils,
 ..screens.adapter_mixins.analysis.
@@ -465,6 +469,7 @@ class PlaylistCardAnalysisPopupMixin:
                     progress_bar,
                     status_label,
                     enrichment_label,
+                    analysis_task=task,
                 )
                 return
 
@@ -493,6 +498,7 @@ class PlaylistCardAnalysisPopupMixin:
                 progress_bar,
                 status_label,
                 enrichment_label,
+                analysis_task=task,
             )
         except Exception as exc:
             if task.is_cancelled():
@@ -508,6 +514,7 @@ class PlaylistCardAnalysisPopupMixin:
                 progress_bar,
                 status_label,
                 enrichment_label,
+                analysis_task=task,
             )
 
     @mainthread
@@ -517,10 +524,23 @@ class PlaylistCardAnalysisPopupMixin:
         duration_label: Label,
         analysis: Optional[dict[str, Any]],
         error: Optional[str],
-        progress_bar: Optional[ProgressBar] = None,
+        progress_bar: ProgressBar | None = None,
         status_label: Optional[Label] = None,
         enrichment_label: Optional[Label] = None,
+        analysis_task: Any = None,
     ) -> None:
+        if analysis_task is not None and (
+            analysis_task.is_cancelled()
+            or (
+                self._analysis_task is not None
+                and analysis_task is not self._analysis_task
+            )
+        ):
+            # Execution-time guard: the worker's pre-check can race dismiss
+            # or refresh across the @mainthread boundary. This runs on the
+            # main thread — same thread as dismiss/refresh — so a dismissed
+            # or superseded run never mutates detached or reassigned widgets.
+            return
         render_analysis_popup_content(
             analysis_container=analysis_container,
             duration_label=duration_label,

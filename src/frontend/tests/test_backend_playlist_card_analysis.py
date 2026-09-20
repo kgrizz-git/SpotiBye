@@ -431,10 +431,80 @@ class TestAnalysisPopupRendering:
             card, "_load_analysis_worker", lambda *args, **kwargs: None
         )
 
-        card._start_analysis_worker("playlist-1", _as_box_layout(content))
+        card._start_analysis_worker("playlist-1", content)
 
         assert cancelled == [True]
         assert card._analysis_task is not old_task
+
+    def test_update_ui_skips_cancelled_task_at_execution_time(self) -> None:
+        """Queued-then-cancelled render must not touch widgets (TOCTOU)."""
+        from src.frontend.utils.analysis_task import AnalysisTask
+
+        card = _card()
+        container = _FakeWidget()
+        status_label = _FakeWidget(text="")
+        task = AnalysisTask(_FakeWidget(), _FakeWidget())
+        card._analysis_task = task
+        task.cancel()
+
+        card._update_analysis_ui(
+            _as_box_layout(container),
+            _as_label(_FakeWidget(text="")),
+            None,
+            "boom",
+            cast(Any, _FakeWidget()),
+            _as_label(status_label),
+            cast(Any, _FakeWidget(text="")),
+            analysis_task=task,
+        )
+
+        assert container.children == []
+        assert status_label.text == ""
+
+    def test_update_ui_skips_superseded_task_at_execution_time(self) -> None:
+        from src.frontend.utils.analysis_task import AnalysisTask
+
+        card = _card()
+        container = _FakeWidget()
+        status_label = _FakeWidget(text="")
+        old_task = AnalysisTask(_FakeWidget(), _FakeWidget())
+        card._analysis_task = AnalysisTask(_FakeWidget(), _FakeWidget())
+
+        card._update_analysis_ui(
+            _as_box_layout(container),
+            _as_label(_FakeWidget(text="")),
+            None,
+            "boom",
+            cast(Any, _FakeWidget()),
+            _as_label(status_label),
+            cast(Any, _FakeWidget(text="")),
+            analysis_task=old_task,
+        )
+
+        assert container.children == []
+        assert status_label.text == ""
+
+    def test_update_ui_renders_for_current_task(self) -> None:
+        from src.frontend.utils.analysis_task import AnalysisTask
+
+        card = _card()
+        container = _FakeWidget()
+        status_label = _FakeWidget(text="")
+        task = AnalysisTask(_FakeWidget(), _FakeWidget())
+        card._analysis_task = task
+
+        card._update_analysis_ui(
+            _as_box_layout(container),
+            _as_label(_FakeWidget(text="")),
+            None,
+            "boom",
+            cast(Any, _FakeWidget()),
+            _as_label(status_label),
+            cast(Any, _FakeWidget(text="")),
+            analysis_task=task,
+        )
+
+        assert status_label.text == "Analysis unavailable: boom"
 
     def test_worker_force_reanalyze_uses_force_adapter_method(
         self, monkeypatch

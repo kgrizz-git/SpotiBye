@@ -43,6 +43,11 @@ class AnalysisTask:
         self._displayed_progress = self._clamp(progress)
 
         def apply_update(_dt: float) -> None:
+            # Execution-time guard: a callback queued before dismiss/refresh
+            # must not touch detached or reassigned widgets. Runs on the main
+            # thread, same thread as cancel(), so the check is race-free.
+            if self._cancelled:
+                return
             if self._progress_bar is not None:
                 self._progress_bar.value = self._displayed_progress
             if self._status_label is not None:
