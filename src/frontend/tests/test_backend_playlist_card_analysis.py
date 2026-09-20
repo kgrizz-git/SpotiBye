@@ -105,6 +105,7 @@ try:
         _mood_label,
     )
     from ..ui import backend_playlist_card_analysis_popup as analysis_popup_module
+    from ..ui.backend_playlist_card_analysis_render import summarize_partial_errors
 finally:
     for _name, _orig in _original_modules.items():
         if _orig is None:
@@ -889,3 +890,49 @@ class TestRefactoredRenderFunctions:
         assert "ReccoBeats Metadata:" in texts
         assert any("ISRC available for 8 of 10 tracks" in t for t in texts)
         assert any("Popularity range: 20–90" in t for t in texts)
+
+
+class TestSummarizePartialErrors:
+    def test_sibling_chunk_coverage_notes_tally_into_one_line(self) -> None:
+        errors = [
+            {
+                "source": "spotify:artists",
+                "message": "Spotify artist metadata partially available: resolved 12 of 13 artists; 1 failed.",
+            },
+            {
+                "source": "reccobeats:coverage",
+                "message": "Audio features available for 1 of 9 tracks.",
+            },
+            {
+                "source": "reccobeats:coverage",
+                "message": "Audio features available for 0 of 9 tracks.",
+            },
+            {
+                "source": "reccobeats:coverage",
+                "message": "Audio features available for 0 of 9 tracks.",
+            },
+        ]
+
+        lines = summarize_partial_errors(errors)
+
+        assert len(lines) == 2
+        assert lines[0].startswith("artist genres unavailable")
+        assert lines[1] == (
+            "audio feature coverage note (Audio features available for 1 of 27 tracks.)"
+        )
+
+    def test_non_matching_errors_pass_through_in_order(self) -> None:
+        errors = [
+            {"source": "reccobeats:coverage", "message": "Audio features unavailable"},
+            {"source": "spotify:artists", "message": "HTTP 500: boom"},
+        ]
+
+        lines = summarize_partial_errors(errors)
+
+        assert len(lines) == 2
+        assert lines[0] == "audio feature coverage note (Audio features unavailable)"
+        assert lines[1] == "artist genres unavailable (HTTP 500: boom)"
+
+    def test_empty_and_missing_errors(self) -> None:
+        assert summarize_partial_errors([]) == []
+        assert summarize_partial_errors(None) == []
