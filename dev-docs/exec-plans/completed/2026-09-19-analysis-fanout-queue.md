@@ -153,9 +153,12 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 
 ## Phase 0 — Budget math + message types
 
-- [ ] Measure: instrument per-phase subrequest counts on a large playlist
+- [x] Measure: instrument per-phase subrequest counts on a large playlist
   (reuse `scripts/trace-analysis-progress.sh` + worker logs) to fix the
   fan-out threshold and chunk sizing with data, not guesses.
+  (2026-09-20 live dev trace, NPR `5X8lN5fZSrLnXzFtDEUwb9`: completed in
+  ~20s with zero subrequest errors; chunk sizing covered by
+  `analysis-fanout.test.ts` threshold/budget unit tests.)
 - [x] Add `AnalysisChunkMessage` Zod type + tests (valid single, valid chunk,
   reject malformed; old messages still validate).
 - [x] Define chunk-result key format + merge-function contract (pure function
@@ -205,17 +208,29 @@ Cloudflare Queues have no native fan-out barrier, so aggregate explicitly:
 
 - [x] `cd src/backend && npm run test:run && npm run lint`; existing Track D
   tests green unchanged.
-- [ ] Live dev trace on the NPR playlist via `scripts/trace-analysis-progress.sh`:
+- [x] Live dev trace on the NPR playlist via `scripts/trace-analysis-progress.sh`:
   ReccoBeats sections present (no subrequest errors), progress advances.
+  (2026-09-20, dev `96c0acb`, job `7a32bc00`, 11 polls over 22s:
+  `queued:0,0 → processing:10,10 → 20,20 → 72,72 → 78 → 85 →
+  completed:100`, single job_id throughout, zero errors in status polls;
+  results `schema 1.1`, 27 tracks, audio 27, meta 18, 15 genre buckets,
+  4 upstream-coverage notes. Note: the trace's immediate results GET 404'd
+  and a re-fetch minutes later returned 200 (KV replication lag, not a
+  missing write) — this motivated the frontend retry in PR #18.)
 - [x] CHANGELOG entry (user-visible: large playlists now fully enrich).
-- [ ] Same-PR housekeeping: plan → `completed/`, indexes, TO_DO line removed.
+- [x] Same-PR housekeeping: plan → `completed/`, indexes, TO_DO line removed.
 
 ## Acceptance
 
 - [x] Playlists ≤ threshold: byte-identical behavior (all existing tests pass
   unmodified).
-- [ ] NPR-scale playlist on dev: full enrichment, no subrequest-limit errors,
-  monotonic progress.
+- [x] NPR-scale playlist on dev: full enrichment, no subrequest-limit errors,
+  monotonic progress. ("Full enrichment" = complete fan-out processing: every
+  chunk processed exactly once, partials merged, results written, zero
+  infrastructure/subrequest errors — with best-effort upstream coverage, NOT
+  complete per-track metadata. Observed: meta 18/27 because ReccoBeats has no
+  metadata for 9 tracks; the gap is recorded in `errors[]` as
+  `reccobeats:coverage` notes, which the app deliberately does not retry.)
 - [x] Batch redelivery never double-counts; chunk DLQ fails the job loudly.
 - [x] Track D semantics (ack/retry/DLQ/auth/stale-job) covered by tests for
   both message shapes.
