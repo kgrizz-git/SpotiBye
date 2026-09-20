@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from kivy.metrics import dp
@@ -17,10 +18,10 @@ from ..services.enrichment_status import (
 from .backend_playlist_card_utils import _describe_error_source, _mood_label
 
 
-def _small_label(text, color=(0.75, 0.75, 0.75, 1), height=dp(22)):
+def _small_label(text, color=(0.75, 0.75, 0.75, 1), height=dp(22), font_size=dp(14)):
     return Label(
         text=text,
-        font_size=dp(14),
+        font_size=font_size,
         color=color,
         halign="left",
         text_size=(dp(420), None),
@@ -99,18 +100,66 @@ def _update_enrichment_label(
         )
 
 
+# Matches per-chunk coverage notes like "Audio features available for 1 of 9
+# tracks." so sibling chunks can be tallied into one line.
+_COVERAGE_TALLY_RE = re.compile(
+    r"^(?P<prefix>.*available for )(?P<have>\d+) of (?P<total>\d+)(?P<suffix> tracks?\.)$"
+)
+
+
+def summarize_partial_errors(errors: list[Any] | None) -> list[str]:
+    """Collapse raw backend `errors[]` into display lines.
+
+    Per-chunk `reccobeats:coverage` notes with the same wording are summed
+    ("1 of 9" + "0 of 9" + "0 of 9" -> "1 of 27 tracks"); anything that does
+    not match the tally pattern is passed through unchanged. Order follows
+    first appearance.
+    """
+    tallies: dict[tuple[str, str, str], list[Any]] = {}
+    lines: list[str] = []
+    pending_group: tuple[str, str, str] | None = None
+
+    def flush() -> None:
+        nonlocal pending_group
+        if pending_group is None:
+            return
+        have, total, source, prefix, suffix = tallies[pending_group]
+        lines.append(
+            _describe_error_source(source, f"{prefix}{have} of {total}{suffix}")
+        )
+        pending_group = None
+
+    for err in errors or []:
+        source = err.get("source", "unknown") if isinstance(err, dict) else "unknown"
+        message = err.get("message") if isinstance(err, dict) else None
+        match = _COVERAGE_TALLY_RE.match((message or "").strip())
+        if not match:
+            flush()
+            lines.append(_describe_error_source(source, message))
+            continue
+        key = (source, match.group("prefix"), match.group("suffix"))
+        if key != pending_group:
+            flush()
+            tallies[key] = [0, 0, source, match.group("prefix"), match.group("suffix")]
+            pending_group = key
+        tallies[key][0] += int(match.group("have"))
+        tallies[key][1] += int(match.group("total"))
+    flush()
+    return lines
+
+
 def _render_partial_errors(
     analysis_container: BoxLayout,
     results: dict[str, Any],
 ) -> None:
     """Render partial data error messages."""
-    for err in results.get("errors") or []:
-        source = err.get("source", "unknown") if isinstance(err, dict) else "unknown"
-        message = err.get("message") if isinstance(err, dict) else None
+    for line in summarize_partial_errors(results.get("errors")):
         analysis_container.add_widget(
             _small_label(
-                f"Partial data: {_describe_error_source(source, message)}",
+                f"Partial data: {line}",
                 color=(0.65, 0.4, 0.4, 1),
+                height=dp(20),
+                font_size=dp(12),
             )
         )
 
@@ -397,4 +446,5 @@ __all__ = [
     "_render_audio_features_track_count",
     "_render_reccobeats_metadata",
     "_spacer",
+    "summarize_partial_errors",
 ]
