@@ -103,7 +103,7 @@ class TestStaleResultsRecovery:
         return ReccoBeatsBackendService(backend_client=backend_client)
 
     def test_transient_not_found_recovers_without_reposting(
-        self, patched_cache_manager: MagicMock
+        self, patched_cache_manager: MagicMock, analysis_task: MagicMock
     ) -> None:
         """A 404 right after completed is usually KV lag, not staleness."""
         backend_client = make_backend_client()
@@ -121,13 +121,16 @@ class TestStaleResultsRecovery:
         with patch(
             "src.frontend.services.reccobeats_backend.time.sleep"
         ) as sleep_mock:
-            result = service.analyze_playlist("playlist-1")
+            result = service.analyze_playlist(
+                "playlist-1", analysis_task=analysis_task
+            )
 
         assert result == fresh_results
         assert backend_client.analyze_playlist.call_count == 1
         assert backend_client.get_analysis_results.call_count == 2
         sleep_mock.assert_called_once()
         patched_cache_manager.clear_file.assert_not_called()
+        analysis_task.update_progress.assert_any_call(100, "Waiting for results...")
 
     def test_deletes_and_reposts_once_when_completed_results_have_reccobeats_errors(
         self, patched_cache_manager: MagicMock

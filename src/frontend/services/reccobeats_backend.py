@@ -306,6 +306,8 @@ class ReccoBeatsBackendService:
                     RESULTS_FETCH_ATTEMPTS,
                     delay,
                 )
+                if analysis_task and hasattr(analysis_task, "update_progress"):
+                    analysis_task.update_progress(100, "Waiting for results...")
                 time.sleep(delay)
         return None
 
