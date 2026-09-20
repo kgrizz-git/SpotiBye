@@ -4,7 +4,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 ## Playlist Analysis — End-to-End
 
-- [ ] Refactor playlist analysis to fan-out queue architecture for large playlists
+- [ ] Refactor playlist analysis to fan-out queue architecture for large playlists ([plan](../exec-plans/active/2026-09-19-analysis-fanout-queue.md)) — **in progress 2026-09-19** (plan draft v1 for review; live subrequest-limit evidence from NPR trace)
   - [ ] Preserve existing Track D queue behavior
   - [ ] Split work into distributed batches for playlists with more than 40 artists per Worker invocation
   - [ ] Add backend tests for batch fan-out and aggregation
