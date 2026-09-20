@@ -69,6 +69,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ### Fixed
 - Fixed spurious "Analysis failed: Analysis results not found" after a successful large-playlist analysis: the app now retries the results fetch through KV replication lag before concluding the cached analysis is stale and re-running the whole job (which previously burned a full second analysis and then surfaced the same error).
+- Reopening a playlist no longer re-runs the full analysis when the cached results are fresh but enrichment-partial (e.g. tracks ReccoBeats has no data for): the backend now serves the cached results and leaves gap-filling to the targeted miss-fill, instead of deleting them and burning a whole new job every open.
 - Corrected a dead-code bug in `scripts/check-dependencies.py` where the return value was always 0 regardless of `all_passed` (the `--ci` exit path was already handled by `sys.exit(1)`).
 - Fixed remaining Python `logger.error()` calls inside `except` blocks to use `logger.exception()` so SonarCloud rule S8572 is satisfied; the initial migration to lazy `%s` formatting left several error-level calls that should include traceback context.
 - Parameterized three similar HTTPException status-code tests in `src/backend/tests/error-middleware.test.ts` to resolve SonarCloud rule S5976.

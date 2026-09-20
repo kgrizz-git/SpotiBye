@@ -24,17 +24,6 @@ function isStaleAnalysisResult(results: AnalysisResult | null): boolean {
   );
 }
 
-/** True when completed results still have unresolved ReccoBeats endpoint coverage. */
-function isEnrichmentIncomplete(results: AnalysisResult): boolean {
-  const unique = results.unique_track_count ?? 0;
-  if (unique <= 0) {
-    return false;
-  }
-  const audioResolved = results.audio_features_resolved_count ?? 0;
-  const metadataResolved = results.track_metadata_resolved_count ?? 0;
-  return audioResolved < unique || metadataResolved < unique;
-}
-
 async function resolveForceEnrichment(
   c: { req: { valid: (target: 'query' | 'json') => { force_enrichment: boolean }; json: () => Promise<unknown> } },
   queryForce: boolean,
@@ -88,7 +77,12 @@ app.post(
 
       if (isCompleted) {
         const results = await cacheService.get<AnalysisResult>(resultsKey);
-        if (!isStaleAnalysisResult(results) && results && !isEnrichmentIncomplete(results)) {
+        // Serve whatever is cached: completed fresh-schema results are
+        // returned even when enrichment is partial (upstream gaps may never
+        // fill — re-running the whole job every open can never complete
+        // them). Gap-filling is the frontend miss-fill's job; only stale
+        // results trigger a fresh job here.
+        if (!isStaleAnalysisResult(results) && results) {
           return c.json({
             data: existingStatus,
             meta: { timestamp: new Date().toISOString() }

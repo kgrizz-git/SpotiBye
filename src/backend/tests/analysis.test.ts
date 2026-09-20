@@ -881,13 +881,6 @@ describe('Analysis Routes', () => {
       title: 're-enqueues a fresh job when completed status has no matching results (stale)',
       cache: null as Record<string, unknown> | null,
     },
-    {
-      title: 're-enqueues when completed results have incomplete enrichment coverage',
-      cache: {
-        audio_features_resolved_count: 1,
-        enrichment_resolved_track_count: 1,
-      } as Record<string, unknown> | null,
-    },
   ])('$title', async ({ cache }) => {
       await seedStatus('job-old', 'completed', 100);
       if (cache === null) {
@@ -935,6 +928,23 @@ describe('Analysis Routes', () => {
       expect(response.status).toBe(200);
       expect(data.data).toMatchObject({ job_id: 'job-complete', status: 'completed' });
       expect(mockEnv.ANALYSIS_QUEUE.send).not.toHaveBeenCalled();
+    });
+
+    it('reuses completed results with incomplete enrichment coverage (serve cached, fill gaps via miss-fill)', async () => {
+      await seedStatus('job-partial', 'completed', 100);
+      mockCachedResults('job-partial', {
+        audio_features_resolved_count: 27,
+        track_metadata_resolved_count: 18,
+        unique_track_count: 27,
+      } as Record<string, unknown>);
+
+      const response = await postPlaylist();
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data).toMatchObject({ job_id: 'job-partial', status: 'completed' });
+      expect(mockEnv.ANALYSIS_QUEUE.send).not.toHaveBeenCalled();
+      expect(mockEnv.CACHE_KV.delete).not.toHaveBeenCalled();
     });
 
     it('force_enrichment bypasses completed status and enqueues with flag', async () => {
