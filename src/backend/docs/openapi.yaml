@@ -1060,13 +1060,21 @@ components:
         Optional analysis controls. When `force_enrichment` is true, bypasses
         idempotent completed/queued short-circuit, clears user status/results,
         and clears per-track ReccoBeats positive + absent cache keys for
-        playlist track IDs before refetch.
+        playlist track IDs before refetch. When `refresh` is true, also
+        bypasses the short-circuit and enqueues a new job, but preserves
+        per-track cache and current results so only untried track IDs hit
+        the network.
       properties:
         force_enrichment:
           type: boolean
           default: false
           description: >-
             Force-refresh ReccoBeats per-track enrichment for all playlist tracks.
+        refresh:
+          type: boolean
+          default: false
+          description: >-
+            Enqueue a refresh job reusing warm per-track cache entries.
       additionalProperties: false
 
     AnalysisStatusRecord:
