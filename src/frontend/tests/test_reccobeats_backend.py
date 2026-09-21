@@ -192,7 +192,9 @@ class TestStaleResultsRecovery:
         assert result["errors"][0]["source"] == "reccobeats:coverage"
         backend_client.delete_analysis.assert_not_called()
         patched_cache_manager.clear_file.assert_not_called()
-        backend_client.analyze_playlist.assert_called_once_with("playlist-1")
+        backend_client.analyze_playlist.assert_called_once_with(
+            "playlist-1", refresh=False
+        )
         backend_client.get_analysis_results.assert_called_once()
 
     def test_force_reanalyze_uses_force_enrichment_without_delete(
@@ -395,3 +397,24 @@ class TestAnalysisPhaseLabel:
         assert analysis_phase_label(85) == "Enriching audio features (ReccoBeats)"
         assert analysis_phase_label(86) == "Finalizing insights"
         assert analysis_phase_label(100) == "Finalizing insights"
+
+
+class TestRefreshMode:
+    def _service(self, backend_client: MagicMock) -> ReccoBeatsBackendService:
+        return ReccoBeatsBackendService(backend_client=backend_client)
+
+    def test_miss_fill_posts_refresh_without_force(
+        self, patched_cache_manager: MagicMock
+    ) -> None:
+        backend_client = make_backend_client()
+
+        service = self._service(backend_client)
+        result = service.run_enrichment_miss_fill("playlist-1")
+
+        assert result == COMPLETED_RESULTS
+        backend_client.analyze_playlist.assert_called_once_with(
+            "playlist-1", refresh=True
+        )
+        patched_cache_manager.clear_file.assert_called_once_with(
+            "analysis_playlist-1.json"
+        )

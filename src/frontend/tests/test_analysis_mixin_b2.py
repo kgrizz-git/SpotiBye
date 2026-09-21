@@ -118,4 +118,6 @@ class TestAnalysisMixinB2Gates:
 
         harness.cache_manager.clear_file.assert_called_with("analysis_playlist-1.json")
         harness.get_playlist_tracks.assert_called_with("playlist-1", force_refresh=True)
-        harness.reccobeats_service.analyze_playlist.assert_called_once()
+        harness.reccobeats_service.analyze_playlist.assert_called_once_with(
+            "playlist-1", refresh=True
+        )

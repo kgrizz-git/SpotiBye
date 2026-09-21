@@ -43,6 +43,25 @@ async function resolveForceEnrichment(
   return false;
 }
 
+async function resolveRefresh(
+  c: { req: { valid: (target: 'query' | 'json') => { refresh: boolean }; json: () => Promise<unknown> } },
+  queryRefresh: boolean,
+): Promise<boolean> {
+  if (queryRefresh) {
+    return true;
+  }
+  try {
+    const raw = await c.req.json();
+    const parsed = AnalysisRequestSchema.safeParse(raw);
+    if (parsed.success) {
+      return parsed.data.refresh;
+    }
+  } catch {
+    // Empty or non-JSON body — treat as default (no refresh).
+  }
+  return false;
+}
+
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware to all routes
@@ -51,6 +70,9 @@ app.use('*', authMiddleware);
 // POST /analysis/playlist/:id - Analyze playlist
 // Optional `force_enrichment` (JSON body or query) bypasses idempotent
 // completed/queued short-circuit and clears user status/results before enqueue.
+// Optional `refresh` (JSON body or query) also bypasses the short-circuit and
+// enqueues a new job, but preserves per-track cache and current results: the
+// job reuses resolved tracks and enriches only untried IDs.
 app.post(
   '/playlist/:id',
   zValidator('param', IdParamSchema),
@@ -60,6 +82,7 @@ app.post(
     const { id: playlistId } = c.req.valid('param');
     const queryForce = c.req.valid('query').force_enrichment;
     const forceEnrichment = await resolveForceEnrichment(c, queryForce);
+    const refresh = await resolveRefresh(c, c.req.valid('query').refresh);
     const userId = c.get('user').id;
     const cacheService = new CacheService(c.env.CACHE_KV);
     const statusStore = new AnalysisStatusStore(c.env.ANALYSIS_STATUS);
@@ -67,7 +90,7 @@ app.post(
     const resultsKey = `analysis:${playlistId}:${userId}:results`;
     const existingStatus = await statusStore.getStatus(userId, playlistId);
 
-    if (existingStatus && !forceEnrichment) {
+    if (existingStatus && !forceEnrichment && !refresh) {
       const isQueued = existingStatus.status === 'queued';
       const isCompleted = existingStatus.status === 'completed';
       const isActivelyProcessing =

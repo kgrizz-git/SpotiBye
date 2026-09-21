@@ -947,6 +947,26 @@ describe('Analysis Routes', () => {
       expect(mockEnv.CACHE_KV.delete).not.toHaveBeenCalled();
     });
 
+    it('refresh enqueues a new job without deleting current results or clearing per-track cache', async () => {
+      await seedStatus('job-partial', 'completed', 100);
+      mockCachedResults('job-partial', {
+        audio_features_resolved_count: 27,
+        track_metadata_resolved_count: 18,
+        unique_track_count: 27,
+      } as Record<string, unknown>);
+
+      const response = await postPlaylist({ body: JSON.stringify({ refresh: true }) });
+      const data = (await response.json()) as any;
+
+      expect(response.status).toBe(200);
+      expect(data.data.status).toBe('queued');
+      expect(data.data.job_id).not.toBe('job-partial');
+      expect(mockEnv.CACHE_KV.delete).not.toHaveBeenCalled();
+      expect(mockEnv.ANALYSIS_QUEUE.send).toHaveBeenCalledWith(
+        expect.not.objectContaining({ force_enrichment: true }),
+      );
+    });
+
     it('force_enrichment bypasses completed status and enqueues with flag', async () => {
       await seedStatus('job-complete', 'completed', 100);
       mockCachedResults('job-complete');

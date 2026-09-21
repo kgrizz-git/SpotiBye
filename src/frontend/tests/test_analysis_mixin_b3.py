@@ -33,8 +33,10 @@ class TestB3RefreshAdapter:
     def test_refresh_playlist_tracks_force_refreshes_and_reanalyzes(self) -> None:
         harness = _Harness()
         harness.get_playlist_tracks = MagicMock(return_value=[{"track": {"id": "t1"}}])
-        harness.analyze_playlist = MagicMock(return_value={"status": "completed"})
         harness.cache_manager.is_tracks_cache_valid.return_value = False
+        harness.reccobeats_service.analyze_playlist.return_value = {
+            "status": "completed"
+        }
 
         result = harness.refresh_playlist_tracks("playlist-1")
 
@@ -42,8 +44,12 @@ class TestB3RefreshAdapter:
             "playlist-1", force_refresh=True
         )
         harness.backend_client.delete_export.assert_called_once_with("playlist-1")
-        harness.cache_manager.clear_file.assert_called_with("analysis_playlist-1.json")
-        harness.analyze_playlist.assert_called_once()
+        harness.cache_manager.clear_file.assert_called_once_with("analysis_playlist-1.json")
+        # Refresh bypasses the completed short-circuit so new track IDs are
+        # delta-enriched (see backend `refresh` mode).
+        harness.reccobeats_service.analyze_playlist.assert_called_once_with(
+            "playlist-1", refresh=True
+        )
         assert result == {"status": "completed"}
 
     def test_force_reanalyze_resets_session_ledger(self) -> None:

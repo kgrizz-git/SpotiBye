@@ -162,16 +162,19 @@ class AnalysisMixin:
         playlist_id: str,
         progress_callback: Optional[Callable[..., Any]] = None,
         analysis_task: Optional[Any] = None,
+        refresh: bool = False,
     ) -> Optional[Dict[str, Any]]:
         if progress_callback:
             progress_callback("Starting playlist analysis...")
 
         if analysis_task is not None:
             analysis_results = self.reccobeats_service.analyze_playlist(
-                playlist_id, analysis_task
+                playlist_id, analysis_task, refresh=refresh
             )
         else:
-            analysis_results = self.reccobeats_service.analyze_playlist(playlist_id)
+            analysis_results = self.reccobeats_service.analyze_playlist(
+                playlist_id, refresh=refresh
+            )
 
         if analysis_results:
             self.cache_manager.cache_analysis(playlist_id, analysis_results)
@@ -236,7 +239,7 @@ class AnalysisMixin:
                         self.cache_manager.clear_file(f"analysis_{playlist_id}.json")
                         self.get_playlist_tracks(playlist_id, force_refresh=True)
                         return self._run_backend_analysis(
-                            playlist_id, progress_callback, analysis_task
+                            playlist_id, progress_callback, analysis_task, refresh=True
                         )
 
                     logger.info(
@@ -357,7 +360,9 @@ class AnalysisMixin:
                 )
 
             self.cache_manager.clear_file(f"analysis_{playlist_id}.json")
-            return self.analyze_playlist(playlist_id, progress_callback, analysis_task)
+            return self._run_backend_analysis(
+                playlist_id, progress_callback, analysis_task, refresh=True
+            )
         except Exception as e:
             logger.error("Error refreshing playlist tracks: %s", e)
             if self.error_callback:

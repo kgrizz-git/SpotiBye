@@ -73,7 +73,7 @@ class ReccoBeatsBackendService:
     @handle_network_errors
     @retry_on_network_error(max_retries=3, backoff_factor=1.0)
     def analyze_playlist(
-        self, playlist_id: str, analysis_task: Optional[Any] = None
+        self, playlist_id: str, analysis_task: Optional[Any] = None, refresh: bool = False
     ) -> Dict[str, Any]:
         """
         Analyze a playlist using backend API.
@@ -81,6 +81,8 @@ class ReccoBeatsBackendService:
         Args:
             playlist_id: Spotify playlist ID
             analysis_task: Optional analysis task for cancellation tracking
+            refresh: Enqueue a refresh job (no per-track clearing) instead of
+                relying on the completed short-circuit.
 
         Returns:
             Analysis job information
@@ -94,7 +96,9 @@ class ReccoBeatsBackendService:
             logger.info(f"Starting playlist analysis for {playlist_id}")
 
             # Start analysis job
-            response = self.backend_client.analyze_playlist(playlist_id)
+            response = self.backend_client.analyze_playlist(
+                playlist_id, refresh=refresh
+            )
             job_id = response.get("job_id")
 
             if not job_id:
@@ -131,9 +135,24 @@ class ReccoBeatsBackendService:
     def run_enrichment_miss_fill(
         self, playlist_id: str, analysis_task: Optional[Any] = None
     ) -> Dict[str, Any]:
-        """Re-run analysis so the backend per-track cache miss-fills unresolved IDs only."""
+        """Enqueue a refresh job so only untried track IDs hit the network.
+
+        Unlike force, refresh preserves the per-track cache and current
+        results: resolved tracks are served from cache, the job enriches the
+        rest and overwrites results on success.
+        """
         get_cache_manager().clear_file(f"analysis_{playlist_id}.json")
-        return self.analyze_playlist(playlist_id, analysis_task)
+        self._reposted_on_stale = False
+        self._reposted_on_reccobeats_error = False
+        logger.info(f"Refresh-enriching playlist {playlist_id} (refresh mode)")
+
+        response = self.backend_client.analyze_playlist(playlist_id, refresh=True)
+        job_id = response.get("job_id")
+
+        if not job_id:
+            raise BackendAPIError("No job ID received from backend")
+
+        return self._poll_analysis_completion(job_id, playlist_id, analysis_task)
 
     def _poll_analysis_completion(
         self,
