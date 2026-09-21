@@ -49,7 +49,7 @@ class TestAnalyzePlaylistCacheStaleness:
 
         assert result == fresh
         harness.reccobeats_service.analyze_playlist.assert_called_once_with(
-            "playlist-1", analysis_task
+            "playlist-1", analysis_task, refresh=False
         )
 
     def test_forwards_analysis_task_to_forced_reanalysis(self) -> None:
@@ -149,7 +149,7 @@ class TestAnalyzePlaylistCacheStaleness:
             "analysis_playlist-1.json"
         )
         harness.reccobeats_service.analyze_playlist.assert_called_once_with(
-            "playlist-1"
+            "playlist-1", refresh=False
         )
 
     def test_discards_cache_and_reanalyzes_when_schema_version_stale(self) -> None:

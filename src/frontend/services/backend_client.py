@@ -346,10 +346,12 @@ class BackendClient:
 
     # Analysis endpoints
     def analyze_playlist(
-        self, playlist_id: str, *, force_enrichment: bool = False
+        self, playlist_id: str, *, force_enrichment: bool = False, refresh: bool = False
     ) -> Dict[str, Any]:
         """Start playlist analysis."""
         payload = {"force_enrichment": True} if force_enrichment else {}
+        if refresh:
+            payload["refresh"] = True
         response = self._make_request(
             "POST",
             f"/analysis/playlist/{playlist_id}",
