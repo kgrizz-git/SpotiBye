@@ -94,7 +94,7 @@ jobs:
       - name: OSV-Scanner Dependency Check
         id: osv
         if: success() || failure()
-        uses: google/osv-scanner-action/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67  # v2.5.1
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc  # v2.6.0
         with:
           # OSV-Scanner honours .gitignore by default, so .venv/, node_modules/,
           # backups/, and docs/old-docs-backup/ are skipped without extra flags.
@@ -112,7 +112,7 @@ jobs:
       - name: IaC Security Check (Checkov)
         id: checkov
         if: (success() || failure()) && hashFiles('src/backend/wrangler.toml') != ''
-        uses: bridgecrewio/checkov-action@f967808197a8d784d3e72919f38c3ff0cda7884e
+        uses: bridgecrewio/checkov-action@a8664e3a0549367977f0cda990a34311835c87c0
         with:
           directory: src/backend/
           framework: cloudformation,terraform
