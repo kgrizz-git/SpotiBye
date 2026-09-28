@@ -47,7 +47,7 @@ jobs:
       - name: TruffleHog Secret Scan (PR Diff)
         id: trufflehog_pr
         if: (success() || failure()) && github.event_name == 'pull_request'
-        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c
+        uses: trufflesecurity/trufflehog@f714bf454f350590f4a24c3ddb1aef02c35bf5b6
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
@@ -60,7 +60,7 @@ jobs:
       - name: TruffleHog Secret Scan (Full History)
         id: trufflehog_full
         if: (success() || failure()) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-        uses: trufflesecurity/trufflehog@363923b901c911a9164f50b6c423f47c15372b1c
+        uses: trufflesecurity/trufflehog@f714bf454f350590f4a24c3ddb1aef02c35bf5b6
         with:
           path: ./
           extra_args: --debug --only-verified --exclude-paths .trufflehog-exclude.txt
@@ -112,7 +112,7 @@ jobs:
       - name: IaC Security Check (Checkov)
         id: checkov
         if: (success() || failure()) && hashFiles('src/backend/wrangler.toml') != ''
-        uses: bridgecrewio/checkov-action@a8664e3a0549367977f0cda990a34311835c87c0
+        uses: bridgecrewio/checkov-action@444c9db6fa75e2d9c19ebf1fde7322089be9009e
         with:
           directory: src/backend/
           framework: cloudformation,terraform
