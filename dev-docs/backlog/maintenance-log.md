@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-05 — Dependabot assignee and label warnings fixed
+
+PR: #36
+Scope: `.github/dependabot.yml`, `.github/CODEOWNERS`
+Replaced the nonexistent `kgrizz` handle with `kgrizz-git` and created the `dependencies`, `javascript`, `backend`, `python` and `github-actions` labels, so Dependabot PRs stop posting assignee and label warnings.
+
 ## 2026-10-05 — brace-expansion override bumped to clear OSV advisories
 
 PR: #35
