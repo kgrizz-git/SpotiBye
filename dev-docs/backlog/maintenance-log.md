@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-05 — brace-expansion override bumped to clear OSV advisories
+
+PR: #35
+Scope: `src/backend/package.json`
+Raised the `brace-expansion` npm override from an exact `5.0.9` pin to `^5.0.12`, fixing GHSA-6j4f-fj2g-mc7p, GHSA-qhr7-859c-m2p7 and GHSA-q2hr-2g5m-vwhr that failed OSV-Scanner on Dependabot PR #34.
+
 ## 2026-09-19 — Docs harness baseline captured
 
 PR: n/a (bootstrap entry; landed via docs-harness housekeeping branch)
