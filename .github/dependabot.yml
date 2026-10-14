@@ -8,9 +8,8 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-      time: "09:00"
-      timezone: "America/New_York"
+      interval: "cron"
+      cronjob: "0 9 10 * *" # 09:00 UTC on the 10th of each month
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -38,9 +37,8 @@ updates:
   - package-ecosystem: "npm"
     directory: "/src/backend"
     schedule:
-      interval: "weekly"
-      time: "09:00"
-      timezone: "America/New_York"
+      interval: "cron"
+      cronjob: "0 9 10 * *" # 09:00 UTC on the 10th of each month
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
@@ -80,9 +78,8 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      time: "09:00"
-      timezone: "America/New_York"
+      interval: "cron"
+      cronjob: "0 9 10 * *" # 09:00 UTC on the 10th of each month
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
