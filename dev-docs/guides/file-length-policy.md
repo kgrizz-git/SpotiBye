@@ -46,3 +46,9 @@ In rare cases where immediate refactoring is impractical (e.g., a large legacy m
    ```
 3. Exemption patterns support gitignore-style globs (`**`).
 4. Set an `expires` date so the exemption is revisited and refactored.
+
+### Permanent exemptions
+
+Omitting the `expires` key makes an exemption permanent: the checker treats it as never expired, so it stops flagging the matched files with no renewal tripwire. Use only for whole-category exclusions where splitting is not meaningful (e.g., `dev-docs/**/*.md` — internal docs that are allowed to grow), and state the justification, including the baseline scale, in `reason`.
+
+`scripts/check_file_lengths.py --count-only` reports active/expired/exemption counts but no longer provides an expiry early warning once no `expires` dates remain — permanent exemptions therefore need an explicit owner decision in the PR that adds them.
