@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-14 — Dependabot version updates moved to monthly on the 10th
+
+PR: #43
+Scope: `.github/dependabot.yml`
+Switched all three version-update ecosystems (pip, npm, github-actions) from weekly to monthly on the 10th. `interval: monthly` only supports the 1st of the month, so the schedule uses cron (`0 9 10 * *`, 09:00 UTC); cron runs in UTC rather than America/New_York, so the effective local time shifts an hour across DST. Cooldown, groups, open-PR limits, labels, reviewers, and ignore rules are unchanged.
+
 ## 2026-10-13 — CI unblocked: permanent file-length exemptions, source-map-js pin, js-yaml override removed
 
 PR: #42
