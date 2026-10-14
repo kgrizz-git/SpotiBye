@@ -8,11 +8,11 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-      time: "09:00"
+      interval: "cron"
+      cronjob: "0 9 10 * *" # 09:00 on the 10th of each month
       timezone: "America/New_York"
     cooldown:
-      default-days: 7
+      default-days: 3
     open-pull-requests-limit: 5
     reviewers:
       - "kgrizz-git"
@@ -38,11 +38,11 @@ updates:
   - package-ecosystem: "npm"
     directory: "/src/backend"
     schedule:
-      interval: "weekly"
-      time: "09:00"
+      interval: "cron"
+      cronjob: "0 9 10 * *" # 09:00 on the 10th of each month
       timezone: "America/New_York"
     cooldown:
-      default-days: 7
+      default-days: 3
     open-pull-requests-limit: 5
     reviewers:
       - "kgrizz-git"
@@ -80,11 +80,11 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      time: "09:00"
+      interval: "cron"
+      cronjob: "0 9 10 * *" # 09:00 on the 10th of each month
       timezone: "America/New_York"
     cooldown:
-      default-days: 7
+      default-days: 3
     open-pull-requests-limit: 5
     reviewers:
       - "kgrizz-git"

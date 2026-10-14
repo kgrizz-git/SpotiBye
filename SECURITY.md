@@ -81,9 +81,9 @@ If you discover a security vulnerability, please:
 
 Dependabot is configured in `.github/dependabot.yml` to automatically:
 
-- Monitor Python (`pip`) dependencies weekly
-- Monitor Node.js (`npm`) dependencies weekly
-- Monitor GitHub Actions weekly
+- Monitor Python (`pip`) dependencies monthly (10th, 09:00 America/New_York)
+- Monitor Node.js (`npm`) dependencies monthly (10th, 09:00 America/New_York)
+- Monitor GitHub Actions monthly (10th, 09:00 America/New_York)
 - Monitor Docker images weekly (if applicable)
 - Create grouped PRs for minor/patch updates to reduce noise
 
@@ -187,7 +187,7 @@ Dependabot runs **only on GitHub** — there is no supported way to run the full
 
 | What Dependabot does | Local equivalent |
 |----------------------|------------------|
-| **Version updates** (weekly PRs for outdated deps) | `python scripts/check-dependencies.py --outdated` — uses `pip-review` and `npm outdated` |
+| **Version updates** (monthly PRs for outdated deps) | `python scripts/check-dependencies.py --outdated` — uses `pip-review` and `npm outdated` |
 | **Security updates** (CVE PRs; enable in repo settings) | `python scripts/check-dependencies.py --security` — uses `pip-audit` and `npm audit` today; OSV-Scanner (pre-push + CI) is the planned replacement |
 | **Apply updates yourself** | Python: `pip-review --local --auto` · Node: `npm update` or `npx npm-check-updates -i` in `src/backend/` |
 

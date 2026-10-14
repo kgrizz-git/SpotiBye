@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-14 — Dependabot version updates moved to monthly on the 10th
+
+PR: #43
+Scope: `.github/dependabot.yml`
+Switched all three version-update ecosystems (pip, npm, github-actions) from weekly to monthly on the 10th. `interval: monthly` only supports the 1st of the month, so the schedule uses cron (`0 9 10 * *`) with `timezone: America/New_York` — per GitHub's Dependabot options reference, `timezone` still applies to a cron interval, so the run keeps the previous 09:00 local time and stays DST-correct. Also lowered `cooldown.default-days` from 7 to 3 so releases landing in the days before the monthly run are deferred at most one cycle instead of roughly a month. Groups, open-PR limits, labels, reviewers, and ignore rules unchanged. Cadence references in `SECURITY.md` and the pending confirmation step in the billable-minutes exec-plan were updated to match.
+
 ## 2026-10-13 — CI unblocked: permanent file-length exemptions, source-map-js pin, js-yaml override removed
 
 PR: #42
