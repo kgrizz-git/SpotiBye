@@ -76,7 +76,7 @@ Three phases, ordered by safety. Each phase is one PR. Stop after any phase if t
 - [x] Delete the `docker in /backend-backup` block
 - [x] Verify no remaining references in the repo: `rg "BACKUP-COPY-READ-ONLY|backend-backup" .github/` (no matches)
 - [x] Close any remaining open failed Dependabot PRs targeting the deleted directories (none open as of 2026-07-22)
-- [ ] Confirm next weekly Dependabot cycle (Monday 09:00 ET) generates no PRs for the removed directories
+- [ ] Confirm next monthly Dependabot cycle (10th, 09:00 ET) generates no PRs for the removed directories
 
 **Expected:** ~11 failed-job minutes/month eliminated, plus fewer wasted Dependabot notifications. No functioning scan is removed — those entries have never produced a passing run.
 
@@ -161,7 +161,7 @@ After each phase lands:
 
 ## Definition of done
 
-- [x] Phase 1 code complete; no open stale Dependabot PRs for deleted dirs (weekly cycle confirmation still pending)
+- [x] Phase 1 code complete; no open stale Dependabot PRs for deleted dirs (monthly cycle confirmation still pending)
 - [x] Phase 2 complete: `pull_request` removed from `deploy-backend.yml`; duplicate PR tests gone
 - [x] Phase 3 complete: Security scan consolidated into single sequential runner job with TruffleHog dual-mode and Semgrep Docker rules intact
 - [ ] Billable duration per security run reduced from 6 min to ≤ 2 min (confirm on first PR/Actions run)
