@@ -2,23 +2,19 @@
   "exemptions": [
     {
       "pattern": "dev-docs/**/*.md",
-      "reason": "27 existing files over 300 lines — dev-internal docs, not user-facing",
-      "expires": "2026-10-07"
+      "reason": "dev-internal docs, not user-facing; permanent exemption"
     },
     {
       "pattern": "src/backend/docs/**/*.md",
-      "reason": "6 existing files over 300 lines — backend docs, not end-user docs",
-      "expires": "2026-10-07"
+      "reason": "backend docs, not end-user docs; permanent exemption"
     },
     {
       "pattern": ".github/instructions/**/*.md",
-      "reason": "1 existing file over 300 lines — internal agent instructions",
-      "expires": "2026-10-07"
+      "reason": "internal agent instructions; permanent exemption"
     },
     {
       "pattern": "SECURITY.md",
-      "reason": "Security policy doc grew past 300 lines after adding the SonarCloud tradeoffs section; kept whole for completeness",
-      "expires": "2026-10-07"
+      "reason": "Security policy doc kept whole for completeness; permanent exemption"
     }
   ]
 }
