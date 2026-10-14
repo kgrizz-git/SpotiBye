@@ -2,7 +2,7 @@
   "exemptions": [
     {
       "pattern": "dev-docs/**/*.md",
-      "reason": "27 existing files over 300 lines — dev-internal docs, not user-facing; permanent exemption"
+      "reason": "dev-docs docs over 300 lines (27 at time of exemption) — dev-internal docs, not user-facing; permanent exemption"
     },
     {
       "pattern": "src/backend/docs/**/*.md",
