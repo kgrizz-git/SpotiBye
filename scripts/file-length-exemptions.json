@@ -14,7 +14,7 @@
     },
     {
       "pattern": "SECURITY.md",
-      "reason": "Security policy doc grew past 300 lines after adding the SonarCloud tradeoffs section; kept whole for completeness; permanent exemption"
+      "reason": "310 lines over the 300-line limit at time of exemption — Security policy doc kept whole for completeness after adding the SonarCloud tradeoffs section; permanent exemption"
     }
   ]
 }
