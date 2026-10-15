@@ -36,8 +36,8 @@
   "dependencies": {
     "@hono/zod-validator": "^0.9.1",
     "exceljs": "^4.4.0",
-    "hono": "^4.13.10",
-    "zod": "^4.6.5"
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
   },
   "overrides": {
     "esbuild": "^0.28.1",
