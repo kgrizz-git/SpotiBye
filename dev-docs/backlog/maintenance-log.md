@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-15 — Security Scan runs on Python 3.13; zizmor report written outside the checkout
+
+PR: n/a (pending)
+Scope: `.github/workflows/security.yml`
+The job's `setup-python` moves from 3.10 to 3.13: zizmor 1.31.0 requires Python >=3.11, so `pip install zizmor==1.31.0` found no distribution on 3.10 and the advisory step failed with exit 127. Bandit 1.9.4 runs unchanged on 3.13. The zizmor JSON report is now written to `$RUNNER_TEMP` instead of the checkout, so a PR that commits a `zizmor.json` symlink cannot make the shell redirect truncate a workflow file before zizmor scans it.
+
 ## 2026-10-15 — zizmor check fails closed on an empty token; tolerant finding parsing
 
 PR: n/a (pending)

@@ -99,7 +99,8 @@ jobs:
         if: success() || failure()
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.10'
+          # zizmor (installed below) requires Python >=3.11.
+          python-version: '3.13'
 
       - name: Bandit Python SAST
         id: bandit
@@ -159,7 +160,7 @@ jobs:
             exit 1
           fi
           set +e
-          zizmor --format=json . > zizmor.json
+          zizmor --format=json . > "$RUNNER_TEMP/zizmor.json"
           rc=$?
           set -e
           # 0 = no findings, 10-14 = findings by severity; anything else
@@ -170,10 +171,11 @@ jobs:
           fi
           python3 - <<'PY'
           import json
+          import os
           import sys
 
           findings = [
-              f for f in json.load(open("zizmor.json"))
+              f for f in json.load(open(os.path.join(os.environ["RUNNER_TEMP"], "zizmor.json")))
               if f["ident"] == "known-vulnerable-actions" and not f.get("ignored")
           ]
           for f in findings:

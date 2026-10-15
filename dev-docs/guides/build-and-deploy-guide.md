@@ -7,7 +7,7 @@ This project has two deployment tracks:
 ## 1) Python Desktop App
 
 ### Prerequisites
-- Python 3.10 recommended for release builds (matches CI)
+- Python 3.13 recommended for release builds (matches the `build.yml` release workflow)
 - Virtual environment at project root (`.venv`)
 
 ### Install dependencies
