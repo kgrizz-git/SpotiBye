@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-15 — Semgrep cooldown finding suppressed; 3-day Dependabot cooldown kept
+
+PR: n/a (pending)
+Scope: `.github/dependabot.yml`
+The community Semgrep rule `dependabot-missing-cooldown` flags any `cooldown.default-days` below 7 as blocking, so the 3-day value from #43 failed Security Scan on every PR (first seen on Dependabot PRs #40, #44, #45). Kept 3 days on purpose — with the monthly run on the 10th, a 7-day cooldown pushes releases from the 3rd–9th back a full cycle (~30 days) — and added an inline `nosemgrep` for that rule on each `default-days` line. Do not raise it to 7 just to satisfy the scanner without revisiting that tradeoff.
+
 ## 2026-10-14 — Dependabot version updates moved to monthly on the 10th
 
 PR: #43
