@@ -305,6 +305,10 @@ SonarCloud flags several issues that are **intentional, documented tradeoffs** f
 
 - **Status:** Fixed. `scripts/check_file_lengths.py` validates the exemptions path against the repo root (configurable via `ALLOWED_FILE_ROOTS`) before access.
 
+### Semgrep scanner image user (docker:S6471)
+
+- **Status:** Mitigated. The pinned image (`.github/docker/semgrep/Dockerfile`) defaults to root, but that file is never built; it only feeds the `FROM` reference to the Semgrep SAST step, which runs the container with `--user "$(id -u):$(id -g)"` (the non-root runner user). The Dockerfile's `USER nobody` line exists only to satisfy the rule and has no runtime effect.
+
 ### Workflow permissions (S8233)
 
 - **Status:** Fixed. `deployments: write` is scoped to the `deploy-dev` / `deploy-prod` jobs only; workflow-level permissions are read-only.

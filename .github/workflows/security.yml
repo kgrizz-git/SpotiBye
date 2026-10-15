@@ -83,7 +83,11 @@ jobs:
             echo "::error::No FROM line in .github/docker/semgrep/Dockerfile"
             exit 1
           fi
+          # Run as the runner's (non-root) user instead of the image default
+          # (root); HOME=/tmp gives semgrep a writable home for its settings.
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
             -e SEMGREP_RULES="p/security-audit p/owasp-top-ten p/cwe-top-25 p/ci p/secrets p/javascript p/typescript p/python" \
             -v "${PWD}:/src" \
             "${SEMGREP_IMAGE}" semgrep ci
