@@ -22,6 +22,7 @@ This project uses multiple security scanning tools integrated into CI/CD:
 ### Dependency Scanning
 - **OSV-Scanner**: Unified Python + Node.js dependency vulnerability scanning (CI and pre-push)
 - **Dependency Review**: GitHub-native PR dependency scanning
+- **zizmor** (`known-vulnerable-actions` audit only): Checks commit-SHA-pinned GitHub Actions against GitHub's security advisories in `security.yml`. Dependabot raises alerts only for actions referenced by semver tag, so SHA-pinned actions are otherwise never alerted on. A zizmor tool error also fails the step, as does an empty `GH_TOKEN` (zizmor would otherwise silently skip its online audits). PR runs follow the `paths:` filter, which covers every file under `.github/workflows/` and `.github/actions/`, so any PR that changes an action pin (including Dependabot github-actions PRs) runs the check; the weekly run catches advisories published after merge
 
 ### Infrastructure as Code (IaC) Scanning
 - **Checkov**: Scans Cloudflare Workers configuration and Terraform
@@ -34,7 +35,7 @@ Security scans run on:
 - Weekly scheduled scans (Mondays at midnight UTC)
 - Manual workflow dispatch
 
-**Path-filter note:** PR workflows only run when changed files match the `paths:` filters in `security.yml` (source, manifests, workflow). PRs that touch only docs or unrelated config may not re-run dependency scans; the weekly schedule still scans installed dependencies for newly disclosed CVEs.
+**Path-filter note:** PR workflows only run when changed files match the `paths:` filters in `security.yml` (source, manifests, workflows and composite actions). PRs that touch only docs or unrelated config may not re-run dependency scans; the weekly schedule still scans installed dependencies for newly disclosed CVEs.
 
 ### Workflow Files
 - `.github/workflows/security.yml` - Main security scanning workflow

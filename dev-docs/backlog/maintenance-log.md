@@ -10,6 +10,30 @@
 
 ---
 
+## 2026-10-15 — Security Scan runs on Python 3.13; zizmor report written outside the checkout
+
+PR: n/a (pending)
+Scope: `.github/workflows/security.yml`
+The job's `setup-python` moves from 3.10 to 3.13: zizmor 1.31.0 requires Python >=3.11, so `pip install zizmor==1.31.0` found no distribution on 3.10 and the advisory step failed with exit 127. Bandit 1.9.4 runs unchanged on 3.13. The zizmor JSON report is now written to `$RUNNER_TEMP` instead of the checkout, so a PR that commits a `zizmor.json` symlink cannot make the shell redirect truncate a workflow file before zizmor scans it.
+
+## 2026-10-15 — zizmor check fails closed on an empty token; tolerant finding parsing
+
+PR: n/a (pending)
+Scope: `.github/workflows/security.yml`
+The Security Scan zizmor step now errors when `GH_TOKEN` is empty: without a token zizmor silently skips its online audits (including `known-vulnerable-actions`) and would pass. Per-finding location parsing now tolerates findings without a local path (reported as `?`) instead of raising `KeyError`.
+
+## 2026-10-15 — OSV PR scan re-pinned to v2.7.0; Security Scan runs on any workflow/action change
+
+PR: n/a (pending)
+Scope: `.github/workflows/dependency-review.yml`, `.github/workflows/security.yml`, `SECURITY.md`
+`dependency-review.yml` pinned `osv-scanner-reusable-pr.yml` to `8ac9e5c`, an untagged commit on `main` (v2.6.0+2) that neither Dependabot nor zizmor can map to a release; re-pinned to the peeled v2.7.0 commit `b1d267a` (`# v2.7.0`), matching `security.yml`'s osv-scanner-action. The reusable workflow's inputs are identical at both refs (only its inner action pins moved from v2.6.0 to v2.7.0), so `upload-sarif: false` still applies. Security Scan's `pull_request.paths` now includes `.github/workflows/**` and `.github/actions/**` (replacing the explicit `security.yml` entry), so PRs that change an action pin in any workflow, including Dependabot github-actions PRs, run the zizmor `known-vulnerable-actions` check before merge instead of only on the weekly run.
+
+## 2026-10-15 — Security Scan checks SHA-pinned actions against GitHub advisories (zizmor)
+
+PR: n/a (pending)
+Scope: `.github/workflows/security.yml`, `SECURITY.md`
+GitHub's Dependabot alerts are generated only for actions referenced by semver tag, never for actions pinned by commit SHA, and every action in this repo is SHA-pinned, so a vulnerable pinned action was never alerted on. Security Scan now installs `zizmor==1.31.0` (wheels only, like Bandit) and fails only on its `known-vulnerable-actions` audit, which resolves each SHA pin to its release tag and checks GitHub's advisory database; a zizmor tool error (exit other than 0 or 10-14) also fails the step. Added as steps in the existing single `security-scan` job, not a new job, to keep the one-runner billing layout; the result is a new row in the scan summary. Runs on the weekly schedule, dispatch, and PRs matching the existing `paths:` filter (unchanged).
+
 ## 2026-10-15 — Dependabot cooldown raised to 7 days; cooldown `nosemgrep` suppressions removed
 
 PR: n/a (pending)
