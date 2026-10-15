@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-15 — Dependabot cooldown raised to 7 days; cooldown `nosemgrep` suppressions removed
+
+PR: n/a (pending)
+Scope: `.github/dependabot.yml`
+Revisited the 3-day cooldown tradeoff from the entry below and raised `cooldown.default-days` from 3 to 7 on all four ecosystems (pip, npm, github-actions, docker). The longer window gives more time for compromised or yanked upstream releases (npm and Actions are the highest-risk ecosystems here) to be caught before Dependabot proposes them; the accepted cost is that releases from the 3rd–9th wait one extra monthly cycle. Security updates are unaffected (cooldown does not apply to them). 7 days satisfies Semgrep's `dependabot-missing-cooldown` rule, so the inline `nosemgrep` comments on each `default-days` line were removed.
+
 ## 2026-10-15 — Semgrep cooldown finding suppressed; 3-day Dependabot cooldown kept; Semgrep image pinned
 
 PR: n/a (pending)
