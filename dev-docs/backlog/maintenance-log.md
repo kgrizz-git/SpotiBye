@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-15 — Security Scan checks SHA-pinned actions against GitHub advisories (zizmor)
+
+PR: n/a (pending)
+Scope: `.github/workflows/security.yml`, `SECURITY.md`
+GitHub's Dependabot alerts are generated only for actions referenced by semver tag, never for actions pinned by commit SHA, and every action in this repo is SHA-pinned, so a vulnerable pinned action was never alerted on. Security Scan now installs `zizmor==1.31.0` (wheels only, like Bandit) and fails only on its `known-vulnerable-actions` audit, which resolves each SHA pin to its release tag and checks GitHub's advisory database; a zizmor tool error (exit other than 0 or 10-14) also fails the step. Added as steps in the existing single `security-scan` job, not a new job, to keep the one-runner billing layout; the result is a new row in the scan summary. Runs on the weekly schedule, dispatch, and PRs matching the existing `paths:` filter (unchanged).
+
 ## 2026-10-15 — Dependabot cooldown raised to 7 days; cooldown `nosemgrep` suppressions removed
 
 PR: n/a (pending)

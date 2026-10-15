@@ -133,6 +133,50 @@ jobs:
           directory: src/backend/
           framework: cloudformation,terraform
 
+      # Dependabot alerts are never raised for actions pinned by commit SHA
+      # (only for semver tags), so check pinned actions against GitHub's
+      # advisory database here. zizmor resolves each SHA to its release tag.
+      # Only the known-vulnerable-actions audit fails the step; other zizmor
+      # findings are out of scope for this check. Kept as steps in this job
+      # (not a separate job) per the single-runner billing note above.
+      - name: Install zizmor
+        if: success() || failure()
+        run: "pip install --only-binary=:all: zizmor==1.31.0"
+
+      - name: Check actions against GitHub security advisories
+        id: zizmor
+        if: success() || failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          zizmor --format=json . > zizmor.json
+          rc=$?
+          set -e
+          # 0 = no findings, 10-14 = findings by severity; anything else
+          # (e.g. 1) means the audit itself failed, which must not pass.
+          if [ "$rc" -ne 0 ] && { [ "$rc" -lt 10 ] || [ "$rc" -gt 14 ]; }; then
+            echo "::error::zizmor failed (exit $rc)"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          import sys
+
+          findings = [
+              f for f in json.load(open("zizmor.json"))
+              if f["ident"] == "known-vulnerable-actions" and not f.get("ignored")
+          ]
+          for f in findings:
+              loc = f["locations"][0]
+              path = loc["symbolic"]["key"]["Local"]["verbatim_path"]
+              line = loc["concrete"]["location"]["start_point"]["row"] + 1
+              note = loc["symbolic"].get("annotation", "")
+              print(f"::error file={path},line={line}::{f['desc']}: {note}")
+          print(f"{len(findings)} known-vulnerable action reference(s)")
+          sys.exit(1 if findings else 0)
+          PY
+
       # Note: step.outcome is 'skipped' (truthy) when a step's if: is false,
       # so do not use || between PR and full-history TruffleHog outcomes.
       - name: Generate Security Scan Summary
@@ -144,6 +188,7 @@ jobs:
           BANDIT: ${{ steps.bandit.outcome }}
           OSV: ${{ steps.osv.outcome }}
           CHECKOV: ${{ steps.checkov.outcome }}
+          ZIZMOR: ${{ steps.zizmor.outcome }}
         run: |
           if [ "${TRUFFLEHOG_PR}" != "skipped" ] && [ -n "${TRUFFLEHOG_PR}" ]; then
             TRUFFLEHOG_OUTCOME="${TRUFFLEHOG_PR}"
@@ -161,4 +206,5 @@ jobs:
             echo "| Bandit Python SAST | ${BANDIT:-skipped} |"
             echo "| OSV-Scanner | ${OSV:-skipped} |"
             echo "| Checkov IaC Scan | ${CHECKOV:-skipped} |"
+            echo "| zizmor Known-Vulnerable Actions | ${ZIZMOR:-skipped} |"
           } >> "$GITHUB_STEP_SUMMARY"

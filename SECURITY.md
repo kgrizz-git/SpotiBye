@@ -22,6 +22,7 @@ This project uses multiple security scanning tools integrated into CI/CD:
 ### Dependency Scanning
 - **OSV-Scanner**: Unified Python + Node.js dependency vulnerability scanning (CI and pre-push)
 - **Dependency Review**: GitHub-native PR dependency scanning
+- **zizmor** (`known-vulnerable-actions` audit only): Checks commit-SHA-pinned GitHub Actions against GitHub's security advisories in `security.yml`. Dependabot raises alerts only for actions referenced by semver tag, so SHA-pinned actions are otherwise never alerted on. A zizmor tool error also fails the step. PR runs follow the `paths:` filter (which covers `security.yml` but not other workflow files), so changes to other workflows' pins are checked by the weekly run
 
 ### Infrastructure as Code (IaC) Scanning
 - **Checkov**: Scans Cloudflare Workers configuration and Terraform
