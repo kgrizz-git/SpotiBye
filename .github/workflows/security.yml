@@ -14,6 +14,10 @@ on:
       - 'package*.json'
       - 'src/**'
       - '.github/workflows/security.yml'
+      # Scanned config (dependabot.yml) and the pinned Semgrep image, so a
+      # cooldown change or an image bump runs the scan before merge.
+      - '.github/dependabot.yml'
+      - '.github/docker/**'
   # Weekly security scan on main branch
   schedule:
     - cron: '0 0 * * 1'  # Every Monday at midnight UTC
