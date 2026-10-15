@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-15 — OSV PR scan re-pinned to v2.7.0; Security Scan runs on any workflow/action change
+
+PR: n/a (pending)
+Scope: `.github/workflows/dependency-review.yml`, `.github/workflows/security.yml`, `SECURITY.md`
+`dependency-review.yml` pinned `osv-scanner-reusable-pr.yml` to `8ac9e5c`, an untagged commit on `main` (v2.6.0+2) that neither Dependabot nor zizmor can map to a release; re-pinned to the peeled v2.7.0 commit `b1d267a` (`# v2.7.0`), matching `security.yml`'s osv-scanner-action. The reusable workflow's inputs are identical at both refs (only its inner action pins moved from v2.6.0 to v2.7.0), so `upload-sarif: false` still applies. Security Scan's `pull_request.paths` now includes `.github/workflows/**` and `.github/actions/**` (replacing the explicit `security.yml` entry), so PRs that change an action pin in any workflow, including Dependabot github-actions PRs, run the zizmor `known-vulnerable-actions` check before merge instead of only on the weekly run.
+
 ## 2026-10-15 — Security Scan checks SHA-pinned actions against GitHub advisories (zizmor)
 
 PR: n/a (pending)

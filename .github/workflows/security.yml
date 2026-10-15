@@ -13,7 +13,10 @@ on:
       - 'requirements.txt'
       - 'package*.json'
       - 'src/**'
-      - '.github/workflows/security.yml'
+      # Any workflow or composite-action change, so a pin bump anywhere
+      # (including Dependabot github-actions PRs) gets the zizmor check.
+      - '.github/workflows/**'
+      - '.github/actions/**'
       # Scanned config (dependabot.yml) and the pinned Semgrep image, so a
       # cooldown change or an image bump runs the scan before merge.
       - '.github/dependabot.yml'
