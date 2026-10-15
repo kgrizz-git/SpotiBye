@@ -1,7 +1,7 @@
 version: 2
 
 # Dependabot configuration for SpotiBye project
-# Monitors Python (pip), Node.js (npm), and GitHub Actions dependencies
+# Monitors Python (pip), Node.js (npm), GitHub Actions, and the Semgrep scanner image (docker)
 
 updates:
   # Python dependencies - Main project
@@ -103,6 +103,28 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  # Semgrep scanner image (pinned in .github/docker/semgrep/Dockerfile,
+  # consumed by the Semgrep SAST step in .github/workflows/security.yml)
+  - package-ecosystem: "docker"
+    directory: "/.github/docker/semgrep"
+    schedule:
+      interval: "cron"
+      cronjob: "0 9 10 * *" # 09:00 on the 10th of each month
+      timezone: "America/New_York"
+    cooldown:
+      default-days: 3 # nosemgrep: dependabot-missing-cooldown -- deliberate; see maintenance-log 2026-10-15
+    open-pull-requests-limit: 2
+    reviewers:
+      - "kgrizz-git"
+    assignees:
+      - "kgrizz-git"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
 
 # Security updates configuration
 # Enable automated security updates (separate from version updates)

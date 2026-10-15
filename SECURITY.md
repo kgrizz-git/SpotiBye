@@ -84,7 +84,7 @@ Dependabot is configured in `.github/dependabot.yml` to automatically:
 - Monitor Python (`pip`) dependencies monthly (10th, 09:00 America/New_York)
 - Monitor Node.js (`npm`) dependencies monthly (10th, 09:00 America/New_York)
 - Monitor GitHub Actions monthly (10th, 09:00 America/New_York)
-- Monitor Docker images weekly (if applicable)
+- Monitor the Semgrep scanner image pinned in `.github/docker/semgrep/Dockerfile` monthly (10th, 09:00 America/New_York; version-update PRs only, no vulnerability alerts for images)
 - Create grouped PRs for minor/patch updates to reduce noise
 
 ### Enable Dependabot in GitHub

@@ -67,14 +67,22 @@ jobs:
 
       # Semgrep SAST — pass rules via -e only (do not also pass --config;
       # CLI --config overrides/ignores SEMGREP_RULES).
+      # Image is pinned (tag + digest) in .github/docker/semgrep/Dockerfile so
+      # Dependabot's docker ecosystem can bump it; rule packs are still fetched
+      # from the registry at run time.
       - name: Semgrep SAST
         id: semgrep
         if: success() || failure()
         run: |
+          SEMGREP_IMAGE="$(sed -n 's/^FROM[[:space:]]\{1,\}//p' .github/docker/semgrep/Dockerfile)"
+          if [ -z "${SEMGREP_IMAGE}" ]; then
+            echo "::error::No FROM line in .github/docker/semgrep/Dockerfile"
+            exit 1
+          fi
           docker run --rm \
             -e SEMGREP_RULES="p/security-audit p/owasp-top-ten p/cwe-top-25 p/ci p/secrets p/javascript p/typescript p/python" \
             -v "${PWD}:/src" \
-            semgrep/semgrep semgrep ci
+            "${SEMGREP_IMAGE}" semgrep ci
 
       - name: Set up Python
         if: success() || failure()

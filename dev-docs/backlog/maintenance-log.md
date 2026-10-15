@@ -10,11 +10,12 @@
 
 ---
 
-## 2026-10-15 — Semgrep cooldown finding suppressed; 3-day Dependabot cooldown kept
+## 2026-10-15 — Semgrep cooldown finding suppressed; 3-day Dependabot cooldown kept; Semgrep image pinned
 
 PR: n/a (pending)
-Scope: `.github/dependabot.yml`
+Scope: `.github/dependabot.yml`, `.github/workflows/security.yml`, `.github/docker/semgrep/Dockerfile`, `SECURITY.md`
 The community Semgrep rule `dependabot-missing-cooldown` flags any `cooldown.default-days` below 7 as blocking, so the 3-day value from #43 failed Security Scan on every PR (first seen on Dependabot PRs #40, #44, #45). Kept 3 days on purpose — with the monthly run on the 10th, a 7-day cooldown pushes releases from the 3rd–9th back a full cycle (~30 days) — and added an inline `nosemgrep` for that rule on each `default-days` line. Do not raise it to 7 just to satisfy the scanner without revisiting that tradeoff.
+Also pinned the Semgrep SAST image (previously unpinned `latest`) to `semgrep/semgrep:1.180.0` by tag and digest — the same digest CI was already pulling — in a never-built one-line Dockerfile that the workflow reads, and added a `docker` Dependabot ecosystem for it, so bumps arrive as monthly PRs instead of silently. Dependabot gives version-update PRs for images, not vulnerability alerts. Rule packs are still fetched from the registry at scan time, so new upstream rules can still surface findings.
 
 ## 2026-10-14 — Dependabot version updates moved to monthly on the 10th
 
