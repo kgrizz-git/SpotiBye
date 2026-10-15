@@ -12,7 +12,7 @@ updates:
       cronjob: "0 9 10 * *" # 09:00 on the 10th of each month
       timezone: "America/New_York"
     cooldown:
-      default-days: 3 # nosemgrep: dependabot-missing-cooldown -- deliberate; see maintenance-log 2026-10-15
+      default-days: 7
     open-pull-requests-limit: 5
     reviewers:
       - "kgrizz-git"
@@ -42,7 +42,7 @@ updates:
       cronjob: "0 9 10 * *" # 09:00 on the 10th of each month
       timezone: "America/New_York"
     cooldown:
-      default-days: 3 # nosemgrep: dependabot-missing-cooldown -- deliberate; see maintenance-log 2026-10-15
+      default-days: 7
     open-pull-requests-limit: 5
     reviewers:
       - "kgrizz-git"
@@ -84,7 +84,7 @@ updates:
       cronjob: "0 9 10 * *" # 09:00 on the 10th of each month
       timezone: "America/New_York"
     cooldown:
-      default-days: 3 # nosemgrep: dependabot-missing-cooldown -- deliberate; see maintenance-log 2026-10-15
+      default-days: 7
     open-pull-requests-limit: 5
     reviewers:
       - "kgrizz-git"
@@ -113,7 +113,7 @@ updates:
       cronjob: "0 9 10 * *" # 09:00 on the 10th of each month
       timezone: "America/New_York"
     cooldown:
-      default-days: 3 # nosemgrep: dependabot-missing-cooldown -- deliberate; see maintenance-log 2026-10-15
+      default-days: 7
     open-pull-requests-limit: 2
     reviewers:
       - "kgrizz-git"
