@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-15 — zizmor check fails closed on an empty token; tolerant finding parsing
+
+PR: n/a (pending)
+Scope: `.github/workflows/security.yml`
+The Security Scan zizmor step now errors when `GH_TOKEN` is empty: without a token zizmor silently skips its online audits (including `known-vulnerable-actions`) and would pass. Per-finding location parsing now tolerates findings without a local path (reported as `?`) instead of raising `KeyError`.
+
 ## 2026-10-15 — OSV PR scan re-pinned to v2.7.0; Security Scan runs on any workflow/action change
 
 PR: n/a (pending)
