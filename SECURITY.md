@@ -84,7 +84,7 @@ Dependabot is configured in `.github/dependabot.yml` to automatically:
 - Monitor Python (`pip`) dependencies monthly (10th, 09:00 America/New_York)
 - Monitor Node.js (`npm`) dependencies monthly (10th, 09:00 America/New_York)
 - Monitor GitHub Actions monthly (10th, 09:00 America/New_York)
-- Monitor Docker images weekly (if applicable)
+- Monitor the Semgrep scanner image pinned in `.github/docker/semgrep/Dockerfile` monthly (10th, 09:00 America/New_York; version-update PRs only, no vulnerability alerts for images)
 - Create grouped PRs for minor/patch updates to reduce noise
 
 ### Enable Dependabot in GitHub
@@ -304,6 +304,10 @@ SonarCloud flags several issues that are **intentional, documented tradeoffs** f
 ### Python path traversal (S8707)
 
 - **Status:** Fixed. `scripts/check_file_lengths.py` validates the exemptions path against the repo root (configurable via `ALLOWED_FILE_ROOTS`) before access.
+
+### Semgrep scanner image user (docker:S6471)
+
+- **Status:** Mitigated. The pinned image (`.github/docker/semgrep/Dockerfile`) defaults to root, but that file is never built; it only feeds the `FROM` reference to the Semgrep SAST step, which runs the container with `--user "$(id -u):$(id -g)"` (the non-root runner user). The Dockerfile's `USER nobody` line exists only to satisfy the rule and has no runtime effect.
 
 ### Workflow permissions (S8233)
 
