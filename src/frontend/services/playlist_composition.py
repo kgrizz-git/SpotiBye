@@ -7,7 +7,7 @@ Outputs: unique track ID sets, stable hashes, composition fingerprints for cache
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 
 def extract_spotify_track_id(item: Dict[str, Any]) -> Optional[str]:
@@ -59,7 +59,12 @@ def fingerprints_match(
     """Return True when cached fingerprint matches current playlist composition."""
     cached_snap = cached.get("snapshot_id")
     cached_hash = cached.get("track_id_hash")
-    if isinstance(cached_snap, str) and cached_snap and isinstance(snapshot_id, str) and snapshot_id:
+    if (
+        isinstance(cached_snap, str)
+        and cached_snap
+        and isinstance(snapshot_id, str)
+        and snapshot_id
+    ):
         return cached_snap == snapshot_id
     if isinstance(cached_hash, str) and cached_hash:
         return cached_hash == track_id_hash

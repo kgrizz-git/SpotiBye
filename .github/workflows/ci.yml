@@ -64,6 +64,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[development]"  # NOSONAR(S8541): Kivy/KivyMD need source builds on Linux; --only-binary breaks wheels
 
+      # Lint and type gates also run as local hooks; CI enforces them for
+      # contributors who skip pre-commit.
+      - name: Lint (ruff)
+        run: ruff check src scripts
+
+      - name: Type check (basedpyright)
+        run: basedpyright src/frontend src/shared scripts --level error
+
       - name: File length check
         run: python scripts/check_file_lengths.py --ci --exemptions scripts/file-length-exemptions.json
 
@@ -78,4 +86,29 @@ jobs:
           # skipped via KIVY_DISPLAY_AVAILABLE checks in the test files.
           KIVY_WINDOW: headless
           KIVY_NO_ENV_CONFIG: "1"
-        run: pytest src/frontend/tests/ -v
+        run: |
+          pytest src/frontend/tests/ -v
+          pytest scripts/tests/ -v
+
+  hygiene:
+    name: Repo hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.11"
+
+      - name: Repo structure
+        run: scripts/check-repo-structure.sh
+
+      - name: CLAUDE.md is up to date
+        run: python scripts/compile_claude_md.py --check
+
+      # Warn-only until its gate flips to errors; surfaces drift in the log.
+      - name: Docs hygiene (warn-only)
+        run: python scripts/check_docs_hygiene.py

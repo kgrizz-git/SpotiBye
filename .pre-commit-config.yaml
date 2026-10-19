@@ -52,7 +52,7 @@ repos:
 
   # Python linting (Ruff)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.8
+    rev: v0.15.20
     hooks:
       - id: ruff
         name: Ruff Linter
