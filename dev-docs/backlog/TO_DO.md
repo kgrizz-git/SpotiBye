@@ -74,6 +74,9 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Branch protection on `main` is now tier-unblocked (was `403 Upgrade to GitHub Pro or make this repository public`; now `404 Branch not protected`) — decide required checks separately
   - [ ] `SECURITY.md` still describes the private-era posture
   - [ ] 3 Dependabot alerts open on the public repo
+  - [ ] Add `ruff format --check` to CI in its own PR (30 files would be reformatted as of 2026-10-18)
+  - [ ] Add a `macos-latest` frontend test job to `ci.yml` (minutes are free; launcher and window icon are macOS-specific)
+  - [ ] Add an OpenSSF Scorecard workflow (free for public repos; uploads SARIF to Code Scanning)
 - [ ] Add screenshots to README for the public release
   - [ ] Logo/badges land with the app-icon plan above; screenshots still outstanding
   - [ ] Redact Spotify username and any other personal data from source images (currently in a separate folder outside the repo)
