@@ -30,6 +30,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Test helper: `src/backend/tests/helpers/kv.ts` (`kvNamespace` + `envWithKv` factories) shared by `analysis-queue.test.ts`, `auth-middleware.test.ts`, and `analysis-job.test.ts`.
 
 ### Changed
+- Running from source now shows the SpotiBye icon and a `SpotiBye` window title instead of Kivy's defaults.
 - Release builds (`build.yml`) now bundle Python 3.13 instead of 3.10. Every pinned desktop dependency ships Python 3.13 wheels (Kivy 2.3.1 and its Windows `kivy-deps` packages for Windows, macOS and Linux; Pillow, PyInstaller 6.22.3); KivyMD 1.2.0 is pure Python. Running from source still supports Python 3.10+.
 - Analysis progress messages now name the current phase (Spotify track fetch vs ReccoBeats enrichment vs finalizing) based on the backend's progress bands, instead of a static "Analyzing playlist..." label.
 - Playlist analysis section is more readable: larger section headers and body text with breathing room between sections.

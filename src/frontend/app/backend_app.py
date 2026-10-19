@@ -46,6 +46,7 @@ from ..screens.backend_main_screen import BackendMainScreen
 from ...shared.logging_config import logger as original_logger
 from ..utils.platform_utils import (
     diagnose_macos_issues,
+    resolve_window_icon,
     set_window_basics,
 )
 
@@ -131,9 +132,15 @@ class BackendSpotifyExporterApp(MDApp):
         try:
             self._setup_fonts()
             diagnose_macos_issues()
-            set_window_basics(
-                "Spotify Playlist Exporter - Powered by ReccoBeats & Cloudflare"
-            )
+            self.title = "SpotiBye"
+            try:
+                # Kivy applies App.icon via window.set_icon() right after build().
+                icon_path = resolve_window_icon()
+                if icon_path is not None:
+                    self.icon = str(icon_path)
+            except Exception as exc:
+                original_logger.warning("Could not set window icon: %s", exc)
+            set_window_basics("SpotiBye")
 
             self.screen_manager = ScreenManager()
 

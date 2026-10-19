@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import platform
 import subprocess
+import sys
 import importlib
 import importlib.util
+from pathlib import Path
 from typing import Tuple
 
 from kivy.clock import Clock
@@ -425,7 +427,19 @@ def _fallback_window_setup() -> None:
         KivyWindow.resizable = True
         KivyWindow.minimum_width = 480
         KivyWindow.minimum_height = 600
-    KivyWindow.title = "Spotify Playlist Exporter - Powered by ReccoBeats"
+    KivyWindow.title = "SpotiBye"
+
+
+def resolve_window_icon(root: Path | None = None) -> Path | None:
+    """Return the unmasked window icon PNG, or None if unavailable.
+
+    Frozen (PyInstaller) builds own their icon and do not bundle ``resources/``.
+    """
+    if getattr(sys, "frozen", False):
+        return None
+    base = root if root is not None else Path(__file__).resolve().parents[3]
+    icon = base / "resources" / "SpotiBye black edited 1.png"
+    return icon if icon.is_file() else None
 
 
 __all__ = [
@@ -436,4 +450,5 @@ __all__ = [
     "calculate_optimal_window_size",
     "set_window_on_top",
     "set_window_basics",
+    "resolve_window_icon",
 ]
