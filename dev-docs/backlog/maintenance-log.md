@@ -10,6 +10,11 @@
 
 ---
 
+## 2026-10-19 — README logo, badges, and interim screenshots
+
+PR: n/a (pending)
+Scope: `README.md`, `resources/spotibye-logo-320.png`, `docs/images/`
+README now opens with a 320 px copy of the app icon, CI/license/platform badges, and three hand-redacted screenshots (metadata stripped). The Security Scan and OSV PR Scan badges are left out because both workflows are PR-only. The screenshots are interim: the app-icon plan's Phase 2b replaces them with mock-data captures.
 ## 2026-10-18 — Exec-plan for app icon, source launcher, and public-repo CI posture
 
 PR: n/a (pending)
