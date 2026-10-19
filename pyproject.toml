@@ -69,6 +69,10 @@ reportAttributeAccessIssue = "none"
 reportIncompatibleMethodOverride = "none"
 reportOptionalMemberAccess = "none"
 reportImportCycles = "none"
+# The gate is errors only (`--level error`). In GitHub Actions basedpyright
+# still counts warnings and, under the default "recommended" mode, fails on
+# them, so make the exit code track errors alone.
+failOnWarnings = false
 
 # Keep the type checker out of backup directories, virtual environments, and
 # build artifacts. Only `backups/` currently exists; the other backup paths are
