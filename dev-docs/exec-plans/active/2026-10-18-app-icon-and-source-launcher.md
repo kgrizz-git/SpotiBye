@@ -1,7 +1,7 @@
 # Plan: App Icon at Runtime, README Branding, a Source Launcher, and Public-Repo CI Posture
 
-**Status:** not started — plan authored on `feat/app-icon-and-source-launcher`
-**Branch:** `feat/app-icon-and-source-launcher`
+**Status:** in progress — Phase 2 delivered in #53; Phase 4 in #54 (two post-merge checks open); Phases 1, 2b, 3 and 5 not started
+**Branch:** plan authored on `feat/app-icon-and-source-launcher` (#52); each phase ships on its own branch
 **Created:** 2026-10-18
 **Motivation (branding):** The repo ships exactly one icon design (`resources/`) and wires it into the *packaged* app only. Three gaps follow from that: (1) running from source (`python run_frontend_backend.py`) shows Kivy's default icon and an "Untitled"-looking title bar, so the app is unrecognizable in Mission Control/Dock/Alt-Tab; (2) the README — the project's front door on GitHub — has no logo and no badges; (3) a source user has no double-clickable entry point and no branded icon in Finder, which is exactly the "just run it" experience every other desktop app has.
 **Motivation (CI posture):** The repo is now **public**, which retroactively invalidates the cost model behind `2026-07-22-reduce-github-actions-billable-minutes.md` (Actions minutes are free for public repos) and leaves three concrete gaps: a stale `push`-trigger + secret-scanning hole in `security.yml`, a stale private-repo justification on SARIF upload in `dependency-review.yml`, and a pre-existing gap where `scripts/tests/` is verified locally but never runs in CI — which directly affects Phase 3's launcher test.

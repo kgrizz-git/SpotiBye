@@ -12,7 +12,7 @@
 
 ## 2026-10-19 — Public-repo CI posture: push secret scanning, SARIF, lint/type/hygiene gates
 
-PR: n/a (pending)
+PR: #54
 Scope: `.github/workflows/security.yml`, `.github/workflows/dependency-review.yml`, `.github/workflows/ci.yml`, `pyproject.toml`, `.pre-commit-config.yaml`
 Security Scan now runs on every push to `main`. TruffleHog diffs from the pre-push commit, and falls back to full history on forced or branch-creation pushes. Push runs get per-commit concurrency groups, so no merge scan is cancelled or replaced. The OSV PR scan now uploads SARIF to Code Scanning. The CI frontend job adds `ruff check`, basedpyright, and `scripts/tests/`, and a new `hygiene` job runs the repo-structure, `CLAUDE.md` and docs-hygiene checks. Ruff is pinned to 0.15.20 in both `pyproject.toml` and the pre-commit hook (was unpinned and `v0.4.8`); two unused imports were removed. The billable-minutes plan moved to `completed/superseded/` because the public repo's Actions minutes are unmetered.
 
