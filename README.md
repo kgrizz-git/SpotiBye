@@ -69,6 +69,7 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for layer contracts and data flow, and 
 - Backend: `cd src/backend && npm run test:run && npm run lint`
 - Frontend (with your Python environment active): `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 python -m pytest src/frontend/tests/ -v`
 - Quick check of everything: `./scripts/verify-all.sh` from the repo root
+- Run from source on macOS: double-click `SpotiBye.command` (the first run brands it with the app icon); elsewhere run `python3 run_frontend_backend.py`
 
 ## Security
 

@@ -40,6 +40,9 @@ src/backend/wrangler.selfhost.toml
 # Temporary files (plan reviews, assessments, etc.)
 tmp/
 
+# macOS launcher: marks a failed first-run icon attempt (see SpotiBye.command)
+.spotibye-launcher-icon-failed
+
 # AI/IDE tooling (local agent config, not project code)
 .claude/
 .kilo/
