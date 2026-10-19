@@ -19,7 +19,7 @@
 - There is no test module for `platform_utils` today (`ls src/frontend/tests | rg -i platform` → no match).
 - `dev-docs/guides/frontend-distribution-guide.md:25-28` documents the icons as `src/frontend/assets/icon.{ico,icns,png}` — a path that does not exist. Stale; fix it while here.
 - README has no image and no badges. Workflow names for badges: `CI` (`ci.yml`), `Build Executables` (`build.yml`), `Security Scan` (`security.yml`), `OSV PR Scan` (`dependency-review.yml`). Triggers matter: `ci.yml` runs on push **and** PR to `main`/`develop`/`WIP` with no path filter, whereas `security.yml` and `dependency-review.yml` are **PR-only with path filters** — a status badge for either reports "skipped" or stale most of the time and is misleading.
-- Repo guardrails that constrain this plan: `scripts/check-repo-structure.sh:59-71` requires active plans to use `- [ ]` tracking (a hard error). `scripts/check_docs_hygiene.py` checks that the plan is indexed in `active/README.md` and has a `TO_DO.md` backlink, but it only warns: `main()` always returns 0 (`:159-169`). Docs are capped at 300 lines by the file-length hook, hence five tight phases.
+- Repo guardrails that constrain this plan: `scripts/check-repo-structure.sh:59-71` requires active plans to use `- [ ]` tracking (a hard error). `scripts/check_docs_hygiene.py` checks that the plan is indexed in `active/README.md` and has a `TO_DO.md` backlink, but it only warns: `main()` always returns 0 (`:159-169`). Docs are capped at 300 lines by the file-length hook, hence tight phases.
 
 **Public-repo ground facts (verified 2026-10-18 via `gh api`):**
 
@@ -43,7 +43,7 @@
 - [ ] Decide the source variant: use the **unmasked** `SpotiBye black edited 1.png` for the window, keeping the squircle `-modified` variant for Finder/Dock/installed bundles (macOS applies the squircle itself to real app icons; double-masking makes the window icon look shrunken). Record the choice here and in the guide.
 - [ ] Add a pure, side-effect-free resolver in `src/frontend/utils/platform_utils.py`: `resolve_window_icon(root: Path | None = None) -> Path | None`. It defaults `root` to `Path(__file__).resolve().parents[3]` (that *is* the repo root: `utils` → `frontend` → `src` → root; no walking needed), and the parameter lets tests inject a temp root instead of monkeypatching. It checks `resources/` for the chosen PNG, and returns `None` when the file is absent **or** when running frozen (`getattr(sys, "frozen", False)` → the PyInstaller bundle already owns its icon via `spotibye.spec`, and `resources/` is not bundled, so this guard prevents a missing-file path in production builds).
 - [ ] Wire it through `App.icon`, not `Window.icon` (a no-op after creation; see Ground facts). In `BackendSpotifyExporterApp.build()` set `self.icon = str(path)` when the resolver returns a path. Kivy then calls `Window.set_icon()` after `build()` on both the normal and the `_fallback_window_setup()` path, so no second call site is needed. Wrap the assignment in `try/except Exception` with `logger.warning(...)`. Icon failure must never block app startup.
-- [ ] In the same edit, set `self.title` to the string `build()` already passes to `set_window_basics()`. Otherwise Kivy's post-`build()` `set_title()` keeps replacing it with `BackendSpotifyExporter`.
+- [ ] Brand the window title as `SpotiBye`. Set `self.title = "SpotiBye"` in `build()`, pass the same string to `set_window_basics()` (`backend_app.py:134-136`), and replace the hardcoded fallback title (`platform_utils.py:428`). Without `self.title`, Kivy's post-`build()` `set_title()` keeps replacing it with `BackendSpotifyExporter`. Also rename the login heading `Spotify Playlist Exporter` (`auth/backend_login_screen.py:67`) so new screenshots match. Do not rename the `App` class: Kivy derives `App.name` and `user_data_dir` from it.
 - [ ] Keep `platform_utils.py` (439 lines today) under the 700-line code cap.
 - [ ] Tests: new `src/frontend/tests/test_window_icon.py` covering (a) resolver returns the PNG when present, (b) returns `None` when the file is missing (injected temp root), (c) returns `None` when `sys.frozen` is set, (d) the real repo root resolves to an existing file, which catches a renamed asset. Pure-function tests only — do not open a real window in the suite.
 - [ ] Manually verify on macOS that the Dock/Alt-Tab entry and the window title-bar-adjacent icon show SpotiBye, and record the result in this plan.
@@ -55,6 +55,17 @@
 - [ ] Add badges under the heading in this conservative set, each verified against the workflow file before it is committed: CI status (`https://github.com/kgrizz-git/SpotiBye/actions/workflows/ci.yml/badge.svg?branch=main`, link to the Actions run) and license (`GPL-3.0`, link to `LICENSE`).
 - [ ] Deliberately **omit** `Security Scan` and `OSV PR Scan` badges, and note why inline as an HTML comment: both workflows are PR-only with path filters (`security.yml:6-23`, `dependency-review.yml:4-12`), so a badge shows a misleading permanent "skipped". Once `security.yml` gains an unfiltered `main` push trigger (Phase 4), it becomes badge-eligible. Whichever of the two PRs lands second adds the badge, because the badge row exists only after the branding PR. `dependency-review.yml` never does while it stays PR-diff scoped.
 - [ ] Re-check badge URLs render (no 404, correct branch) before the PR — a red-for-the-wrong-reason badge is worse than none.
+
+## Phase 2b — Personal-data-free screenshots (after Phase 1)
+
+The README currently uses hand-redacted March 2026 captures. They show the old title and real listening data, and the redaction boxes are visible. Replace them with captures of the app running against fictional data.
+
+- [ ] Add a screenshot-mode runner (e.g. `scripts/capture_screenshots.py`) that starts `src/frontend/tests/mock_backend.py` on localhost with a fictional fixture: invented playlist names, owner `demo-user`, generated placeholder cover art (no real album art), and synthetic analysis values. Point the app at it via `SPOTIBYE_BACKEND_URL`. First verify that the mock covers every route the main, analysis, tracks, and cache-explorer screens call, and add any that are missing.
+- [ ] Drive each screen and capture with Kivy `Window.screenshot()` at a fixed window size, so retakes are reproducible. Fall back to a manual `screencapture -l <windowid>` if login cannot be scripted.
+- [ ] Use a throwaway cache directory, so the run neither reads nor pollutes the real user cache, and so the cache explorer shows only fixture data.
+- [ ] Capture: login, playlist grid, playlist analysis, tracks view, cache explorer, and one exported sheet (open the fixture export in a spreadsheet app).
+- [ ] Inspect every capture at full size before committing. Confirm no username, home path, real playlist ID, or real cover art appears, and strip metadata on save.
+- [ ] Replace the images in `docs/images/` under the same file names, so `README.md` needs no edit. Delete the redacted originals from `tmp/`.
 
 ## Phase 3 — Double-clickable launcher with first-run icon association
 
@@ -91,7 +102,7 @@ Bundled from the "repo is public now" review. **Ship as its own PR**, separate f
 
 ## Phase 5 — Docs, verification, and ship
 
-- [ ] Add a `CHANGELOG.md` **Unreleased → Added** entry: window icon when running from source, README logo/badges, and the `SpotiBye.command` launcher. User-visible, so `CHANGELOG.md` is required (any internal-only leftovers go to `dev-docs/backlog/maintenance-log.md` instead).
+- [ ] Add a `CHANGELOG.md` **Unreleased → Added** entry: window icon and `SpotiBye` window title when running from source, README logo/badges/screenshots, and the `SpotiBye.command` launcher. User-visible, so `CHANGELOG.md` is required (any internal-only leftovers go to `dev-docs/backlog/maintenance-log.md` instead).
 - [ ] Confirm the Phase 4 CI changes are logged in `dev-docs/backlog/maintenance-log.md`, not `CHANGELOG.md`. Trigger and SARIF changes are internal tooling with no user-facing behavior change.
 - [ ] Fix the stale icon paths in `dev-docs/guides/frontend-distribution-guide.md:25-28` to point at `resources/` instead of the nonexistent `src/frontend/assets/`, and add a short "running from source" section pointing at `SpotiBye.command` and the runtime window icon.
 - [ ] Mention the launcher in the README Development section next to the existing `verify-all.sh` line.

@@ -78,8 +78,6 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Add a `macos-latest` frontend test job to `ci.yml` (minutes are free; launcher and window icon are macOS-specific)
   - [ ] Add an OpenSSF Scorecard workflow (free for public repos; uploads SARIF to Code Scanning)
 - [ ] Add screenshots to README for the public release
-  - [ ] Logo/badges land with the app-icon plan above; screenshots still outstanding
-  - [ ] Redact Spotify username and any other personal data from source images (currently in a separate folder outside the repo)
-  - [ ] Copy redacted images into the repo and reference them from README
+  - [ ] Interim hand-redacted screenshots ship with the README polish PR; replace them with mock-data captures (Phase 2b of the app-icon plan)
 
 See also: agent-first-retrofit, quality review/assessment
