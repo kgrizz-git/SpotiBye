@@ -24,13 +24,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Private personal repos cannot use actions/dependency-review-action.
-  # Use OSV's PR-diff workflow instead so dependency PRs still get a blocking
-  # "new vulnerabilities introduced by this branch" check.
+  # OSV's PR-diff workflow gives dependency PRs a blocking "new
+  # vulnerabilities introduced by this branch" check. Post-merge dependency
+  # coverage comes from the OSV step in security.yml (push to main).
   scan-pr:
     name: Dependency Vulnerabilities (OSV PR)
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36  # v2.7.0
     with:
-      # Private personal repos here do not have GitHub Code Scanning enabled,
-      # so uploading SARIF via github/codeql-action/upload-sarif will fail.
-      upload-sarif: false
+      # The repo is public and Code Scanning is enabled, so findings are
+      # uploaded as SARIF alongside the blocking check.
+      upload-sarif: true

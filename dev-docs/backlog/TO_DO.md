@@ -67,7 +67,6 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Confirm frontend packaging command and output artifact
   - [ ] Confirm backend deployment workflow and required secrets
   - [ ] Confirm CI runs the expected frontend, backend, and structure checks
-- [ ] Check GitHub Actions minutes usage and see if any can be trimmed ([plan](../exec-plans/active/2026-07-22-reduce-github-actions-billable-minutes.md))
 - [ ] Decide whether to start a new repository before wider release-readiness work
   - [ ] Complete repository cleanup prerequisites
   - [ ] Decide what history, issues, and release artifacts must be retained
@@ -77,7 +76,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Evaluate if a hosted backend option should be offered for users who don't want to self-host
 
 - [ ] App icon when running from source (Kivy `App.icon` + `App.title` — `Window.icon` is a no-op after window creation), README logo + badges, and a double-clickable `SpotiBye.command` launcher that brands itself in Finder on first run; plus the repo's public-repo CI posture ([plan](../exec-plans/active/2026-10-18-app-icon-and-source-launcher.md)) — **in progress 2026-10-18**
-- [ ] Repo is public, so Actions minutes are unmetered: retire the cost premise in the [billable-minutes plan](../exec-plans/active/2026-07-22-reduce-github-actions-billable-minutes.md) (Phase 4 of the app-icon plan)
+- [ ] Public-repo follow-ups (from Phase 4 of the app-icon plan)
   - [ ] Branch protection on `main` is now tier-unblocked (was `403 Upgrade to GitHub Pro or make this repository public`; now `404 Branch not protected`) — decide required checks separately
   - [ ] `SECURITY.md` still describes the private-era posture
   - [ ] 3 Dependabot alerts open on the public repo

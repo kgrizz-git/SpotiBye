@@ -1,7 +1,7 @@
 # Plan: Reduce GitHub Actions Billable Minutes
 
 **Date:** 2026-07-22
-**Status:** Active (implementation complete on branch; CI verification pending)
+**Status:** Superseded 2026-10-19 — the repo is public, so Actions minutes are unmetered and the cost premise no longer applies. The Security Scan consolidation it delivered stays. Retired by Phase 4 of [`2026-10-18-app-icon-and-source-launcher.md`](../../active/2026-10-18-app-icon-and-source-launcher.md).
 **Backlog:** `dev-docs/backlog/TO_DO.md` → "Check GitHub Actions minutes usage and see if any can be trimmed"
 **Scope:** `.github/workflows/*.yml`, `.github/dependabot.yml`. **No application code or backend changes.**
 

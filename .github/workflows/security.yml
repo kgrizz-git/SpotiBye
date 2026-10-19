@@ -1,8 +1,10 @@
 name: Security Scan
 
 on:
-  # Only run security scans on PRs to main/develop, not every push
-  # This reduces redundant runs while maintaining security on important branches
+  # PRs to main/develop/WIP (path-filtered), every push to main, and a weekly
+  # full-history run. Push runs give each merge its own scan.
+  push:
+    branches: [main]
   pull_request:
     branches: [main, develop, WIP]
     paths:
@@ -31,9 +33,11 @@ permissions:
   security-events: write
   actions: read
 
+# Push runs are keyed on their commit so a queued merge scan is never replaced
+# by a later one (a group keeps only one pending run); PR runs still cancel.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Single sequential runner: parallel short jobs each bill 1 minute; one job
 # keeps the same scanners while cutting billable minutes ~6x → 1–2x per run.
@@ -48,25 +52,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      # TruffleHog PR Diff Mode — no --exclude-paths. A PR-scoped exclude file
-      # would let the same PR widen exclusions and hide secrets from this gate.
-      # Lob false positives only appear in full-history scans (below).
-      - name: TruffleHog Secret Scan (PR Diff)
+      # TruffleHog Diff Mode (PR, or push to main) — no --exclude-paths. A
+      # PR-scoped exclude file would let the same PR widen exclusions and hide
+      # secrets from this gate. Lob false positives only appear in full-history
+      # scans (below). On push the base is the pre-push commit; on PR it is the
+      # default branch. Forced or branch-creation pushes have no usable base and
+      # use the full-history step instead.
+      - name: TruffleHog Secret Scan (Diff)
         id: trufflehog_pr
-        if: (success() || failure()) && github.event_name == 'pull_request'
+        if: >-
+          (success() || failure()) && (github.event_name == 'pull_request' ||
+          (github.event_name == 'push' && !github.event.forced &&
+          github.event.before != '0000000000000000000000000000000000000000'))
         uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
+          base: ${{ github.event_name == 'push' && github.event.before || github.event.repository.default_branch }}
           head: HEAD
           extra_args: --debug --only-verified
 
-      # TruffleHog Full History Mode (Schedule / Manual Dispatch).
+      # TruffleHog Full History Mode (Schedule / Manual Dispatch, and pushes
+      # whose diff base is unusable).
       # --exclude-paths applies only here: weekly history scans hit Lob FPs on
       # unittest names matching test_ + 35 chars (trufflesecurity/trufflehog#5184).
       - name: TruffleHog Secret Scan (Full History)
         id: trufflehog_full
-        if: (success() || failure()) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        if: >-
+          (success() || failure()) && (github.event_name == 'schedule' ||
+          github.event_name == 'workflow_dispatch' || (github.event_name == 'push' &&
+          (github.event.forced ||
+          github.event.before == '0000000000000000000000000000000000000000')))
         uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9
         with:
           path: ./
