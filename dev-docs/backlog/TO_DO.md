@@ -2,6 +2,13 @@
 
 Active work only; no completed items retained here. Done = log + delete: user-visible outcomes go to `CHANGELOG.md` Unreleased, internal-only work goes to `dev-docs/backlog/maintenance-log.md`, and plan-backed items move to `dev-docs/exec-plans/completed/` in the same PR. Every active exec-plan has a backlink from a TO_DO entry; small items may exist without a plan. `in progress YYYY-MM-DD` = last confirmed state; `NEEDS REVIEW` = needs a second pair of eyes before proceeding. Staleness is flagged by `scripts/check_docs_hygiene.py` (warn-only).
 
+## Next Up
+
+- [ ] Implement Phase 4 of the [app-icon and public-repo CI plan](../exec-plans/active/2026-10-18-app-icon-and-source-launcher.md) (public-repo CI posture) as its own PR: push-triggered secret scanning, SARIF upload, `scripts/tests/`, basedpyright, ruff check, and a hygiene job in CI
+- [ ] Implement that plan's branding phases: window icon and `SpotiBye` window title (Phase 1), then the `SpotiBye.command` launcher (Phase 3)
+- [ ] After Phase 1, retake the README screenshots from mock data (Phase 2b) to replace the interim hand-redacted ones
+- [ ] Decide which checks branch protection on `main` should require, so the new CI gates can block merges
+
 ## Playlist Analysis — End-to-End
 
 - [ ] Fan-out backstop gap: if the status-store round-trip throws between a finalizer grant and the backstop write, the consumer swallows it and acks (DeepSeek PR #16 follow-up). Consider failing open (retry instead of ack) so the grant path re-runs.

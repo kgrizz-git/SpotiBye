@@ -1,6 +1,20 @@
-# SpotiBye
+<p align="center">
+  <!-- Regenerate: sips -Z 320 "resources/SpotiBye black edited 1-modified.png" --out resources/spotibye-logo-320.png -->
+  <img src="resources/spotibye-logo-320.png" alt="SpotiBye logo" width="160">
+</p>
 
-Export your Spotify playlists to **CSV**, **XLSX**, or **JSON** — with optional audio-feature analysis (tempo, key, danceability, energy, and more).
+<h1 align="center">SpotiBye</h1>
+
+<p align="center">
+  Export your Spotify playlists to <strong>CSV</strong>, <strong>XLSX</strong>, or <strong>JSON</strong>, with optional audio-feature analysis.
+</p>
+
+<p align="center">
+  <a href="https://github.com/kgrizz-git/SpotiBye/actions/workflows/ci.yml"><img src="https://github.com/kgrizz-git/SpotiBye/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg" alt="License: GPL-3.0-or-later"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg" alt="Platforms: Windows, macOS, Linux">
+  <!-- Security Scan and OSV PR Scan badges are omitted on purpose: both workflows are PR-only with path filters, so their badges would show a misleading status for main. -->
+</p>
 
 SpotiBye is a desktop app: log in with Spotify, browse your playlists, analyze them, and export the results to a file. All Spotify API traffic goes through the backend — whether run locally or deployed to Cloudflare — so your Spotify password never touches the app, and client credentials live only on the backend.
 
@@ -10,6 +24,19 @@ SpotiBye is a desktop app: log in with Spotify, browse your playlists, analyze t
 - **Playlist analysis** — per-track audio features (tempo, key, danceability, energy, valence, acousticness, instrumentalness, liveness, speechiness, loudness) with live progress
 - **Cloud backend** — fast, cached processing on Cloudflare Workers; resumable exports for multi-playlist exports
 - **Private by design** — Spotify OAuth 2.0 PKCE; Spotify access and refresh tokens are managed server-side and never stored on your device (the app keeps only a backend-issued session token)
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/screenshot-playlists.jpg" alt="Playlist grid with selection, sorting, search, and export format controls" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot-cache-explorer.jpg" alt="Cache explorer showing cached playlists, tracks, and track details" width="400">
+  <img src="docs/images/screenshot-export-sheet.jpg" alt="An exported playlist opened in a spreadsheet" width="400">
+</p>
+
+<sub>Screenshots are from an earlier build, and personal details are blanked out.</sub>
 
 ## Requirements
 

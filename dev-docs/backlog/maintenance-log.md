@@ -10,9 +10,15 @@
 
 ---
 
+## 2026-10-19 — README logo, badges, and interim screenshots
+
+PR: #53
+Scope: `README.md`, `resources/spotibye-logo-320.png`, `docs/images/`
+README now opens with a 320 px copy of the app icon, CI/license/platform badges, and three hand-redacted screenshots (metadata stripped). The Security Scan and OSV PR Scan badges are left out because both workflows are PR-only. The screenshots are interim: the app-icon plan's Phase 2b replaces them with mock-data captures.
+
 ## 2026-10-18 — Exec-plan for app icon, source launcher, and public-repo CI posture
 
-PR: n/a (pending)
+PR: #52
 Scope: `dev-docs/exec-plans/active/2026-10-18-app-icon-and-source-launcher.md`, `dev-docs/backlog/TO_DO.md`, `dev-docs/exec-plans/active/README.md`
 Added a reviewed plan covering the runtime window icon (`App.icon`/`App.title`), README logo and badges, a `SpotiBye.command` launcher, and public-repo CI posture (push-triggered secret scanning, SARIF upload, `scripts/tests/`, basedpyright, ruff check, a hygiene job). Deferred `ruff format --check`, a macOS test job, and OpenSSF Scorecard to `TO_DO.md`. No code or workflow changes yet.
 
