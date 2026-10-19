@@ -64,7 +64,7 @@ class BackendLoginScreen(Screen):
 
         # Title
         title = Label(
-            text="Spotify Playlist Exporter",
+            text="SpotiBye",
             font_size=dp(24),
             size_hint_y=None,
             height=dp(50),
