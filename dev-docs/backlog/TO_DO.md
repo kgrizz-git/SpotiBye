@@ -69,7 +69,13 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 - [ ] Consider releasing as public open-source with instructions on how users can set up their own backend ([plan](../exec-plans/active/2026-09-15-self-host-guides-and-scripts.md)) — docs + setup script shipped; remaining is the hosted-backend evaluation below
   - [ ] Evaluate if a hosted backend option should be offered for users who don't want to self-host
 
+- [ ] App icon when running from source (Kivy `Window.icon`), README logo + badges, and a double-clickable `SpotiBye.command` launcher that brands itself in Finder on first run ([plan](../exec-plans/active/2026-10-18-app-icon-and-source-launcher.md)) — **in progress 2026-10-18**
+- [ ] Repo is public, so Actions minutes are unmetered: retire the cost premise in the [billable-minutes plan](../exec-plans/active/2026-07-22-reduce-github-actions-billable-minutes.md) (Phase 4 of the app-icon plan)
+  - [ ] Branch protection on `main` is now tier-unblocked (was `403 Upgrade to GitHub Pro or make this repository public`; now `404 Branch not protected`) — decide required checks separately
+  - [ ] `SECURITY.md` still describes the private-era posture
+  - [ ] 3 Dependabot alerts open on the public repo
 - [ ] Add screenshots to README for the public release
+  - [ ] Logo/badges land with the app-icon plan above; screenshots still outstanding
   - [ ] Redact Spotify username and any other personal data from source images (currently in a separate folder outside the repo)
   - [ ] Copy redacted images into the repo and reference them from README
 
