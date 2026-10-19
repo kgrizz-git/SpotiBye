@@ -50,11 +50,13 @@
 
 ## Phase 2 — README icon and badges
 
-- [ ] Add a repo-relative `<img>` logo under the `# SpotiBye` heading in `README.md`.
-- [ ] Generate a **small** README copy rather than linking the 1.38 MB source PNG: `sips -Z 320 "resources/SpotiBye black edited 1-modified.png" --out resources/spotibye-logo-320.png`, committed. Record the exact regeneration command in `dev-docs/guides/frontend-distribution-guide.md` so the copy is not mistaken for a new source of truth. Use the masked (`-modified`) variant here — README is not a window, so the squircle is correct there.
-- [ ] Add badges under the heading in this conservative set, each verified against the workflow file before it is committed: CI status (`https://github.com/kgrizz-git/SpotiBye/actions/workflows/ci.yml/badge.svg?branch=main`, link to the Actions run) and license (`GPL-3.0`, link to `LICENSE`).
-- [ ] Deliberately **omit** `Security Scan` and `OSV PR Scan` badges, and note why inline as an HTML comment: both workflows are PR-only with path filters (`security.yml:6-23`, `dependency-review.yml:4-12`), so a badge shows a misleading permanent "skipped". Once `security.yml` gains an unfiltered `main` push trigger (Phase 4), it becomes badge-eligible. Whichever of the two PRs lands second adds the badge, because the badge row exists only after the branding PR. `dependency-review.yml` never does while it stays PR-diff scoped.
-- [ ] Re-check badge URLs render (no 404, correct branch) before the PR — a red-for-the-wrong-reason badge is worse than none.
+Delivered early in #53, together with interim hand-redacted screenshots. The logo regeneration command lives in an HTML comment beside the `<img>` in `README.md`, not in the distribution guide. #53 also adds a static platform badge.
+
+- [x] Add a repo-relative `<img>` logo under the `# SpotiBye` heading in `README.md`.
+- [x] Generate a **small** README copy rather than linking the 1.38 MB source PNG: `sips -Z 320 "resources/SpotiBye black edited 1-modified.png" --out resources/spotibye-logo-320.png`, committed. Record the exact regeneration command in `dev-docs/guides/frontend-distribution-guide.md` so the copy is not mistaken for a new source of truth. Use the masked (`-modified`) variant here — README is not a window, so the squircle is correct there.
+- [x] Add badges under the heading in this conservative set, each verified against the workflow file before it is committed: CI status (`https://github.com/kgrizz-git/SpotiBye/actions/workflows/ci.yml/badge.svg?branch=main`, link to the Actions run) and license (`GPL-3.0`, link to `LICENSE`).
+- [x] Deliberately **omit** `Security Scan` and `OSV PR Scan` badges, and note why inline as an HTML comment: both workflows are PR-only with path filters (`security.yml:6-23`, `dependency-review.yml:4-12`), so a badge shows a misleading permanent "skipped". Once `security.yml` gains an unfiltered `main` push trigger (Phase 4), it becomes badge-eligible. Whichever of the two PRs lands second adds the badge, because the badge row exists only after the branding PR. `dependency-review.yml` never does while it stays PR-diff scoped.
+- [x] Re-check badge URLs render (no 404, correct branch) before the PR — a red-for-the-wrong-reason badge is worse than none.
 
 ## Phase 2b — Personal-data-free screenshots (after Phase 1)
 
