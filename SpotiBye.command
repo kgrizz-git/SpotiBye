@@ -3,12 +3,18 @@
 # Finder starts Terminal in $HOME, so move to the repo root first.
 cd "$(dirname "$0")" || exit 1
 
-# Prefer the project venv; fall back to python3 only if Kivy is installed.
-if [ -x .venv/bin/python ]; then
-  PY=.venv/bin/python
-elif python3 -c 'import kivy' >/dev/null 2>&1; then
-  PY=python3
-else
+# Prefer the project venv, then python3, but only one that has the app's
+# runtime packages. find_spec checks without importing (no Kivy startup), and
+# catches a venv whose package install failed part-way.
+HAS_DEPS='import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in ("kivy", "kivymd", "requests")))'
+PY=
+for candidate in .venv/bin/python python3; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "$HAS_DEPS" >/dev/null 2>&1; then
+    PY=$candidate
+    break
+  fi
+done
+if [ -z "$PY" ]; then
   echo "SpotiBye: dependencies are not installed. Run:" >&2
   echo "  python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt" >&2
   exit 1

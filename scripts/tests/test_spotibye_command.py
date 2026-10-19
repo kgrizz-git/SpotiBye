@@ -53,5 +53,11 @@ def test_icon_block_is_guarded_by_resource_fork_check() -> None:
     assert guard < text.index("setIconForFileOptions")
 
 
+def test_interpreter_check_covers_runtime_packages() -> None:
+    text = _text()
+    for module in ("kivy", "kivymd", "requests"):
+        assert f'"{module}"' in text
+
+
 def test_launcher_does_not_use_setfile() -> None:
     assert "SetFile" not in _text()
