@@ -4,8 +4,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 ## Next Up
 
-- [ ] Merge the app-icon and public-repo CI plan ([PR #52](https://github.com/kgrizz-git/SpotiBye/pull/52); plan: `dev-docs/exec-plans/active/2026-10-18-app-icon-and-source-launcher.md`)
-- [ ] Implement that plan's Phase 4 (public-repo CI posture) as its own PR: push-triggered secret scanning, SARIF upload, `scripts/tests/`, basedpyright, ruff check, and a hygiene job in CI
+- [ ] Implement Phase 4 of the [app-icon and public-repo CI plan](../exec-plans/active/2026-10-18-app-icon-and-source-launcher.md) (public-repo CI posture) as its own PR: push-triggered secret scanning, SARIF upload, `scripts/tests/`, basedpyright, ruff check, and a hygiene job in CI
 - [ ] Implement that plan's branding phases: window icon and `SpotiBye` window title (Phase 1), then the `SpotiBye.command` launcher (Phase 3)
 - [ ] After Phase 1, retake the README screenshots from mock data (Phase 2b) to replace the interim hand-redacted ones
 - [ ] Decide which checks branch protection on `main` should require, so the new CI gates can block merges
