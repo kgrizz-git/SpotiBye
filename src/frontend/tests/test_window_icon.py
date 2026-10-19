@@ -9,7 +9,7 @@ import pytest
 
 from ..utils.platform_utils import resolve_window_icon
 
-_ICON_NAME = "SpotiBye black edited 1.png"
+_ICON_NAME = "SpotiBye black edited 1-modified.png"
 
 
 def test_returns_png_when_present(tmp_path: Path) -> None:

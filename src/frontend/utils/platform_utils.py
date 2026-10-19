@@ -431,14 +431,14 @@ def _fallback_window_setup() -> None:
 
 
 def resolve_window_icon(root: Path | None = None) -> Path | None:
-    """Return the unmasked window icon PNG, or None if unavailable.
+    """Return the rounded (squircle) window icon PNG, or None if unavailable.
 
     Frozen (PyInstaller) builds own their icon and do not bundle ``resources/``.
     """
     if getattr(sys, "frozen", False):
         return None
     base = root if root is not None else Path(__file__).resolve().parents[3]
-    icon = base / "resources" / "SpotiBye black edited 1.png"
+    icon = base / "resources" / "SpotiBye black edited 1-modified.png"
     return icon if icon.is_file() else None
 
 
