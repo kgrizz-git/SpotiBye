@@ -47,7 +47,8 @@ def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         path = Path(spec.origin).parent / "data" / "fonts" / "Roboto-Bold.ttf"
         if path.exists():
             return ImageFont.truetype(str(path), size)
-    return ImageFont.load_default(size=size)
+    # `size` exists since Pillow 10.1 (requirements pin pillow>=12.3); Sonar's stubs predate it.
+    return ImageFont.load_default(size=size)  # NOSONAR(S930)
 
 
 def _stripes(rng: random.Random, pal: tuple[str, ...], _t: str, _a: str) -> Image.Image:
