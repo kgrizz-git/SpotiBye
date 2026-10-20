@@ -83,5 +83,6 @@ def test_ctypes_helper_raises_without_coregraphics(
 @pytest.mark.skipif(sys.platform != "darwin", reason="needs real CoreGraphics")
 def test_real_coregraphics_reports_a_screen() -> None:
     width, height = platform_utils._macos_main_display_size()
-    assert width > 0 and height > 0
+    assert width > 0
+    assert height > 0
     assert platform_utils._macos_main_display_size() == (width, height)
