@@ -12,9 +12,15 @@
 
 ## 2026-10-20 — certifi floor raised to clear GHSA-6q48-6c7w-9gw2
 
-PR: n/a (pending)
+PR: #62
 Scope: `requirements.txt`, `pyproject.toml`
 OSV-Scanner began failing Security Scan on every PR after GHSA-6q48-6c7w-9gw2 (critical, CVSS 9.1) was published against `certifi` 2026.7.22, a transitive dependency of `requests`/`spotipy`. Added a `certifi>=2026.10.19` floor next to the existing `idna`/`pygments` transitive floors.
+
+## 2026-10-19 — README screenshots regenerated from fictional mock data
+
+PR: #61
+Scope: `scripts/capture_screenshots.py`, `scripts/screenshot_fixture.py`, `src/frontend/tests/mock_backend.py`, `docs/images/`, `README.md`
+A new script runs the real app against the mock backend with invented playlists, artists and generated cover art, in a throwaway `HOME`, and captures login, playlist grid, analysis, tracks and cache-explorer screens. README shows the grid, analysis, tracks and cache-explorer shots, plus the owner's real export sheet with personal fields repainted as fictional values. Covers are generated 2x2 mosaics of invented album art. The mock backend gained `/auth/me`, static file serving, an overridable auth user, and a threading server.
 
 ## 2026-10-19 — Public-repo CI posture: push secret scanning, SARIF, lint/type/hygiene gates
 

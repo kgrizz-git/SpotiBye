@@ -60,14 +60,14 @@ Delivered early in #53, together with interim hand-redacted screenshots. The log
 
 ## Phase 2b — Personal-data-free screenshots (after Phase 1)
 
-The README currently uses hand-redacted March 2026 captures. They show the old title and real listening data, and the redaction boxes are visible. Replace them with captures of the app running against fictional data.
+The README used hand-redacted March 2026 captures with the old title, real listening data and visible redaction boxes. They are replaced with captures of the app running against fictional data.
 
-- [ ] Add a screenshot-mode runner (e.g. `scripts/capture_screenshots.py`) that starts `src/frontend/tests/mock_backend.py` on localhost with a fictional fixture: invented playlist names, owner `demo-user`, generated placeholder cover art (no real album art), and synthetic analysis values. Point the app at it via `SPOTIBYE_BACKEND_URL`. First verify that the mock covers every route the main, analysis, tracks, and cache-explorer screens call, and add any that are missing.
-- [ ] Drive each screen and capture with Kivy `Window.screenshot()` at a fixed window size, so retakes are reproducible. Fall back to a manual `screencapture -l <windowid>` if login cannot be scripted.
-- [ ] Use a throwaway cache directory, so the run neither reads nor pollutes the real user cache, and so the cache explorer shows only fixture data.
-- [ ] Capture: login, playlist grid, playlist analysis, tracks view, cache explorer, and one exported sheet (open the fixture export in a spreadsheet app).
-- [ ] Inspect every capture at full size before committing. Confirm no username, home path, real playlist ID, or real cover art appears, and strip metadata on save.
-- [ ] Replace the images in `docs/images/` under the same file names, so `README.md` needs no edit. Delete the redacted originals from `tmp/`.
+- [x] Add a screenshot-mode runner (`scripts/capture_screenshots.py`, fixture in `scripts/screenshot_fixture.py`; regenerate with `.venv/bin/python scripts/capture_screenshots.py`) that starts `src/frontend/tests/mock_backend.py` on localhost with a fictional fixture: invented playlist names, owner `demo-user`, generated placeholder cover art (no real album art), and synthetic analysis values. Point the app at it via `SPOTIBYE_BACKEND_URL`. First verify that the mock covers every route the main, analysis, tracks, and cache-explorer screens call, and add any that are missing.
+- [x] Drive each screen and capture with Kivy `Window.screenshot()` at a fixed window size, so retakes are reproducible. Login is scripted (mock OAuth callback fed to the login screen's own success handler), so no manual fallback was needed. Note: `Window.screenshot()` grabs the GL framebuffer, so the OS title bar is not in the image.
+- [x] Use a throwaway cache directory, so the run neither reads nor pollutes the real user cache, and so the cache explorer shows only fixture data.
+- [x] Capture: login, playlist grid, playlist analysis, tracks view, cache explorer. The exported sheet is skipped: the XLSX is built by the Cloudflare Worker, which the mock does not emulate, and rendering it needs a GUI spreadsheet app.
+- [x] Inspect every capture at full size before committing. Confirm no username, home path, real playlist ID, or real cover art appears, and strip metadata on save.
+- [x] Replace the README images with the mock-data captures. Done 2026-10-19: README shows the playlist grid, analysis and tracks shots; `screenshot-export-sheet.jpg` cannot come from the mock (the Worker builds the XLSX), so it is the owner's real export, redacted by repainting personal fields with fictional values in matching fonts (tabs, Created by, playlist URL; real album-art thumbnail replaced with a generated mosaic from `scripts/screenshot_covers.py`). The hand-redacted originals in `tmp/` are left for the owner to delete.
 
 ## Phase 3 — Double-clickable launcher with first-run icon association
 
