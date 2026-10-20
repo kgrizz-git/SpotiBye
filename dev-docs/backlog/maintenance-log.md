@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-20 — App-icon and public-repo CI plan closed
+
+PR: n/a (pending)
+Scope: `dev-docs/exec-plans/`, `dev-docs/backlog/TO_DO.md`, `dev-docs/guides/frontend-distribution-guide.md`
+Closed the plan after #53, #54 and #58–#61 shipped. Fixed the distribution guide's stale `src/frontend/assets/` icon paths to `resources/`, recorded the rounded runtime-icon choice, and added a short running-from-source section. Recorded the owner's manual checks (Dock/taskbar icon and title; Finder icon and clean second launch) and resolved the two open decisions (keep the JXA icon rung; no per-push full-history TruffleHog). Moved the plan to `completed/` and removed its TO_DO and Next Up entries.
+
 ## 2026-10-20 — certifi floor raised to clear GHSA-6q48-6c7w-9gw2
 
 PR: #62
