@@ -106,7 +106,8 @@ def get_screen_resolution() -> Tuple[int, int]:
                     return width, height
             except Exception as exc:
                 logger.info("CoreGraphics method failed: %s", exc)
-            return 1920, 1080
+            # Conservative: fits common MacBook logical resolutions (1440x900+).
+            return 1440, 900
 
         if system == "Windows":
             try:
