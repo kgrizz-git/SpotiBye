@@ -32,11 +32,11 @@ SpotiBye is a desktop app: log in with Spotify, browse your playlists, analyze t
 </p>
 
 <p align="center">
-  <img src="docs/images/screenshot-cache-explorer.jpg" alt="Cache explorer showing cached playlists, tracks, and track details" width="400">
-  <img src="docs/images/screenshot-export-sheet.jpg" alt="An exported playlist opened in a spreadsheet" width="400">
+  <img src="docs/images/screenshot-playlist-analysis.jpg" alt="Playlist analysis with genre distribution, top artists, and audio features" width="400">
+  <img src="docs/images/screenshot-tracks.jpg" alt="Track list for a playlist" width="400">
 </p>
 
-<sub>Screenshots are from an earlier build, and personal details are blanked out.</sub>
+<sub>Screenshots use fictional demo data. Regenerate them with <code>.venv/bin/python scripts/capture_screenshots.py</code>.</sub>
 
 ## Requirements
 

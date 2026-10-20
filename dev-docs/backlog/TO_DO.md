@@ -6,7 +6,6 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 - [ ] Implement Phase 4 of the [app-icon and public-repo CI plan](../exec-plans/active/2026-10-18-app-icon-and-source-launcher.md) (public-repo CI posture) as its own PR: push-triggered secret scanning, SARIF upload, `scripts/tests/`, basedpyright, ruff check, and a hygiene job in CI
 - [ ] Implement that plan's branding phases: window icon and `SpotiBye` window title (Phase 1), then the `SpotiBye.command` launcher (Phase 3)
-- [ ] After Phase 1, retake the README screenshots from mock data (Phase 2b) to replace the interim hand-redacted ones
 - [ ] Decide which checks branch protection on `main` should require, so the new CI gates can block merges
 
 ## Playlist Analysis — End-to-End
@@ -83,7 +82,5 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Add `ruff format --check` to CI in its own PR (30 files would be reformatted as of 2026-10-18)
   - [ ] Add a `macos-latest` frontend test job to `ci.yml` (minutes are free; launcher and window icon are macOS-specific)
   - [ ] Add an OpenSSF Scorecard workflow (free for public repos; uploads SARIF to Code Scanning)
-- [ ] Add screenshots to README for the public release
-  - [ ] Interim hand-redacted screenshots ship with the README polish PR; replace them with mock-data captures (Phase 2b of the app-icon plan)
 
 See also: agent-first-retrofit, quality review/assessment

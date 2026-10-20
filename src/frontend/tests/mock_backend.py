@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
@@ -26,6 +26,10 @@ class MockBackendHandler(BaseHTTPRequestHandler):
             self._handle_health_check()
         elif parsed_path.path == "/auth/spotify/callback":
             self._handle_spotify_callback(query_params=query_params)
+        elif parsed_path.path == "/auth/me":
+            self._handle_get_me()
+        elif parsed_path.path in self.test_data.get("static_files", {}):
+            self._handle_static_file(parsed_path.path)
         elif parsed_path.path == "/spotify/playlists":
             self._handle_get_playlists()
         elif parsed_path.path.startswith("/spotify/playlists/") and (
@@ -124,17 +128,36 @@ class MockBackendHandler(BaseHTTPRequestHandler):
                     "token": "mock_jwt_token_abcdef123456",
                     "refresh_token": "mock_refresh_token_789012",
                     "expires_in": 3600,
-                    "user": {
-                        "id": "test_user_123",
-                        "display_name": "Test User",
-                        "email": "test@example.com",
-                    },
+                    "user": self.test_data.get(
+                        "auth_user",
+                        {
+                            "id": "test_user_123",
+                            "display_name": "Test User",
+                            "email": "test@example.com",
+                        },
+                    ),
                 }
                 self._send_json_response(200, token_data)
             else:
                 self._send_error(400, "Invalid authorization code or state")
         except Exception as e:
             self._send_error(400, f"Invalid request data: {e}")
+
+    def _handle_get_me(self):
+        """Handle the session-check endpoint (``test_data["auth_user"]`` overrides)."""
+        user = self.test_data.get("auth_user", {"id": "test_user_123"})
+        self._send_json_response(
+            200, {"id": user.get("id"), "name": user.get("display_name")}
+        )
+
+    def _handle_static_file(self, path: str):
+        """Serve ``test_data["static_files"][path]`` as ``(content_type, bytes)``."""
+        content_type, body = self.test_data["static_files"][path]
+        self.send_response(200)
+        self.send_header("Content-type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _handle_token_refresh(self):
         """Handle token refresh."""
@@ -382,7 +405,7 @@ class MockBackendServer:
             def handler(*args, **kwargs):
                 return MockBackendHandler(self.test_data, *args, **kwargs)
 
-            self.server = HTTPServer((self.host, self.port), handler)
+            self.server = ThreadingHTTPServer((self.host, self.port), handler)
             self.port = self.server.server_address[
                 1
             ]  # capture actual port (handles port=0)

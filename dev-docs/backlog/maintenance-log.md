@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-19 — README screenshots regenerated from fictional mock data
+
+PR: n/a (pending)
+Scope: `scripts/capture_screenshots.py`, `scripts/screenshot_fixture.py`, `src/frontend/tests/mock_backend.py`, `docs/images/`, `README.md`
+A new script runs the real app against the mock backend with invented playlists, artists and generated cover art, in a throwaway `HOME`, and captures login, playlist grid, analysis, tracks and cache-explorer screens. README now shows the grid, analysis and tracks shots; the old hand-redacted real-data images are replaced, and the export-sheet image is removed. The mock backend gained `/auth/me`, static file serving, an overridable auth user, and a threading server.
+
 ## 2026-10-19 — Public-repo CI posture: push secret scanning, SARIF, lint/type/hygiene gates
 
 PR: #54
