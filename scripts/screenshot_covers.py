@@ -37,9 +37,8 @@ PALETTES: list[tuple[str, str, str, str]] = [
 
 def make_rng(seed: int) -> random.Random:
     """Return the seeded generator used for all demo-fixture randomness."""
-    # fmt: off
-    return random.Random(seed)  # NOSONAR(S2245): deterministic demo fixture, not security-sensitive
-    # fmt: on
+    # Deterministic demo fixture, not security-sensitive.
+    return random.Random(seed)  # NOSONAR(S2245)
 
 
 def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -48,7 +47,7 @@ def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         path = Path(spec.origin).parent / "data" / "fonts" / "Roboto-Bold.ttf"
         if path.exists():
             return ImageFont.truetype(str(path), size)
-    return ImageFont.load_default(size)
+    return ImageFont.load_default(size=size)
 
 
 def _stripes(rng: random.Random, pal: tuple[str, ...], _t: str, _a: str) -> Image.Image:
