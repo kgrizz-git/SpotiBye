@@ -71,6 +71,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Replaced `'as unknown as T'` casts in `spotify.ts` (`getAudioFeatures`, `getArtist`, `getMultipleAudioFeatures`) with typed wrappers that perform runtime shape checks and throw on invalid input.
 
 ### Fixed
+- macOS: launching from Terminal.app (including double-clicking `SpotiBye.command`) no longer crashes at startup. The screen-size check now asks CoreGraphics directly instead of falling back to Tk, which aborted the process, and no longer asks Finder via AppleScript (no Automation permission prompt).
 - Fixed spurious "Analysis failed: Analysis results not found" after a successful large-playlist analysis: the app now retries the results fetch through KV replication lag before concluding the cached analysis is stale and re-running the whole job (which previously burned a full second analysis and then surfaced the same error).
 - Reopening a playlist no longer re-runs the full analysis when the cached results are fresh but enrichment-partial (e.g. tracks ReccoBeats has no data for): the backend now serves the cached results, and explicit refresh paths (miss-fill, composition change, Refresh button) enqueue a `refresh` job that reuses the warm per-track cache instead of burning a full job every open.
 - Corrected a dead-code bug in `scripts/check-dependencies.py` where the return value was always 0 regardless of `all_passed` (the `--ci` exit path was already handled by `sys.exit(1)`).
