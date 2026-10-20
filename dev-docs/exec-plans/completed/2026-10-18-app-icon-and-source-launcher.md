@@ -1,6 +1,6 @@
 # Plan: App Icon at Runtime, README Branding, a Source Launcher, and Public-Repo CI Posture
 
-**Status:** in progress — Phase 2 delivered in #53; Phase 4 delivered in #54; Phases 1, 2b, 3 and 5 not started
+**Status:** completed 2026-10-20 — Phase 2 in #53, Phase 4 in #54, Phase 1 in #58, Phase 3 in #59 (plus the #60 crash fix), Phase 2b in #61, Phase 5 in the closing PR.
 **Branch:** plan authored on `feat/app-icon-and-source-launcher` (#52); each phase ships on its own branch
 **Created:** 2026-10-18
 **Motivation (branding):** The repo ships exactly one icon design (`resources/`) and wires it into the *packaged* app only. Three gaps follow from that: (1) running from source (`python run_frontend_backend.py`) shows Kivy's default icon and an "Untitled"-looking title bar, so the app is unrecognizable in Mission Control/Dock/Alt-Tab; (2) the README — the project's front door on GitHub — has no logo and no badges; (3) a source user has no double-clickable entry point and no branded icon in Finder, which is exactly the "just run it" experience every other desktop app has.
@@ -46,7 +46,7 @@
 - [x] Brand the window title as `SpotiBye`. Set `self.title = "SpotiBye"` in `build()`, pass the same string to `set_window_basics()` (`backend_app.py:134-136`), and replace the hardcoded fallback title (`platform_utils.py:428`). Without `self.title`, Kivy's post-`build()` `set_title()` keeps replacing it with `BackendSpotifyExporter`. Also rename the login heading `Spotify Playlist Exporter` (`auth/backend_login_screen.py:67`) so new screenshots match. Do not rename the `App` class: Kivy derives `App.name` and `user_data_dir` from it.
 - [x] Keep `platform_utils.py` (439 lines today) under the 700-line code cap.
 - [x] Tests: new `src/frontend/tests/test_window_icon.py` covering (a) resolver returns the PNG when present, (b) returns `None` when the file is missing (injected temp root), (c) returns `None` when `sys.frozen` is set, (d) the real repo root resolves to an existing file, which catches a renamed asset. Pure-function tests only — do not open a real window in the suite.
-- [ ] Manually verify on macOS that the Dock/Alt-Tab entry and the window title-bar-adjacent icon show SpotiBye, and record the result in this plan.
+- [x] Manually verify on macOS that the Dock/Alt-Tab entry and the window title-bar-adjacent icon show SpotiBye, and record the result in this plan. Verified 2026-10-19 by the owner: SpotiBye icon (rounded variant) and title shown.
 
 ## Phase 2 — README icon and badges
 
@@ -80,7 +80,7 @@ The README used hand-redacted March 2026 captures with the old title, real liste
 - [x] Scope: macOS gets the launcher. Other platforms get a short "run `python3 run_frontend_backend.py`" line and no icon work — Windows Explorer cannot set per-file icons from a script, and inventing `.bat`/`.desktop` variants here is scope creep (see Out of scope).
 - [x] Phase 1 and Phase 3 compose deliberately: the launcher brands the Finder file, and the app now brands its own window, so a source run looks branded at both layers without touching packaging.
 - [x] Test: add a Python test under `scripts/tests/` asserting `SpotiBye.command` exists, is LF-only, is executable, drives `run_frontend_backend.py`, and that the icon block is guarded by the already-set check. (Shell-level behavior is verified manually, not in CI: the `frontend` CI job runs on `ubuntu-latest` only, `ci.yml:50`.)
-- [ ] Manual verification, recorded here: double-click from Finder with cwd ≠ repo root, confirm it launches; confirm the Finder icon *visibly* appears after first run (screenshot or `xattr -l` showing `com.apple.ResourceFork`). An exit code alone does not count. Confirm a second run does not re-apply the icon and does not re-prompt; confirm `git status` is clean afterward.
+- [x] Manual verification, recorded here: double-click from Finder with cwd ≠ repo root, confirm it launches; confirm the Finder icon *visibly* appears after first run (screenshot or `xattr -l` showing `com.apple.ResourceFork`). An exit code alone does not count. Confirm a second run does not re-apply the icon and does not re-prompt; confirm `git status` is clean afterward. Verified 2026-10-20 by the owner: icon appeared in Finder; a second double-click launched normally with no re-apply and no permission prompt; `git status` clean. The first attempt crashed in an unrelated screen-size fallback (Tk), fixed in #60.
 
 ## Phase 4 — Public-repo CI posture
 
@@ -104,23 +104,23 @@ Bundled from the "repo is public now" review. **Ship as its own PR**, separate f
 
 ## Phase 5 — Docs, verification, and ship
 
-- [ ] Add a `CHANGELOG.md` **Unreleased → Added** entry: window icon and `SpotiBye` window title when running from source, README logo/badges/screenshots, and the `SpotiBye.command` launcher. User-visible, so `CHANGELOG.md` is required (any internal-only leftovers go to `dev-docs/backlog/maintenance-log.md` instead).
-- [ ] Confirm the Phase 4 CI changes are logged in `dev-docs/backlog/maintenance-log.md`, not `CHANGELOG.md`. Trigger and SARIF changes are internal tooling with no user-facing behavior change.
-- [ ] Fix the stale icon paths in `dev-docs/guides/frontend-distribution-guide.md:25-28` to point at `resources/` instead of the nonexistent `src/frontend/assets/`, and add a short "running from source" section pointing at `SpotiBye.command` and the runtime window icon.
-- [ ] Mention the launcher in the README Development section next to the existing `verify-all.sh` line.
-- [ ] Link this plan from `dev-docs/backlog/TO_DO.md` (backlink added at authoring time; remove the entry when the plan completes) and index it in `dev-docs/exec-plans/active/README.md` (done at authoring time).
-- [ ] Run, from the repo root: `./scripts/verify-all.sh`, `.venv/bin/basedpyright src/frontend src/shared scripts --level error`, `scripts/check-repo-structure.sh`, and `scripts/check_docs_hygiene.py`. Frontend tests must use `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v` from the repo root.
-- [ ] Two-reviewer pass before opening the PR, per repo practice for user-facing changes.
-- [ ] Open the PR as one logical change; split Phase 3 into its own PR if the diff exceeds ~400 lines. **Phase 4 ships as a separate PR** and must not gate the Phase 1–3 branding PR.
-- [ ] When **both** PRs have merged (whichever lands last): move this plan to `dev-docs/exec-plans/completed/`, index it in `completed/README.md`, drop the `TO_DO.md` backlink, and confirm the active-plan hygiene checks are quiet.
+- [x] Add a `CHANGELOG.md` **Unreleased → Added** entry: window icon and `SpotiBye` window title when running from source, README logo/badges/screenshots, and the `SpotiBye.command` launcher. User-visible, so `CHANGELOG.md` is required (any internal-only leftovers go to `dev-docs/backlog/maintenance-log.md` instead). Done across #58 (window icon/title, Changed), #59 (launcher, Added) and #60 (Terminal.app crash, Fixed); README logo/badges/screenshots are docs-only and logged in `maintenance-log.md`.
+- [x] Confirm the Phase 4 CI changes are logged in `dev-docs/backlog/maintenance-log.md`, not `CHANGELOG.md`. Trigger and SARIF changes are internal tooling with no user-facing behavior change. Logged under PR #54.
+- [x] Fix the stale icon paths in `dev-docs/guides/frontend-distribution-guide.md:25-28` to point at `resources/` instead of the nonexistent `src/frontend/assets/`, and add a short "running from source" section pointing at `SpotiBye.command` and the runtime window icon. Done; the guide also records the rounded-icon choice and a short "Running from Source" section.
+- [x] Mention the launcher in the README Development section next to the existing `verify-all.sh` line. Done in #59.
+- [x] Link this plan from `dev-docs/backlog/TO_DO.md` (backlink added at authoring time; remove the entry when the plan completes) and index it in `dev-docs/exec-plans/active/README.md` (done at authoring time). Backlink and index row removed now that the plan is complete.
+- [x] Run, from the repo root: `./scripts/verify-all.sh`, `.venv/bin/basedpyright src/frontend src/shared scripts --level error`, `scripts/check-repo-structure.sh`, and `scripts/check_docs_hygiene.py`. Frontend tests must use `KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -v` from the repo root. Run on the closing PR; see its description.
+- [x] Two-reviewer pass before opening the PR, per repo practice for user-facing changes. Each phase PR got Greptile/CodeRabbit plus an extra model review (Sonnet-implemented phases reviewed by Opus; #60 by DeepSeek; this closing PR by GLM 5.3 Flash).
+- [x] Open the PR as one logical change; split Phase 3 into its own PR if the diff exceeds ~400 lines. **Phase 4 ships as a separate PR** and must not gate the Phase 1–3 branding PR. Shipped as #53 (README), #54 (CI), #58 (Phase 1), #59 (Phase 3), #60 (crash fix), #61 (Phase 2b screenshots), #62 (certifi).
+- [x] When **both** PRs have merged (whichever lands last): move this plan to `dev-docs/exec-plans/completed/`, index it in `completed/README.md`, drop the `TO_DO.md` backlink, and confirm the active-plan hygiene checks are quiet. Done in the closing PR.
 
 ---
 
 ## Open decisions (resolve in the phase named, record the outcome here)
 
 - [x] Window icon from the masked or unmasked PNG — Resolved 2026-10-19: rounded `-modified` PNG, chosen by the owner after seeing the square one in the Dock.
-- [ ] Whether the JXA `NSWorkspace` rung actually brands `SpotiBye.command` on a stock Mac. If the Phase 3 visual check fails, decide between the CLT-only `DeRez`/`Rez` recipe and dropping launcher branding. `SetFile -a C` alone is ruled out (flag only, no icon data). **Result (2026-10-19, macOS Darwin 25.6, temp copy of the script):** the JXA rung returned `true` and `xattr -l` on the copy showed `com.apple.ResourceFork` (plus `com.apple.FinderInfo`). Finder rendering and the Finder double-click path are still unconfirmed (manual verification step).
-- [ ] Phase 4: whether full-history TruffleHog should *also* run on every `main` push, on top of the push-diff scan. The default is diff-on-push plus full history on the weekly cron. Decide from the first push run's wall time.
+- [x] Whether the JXA `NSWorkspace` rung actually brands `SpotiBye.command` on a stock Mac. If the Phase 3 visual check fails, decide between the CLT-only `DeRez`/`Rez` recipe and dropping launcher branding. `SetFile -a C` alone is ruled out (flag only, no icon data). **Result (2026-10-19, macOS Darwin 25.6, temp copy of the script):** the JXA rung returned `true` and `xattr -l` on the copy showed `com.apple.ResourceFork` (plus `com.apple.FinderInfo`). Finder rendering and the Finder double-click path are still unconfirmed (manual verification step). Resolved 2026-10-20: the owner confirmed the icon visibly appears in Finder, so the JXA rung stays and the `DeRez`/`Rez` fallback is not needed.
+- [x] Phase 4: whether full-history TruffleHog should *also* run on every `main` push, on top of the push-diff scan. The default is diff-on-push plus full history on the weekly cron. Decide from the first push run's wall time. Resolved 2026-10-20: keep diff-on-push plus the weekly full-history cron; no per-push full-history scan.
 
 ## Out of scope
 

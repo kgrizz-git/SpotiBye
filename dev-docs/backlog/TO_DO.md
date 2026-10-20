@@ -4,9 +4,8 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 ## Next Up
 
-- [ ] Implement Phase 4 of the [app-icon and public-repo CI plan](../exec-plans/active/2026-10-18-app-icon-and-source-launcher.md) (public-repo CI posture) as its own PR: push-triggered secret scanning, SARIF upload, `scripts/tests/`, basedpyright, ruff check, and a hygiene job in CI
-- [ ] Implement that plan's branding phases: window icon and `SpotiBye` window title (Phase 1), then the `SpotiBye.command` launcher (Phase 3)
 - [ ] Decide which checks branch protection on `main` should require, so the new CI gates can block merges
+- [ ] Add `ruff format --check` to CI in its own PR (reformat the ~30 files first, in one formatting-only commit)
 
 ## Playlist Analysis — End-to-End
 
@@ -74,12 +73,9 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 - [ ] Consider releasing as public open-source with instructions on how users can set up their own backend ([plan](../exec-plans/active/2026-09-15-self-host-guides-and-scripts.md)) — docs + setup script shipped; remaining is the hosted-backend evaluation below
   - [ ] Evaluate if a hosted backend option should be offered for users who don't want to self-host
 
-- [ ] App icon when running from source (Kivy `App.icon` + `App.title` — `Window.icon` is a no-op after window creation), README logo + badges, and a double-clickable `SpotiBye.command` launcher that brands itself in Finder on first run; plus the repo's public-repo CI posture ([plan](../exec-plans/active/2026-10-18-app-icon-and-source-launcher.md)) — **in progress 2026-10-18**
-- [ ] Public-repo follow-ups (from Phase 4 of the app-icon plan)
-  - [ ] Branch protection on `main` is now tier-unblocked (was `403 Upgrade to GitHub Pro or make this repository public`; now `404 Branch not protected`) — decide required checks separately
+- [ ] Public-repo follow-ups (from the [app-icon and public-repo CI plan](../exec-plans/completed/2026-10-18-app-icon-and-source-launcher.md))
   - [ ] `SECURITY.md` still describes the private-era posture
   - [ ] 3 Dependabot alerts open on the public repo
-  - [ ] Add `ruff format --check` to CI in its own PR (30 files would be reformatted as of 2026-10-18)
   - [ ] Add a `macos-latest` frontend test job to `ci.yml` (minutes are free; launcher and window icon are macOS-specific)
   - [ ] Add an OpenSSF Scorecard workflow (free for public repos; uploads SARIF to Code Scanning)
 

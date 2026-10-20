@@ -22,10 +22,15 @@ This guide explains how to package and distribute the SpotiBye frontend applicat
 - PyInstaller (included in requirements.txt)
 - Deployed backend URL
 - Spotify Developer App credentials
-- Icons for your application:
-  - Windows: `src/frontend/assets/icon.ico` (recommended size: 256x256px)
-  - macOS: `src/frontend/assets/icon.icns` (recommended size: 1024x1024px @1x, 2048x2048px @2x)
-  - Linux: `src/frontend/assets/icon.png` (recommended size: 512x512px)
+- Icons for your application (already in `resources/`; `spotibye.spec` picks them per platform):
+  - Windows: `resources/SpotiBye black edited 1-modified.ico`
+  - macOS: `resources/SpotiBye black edited 1-modified.icns`
+  - Linux: `resources/SpotiBye black edited 1-modified.png`
+  - The rounded `-modified` PNG is also the runtime window/taskbar icon when running from source (`resolve_window_icon()` in `src/frontend/utils/platform_utils.py`; frozen builds skip it and use the bundled icon). `resources/spotibye-logo-320.png` is a README-only copy; regenerate it with the command in the HTML comment beside the logo in `README.md`.
+
+## Running from Source
+
+On macOS, double-click `SpotiBye.command` at the repo root. It uses `.venv/bin/python` (or `python3` if it has the app's packages), prints the install command otherwise, and on first run attaches the app icon to itself in Finder. Elsewhere, run `python3 run_frontend_backend.py`.
 
 ## ✅ Step 1: Prepare Frontend Configuration
 
