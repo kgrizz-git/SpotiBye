@@ -66,76 +66,48 @@ def diagnose_macos_issues() -> None:
         logger.warning("Error in macOS diagnostics: %s", exc)
 
 
+def _macos_main_display_size() -> Tuple[int, int]:
+    """Return the main display size in points via CoreGraphics (macOS only)."""
+    import ctypes
+    import ctypes.util
+
+    class _CGPoint(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double)]
+
+    class _CGSize(ctypes.Structure):
+        _fields_ = [("width", ctypes.c_double), ("height", ctypes.c_double)]
+
+    class _CGRect(ctypes.Structure):
+        _fields_ = [("origin", _CGPoint), ("size", _CGSize)]
+
+    path = ctypes.util.find_library("CoreGraphics")
+    if path is None:
+        raise OSError("CoreGraphics not found")
+    cg = ctypes.CDLL(path)
+    cg.CGMainDisplayID.restype = ctypes.c_uint32
+    cg.CGDisplayBounds.restype = _CGRect
+    cg.CGDisplayBounds.argtypes = [ctypes.c_uint32]
+    bounds = cg.CGDisplayBounds(cg.CGMainDisplayID())
+    return int(bounds.size.width), int(bounds.size.height)
+
+
 def get_screen_resolution() -> Tuple[int, int]:
     """Get screen resolution using fast, reliable methods that don't hang on macOS."""
     try:
         system = platform.system()
 
         if system == "Darwin":
+            # CoreGraphics via ctypes: no Automation prompt (the old Finder
+            # osascript), no PyObjC dependency, and no Tk, whose colour lookup
+            # aborts the process on recent macOS when launched from Terminal.
             try:
-                result = subprocess.run(
-                    [
-                        "osascript",
-                        "-e",
-                        'tell application "Finder" to get bounds of window of desktop',
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    bounds = [int(x.strip()) for x in result.stdout.strip().split(", ")]
-                    if len(bounds) >= 4:
-                        return bounds[2], bounds[3]
-            except Exception as exc:
-                logger.info("osascript method failed: %s", exc)
-
-            try:
-                from Quartz import CGDisplayBounds, CGMainDisplayID  # pyright: ignore[reportMissingImports]
-
-                bounds = CGDisplayBounds(CGMainDisplayID())
-                width = int(bounds.size.width)
-                height = int(bounds.size.height)
+                width, height = _macos_main_display_size()
                 if width > 0 and height > 0:
                     return width, height
-            except ImportError:
-                logger.info("Quartz/CoreGraphics not available")
             except Exception as exc:
                 logger.info("CoreGraphics method failed: %s", exc)
-
-            try:
-                from AppKit import NSScreen  # pyright: ignore[reportMissingImports]
-
-                main_screen = NSScreen.mainScreen()
-                if main_screen:
-                    frame = main_screen.frame()
-                    width = int(frame.size.width)
-                    height = int(frame.size.height)
-                    if width > 0 and height > 0:
-                        return width, height
-            except ImportError:
-                logger.info("AppKit not available")
-            except Exception as exc:
-                logger.info("AppKit method failed: %s", exc)
-
-            try:
-                import tkinter as tk
-
-                root = None
-                try:
-                    root = tk.Tk()
-                    root.withdraw()
-                    width = root.winfo_screenwidth()
-                    height = root.winfo_screenheight()
-                    if width > 0 and height > 0:
-                        return width, height
-                finally:
-                    if root is not None:
-                        root.destroy()
-            except Exception as exc:
-                logger.info("tkinter method failed: %s", exc)
-
-            return 1920, 1080
+            # Conservative: fits common MacBook logical resolutions (1440x900+).
+            return 1440, 900
 
         if system == "Windows":
             try:
