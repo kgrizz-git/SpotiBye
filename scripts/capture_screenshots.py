@@ -360,6 +360,10 @@ def main() -> int:
     finally:
         server.stop()
 
+    # The app can also exit early (e.g. window closed) without raising.
+    missing = [key for key in OUTPUTS if key not in capture.raw]
+    if missing and not errors:
+        errors.append(f"views not captured: {', '.join(missing)}")
     written = [] if errors else _write_outputs(capture.raw, tmp)
     title = Window.title
     shutil.rmtree(tmp, ignore_errors=True)
