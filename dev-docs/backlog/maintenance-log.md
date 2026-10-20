@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-20 — certifi floor raised to clear GHSA-6q48-6c7w-9gw2
+
+PR: n/a (pending)
+Scope: `requirements.txt`, `pyproject.toml`
+OSV-Scanner began failing Security Scan on every PR after GHSA-6q48-6c7w-9gw2 (critical, CVSS 9.1) was published against `certifi` 2026.7.22, a transitive dependency of `requests`/`spotipy`. Added a `certifi>=2026.10.19` floor next to the existing `idna`/`pygments` transitive floors.
+
 ## 2026-10-19 — Public-repo CI posture: push secret scanning, SARIF, lint/type/hygiene gates
 
 PR: #54
