@@ -67,7 +67,7 @@ The README used hand-redacted March 2026 captures with the old title, real liste
 - [x] Use a throwaway cache directory, so the run neither reads nor pollutes the real user cache, and so the cache explorer shows only fixture data.
 - [x] Capture: login, playlist grid, playlist analysis, tracks view, cache explorer. The exported sheet is skipped: the XLSX is built by the Cloudflare Worker, which the mock does not emulate, and rendering it needs a GUI spreadsheet app.
 - [x] Inspect every capture at full size before committing. Confirm no username, home path, real playlist ID, or real cover art appears, and strip metadata on save.
-- [x] Replace the README images with the mock-data captures. Done 2026-10-19: README shows the playlist grid, analysis and tracks shots; the old real-data `screenshot-export-sheet.jpg` is deleted rather than replaced (it cannot be regenerated from the mock). The hand-redacted originals in `tmp/` are left for the owner to delete.
+- [x] Replace the README images with the mock-data captures. Done 2026-10-19: README shows the playlist grid, analysis and tracks shots; `screenshot-export-sheet.jpg` cannot come from the mock (the Worker builds the XLSX), so it is the owner's real export, redacted by repainting personal fields with fictional values in matching fonts (tabs, Created by, playlist URL; album-art thumbnail removed). The hand-redacted originals in `tmp/` are left for the owner to delete.
 
 ## Phase 3 — Double-clickable launcher with first-run icon association
 

@@ -12,31 +12,45 @@ with a real title by chance, but none is taken from a real catalogue.
 
 from __future__ import annotations
 
-import io
+import importlib.util
 import random
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw
+
+def _load_covers() -> Any:
+    """Load the sibling covers module by path (works however this file is loaded)."""
+    path = Path(__file__).with_name("screenshot_covers.py")
+    spec = importlib.util.spec_from_file_location("screenshot_covers", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["screenshot_covers"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+covers = _load_covers()
 
 DEMO_USER = {"id": "demo-user", "display_name": "demo-user"}
 
-# (playlist name, description, track count, hue 0-360)
-PLAYLISTS: list[tuple[str, str, int, int]] = [
-    ("Late Night Drive", "Synthetic highways after midnight", 32, 250),
-    ("Sunday Coffee", "Slow mornings and warm mugs", 24, 30),
-    ("Rainy Window", "Grey skies, soft piano", 28, 205),
-    ("Focus Hour", "Steady beats for deep work", 41, 160),
-    ("Neon Gym", "High tempo, high energy", 36, 320),
-    ("Campfire Stories", "Acoustic and unhurried", 19, 20),
-    ("Golden Hour Walk", "Warm light, easy tempo", 27, 45),
-    ("Road Trip Mix", "Windows down, volume up", 44, 190),
-    ("Cozy Cabin", "Wool socks and fireplaces", 22, 10),
-    ("Deep Space Study", "Ambient drift for long sessions", 38, 275),
-    ("Weekend Cleanup", "Upbeat chores soundtrack", 30, 120),
-    ("Moonlit Piano", "Quiet keys before sleep", 17, 230),
-    ("Summer Block Party", "Sunny, loud, and danceable", 46, 55),
-    ("Lo-Fi Library", "Dusty loops for reading", 35, 290),
+# (playlist name, description, track count)
+PLAYLISTS: list[tuple[str, str, int]] = [
+    ("Late Night Drive", "Synthetic highways after midnight", 32),
+    ("Sunday Coffee", "Slow mornings and warm mugs", 24),
+    ("Rainy Window", "Grey skies, soft piano", 28),
+    ("Focus Hour", "Steady beats for deep work", 41),
+    ("Neon Gym", "High tempo, high energy", 36),
+    ("Campfire Stories", "Acoustic and unhurried", 19),
+    ("Golden Hour Walk", "Warm light, easy tempo", 27),
+    ("Road Trip Mix", "Windows down, volume up", 44),
+    ("Cozy Cabin", "Wool socks and fireplaces", 22),
+    ("Deep Space Study", "Ambient drift for long sessions", 38),
+    ("Weekend Cleanup", "Upbeat chores soundtrack", 30),
+    ("Moonlit Piano", "Quiet keys before sleep", 17),
+    ("Summer Block Party", "Sunny, loud, and danceable", 46),
+    ("Lo-Fi Library", "Dusty loops for reading", 35),
 ]
 
 _ADJECTIVES = [
@@ -131,46 +145,30 @@ _GENRES = [
 _PITCHES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 
-def make_cover_png(hue: int, seed: int, size: int = 300) -> bytes:
-    """Return a generated gradient PNG with a few soft shapes (no real art)."""
-    rng = random.Random(seed)
-    img = Image.new("RGB", (size, size))
-    top = _hsv(hue, 0.55, 0.85)
-    bottom = _hsv((hue + 40) % 360, 0.75, 0.35)
-    px = img.load()
-    assert px is not None
-    for y in range(size):
-        t = y / (size - 1)
-        row = tuple(int(top[i] + (bottom[i] - top[i]) * t) for i in range(3))
-        for x in range(size):
-            px[x, y] = row
-    draw = ImageDraw.Draw(img, "RGBA")
-    for _ in range(4):
-        r = rng.randint(size // 10, size // 3)
-        cx, cy = rng.randint(0, size), rng.randint(0, size)
-        alpha = rng.randint(30, 80)
-        draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(255, 255, 255, alpha))
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
+ALBUM_COUNT = 22
+ALBUMS_PER_PLAYLIST = 6
+# 1-based playlist numbers that use one full-bleed album cover, not a mosaic.
+SINGLE_COVER = {3, 8, 12}
 
 
-def _hsv(h: int, s: float, v: float) -> tuple[int, int, int]:
-    import colorsys
+def _make_albums(rng: random.Random) -> list[dict[str, Any]]:
+    """Invent the album pool: name, artist, and the generated cover image."""
+    albums: list[dict[str, Any]] = []
+    names: set[str] = set()
+    while len(albums) < ALBUM_COUNT:
+        title = f"{rng.choice(_ADJECTIVES)} {rng.choice(_NOUNS)}"
+        if title in names:
+            continue
+        names.add(title)
+        artist = f"{rng.choice(_ARTIST_FIRST)} {rng.choice(_ARTIST_SECOND)}"
+        cover = covers.make_album_cover(rng, len(albums), title, artist)
+        albums.append({"title": title, "artist": artist, "cover": cover})
+    return albums
 
-    r, g, b = colorsys.hsv_to_rgb(h / 360, s, v)
-    return int(r * 255), int(g * 255), int(b * 255)
 
-
-def _make_tracks(rng: random.Random, pid: str, count: int) -> list[dict[str, Any]]:
-    artists = [
-        f"{rng.choice(_ARTIST_FIRST)} {rng.choice(_ARTIST_SECOND)}"
-        for _ in range(max(4, count // 4))
-    ]
-    albums = [
-        f"{rng.choice(_ADJECTIVES)} {rng.choice(_NOUNS)}"
-        for _ in range(max(3, count // 5))
-    ]
+def _make_tracks(
+    rng: random.Random, pid: str, count: int, albums: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     seen: set[str] = set()
     items: list[dict[str, Any]] = []
     while len(items) < count:
@@ -179,14 +177,15 @@ def _make_tracks(rng: random.Random, pid: str, count: int) -> list[dict[str, Any
             continue
         seen.add(title)
         i = len(items)
+        album = rng.choice(albums)
         items.append(
             {
                 "added_at": "2026-01-01T00:00:00Z",
                 "track": {
                     "id": f"demo_trk_{pid[-2:]}{i:02d}",
                     "name": title,
-                    "artists": [{"name": rng.choice(artists)}],
-                    "album": {"name": rng.choice(albums)},
+                    "artists": [{"name": album["artist"]}],
+                    "album": {"name": album["title"]},
                     "duration_ms": rng.randint(150_000, 290_000),
                     "preview_url": None,
                     "track_number": i + 1,
@@ -194,6 +193,48 @@ def _make_tracks(rng: random.Random, pid: str, count: int) -> list[dict[str, Any
             }
         )
     return items
+
+
+def _make_explorer_data(
+    rng: random.Random, tracks: dict[str, list[dict[str, Any]]]
+) -> dict[str, Any]:
+    """Legacy-shaped data the cache explorer reads from ``cache_data``.
+
+    The backend explorer never fills ``tracks_by_playlist`` or
+    ``features_by_track`` itself, so the capture script injects these.
+    """
+    by_playlist: dict[str, list[dict[str, Any]]] = {}
+    features: dict[str, dict[str, Any]] = {}
+    for pid, items in tracks.items():
+        rows = []
+        for it in items:
+            t = it["track"]
+            rows.append(
+                {
+                    "id": t["id"],
+                    "name": t["name"],
+                    "artists": [a["name"] for a in t["artists"]],
+                    "album": t["album"],
+                    "duration_ms": t["duration_ms"],
+                    "spotify_cached": True,
+                    "reccobeats_cached": True,
+                }
+            )
+            features[t["id"]] = {
+                "danceability": rng.uniform(0.4, 0.85),
+                "energy": rng.uniform(0.35, 0.9),
+                "valence": rng.uniform(0.2, 0.8),
+                "tempo": rng.uniform(80, 135),
+                "acousticness": rng.uniform(0.05, 0.7),
+                "instrumentalness": rng.uniform(0.0, 0.5),
+                "liveness": rng.uniform(0.05, 0.3),
+                "speechiness": rng.uniform(0.03, 0.12),
+                "key": rng.randint(0, 11),
+                "mode": rng.randint(0, 1),
+                "loudness": rng.uniform(-13.0, -5.0),
+            }
+        by_playlist[pid] = rows
+    return {"tracks_by_playlist": by_playlist, "features_by_track": features}
 
 
 def _fmt_duration(ms: int) -> str:
@@ -221,7 +262,7 @@ def _make_analysis(
     def avg(lo: float, hi: float) -> float:
         return round(rng.uniform(lo, hi), 3)
 
-    key_pcts = {p: 0.0 for p in _PITCHES}
+    key_pcts = dict.fromkeys(_PITCHES, 0.0)
     dominant = rng.choice(_PITCHES)
     key_pcts[dominant] = 24.0
     return {
@@ -282,19 +323,26 @@ def _make_analysis(
 
 def build_test_data(base_url: str) -> dict[str, Any]:
     """Build the mock backend ``test_data`` dict; covers are served at ``base_url``."""
-    rng = random.Random(20261019)
+    rng = covers.make_rng(20261019)
     now_iso = datetime(2026, 10, 19, 12, 0, tzinfo=timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
+    albums = _make_albums(rng)
     playlists: list[dict[str, Any]] = []
     tracks: dict[str, list[dict[str, Any]]] = {}
     analysis: dict[str, dict[str, Any]] = {}
     static: dict[str, tuple[str, bytes]] = {}
-    for idx, (name, desc, count, hue) in enumerate(PLAYLISTS, start=1):
+    for idx, (name, desc, count) in enumerate(PLAYLISTS, start=1):
         pid = f"demo_playlist_{idx:02d}"
         cover_path = f"/covers/{pid}.png"
-        static[cover_path] = ("image/png", make_cover_png(hue, seed=idx))
-        tracks[pid] = _make_tracks(rng, pid, count)
+        # Stride 4 over the pool: each album lands in ~2-3 mosaics, none in all.
+        subset = [
+            albums[(idx * 4 + k) % ALBUM_COUNT] for k in range(ALBUMS_PER_PLAYLIST)
+        ]
+        art = [a["cover"] for a in subset]
+        image = art[0] if idx in SINGLE_COVER else covers.mosaic(art)
+        static[cover_path] = ("image/png", covers.to_png(image))
+        tracks[pid] = _make_tracks(rng, pid, count, subset)
         analysis[pid] = _make_analysis(rng, pid, tracks[pid], now_iso)
         playlists.append(
             {
@@ -314,4 +362,5 @@ def build_test_data(base_url: str) -> dict[str, Any]:
         "playlist_tracks": tracks,
         "analysis_results": analysis,
         "static_files": static,
+        "explorer": _make_explorer_data(rng, tracks),
     }
