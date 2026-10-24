@@ -150,9 +150,9 @@ class TestParseRequirementsFile:
         )
         parsed = _mod.parse_requirements_file(req)
         assert parsed == {
-            "kivy": "==2.3.1",
-            "bandit": ">=1.7.8",
-            "urllib3": "==2.8.0",
+            "kivy": _mod.Requirement((), "==2.3.1"),
+            "bandit": _mod.Requirement(("toml",), ">=1.7.8"),
+            "urllib3": _mod.Requirement((), "==2.8.0"),
         }
 
     def test_skips_comments_blank_lines_and_options(self, tmp_path: Path) -> None:
@@ -160,12 +160,16 @@ class TestParseRequirementsFile:
         req.write_text(
             "# a comment\n\n-r other.txt\n-e .\n--index-url https://example.invalid\npillow==13.0.0\n"
         )
-        assert _mod.parse_requirements_file(req) == {"pillow": "==13.0.0"}
+        assert _mod.parse_requirements_file(req) == {
+            "pillow": _mod.Requirement((), "==13.0.0")
+        }
 
     def test_normalizes_separators_and_case(self, tmp_path: Path) -> None:
         req = tmp_path / "requirements.txt"
         req.write_text("Kivy_Deps.SDL2==0.8.0\n")
-        assert _mod.parse_requirements_file(req) == {"kivy-deps-sdl2": "==0.8.0"}
+        assert _mod.parse_requirements_file(req) == {
+            "kivy-deps-sdl2": _mod.Requirement((), "==0.8.0")
+        }
 
 
 class TestParsePyprojectDependencies:
@@ -178,8 +182,8 @@ class TestParsePyprojectDependencies:
             'development = ["black", "ruff==0.15.20"]\n'
         )
         assert _mod.parse_pyproject_dependencies(pyproject) == {
-            "kivy": "==2.3.1",
-            "urllib3": "==2.8.0",
+            "kivy": _mod.Requirement((), "==2.3.1"),
+            "urllib3": _mod.Requirement((), "==2.8.0"),
         }
 
     def test_missing_dependencies_key_is_empty(self, tmp_path: Path) -> None:
@@ -237,6 +241,35 @@ class TestManifestDrift:
         )
         assert _mod.check_manifest_drift(req, pyproject) is True
 
+    def test_extras_differences_fail(self, tmp_path: Path) -> None:
+        # Extras change what actually gets installed, so they must match.
+        req, pyproject = self._write(
+            tmp_path, "requests[security]==2.34.2\n", '["requests==2.34.2"]'
+        )
+        assert _mod.check_manifest_drift(req, pyproject) is False
+
+    def test_extras_order_does_not_matter(self, tmp_path: Path) -> None:
+        req, pyproject = self._write(
+            tmp_path, "requests[security,socks]==2.34.2\n", '["requests[socks,security]==2.34.2"]'
+        )
+        assert _mod.check_manifest_drift(req, pyproject) is True
+
+    def test_allowlisted_package_in_wrong_manifest_fails(self, tmp_path: Path) -> None:
+        # pyinstaller is allowlisted for requirements.txt only; in pyproject it
+        # is real drift, not a permitted difference.
+        req, pyproject = self._write(
+            tmp_path, "pillow==13.0.0\n", '["pillow==13.0.0", "pyinstaller==6.22.3"]'
+        )
+        assert _mod.check_manifest_drift(req, pyproject) is False
+
+    def test_url_fragment_is_not_treated_as_a_comment(self, tmp_path: Path) -> None:
+        req, pyproject = self._write(
+            tmp_path,
+            "widget @ https://example.invalid/widget-1.0.whl#sha256=abc\n",
+            '["widget @ https://example.invalid/widget-1.0.whl#sha256=abc"]',
+        )
+        assert _mod.check_manifest_drift(req, pyproject) is True
+
 
 class TestManifestsFlag:
     def test_manifests_flag_skips_other_checks(self) -> None:
@@ -271,8 +304,58 @@ class TestManifestsFlag:
                     _mod.main()
         assert exc_info.value.code == 1
 
+    def test_manifests_exits_one_on_drift_without_ci(self) -> None:
+        """Regression: the wired callers pass no --ci, so drift must still gate."""
+        with mock.patch.multiple(
+            _mod,
+            check_manifest_drift=mock.Mock(return_value=False),
+            check_python_security=mock.Mock(return_value=True),
+            check_python_outdated=mock.Mock(return_value=True),
+            check_node_security=mock.Mock(return_value=True),
+            check_node_outdated=mock.Mock(return_value=True),
+        ):
+            with mock.patch("sys.argv", ["check-dependencies.py", "--manifests"]):
+                with pytest.raises(SystemExit) as exc_info:
+                    _mod.main()
+        assert exc_info.value.code == 1
+
+    def test_manifests_returns_zero_when_manifests_agree(self) -> None:
+        with mock.patch.multiple(
+            _mod,
+            check_manifest_drift=mock.Mock(return_value=True),
+            check_python_security=mock.Mock(return_value=True),
+            check_python_outdated=mock.Mock(return_value=True),
+            check_node_security=mock.Mock(return_value=True),
+            check_node_outdated=mock.Mock(return_value=True),
+        ):
+            with mock.patch("sys.argv", ["check-dependencies.py", "--manifests"]):
+                assert _mod.main() == 0
+
 
 class TestRepoManifestsAgree:
     def test_real_repository_manifests_agree(self) -> None:
         """Guard the actual files, not just synthetic fixtures."""
         assert _mod.check_manifest_drift() is True
+
+    def test_advisory_packages_stay_exactly_pinned(self) -> None:
+        """Pillow and urllib3 carried PR #64's advisories.
+
+        A floor makes them unscannable by OSV-Scanner and invisible to the
+        GitHub dependency graph, so both manifests must pin them exactly.
+        """
+        requirements = _mod.parse_requirements_file(
+            _mod.REPO_ROOT / "requirements.txt"
+        )
+        pyproject = _mod.parse_pyproject_dependencies(
+            _mod.REPO_ROOT / "pyproject.toml"
+        )
+        for manifest_name, parsed in (
+            ("requirements.txt", requirements),
+            ("pyproject.toml", pyproject),
+        ):
+            for package in ("pillow", "urllib3"):
+                assert package in parsed, f"{package} missing from {manifest_name}"
+                assert parsed[package].spec.startswith("=="), (
+                    f"{package} must be exactly pinned in {manifest_name}, "
+                    f"found '{parsed[package].spec}'"
+                )

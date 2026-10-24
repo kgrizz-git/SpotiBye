@@ -30,20 +30,28 @@ import subprocess  # nosec: B404 - subprocess is needed for security scanning
 import sys
 import tomllib
 from pathlib import Path
+from typing import NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-#: Packages that are intentionally declared in only one manifest, with the
-#: reason. Anything not listed here must appear in both with the same specifier.
-MANIFEST_ALLOWLIST: dict[str, str] = {
+#: Packages that are intentionally declared in only one manifest, mapped to
+#: ``(expected_file, reason)``. Anything not listed here must appear in both
+#: with the same extras and specifier, and the direction is enforced so an
+#: allowlisted entry cannot quietly migrate to the other manifest.
+MANIFEST_ALLOWLIST: dict[str, tuple[str, str]] = {
     # build-only tool: `build.yml` bundles the app and needs PyInstaller, but it
     # is not a runtime dependency, so it stays out of the packaged metadata.
-    "pyinstaller": "build-only tool, pinned in requirements.txt for build.yml",
+    "pyinstaller": (
+        "requirements.txt",
+        "build-only tool, pinned in requirements.txt for build.yml",
+    ),
 }
 
 #: PEP 508 name + optional extras + version specifier. Options (-r, -e) and
 #: comments are handled before this pattern is applied.
-_REQUIREMENT_RE = re.compile(r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?(?P<spec>.*)$")
+_REQUIREMENT_RE = re.compile(
+    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?(?P<spec>.*)$"
+)
 
 
 def run_command(cmd, cwd=None, description=None):
@@ -73,34 +81,72 @@ def normalize_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def parse_requirements_file(path: Path) -> dict[str, str]:
-    """Return ``{normalized_name: specifier}`` for a requirements.txt file."""
-    requirements: dict[str, str] = {}
+class Requirement(NamedTuple):
+    """The parts of a requirement that change what gets installed."""
+
+    extras: tuple[str, ...]
+    spec: str
+
+    def __str__(self) -> str:
+        extras = f"[{','.join(self.extras)}]" if self.extras else ""
+        return f"{extras}{self.spec}"
+
+
+def _strip_comment(line: str) -> str:
+    """Drop a pip-style comment without eating URL fragments.
+
+    pip only treats ``#`` as a comment when it starts the line or follows
+    whitespace, so ``name @ https://host/path#sha256=...`` keeps its fragment.
+    """
+    if line.lstrip().startswith("#"):
+        return ""
+    marker = re.search(r"\s#", line)
+    if marker is not None:
+        line = line[: marker.start()]
+    return line.strip()
+
+
+def _parse_requirement(line: str) -> tuple[str, Requirement] | None:
+    match = _REQUIREMENT_RE.match(line)
+    if match is None:
+        return None
+    raw_extras = match.group("extras")
+    extras = tuple(
+        sorted(
+            normalize_name(extra.strip())
+            for extra in (raw_extras or "")[1:-1].split(",")
+            if extra.strip()
+        )
+    )
+    return normalize_name(match.group("name")), Requirement(extras, match.group("spec").strip())
+
+
+def parse_requirements_file(path: Path) -> dict[str, Requirement]:
+    """Return ``{normalized_name: Requirement}`` for a requirements.txt file."""
+    requirements: dict[str, Requirement] = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.split("#", 1)[0].strip()
+        line = _strip_comment(raw_line)
         if not line or line.startswith("-"):
             continue
-        match = _REQUIREMENT_RE.match(line)
-        if match is None:
-            continue
-        requirements[normalize_name(match.group("name"))] = match.group("spec").strip()
+        parsed = _parse_requirement(line)
+        if parsed is not None:
+            requirements[parsed[0]] = parsed[1]
     return requirements
 
 
-def parse_pyproject_dependencies(path: Path) -> dict[str, str]:
-    """Return ``{normalized_name: specifier}`` for ``[project].dependencies``.
+def parse_pyproject_dependencies(path: Path) -> dict[str, Requirement]:
+    """Return ``{normalized_name: Requirement}`` for ``[project].dependencies``.
 
     ``[project.optional-dependencies]`` is deliberately excluded: developer
     tooling (ruff, black, bandit, pytest, ...) legitimately exists only there
     and is never bundled into the released application.
     """
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    dependencies: dict[str, str] = {}
+    dependencies: dict[str, Requirement] = {}
     for entry in data.get("project", {}).get("dependencies", []):
-        match = _REQUIREMENT_RE.match(entry.strip())
-        if match is None:
-            continue
-        dependencies[normalize_name(match.group("name"))] = match.group("spec").strip()
+        parsed = _parse_requirement(entry.strip())
+        if parsed is not None:
+            dependencies[parsed[0]] = parsed[1]
     return dependencies
 
 
@@ -125,10 +171,16 @@ def check_manifest_drift(
                     f"pyproject.toml has '{pyproject[name]}'"
                 )
             continue
-        if name in MANIFEST_ALLOWLIST:
+        present_in = "requirements.txt" if in_requirements else "pyproject.toml"
+        allowed = MANIFEST_ALLOWLIST.get(name)
+        if allowed is not None and allowed[0] == present_in:
             continue
-        only = "requirements.txt" if in_requirements else "pyproject.toml"
-        problems.append(f"{name}: declared only in {only}")
+        if allowed is not None:
+            problems.append(
+                f"{name}: allowlisted for {allowed[0]} but declared in {present_in}"
+            )
+            continue
+        problems.append(f"{name}: declared only in {present_in}")
 
     print("\n📦 Python Manifest Agreement (requirements.txt ↔ pyproject.toml)")
     if problems:
@@ -137,8 +189,8 @@ def check_manifest_drift(
             print(f"   - {problem}")
         print(
             "\n   Fix by making the specifiers identical in both files, or add the"
-            " package to MANIFEST_ALLOWLIST in scripts/check-dependencies.py with a"
-            " reason if it is intentionally single-manifest."
+            " package to MANIFEST_ALLOWLIST in scripts/check-dependencies.py with the"
+            " expected file and a reason if it is intentionally single-manifest."
         )
         return False
 
@@ -257,7 +309,10 @@ def main():
     print("  - Use: npm update  (to update Node.js packages)")
     print("  - Use: ncu -u && npm install  (for major Node.js updates)")
 
-    if args.ci and not all_passed:
+    # `--manifests` is a correctness gate: drift is always a bug, so it exits
+    # non-zero whenever it was explicitly requested, with or without --ci.
+    # Other modes stay informational locally and only gate under --ci.
+    if not all_passed and (args.ci or args.manifests):
         sys.exit(1)
 
     return 0
