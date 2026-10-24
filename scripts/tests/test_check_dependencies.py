@@ -192,6 +192,19 @@ class TestParseRequirementsFile:
         with pytest.raises(ValueError, match="cannot parse requirement"):
             _mod.parse_requirements_file(req)
 
+    @pytest.mark.parametrize("line", ["widget[toml", "widget[a,b", "widget["])
+    def test_rejects_unclosed_extras(self, tmp_path: Path, line: str) -> None:
+        """Unclosed extras must fail, not be folded into the specifier.
+
+        The earlier regex implementation parsed ``widget[toml`` as a name plus
+        the spec ``'[toml'``, which let a malformed line into the comparison.
+        The linear splitter rejects it; this pins that behaviour.
+        """
+        req = tmp_path / "requirements.txt"
+        req.write_text(f"{line}\n")
+        with pytest.raises(ValueError, match="cannot parse requirement"):
+            _mod.parse_requirements_file(req)
+
     def test_normalizes_separators_and_case(self, tmp_path: Path) -> None:
         req = tmp_path / "requirements.txt"
         req.write_text("Kivy_Deps.SDL2==0.8.0\n")
