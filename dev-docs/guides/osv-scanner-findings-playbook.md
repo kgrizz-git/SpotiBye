@@ -38,7 +38,7 @@ Mitigations, in order of preference:
 Do not read "OSV-Scanner is green" as "the dependency set is clean" for floored Python packages.
 
 The enforcement model this playbook assumes is spelled out in
-[`../exec-plans/active/2026-10-24-python-dependency-integrity.md`](../exec-plans/active/2026-10-24-python-dependency-integrity.md):
+[`../exec-plans/completed/2026-10-24-python-dependency-integrity.md`](../exec-plans/completed/2026-10-24-python-dependency-integrity.md):
 exact pins so this scanner can evaluate versions, a manifest drift gate so the
 two dependency files cannot disagree, and a fail-closed audit of the shipped
 closure in `build.yml`.

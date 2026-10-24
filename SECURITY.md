@@ -30,8 +30,8 @@ This project uses multiple security scanning tools integrated into CI/CD:
 ## CI/CD Security Workflow
 
 Security scans run on:
-- Every push to `main` or `develop` branches
-- Every pull request to `main` or `develop`
+- Every push to the `main` branch
+- Every pull request to `main`, `develop` or `WIP`
 - Weekly scheduled scans (Mondays at midnight UTC)
 - Manual workflow dispatch
 
@@ -128,7 +128,7 @@ pre-commit --version
 
 ### Pre-commit Hooks (run on every commit)
 
-Fast checks that run on staged files:
+Fast checks that run on staged files. Security-relevant subset — see `.pre-commit-config.yaml` for the full list:
 
 | Hook | Purpose |
 |------|---------|
@@ -144,7 +144,7 @@ Fast checks that run on staged files:
 
 ### Pre-push Hooks (run before every push)
 
-Longer-running checks that ensure code quality:
+Longer-running checks that ensure code quality. Security-relevant subset — see `.pre-commit-config.yaml` for the full list:
 
 | Hook | Purpose |
 |------|---------|
