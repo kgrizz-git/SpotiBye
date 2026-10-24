@@ -34,6 +34,10 @@ from typing import NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+#: Canonical manifest filenames, referenced in messages and defaults.
+REQUIREMENTS_FILE = "requirements.txt"
+PYPROJECT_FILE = "pyproject.toml"
+
 #: Packages that are intentionally declared in only one manifest, mapped to
 #: ``(expected_file, reason)``. Anything not listed here must appear in both
 #: with the same extras and specifier, and the direction is enforced so an
@@ -42,15 +46,15 @@ MANIFEST_ALLOWLIST: dict[str, tuple[str, str]] = {
     # build-only tool: `build.yml` bundles the app and needs PyInstaller, but it
     # is not a runtime dependency, so it stays out of the packaged metadata.
     "pyinstaller": (
-        "requirements.txt",
+        REQUIREMENTS_FILE,
         "build-only tool, pinned in requirements.txt for build.yml",
     ),
 }
 
-#: PEP 508 name + optional extras + version specifier. Options (-r, -e) and
-#: comments are handled before this pattern is applied.
-_REQUIREMENT_RE = re.compile(
-    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?(?P<spec>.*)$"
+#: Characters allowed in a PEP 508 distribution name. Used by the linear
+#: splitter below; no regex, so there is no backtracking to exploit.
+_NAME_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
 )
 
 
@@ -107,18 +111,31 @@ def _strip_comment(line: str) -> str:
 
 
 def _parse_requirement(line: str) -> tuple[str, Requirement] | None:
-    match = _REQUIREMENT_RE.match(line)
-    if match is None:
+    """Split ``name[extras]specifier`` without a backtracking-prone regex."""
+    text = line.strip()
+    end = 0
+    while end < len(text) and text[end] in _NAME_CHARS:
+        end += 1
+    name = text[:end]
+    if not name or not name[0].isalnum():
         return None
-    raw_extras = match.group("extras")
-    extras = tuple(
-        sorted(
-            normalize_name(extra.strip())
-            for extra in (raw_extras or "")[1:-1].split(",")
-            if extra.strip()
+
+    rest = text[end:]
+    extras: tuple[str, ...] = ()
+    if rest.startswith("["):
+        close = rest.find("]")
+        if close == -1:
+            return None
+        extras = tuple(
+            sorted(
+                normalize_name(extra.strip())
+                for extra in rest[1:close].split(",")
+                if extra.strip()
+            )
         )
-    )
-    return normalize_name(match.group("name")), Requirement(extras, match.group("spec").strip())
+        rest = rest[close + 1 :]
+
+    return normalize_name(name), Requirement(extras, rest.strip())
 
 
 #: Options that pull in packages or versions the drift check cannot see. They
@@ -192,11 +209,11 @@ def _compare_manifests(
                 )
             elif requirements[name] != pyproject[name]:
                 problems.append(
-                    f"{name}: requirements.txt has '{requirements[name]}' but "
-                    f"pyproject.toml has '{pyproject[name]}'"
+                    f"{name}: {REQUIREMENTS_FILE} has '{requirements[name]}' but "
+                    f"{PYPROJECT_FILE} has '{pyproject[name]}'"
                 )
             continue
-        present_in = "requirements.txt" if in_requirements else "pyproject.toml"
+        present_in = REQUIREMENTS_FILE if in_requirements else PYPROJECT_FILE
         if allowed is None:
             problems.append(f"{name}: declared only in {present_in}")
         elif allowed[0] != present_in:
@@ -210,10 +227,12 @@ def check_manifest_drift(
     requirements_path: Path | None = None, pyproject_path: Path | None = None
 ) -> bool:
     """Fail when the runtime dependency manifests disagree."""
-    requirements_path = requirements_path or REPO_ROOT / "requirements.txt"
-    pyproject_path = pyproject_path or REPO_ROOT / "pyproject.toml"
+    requirements_path = requirements_path or REPO_ROOT / REQUIREMENTS_FILE
+    pyproject_path = pyproject_path or REPO_ROOT / PYPROJECT_FILE
 
-    print("\n📦 Python Manifest Agreement (requirements.txt ↔ pyproject.toml)")
+    print(
+        f"\n📦 Python Manifest Agreement ({REQUIREMENTS_FILE} ↔ {PYPROJECT_FILE})"
+    )
     try:
         requirements = parse_requirements_file(requirements_path)
         pyproject = parse_pyproject_dependencies(pyproject_path)
