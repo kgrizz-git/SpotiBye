@@ -1,107 +1,86 @@
-# Python Dependency Integrity — installed-env audit, exact versions, local drift checks
+# Python Dependency Integrity — exact pins, fail-closed build audit
 
 **Date:** 2026-10-24
 **Branch:** `chore/python-dependency-integrity`
-**Status:** draft v1 — pending external review (cursor grok-4.7 high)
+**Status:** draft v2 — incorporates cursor grok-4.7 (high) review of v1, plus locally re-verified evidence
 **Backlog link:** `dev-docs/backlog/TO_DO.md` → "Python dependency integrity" under **Security & Dependency Integrity**
 **Origin:** PR #64 (Pillow 13.0.0 / urllib3 2.8.0 / undici 7.30.1)
 
-## Problem
+## What actually failed (v1 got this wrong)
 
-Every finding below was reproduced on 2026-10-24; commands are in PR #64 and the review threads.
+v1 claimed a single root cause: "no exact Python version exists anywhere in the repo." That is false — `requirements.txt` already pins `kivy==2.3.1`, `kivymd==1.2.0`, `requests==2.34.2` and `pyinstaller==6.22.3`. There are **two independent gaps plus two contributing defects**:
 
-1. **OSV-Scanner cannot evaluate a `>=` spec.** `pillow==12.3.0` → 41 findings. `pillow>=12.3.0` → "No issues found". Our only enforced Python dependency gate was therefore vacuous for every floored package.
-2. **`pip-audit -r requirements.txt` audits a hypothetical fresh install.** It resolved 18 packages and picked `pillow 13.0.0` / `urllib3 2.8.0` (newest allowed) while the actual `.venv` held `12.2.0` / `2.7.0`. It was not wrong about which packages matter — it was scanning the wrong versions.
-3. **GitHub cannot see our Python versions either.** The dependency graph reports `versionInfo: None` for `pillow` and `urllib3` (exact pin `requests 2.34.2` resolves fine). A dependency with no version cannot raise a Dependabot alert; the only alerts on the repo are three stale, already-fixed `brace-expansion` entries.
-4. **`build.yml` resolves versions at build time.** It installs `-r requirements.txt` on every release run, so two builds of the same commit can bundle different Pillow/urllib3 versions, and nothing audits what was actually bundled.
-5. **`SECURITY.md` contradicts `.pre-commit-config.yaml`.** The doc says pre-push runs `check-dependencies.py --security` (pip-audit); the hook config says OSV-Scanner is canonical and `check-dependencies.py` is ad hoc only.
+| # | Gap | Evidence |
+|---|---|---|
+| A | **The two packages that carried advisories were range-specified.** `pillow>=12.3.0`, `urllib3` unpinned. | `osv-scanner` on `pillow==12.3.0` → 41 findings; on `pillow>=12.3.0` → "No issues found" |
+| B | **Nothing audited the installed or shipped closure.** `pip-audit -r requirements.txt` resolves upward to the newest allowed versions and audits a hypothetical fresh install. | It resolved `pillow 13.0.0` / `urllib3 2.8.0` while `.venv` held `12.2.0` / `2.7.0` |
+| C | **Dual-manifest drift.** CI installs `-e ".[development]"` from `pyproject.toml` (kivy unpinned, no pyinstaller); `build.yml` installs `-r requirements.txt` (kivy pinned, pyinstaller included). The two paths resolve different trees. | `pyproject.toml:15` `"kivy"` vs `requirements.txt:1` `kivy==2.3.1` |
+| D | **Trigger gap.** `security.yml` path filters list `requirements.txt` but not `pyproject.toml`, so a pyproject-only dependency change skips the whole Security Scan. `dependency-review.yml` lists both — asymmetric gates. | `security.yml:10-20`, `dependency-review.yml:6-12` |
 
-One root cause: **no exact Python version exists anywhere in the repo**, so OSV, Dependabot, the SBOM and the release build all either guess or resolve upward. Adding a fourth scanner would not have changed any of the five findings above.
-
-## Goal
-
-Three properties, in priority order:
-
-1. The environment a developer runs, and the environment `build.yml` ships, contain the versions the repo declares.
-2. Something fails when they do not.
-3. Every shipped version has an exact identity that external scanners can evaluate.
+**And a correction on framing:** Aikido *did* surface these advisories — that report is what started this work. It is a non-gating, off-pipeline signal, so detection existed while enforcement did not. The failure is "no enforced gate", not "no signal".
 
 ## Non-goals
 
-- No new scanning vendors. OSV-Scanner, pip-audit, Bandit, Semgrep and TruffleHog already cover dependency, code and secret surfaces; the gap is resolution, not coverage.
-- No npm work. The backend lockfile already gives exact versions — undici was caught the day its advisories published.
-- No routine dependency upgrades beyond what integrity requires.
+- No new scanners. Detection worked; gating and resolution did not.
+- No npm changes; the backend lockfile already gives exact versions and proved it (undici found the day its advisories published).
+- No `cd`/direnv dependency check. Rejected: needs direnv or a per-user shell hook, invisible to CI and Windows, warns at the wrong moment, and can only warn. Releases build on clean runners, so a stale local venv is contributor ergonomics — not a release control. Recorded as a deferred item below.
+- **No wholesale audit of the CI dev environment.** Measured with `.venv/bin/python -m pip_audit`: **38 advisory rows in `virtualenv` (19), `pip` (12), `filelock` (3), `setuptools` (3), `black` (1) — and zero in project dependencies.** A blanket installed-env check is red on day one for tooling users never receive, so it would be disabled rather than fixed.
 
-## On the "check the venv when entering the directory" proposal
+## Phase 1 — Exact pins + dual-manifest drift gate (closes gap A and C)
 
-The goal is right; the mechanism is not. A `cd` hook (direnv `.envrc` or a `chpwd`/`PROMPT_COMMAND` function) is rejected because:
+- [ ] Pin the security-relevant packages exactly in **both** manifests, matching the existing `requests==2.34.2` / `pyinstaller==6.22.3` style: `pillow==13.0.0`, `urllib3==2.8.0`.
+- [ ] Resolve the kivy divergence: either pin `kivy==2.3.1` in `pyproject.toml` or record why it stays unpinned. Silence here is how CI and the release build drift apart.
+- [ ] Add a drift check (extend `scripts/check-dependencies.py` rather than adding a second dependency script) that fails when a package is constrained differently in `requirements.txt` and `pyproject.toml`, or appears in one and not the other, with a small explicit allowlist for intentionally single-manifest entries (`pyinstaller` is build-only; dev extras are CI-only).
+- [ ] Wire it into `./scripts/verify-all.sh` and the CI hygiene job; add `scripts/tests/` coverage for mismatch, one-sided entry, and allowlisted entry.
+- [ ] Verify the payoff: `gh api repos/kgrizz-git/SpotiBye/dependency-graph/sbom` reports non-null `versionInfo` for `pillow`/`urllib3`, and OSV-Scanner now evaluates them instead of reporting a vacuous pass.
 
-- it needs direnv or a per-user shell function — not in the prerequisites, not shared with contributors, invisible to CI, and awkward on Windows;
-- it fires at directory entry, which is not when correctness matters, and it fires constantly — a warning at `cd` is precisely the signal people learn to ignore;
-- it can only warn. Blocking a `cd` on a dependency mismatch is hostile.
+**Acceptance:** on a branch with `pillow==12.3.0`, OSV-Scanner reports the 41 advisories. On `14.x`-style range-only specs it must not silently pass.
 
-What the hook is trying to prevent is a **stale `.venv`**, and the repo already has two triggers that are shared, visible and CI-mirrored: `./scripts/verify-all.sh` and pre-push. The check belongs there (Phase 1).
+## Phase 2 — Fail-closed audit of the shipped closure (closes gap B)
 
-Second nuance: "meets floors" is not sufficient. The stale venv held `pillow 12.2.0`, which *violated* the declared `>=12.3.0` floor and still ran fine for weeks. The check must compare installed versions against exact pins as well, and report drift above a pin.
+The v1 command (`python -m pip_audit --skip-editable`) was wrong: it audits the whole interpreter including tooling. The verified recipe audits exactly what PyInstaller bundles:
 
-## Phases
+```bash
+python -m pip freeze --exclude-editable > "${RUNNER_TEMP}/frozen.txt"
+python -m pip_audit -r "${RUNNER_TEMP}/frozen.txt" --strict
+```
 
-### Phase 1 — Installed-vs-declared check, shareable and always-on
+Why each part is load-bearing (all verified locally on 2026-10-24):
 
-- [ ] Extend `scripts/check-dependencies.py` with an installed-environment mode (`--verify-installed`, plus `--json`) instead of adding a second dependency-check script. It parses `requirements.txt`, reads versions via `importlib.metadata`, and reports: missing package, version below floor, version above an exact pin, exact-pin mismatch. Extra installed packages are warnings, not failures.
-- [ ] Failure output ends with the one copy-pasteable remediation: `.venv/bin/pip install -r requirements.txt`.
-- [ ] Add `scripts/tests/test_check_dependencies_venv.py` covering: clean environment, below-floor, missing package, exact-pin mismatch, extra package (warn only), and a pinned package installed *newer* than declared.
-- [ ] Call it from `scripts/verify-all.sh` before the frontend suite (honour the existing `--dry-run` short-circuit).
-- [ ] Add a `language: system` pre-push hook in `.pre-commit-config.yaml` that runs the same mode with `.venv/bin/python`. No network, sub-second.
-- [ ] Document the check in `AGENTS.md` ("Running Tests & Verification") and `SECURITY.md`.
+- `pip freeze` omits `pip`, `setuptools` and `wheel` — installer tooling users never receive.
+- `--exclude-editable` is required, not cosmetic: without it the frozen file carries the editable `spotibye` git reference and `pip-audit` fails to build it (`git fetch … not our ref`), so the audit errors out instead of auditing.
+- `--strict` means "fail the entire audit if dependency collection fails"; without it a collection failure can look like a pass.
 
-### Phase 2 — Audit the environment that actually runs and ships
+Steps:
 
-- [ ] `ci.yml` frontend job: after `pip install -e ".[development]"`, run `python -m pip_audit --skip-editable` (pip-audit is already a dev extra). Blocking.
-- [ ] `build.yml`: after `Install Python dependencies`, run the same audit against the exact environment PyInstaller bundles. Blocking, because this is the artifact users receive.
-- [ ] Make the audit resilient: bounded retries and a distinct exit path for "the check could not run" versus "a vulnerability was found", so an OSV/PyPI outage fails loudly instead of silently passing.
-- [ ] `scripts/check-dependencies.py`: audit the current environment by default; keep manifest resolution behind an explicit `--manifest` flag so the existing `-r` behaviour stays available but is no longer the default.
+- [ ] Add the recipe to `build.yml` after `Install Python dependencies`, on **every** matrix OS. Windows matters specifically: `kivy-deps.*` requirements are `sys_platform == "win32"` gated in Kivy's metadata, so only the Windows job audits what Windows bundles.
+- [ ] Keep it out of the ci.yml dev environment (see Non-goals) — one meaningful gate beats two, one of which is permanently red.
+- [ ] Prove it goes red once: temporarily downgrade `pillow` in the build env, confirm the release job fails, revert.
+- [ ] Record exit-code semantics in the workflow comment so a future reader knows a network/tooling failure is a hard failure, not a skip.
 
-### Phase 3 — Give Python exact versions (decision + implementation)
+**Acceptance:** a vulnerable resolved closure fails the release build on every platform; a clean closure passes.
 
-- [ ] Decide between the two options below and record the choice in `dev-docs/architecture/design-decisions/`.
-- [ ] Option A — exact pins in `requirements.txt`/`pyproject.toml` for every direct dependency plus the transitives we have had advisories in. ~10 lines, no new tooling, makes OSV/Dependabot/SBOM work for those packages. Leaves unlisted transitives unpinned, so the drift returns the next time someone adds a dependency.
-- [ ] Option B (recommended) — generate a lockfile from `pyproject.toml` with `uv pip compile` (`requirements.lock`, `requirements-dev.lock`), and consume it in `build.yml` and `ci.yml`. Exact versions for the whole tree, hash-pinnable, visible to OSV, Dependabot and the SBOM, and reproducible across builds of the same commit. Costs: `astral-sh/setup-uv` pinned by SHA on the runners, a regeneration step, and platform-marker handling (see Risks).
-- [ ] If B: add a drift gate so a lock that no longer matches `pyproject.toml` fails CI (regenerate-and-diff, or the tool's `--check` equivalent).
-- [ ] If B: document lock regeneration next to the Dependabot bump instructions; a Dependabot PR that bumps `pyproject.toml` without regenerating the lock must fail the gate.
-- [ ] Re-run the Phase 2 audit against the locked environment and confirm it is clean before landing.
+## Phase 3 — Docs truth and trigger coverage (closes gap D)
 
-### Phase 4 — Prove the alerting surfaces now work
+- [ ] `SECURITY.md`: remove the claim that pre-push runs a `security-scan` / `check-dependencies.py --security` hook — `.pre-commit-config.yaml` runs OSV-Scanner only. Document the actual layers and the stated limitation of each: exact-version scanning (OSV), shipped-closure audit (pip-audit), code SAST (Bandit/Semgrep), secrets (TruffleHog).
+- [ ] `security.yml`: add `pyproject.toml` to the path filters so dependency-only changes cannot skip the scan.
+- [ ] Cross-link `dev-docs/guides/osv-scanner-findings-playbook.md` → this plan for the enforcement model.
 
-- [ ] After Phase 3 lands, confirm the SBOM records versions: `gh api repos/kgrizz-git/SpotiBye/dependency-graph/sbom` should show non-null `versionInfo` for `pillow`/`urllib3`.
-- [ ] Confirm Dependabot evaluates them (`gh api repos/kgrizz-git/SpotiBye/dependabot/alerts`) and enable Dependabot security updates in repo settings if they are off.
-- [ ] Record before/after output in the PR so the next reader can tell the difference between "no findings" and "not evaluated".
+## Deferred (recorded here, not dropped)
 
-### Phase 5 — Documentation truth
+- **Universal lockfile** (`uv pip compile --universal --python-version 3.11` → `requirements.lock`, consumed by `build.yml` and `ci.yml`). Deferred, not rejected: it is the only option that makes non-vulnerable transitive versions reproducible, but it adds a tool to the runners, an editable-install/`--no-deps` interaction, and a drift gate that rots if Dependabot cannot regenerate it. Revisit when reproducibility is required or when a transitive advisory ships.
+- **Local stale-venv check** in `verify-all.sh` / pre-push. Contributor ergonomics only (the release path never uses a developer's checkout). Revisit if a local-build release path is ever added.
+- **Pinning the remaining transitives** (`charset-normalizer`, `kivy-deps.*`). Covered at ship time by Phase 2.
 
-- [ ] Reconcile `SECURITY.md` with `.pre-commit-config.yaml` on what pre-push actually runs.
-- [ ] Add a short layered-model table to `SECURITY.md`: exact-version scanning (OSV-Scanner, lockfile/pins), installed-environment audit (pip-audit), code SAST (Bandit/Semgrep), secrets (TruffleHog) — with the stated limitation of each.
-- [ ] Cross-link from `dev-docs/guides/osv-scanner-findings-playbook.md`.
+## Evidence (reproducible)
 
-## Acceptance criteria
-
-- A stale environment fails `./scripts/verify-all.sh` and names the remediation command. Demonstrated by a unit test, not only by manual downgrade.
-- CI fails when a known-vulnerable version is installed; demonstrated once with a throwaway commit (downgrade `pillow`, watch the job go red, revert).
-- `build.yml` audits the environment it bundles, and a vulnerable version there blocks the release.
-- After Phase 3, `pillow`/`urllib3` have non-null `versionInfo` in the SBOM, and OSV-Scanner's Python result stops being vacuous.
-- `verify-all.sh` wall time grows by < 5 s on a warm environment.
-
-## Risks
-
-- **Kivy on Windows.** `kivy-deps.*` wheels are Windows-only and are not installed from `requirements.txt` today. A lock generated on Linux/macOS may not resolve on the Windows runner. Verify `build.yml`'s Windows path before choosing Option B; may require a universal lock or a per-platform lock.
-- **Hash-pinned lock vs editable install.** `pip install -e ".[development]"` conflicts with a fully pinned tree unless installed with `--no-deps` after the lock.
-- **New CI network dependency.** pip-audit calls the OSV/PyPI APIs; needs bounded retries and a clear distinction between "could not check" and "check found a vulnerability".
-- **Dependabot cannot regenerate pip lockfiles.** Without the Phase 3 drift gate the lock rots and every check stays green — worse than no lock, because it looks authoritative.
-- **Pinning transitives slows security response.** Every advisory bump becomes a lock edit; document `uv lock` refresh so it is routine rather than a puzzle.
-
-## Open questions for review
-
-1. Is the diagnosis right, or is there a cheaper fix that gets the same three properties?
-2. Is Phase 3 Option B (lockfile) justified given the Kivy/Windows complication, or does Option A (exact pins) capture most of the value at a fraction of the risk?
-3. Is rejecting the `cd` hook correct, or is a lightweight opt-in `direnv` snippet worth shipping as developer ergonomics alongside the enforced pre-push check?
-4. What is missing that would still let a vulnerable version reach a user?
+```text
+pip-audit -r requirements.txt (before PR #64)  -> "No known vulnerabilities found"
+                                                (resolved urllib3 2.8.0 / pillow 13.0.0)
+.venv/bin/python -m pip_audit                  -> 38 rows: virtualenv 19, pip 12,
+                                                filelock 3, setuptools 3, black 1;
+                                                0 project deps
+osv-scanner, pillow==12.3.0                    -> 41 findings, 5 critical (9.8, 9.2x4)
+osv-scanner, pillow>=12.3.0                    -> "No issues found"
+SBOM (pillow, urllib3)                         -> versionInfo: null
+```

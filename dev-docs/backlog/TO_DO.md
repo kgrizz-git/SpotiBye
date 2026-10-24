@@ -52,7 +52,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 ## Security & Dependency Integrity
 
-- [ ] Python dependency integrity: audit the installed environment in CI and release builds, give Python dependencies exact versions, and fail locally when `.venv` drifts from the declared floors/pins ([plan](../exec-plans/active/2026-10-24-python-dependency-integrity.md)) — origin PR #64, where OSV-Scanner, pip-audit and Dependabot all missed 41 Pillow and 3 urllib3 advisories because no exact Python version exists anywhere in the repo
+- [ ] Python dependency integrity: pin the packages that carry advisories and fail the release build when the shipped closure is vulnerable; add a drift gate so `requirements.txt` and `pyproject.toml` cannot diverge ([plan](../exec-plans/active/2026-10-24-python-dependency-integrity.md)) — origin PR #64, where OSV-Scanner, pip-audit and Dependabot all missed 41 Pillow and 3 urllib3 advisories because the vulnerable packages were range-specified and nothing audited the installed closure
 
 ## Repo Cleanup & DevOps
 
