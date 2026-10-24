@@ -48,6 +48,8 @@ Work down the list. Stop at the first option that resolves the finding **without
 Applies when the advisory lists a fixed version and the affected package is a direct dep you constrain.
 
 - Python (`requirements.txt`): raise the version floor, e.g. `pillow>=12.2.0` → `pillow>=12.3.0`. Verify the patched release exists (`pip index versions pillow` or PyPI JSON API) before bumping.
+
+> **A floor is not a fix in itself — see [Blind spot: range-only Python specs](#blind-spot-range-only-python-specs).** OSV-Scanner cannot evaluate a `>=` spec, so a raised floor still reports "no issues" even when every version it admits is vulnerable. Prefer an exact pin for security-relevant Python deps, and audit the interpreter that actually runs the app.
 - npm (`package.json` `dependencies` or `devDependencies`): bump the semver range; run `npm install` in `src/backend/` to regenerate the lockfile.
 
 Always confirm the lockfile actually moved to the patched version, not just that the manifest floor changed.
