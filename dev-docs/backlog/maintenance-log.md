@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-24 — Python dependency integrity: exact pins, manifest drift gate, shipped-closure audit
+
+PR: #65
+Scope: `requirements.txt`, `pyproject.toml`, `scripts/check-dependencies.py`, `scripts/tests/test_check_dependencies.py`, `scripts/verify-all.sh`, `.github/workflows/build.yml`, `.github/workflows/ci.yml`, `.github/workflows/security.yml`, `SECURITY.md`, `dev-docs/guides/osv-scanner-findings-playbook.md`, `dev-docs/exec-plans/completed/2026-10-24-python-dependency-integrity.md`, `dev-docs/backlog/TO_DO.md`
+Pinned `pillow==13.0.0` and `urllib3==2.8.0` exactly in both manifests (and `kivy==2.3.1` in `pyproject.toml`, previously bare) so OSV-Scanner, the GitHub dependency graph and Dependabot can evaluate them — GitHub previously recorded these packages with no version at all. Added a `--manifests` mode to `check-dependencies.py` that fails on specifier, extras, one-sided or wrong-manifest drift between `requirements.txt` and `pyproject.toml`; wired into `verify-all.sh` and the CI hygiene job. Added a fail-closed audit of the environment `build.yml` bundles (`pip freeze --exclude-editable` → isolated `pip-audit -r … --strict`, every matrix OS) and widened `security.yml` path filters to cover `pyproject.toml`. `SECURITY.md` no longer claims a pre-push `security-scan` hook that does not exist, and now records what each dependency layer can and cannot see. Review trail: cursor grok-4.7 (high) caught that the drift check printed FAIL but exited 0 at both wired call sites; claude-opus-5-5 (medium) caught an allowlisted package passing when declared in both manifests and parser lines being silently skipped. Both fixed with regression tests.
+
 ## 2026-10-24 — undici override raised to 7.30.1; Pillow moved to 13.0.0 with Python 3.11 floor
 
 PR: #64

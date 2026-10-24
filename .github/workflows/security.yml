@@ -13,6 +13,9 @@ on:
       - '**.ts'
       - '**.json'
       - 'requirements.txt'
+      # CI installs from pyproject.toml, so a dependency-only change there
+      # must not skip the scan the way it did before this filter was widened.
+      - 'pyproject.toml'
       - 'package*.json'
       - 'src/**'
       # Any workflow or composite-action change, so a pin bump anywhere

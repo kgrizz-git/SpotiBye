@@ -2,8 +2,8 @@
 
 **Date:** 2026-10-24
 **Branch:** `chore/python-dependency-integrity`
-**Status:** draft v2 — incorporates cursor grok-4.7 (high) review of v1, plus locally re-verified evidence
-**Backlog link:** `dev-docs/backlog/TO_DO.md` → "Python dependency integrity" under **Security & Dependency Integrity**
+**Status:** completed 2026-10-24 — all three phases shipped in PR #65
+**Backlog link:** removed from `TO_DO.md` on completion (PR #65)
 **Origin:** PR #64 (Pillow 13.0.0 / urllib3 2.8.0 / undici 7.30.1)
 
 ## What actually failed (v1 got this wrong)
@@ -32,7 +32,7 @@ v1 claimed a single root cause: "no exact Python version exists anywhere in the 
 - [x] Resolve the kivy divergence: either pin `kivy==2.3.1` in `pyproject.toml` or record why it stays unpinned. Silence here is how CI and the release build drift apart.
 - [x] Add a drift check (extend `scripts/check-dependencies.py` rather than adding a second dependency script) that fails when a package is constrained differently in `requirements.txt` and `pyproject.toml`, or appears in one and not the other, with a small explicit allowlist for intentionally single-manifest entries (`pyinstaller` is build-only; dev extras are CI-only).
 - [x] Wire it into `./scripts/verify-all.sh` and the CI hygiene job; add `scripts/tests/` coverage for mismatch, one-sided entry, and allowlisted entry.
-- [ ] Verify the payoff: `gh api repos/kgrizz-git/SpotiBye/dependency-graph/sbom` reports non-null `versionInfo` for `pillow`/`urllib3`, and OSV-Scanner now evaluates them instead of reporting a vacuous pass.
+- [x] Verify the payoff: GitHub's PR dependency diff (`gh api repos/kgrizz-git/SpotiBye/dependency-graph/compare/main...<branch>`) now reports `added pillow 13.0.0` / `added urllib3 2.8.0` in both manifests, replacing entries that carried `>= 13.0.0` / `>= 2.8.0` with no version (and `kivy` with an empty version). OSV-Scanner extracts both at exact versions and reports 0 advisories, so Dependabot has something to alert on.
 
 **Acceptance:** on a branch with `pillow==12.3.0`, OSV-Scanner reports the 41 advisories. On `14.x`-style range-only specs it must not silently pass.
 
@@ -65,9 +65,9 @@ Steps:
 
 ## Phase 3 — Docs truth and trigger coverage (closes gap D)
 
-- [ ] `SECURITY.md`: remove the claim that pre-push runs a `security-scan` / `check-dependencies.py --security` hook — `.pre-commit-config.yaml` runs OSV-Scanner only. Document the actual layers and the stated limitation of each: exact-version scanning (OSV), shipped-closure audit (pip-audit), code SAST (Bandit/Semgrep), secrets (TruffleHog).
-- [ ] `security.yml`: add `pyproject.toml` to the path filters so dependency-only changes cannot skip the scan.
-- [ ] Cross-link `dev-docs/guides/osv-scanner-findings-playbook.md` → this plan for the enforcement model.
+- [x] `SECURITY.md`: remove the claim that pre-push runs a `security-scan` / `check-dependencies.py --security` hook — `.pre-commit-config.yaml` runs OSV-Scanner only. Document the actual layers and the stated limitation of each: exact-version scanning (OSV), manifest drift, shipped-closure audit (pip-audit), code SAST (Bandit/Semgrep), secrets (TruffleHog).
+- [x] `security.yml`: add `pyproject.toml` to the path filters so dependency-only changes cannot skip the scan.
+- [x] Cross-link `dev-docs/guides/osv-scanner-findings-playbook.md` → this plan for the enforcement model.
 
 ## Deferred (recorded here, not dropped)
 
