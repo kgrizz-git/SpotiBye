@@ -39,7 +39,7 @@ from pathlib import Path
 SPOTIFY_DASHBOARD_URL = "https://developer.spotify.com/dashboard"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 
-REQUIRED_PYTHON = (3, 10)
+REQUIRED_PYTHON = (3, 11)
 REQUIRED_TOOLS = ("node", "npm", "npx")
 REQUIRED_NODE_MAJOR = 24
 
@@ -97,7 +97,7 @@ def check_python_version() -> PrereqResult:
         name="python",
         ok=False,
         hint=(
-            "Python >=3.10 is required "
+            "Python >=3.11 is required "
             f"(running {sys.version.split()[0]}). "
             "Install from https://www.python.org/downloads/"
         ),

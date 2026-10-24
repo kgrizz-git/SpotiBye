@@ -18,7 +18,7 @@ This guide explains how to package and distribute the SpotiBye frontend applicat
 
 ## Prerequisites
 
-- Python 3.8+ (for building)
+- Python 3.11+ (for building; release builds pin 3.13 in `build.yml`)
 - PyInstaller (included in requirements.txt)
 - Deployed backend URL
 - Spotify Developer App credentials
