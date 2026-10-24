@@ -10,6 +10,11 @@ fi
 echo "Verifying backend..."
 ./scripts/verify-backend.sh
 
+echo "Verifying dependency manifests..."
+PYTHON_BIN="./.venv/bin/python"
+[ -x "$PYTHON_BIN" ] || PYTHON_BIN="python3"
+"$PYTHON_BIN" scripts/check-dependencies.py --manifests
+
 echo "Verifying frontend..."
 ./scripts/verify-frontend.sh
 
