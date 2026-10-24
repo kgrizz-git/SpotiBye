@@ -11,7 +11,7 @@ You will run two pieces locally:
 
 ## Prerequisites
 
-- Python 3.10+ with `venv`
+- Python 3.11+ with `venv`
 - Node 24 + npm (the repo pins this in `.nvmrc`)
 - A Spotify account with an active Premium subscription (Spotify requires the app owner to hold Premium for Development Mode apps — the app stops working if it lapses)
 - A Cloudflare account — only needed for the secondary Cloudflare-deploy path below

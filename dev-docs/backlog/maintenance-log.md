@@ -10,11 +10,11 @@
 
 ---
 
-## 2026-10-24 — undici override raised to clear three GHSA advisories; Pillow floor aligned
+## 2026-10-24 — undici override raised to 7.30.1; Pillow moved to 13.0.0 with Python 3.11 floor
 
 PR: n/a (pending)
-Scope: `src/backend/package.json`, `src/backend/package-lock.json`, `pyproject.toml`
-Three undici advisories published 2026-10-23 (`GHSA-xjj6-f33q-929c` high, `GHSA-4qv8-2p9j-2685`, `GHSA-f72v-6w45-q472`) covered `7.0.0 – 7.30.0`, reached through the dev-only `wrangler` → `miniflare` chain. Raised the existing `overrides.undici` floor from `^7.28.0` to `^7.30.1` and re-locked to 7.30.1; `npm audit` now reports 0 vulnerabilities with and without `--omit=dev`. No `wrangler` major bump was needed. Also aligned `pyproject.toml`'s Pillow floor with `requirements.txt` (`>=12.2.0` → `>=12.3.0`); the project metadata had lagged the PYSEC-2026-2253…3496 fix.
+Scope: `src/backend/package.json`, `src/backend/package-lock.json`, `requirements.txt`, `pyproject.toml`, `scripts/setup-selfhost.py`, `sonar-project.properties`, `dev-docs/guides/osv-scanner-findings-playbook.md`
+Three undici advisories published 2026-10-23 (`GHSA-xjj6-f33q-929c` high, `GHSA-4qv8-2p9j-2685`, `GHSA-f72v-6w45-q472`) covered `7.0.0 – 7.30.0`, reached through the dev-only `wrangler` → `miniflare` chain. Raised the existing `overrides.undici` floor from `^7.28.0` to `^7.30.1` and re-locked; `npm audit` reports 0 with and without `--omit=dev`, no `wrangler` major bump needed. Separately, Aikido surfaced 40 Pillow advisories that both OSV surfaces had missed: OSV-Scanner ignores range-only specs (`pillow>=12.3.0` → "No issues found" while `pillow==12.3.0` → 41 findings) and `pip-audit -r` resolves an open floor upward to the clean 13.0.0. Documented the blind spot and its mitigations in the OSV playbook. Bumped to `pillow>=13.0.0` (all 41 fixed only there) and raised `requires-python` to `>=3.11` because Pillow 13 dropped Python 3.10 (EOL October 2026); CI already used 3.11 and releases bundle 3.13. Verified under 13.0.0: all 10 cover styles, mosaic, LANCZOS resize and JPEG save are byte-identical to 12.3.0; Kivy's `img_pil` provider surface (`open`/`frombytes`/`transpose`/`EXTENSION`) works; frontend suite 285 passed / 7 skipped. User-visible part of the Pillow bump is in `CHANGELOG.md`.
 
 ---
 

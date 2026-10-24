@@ -32,7 +32,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ### Changed
 - Running from source now shows the SpotiBye icon and a `SpotiBye` window title instead of Kivy's defaults.
-- Release builds (`build.yml`) now bundle Python 3.13 instead of 3.10. Every pinned desktop dependency ships Python 3.13 wheels (Kivy 2.3.1 and its Windows `kivy-deps` packages for Windows, macOS and Linux; Pillow, PyInstaller 6.22.3); KivyMD 1.2.0 is pure Python. Running from source still supports Python 3.10+.
+- Release builds (`build.yml`) now bundle Python 3.13 instead of 3.10. Every pinned desktop dependency ships Python 3.13 wheels (Kivy 2.3.1 and its Windows `kivy-deps` packages for Windows, macOS and Linux; Pillow, PyInstaller 6.22.3); KivyMD 1.2.0 is pure Python. Running from source now requires Python 3.11+ (Pillow 13 dropped 3.10).
 - Analysis progress messages now name the current phase (Spotify track fetch vs ReccoBeats enrichment vs finalizing) based on the backend's progress bands, instead of a static "Analyzing playlist..." label.
 - Playlist analysis section is more readable: larger section headers and body text with breathing room between sections.
 - Partial-data notes in playlist analysis are smaller and per-chunk coverage notes are tallied into one line (e.g. "1 of 27 tracks" instead of three "of 9" lines).
@@ -147,6 +147,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Fixed the visible cache explorer Close button in backend mode so it dismisses the popup that is actually open.
 
 ### Security
+- Bumped `pillow` to 13.0.0, clearing 41 advisories (5 critical, 23 high) published 20–23 Oct 2026 that were fixed only in that release — including JPEG decoder buffer overflows, TIFF encoder overflow/use-after-free, a stale-image-storage reuse bug, and an EPS filename argument injection into Ghostscript that could reach RCE. `requires-python` moves to `>=3.11` because Pillow 13 dropped Python 3.10 (EOL October 2026); CI already tested 3.11 and release builds bundle 3.13, so no supported build path changes. The screenshot tooling renders byte-identically under 12.3.0 and 13.0.0.
 - Bumped `js-yaml` to 4.3.2 (`devDependencies` and `overrides`) to fix GHSA-2883-xcg3-v3hh (CVSS 7.5) flagged by OSV-Scanner.
 - TruffleHog full-history (schedule) scans use `--exclude-paths` for three test files whose `test_…` function names trigger the Lob detector false-positive (trufflesecurity/trufflehog#5184), silencing the recurring weekly CI failure. PR-diff scans stay unscoped so contributors cannot widen exclusions in the same PR.
 - Scoped GitHub Actions workflow permissions to minimum required: `build.yml` top-level `contents: write` moved to the `release` job; `deploy-production.yml` top-level `actions: write` removed entirely with `deployments: write` scoped to the `deploy-prod` job.

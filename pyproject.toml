@@ -8,13 +8,13 @@ version = "0.1.5"
 description = "Refactored Spotify Playlist Exporter (Kivy desktop)"
 authors = [{ name = "Kevin Grizzard" }]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "kivy",
     "kivymd==1.2.0",
     "spotipy>=2.25.2",
     "requests==2.34.2",
-    "pillow>=12.3.0",
+    "pillow>=13.0.0",
     "idna>=3.15",
     "pygments>=2.20.0",
     "certifi>=2026.10.19",

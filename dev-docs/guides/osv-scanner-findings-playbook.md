@@ -18,6 +18,27 @@ When the GitHub Action bumped, also check the `google/osv-scanner` (CLI repo) ta
 
 ---
 
+## Blind spot: range-only Python specs
+
+OSV-Scanner only evaluates an **exact** version from a Python requirements file. A floor spec such as `pillow>=12.3.0` is silently treated as "no concrete version" and reports **no findings even when every version the floor admits is affected**. Verified 2026-10-24 with two one-line manifests against the 41 Pillow advisories fixed only in 13.0.0:
+
+```text
+pillow==12.3.0   → Total 1 package affected by 41 known vulnerabilities (5 Critical, 23 High, 13 Medium)
+pillow>=12.3.0   → No issues found
+```
+
+`pip-audit -r requirements.txt` has the mirror-image blind spot: it resolves an open floor *upward* to the newest release, so a vulnerable floor audits clean while the floor is still what installs from a cache, a lockfile, or an older resolver state.
+
+Mitigations, in order of preference:
+
+1. **Pin security-relevant Python deps exactly** (`requests==2.34.2`, `pyinstaller==6.22.3` already do this). Exact pins give OSV-Scanner something to check.
+2. **Audit the interpreter that actually runs the app**, not the manifest: `.venv/bin/python -m pip_audit` (or a venv-local `pip-audit`). The 2026-10-24 sweep found `.venv` still carrying `pillow 12.2.0` while both scanner surfaces reported clean.
+3. **Watch the third-party dashboards** (Aikido, Dependabot security alerts) for ecosystems we only floor. They resolve real installs and caught this class of finding first.
+
+Do not read "OSV-Scanner is green" as "the dependency set is clean" for floored Python packages.
+
+---
+
 ## Decision tree for a finding
 
 Work down the list. Stop at the first option that resolves the finding **without suppression**. Suppression (`osv-scanner.toml` `[[IgnoredVulns]]`) is a last resort, never a default.
