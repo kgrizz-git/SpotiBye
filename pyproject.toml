@@ -14,7 +14,7 @@ dependencies = [
     "kivymd==1.2.0",
     "spotipy>=2.25.2",
     "requests==2.34.2",
-    "pillow>=12.2.0",
+    "pillow>=12.3.0",
     "idna>=3.15",
     "pygments>=2.20.0",
     "certifi>=2026.10.19",

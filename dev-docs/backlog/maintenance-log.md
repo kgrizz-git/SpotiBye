@@ -10,6 +10,14 @@
 
 ---
 
+## 2026-10-24 — undici override raised to clear three GHSA advisories; Pillow floor aligned
+
+PR: n/a (pending)
+Scope: `src/backend/package.json`, `src/backend/package-lock.json`, `pyproject.toml`
+Three undici advisories published 2026-10-23 (`GHSA-xjj6-f33q-929c` high, `GHSA-4qv8-2p9j-2685`, `GHSA-f72v-6w45-q472`) covered `7.0.0 – 7.30.0`, reached through the dev-only `wrangler` → `miniflare` chain. Raised the existing `overrides.undici` floor from `^7.28.0` to `^7.30.1` and re-locked to 7.30.1; `npm audit` now reports 0 vulnerabilities with and without `--omit=dev`. No `wrangler` major bump was needed. Also aligned `pyproject.toml`'s Pillow floor with `requirements.txt` (`>=12.2.0` → `>=12.3.0`); the project metadata had lagged the PYSEC-2026-2253…3496 fix.
+
+---
+
 ## 2026-10-20 — App-icon and public-repo CI plan closed
 
 PR: n/a (pending)
