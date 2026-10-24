@@ -155,14 +155,42 @@ class TestParseRequirementsFile:
             "urllib3": _mod.Requirement((), "==2.8.0"),
         }
 
-    def test_skips_comments_blank_lines_and_options(self, tmp_path: Path) -> None:
+    def test_skips_comments_blank_lines_and_index_options(self, tmp_path: Path) -> None:
         req = tmp_path / "requirements.txt"
         req.write_text(
-            "# a comment\n\n-r other.txt\n-e .\n--index-url https://example.invalid\npillow==13.0.0\n"
+            "# a comment\n\n--index-url https://example.invalid\n"
+            "--extra-index-url=https://example.invalid\npillow==13.0.0\n"
         )
         assert _mod.parse_requirements_file(req) == {
             "pillow": _mod.Requirement((), "==13.0.0")
         }
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "-r other.txt",
+            "-rother.txt",
+            "--requirement=other.txt",
+            "-c constraints.txt",
+            "--constraint constraints.txt",
+            "-e .",
+            "--editable git+https://example.invalid/widget.git#egg=widget",
+        ],
+    )
+    def test_rejects_options_that_hide_dependencies(
+        self, tmp_path: Path, line: str
+    ) -> None:
+        # Skipping these would let packages bypass the drift comparison.
+        req = tmp_path / "requirements.txt"
+        req.write_text(f"pillow==13.0.0\n{line}\n")
+        with pytest.raises(ValueError, match="unsupported option"):
+            _mod.parse_requirements_file(req)
+
+    def test_rejects_unnamed_requirement(self, tmp_path: Path) -> None:
+        req = tmp_path / "requirements.txt"
+        req.write_text("./vendor/widget-1.0.whl\n")
+        with pytest.raises(ValueError, match="cannot parse requirement"):
+            _mod.parse_requirements_file(req)
 
     def test_normalizes_separators_and_case(self, tmp_path: Path) -> None:
         req = tmp_path / "requirements.txt"
@@ -190,6 +218,12 @@ class TestParsePyprojectDependencies:
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text('[project]\nname = "spotibye"\n')
         assert _mod.parse_pyproject_dependencies(pyproject) == {}
+
+    def test_rejects_unparseable_dependency(self, tmp_path: Path) -> None:
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\ndependencies = ["./vendor/widget-1.0.whl"]\n')
+        with pytest.raises(ValueError, match="cannot parse dependency"):
+            _mod.parse_pyproject_dependencies(pyproject)
 
 
 class TestManifestDrift:
@@ -259,6 +293,22 @@ class TestManifestDrift:
         # is real drift, not a permitted difference.
         req, pyproject = self._write(
             tmp_path, "pillow==13.0.0\n", '["pillow==13.0.0", "pyinstaller==6.22.3"]'
+        )
+        assert _mod.check_manifest_drift(req, pyproject) is False
+
+    def test_allowlisted_package_in_both_manifests_fails(self, tmp_path: Path) -> None:
+        # Identical pins in both still mean pyinstaller became a runtime
+        # dependency, which is exactly the migration the allowlist forbids.
+        req, pyproject = self._write(
+            tmp_path,
+            "pillow==13.0.0\npyinstaller==6.22.3\n",
+            '["pillow==13.0.0", "pyinstaller==6.22.3"]',
+        )
+        assert _mod.check_manifest_drift(req, pyproject) is False
+
+    def test_hidden_include_fails_instead_of_passing(self, tmp_path: Path) -> None:
+        req, pyproject = self._write(
+            tmp_path, "pillow==13.0.0\n-r extra.txt\n", '["pillow==13.0.0"]'
         )
         assert _mod.check_manifest_drift(req, pyproject) is False
 

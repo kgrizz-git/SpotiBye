@@ -121,16 +121,39 @@ def _parse_requirement(line: str) -> tuple[str, Requirement] | None:
     return normalize_name(match.group("name")), Requirement(extras, match.group("spec").strip())
 
 
+#: Options that pull in packages or versions the drift check cannot see. They
+#: are rejected rather than skipped so a dependency cannot hide behind them.
+_UNSUPPORTED_LONG_OPTIONS = ("--requirement", "--constraint", "--editable")
+_UNSUPPORTED_SHORT_OPTIONS = ("-r", "-c", "-e")
+
+
+def _is_unsupported_option(line: str) -> bool:
+    option = re.split(r"[\s=]", line, maxsplit=1)[0]
+    if option.startswith("--"):
+        return option in _UNSUPPORTED_LONG_OPTIONS
+    # Short options may be glued to their value, e.g. ``-rbase.txt``.
+    return option[:2] in _UNSUPPORTED_SHORT_OPTIONS
+
+
 def parse_requirements_file(path: Path) -> dict[str, Requirement]:
-    """Return ``{normalized_name: Requirement}`` for a requirements.txt file."""
+    """Return ``{normalized_name: Requirement}`` for a requirements.txt file.
+
+    Raises ``ValueError`` for an include, constraint or editable option, or for
+    a line that is not a named requirement, so nothing escapes the comparison.
+    """
     requirements: dict[str, Requirement] = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = _strip_comment(raw_line)
-        if not line or line.startswith("-"):
+        if not line:
+            continue
+        if line.startswith("-"):
+            if _is_unsupported_option(line):
+                raise ValueError(f"{path.name}: unsupported option '{line}'")
             continue
         parsed = _parse_requirement(line)
-        if parsed is not None:
-            requirements[parsed[0]] = parsed[1]
+        if parsed is None:
+            raise ValueError(f"{path.name}: cannot parse requirement '{line}'")
+        requirements[parsed[0]] = parsed[1]
     return requirements
 
 
@@ -145,9 +168,42 @@ def parse_pyproject_dependencies(path: Path) -> dict[str, Requirement]:
     dependencies: dict[str, Requirement] = {}
     for entry in data.get("project", {}).get("dependencies", []):
         parsed = _parse_requirement(entry.strip())
-        if parsed is not None:
-            dependencies[parsed[0]] = parsed[1]
+        if parsed is None:
+            raise ValueError(f"{path.name}: cannot parse dependency '{entry}'")
+        dependencies[parsed[0]] = parsed[1]
     return dependencies
+
+
+def _compare_manifests(
+    requirements: dict[str, Requirement], pyproject: dict[str, Requirement]
+) -> list[str]:
+    """Return one human-readable problem per disagreeing package."""
+    problems: list[str] = []
+    for name in sorted(requirements.keys() | pyproject.keys()):
+        in_requirements = name in requirements
+        in_pyproject = name in pyproject
+        allowed = MANIFEST_ALLOWLIST.get(name)
+        if in_requirements and in_pyproject:
+            if allowed is not None:
+                # Declaring a single-manifest package in both is the migration
+                # the allowlist exists to catch (e.g. pyinstaller as runtime).
+                problems.append(
+                    f"{name}: allowlisted for {allowed[0]} only but declared in both"
+                )
+            elif requirements[name] != pyproject[name]:
+                problems.append(
+                    f"{name}: requirements.txt has '{requirements[name]}' but "
+                    f"pyproject.toml has '{pyproject[name]}'"
+                )
+            continue
+        present_in = "requirements.txt" if in_requirements else "pyproject.toml"
+        if allowed is None:
+            problems.append(f"{name}: declared only in {present_in}")
+        elif allowed[0] != present_in:
+            problems.append(
+                f"{name}: allowlisted for {allowed[0]} but declared in {present_in}"
+            )
+    return problems
 
 
 def check_manifest_drift(
@@ -157,32 +213,15 @@ def check_manifest_drift(
     requirements_path = requirements_path or REPO_ROOT / "requirements.txt"
     pyproject_path = pyproject_path or REPO_ROOT / "pyproject.toml"
 
-    requirements = parse_requirements_file(requirements_path)
-    pyproject = parse_pyproject_dependencies(pyproject_path)
-
-    problems: list[str] = []
-    for name in sorted(requirements.keys() | pyproject.keys()):
-        in_requirements = name in requirements
-        in_pyproject = name in pyproject
-        if in_requirements and in_pyproject:
-            if requirements[name] != pyproject[name]:
-                problems.append(
-                    f"{name}: requirements.txt has '{requirements[name]}' but "
-                    f"pyproject.toml has '{pyproject[name]}'"
-                )
-            continue
-        present_in = "requirements.txt" if in_requirements else "pyproject.toml"
-        allowed = MANIFEST_ALLOWLIST.get(name)
-        if allowed is not None and allowed[0] == present_in:
-            continue
-        if allowed is not None:
-            problems.append(
-                f"{name}: allowlisted for {allowed[0]} but declared in {present_in}"
-            )
-            continue
-        problems.append(f"{name}: declared only in {present_in}")
-
     print("\n📦 Python Manifest Agreement (requirements.txt ↔ pyproject.toml)")
+    try:
+        requirements = parse_requirements_file(requirements_path)
+        pyproject = parse_pyproject_dependencies(pyproject_path)
+    except ValueError as error:
+        print(f"❌ {error}")
+        return False
+
+    problems = _compare_manifests(requirements, pyproject)
     if problems:
         print(f"❌ {len(problems)} mismatch(es):")
         for problem in problems:
@@ -194,7 +233,8 @@ def check_manifest_drift(
         )
         return False
 
-    print(f"✅ {len(requirements)} runtime dependencies agree across both manifests")
+    shared = len(requirements.keys() & pyproject.keys())
+    print(f"✅ {shared} runtime dependencies agree across both manifests")
     return True
 
 
