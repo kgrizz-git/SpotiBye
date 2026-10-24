@@ -50,6 +50,10 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 - [ ] Add a pre-commit hook that checks for code files over 700 lines and doc files over 300 lines and gives a warning unless the file is in an exempted list ([plan](../exec-plans/active/2026-07-07-file-length-pre-commit-hook-plan.md))
 - [ ] Apply the shared test helpers (`tests/helpers/spotify.ts`, `tests/helpers/hono.ts`) to `export*.test.ts` — same `track()`/request-builder patterns, not on the Sonar hotspot list yet
 
+## Security & Dependency Integrity
+
+- [ ] Python dependency integrity: audit the installed environment in CI and release builds, give Python dependencies exact versions, and fail locally when `.venv` drifts from the declared floors/pins ([plan](../exec-plans/active/2026-10-24-python-dependency-integrity.md)) — origin PR #64, where OSV-Scanner, pip-audit and Dependabot all missed 41 Pillow and 3 urllib3 advisories because no exact Python version exists anywhere in the repo
+
 ## Repo Cleanup & DevOps
 
 - [ ] Remove unused tracked backup and generated files
