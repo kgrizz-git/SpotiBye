@@ -42,7 +42,9 @@ The v1 command (`python -m pip_audit --skip-editable`) was wrong: it audits the 
 
 ```bash
 python -m pip freeze --exclude-editable > "${RUNNER_TEMP}/frozen.txt"
-python -m pip_audit -r "${RUNNER_TEMP}/frozen.txt" --strict
+python -m venv "${RUNNER_TEMP}/audit-env"          # auditor lives elsewhere
+"${AUDIT_PY}" -m pip install "pip-audit==2.10.1"
+"${AUDIT_PY}" -m pip_audit -r "${RUNNER_TEMP}/frozen.txt" --strict
 ```
 
 Why each part is load-bearing (all verified locally on 2026-10-24):
@@ -50,13 +52,14 @@ Why each part is load-bearing (all verified locally on 2026-10-24):
 - `pip freeze` omits `pip`, `setuptools` and `wheel` — installer tooling users never receive.
 - `--exclude-editable` is required, not cosmetic: without it the frozen file carries the editable `spotibye` git reference and `pip-audit` fails to build it (`git fetch … not our ref`), so the audit errors out instead of auditing.
 - `--strict` means "fail the entire audit if dependency collection fails"; without it a collection failure can look like a pass.
+- The auditor is installed into **its own venv** rather than the build environment: installing `pip-audit` there would install its dependencies after the snapshot, mutating the tree that is about to be bundled.
 
 Steps:
 
-- [ ] Add the recipe to `build.yml` after `Install Python dependencies`, on **every** matrix OS. Windows matters specifically: `kivy-deps.*` requirements are `sys_platform == "win32"` gated in Kivy's metadata, so only the Windows job audits what Windows bundles.
-- [ ] Keep it out of the ci.yml dev environment (see Non-goals) — one meaningful gate beats two, one of which is permanently red.
-- [ ] Prove it goes red once: temporarily downgrade `pillow` in the build env, confirm the release job fails, revert.
-- [ ] Record exit-code semantics in the workflow comment so a future reader knows a network/tooling failure is a hard failure, not a skip.
+- [x] Add the recipe to `build.yml` after `Install Python dependencies`, on **every** matrix OS. Windows matters specifically: `kivy-deps.*` requirements are `sys_platform == "win32"` gated in Kivy's metadata, so only the Windows job audits what Windows bundles.
+- [x] Keep it out of the ci.yml dev environment (see Non-goals) — one meaningful gate beats two, one of which is permanently red.
+- [x] Prove it goes red once: a simulated build environment (`python -m venv` + `pip install -r requirements.txt`) audits green (`No known vulnerabilities found`, exit 0); downgrading Pillow to 12.3.0 in that environment makes the same command report `Found 37 known vulnerabilities in 1 package` and exit 1. Re-confirm on the real runner at the next tag build.
+- [x] Record exit-code semantics in the workflow comment so a future reader knows a network/tooling failure is a hard failure, not a skip.
 
 **Acceptance:** a vulnerable resolved closure fails the release build on every platform; a clean closure passes.
 

@@ -134,6 +134,39 @@ jobs:
         pip install --prefer-binary -r requirements.txt  # NOSONAR(S8541): Kivy/KivyMD need source builds on Linux; --only-binary breaks wheels
         pip install pyinstaller  # NOSONAR(S6505): trusted, pinned build tool; --ignore-scripts would break its install
 
+    # Audit the environment PyInstaller is about to bundle, not the manifests.
+    # OSV-Scanner cannot evaluate range specs (a floored package reports "no
+    # issues" while every version it admits is vulnerable), so the shipped
+    # closure needs its own check. Runs on every matrix OS: the Windows runner
+    # resolves the `sys_platform == "win32"` kivy-deps.* wheels, so only it can
+    # audit what Windows bundles.
+    - name: Audit bundled Python dependencies
+      if: env.SKIP_BUILD != 'true'
+      shell: bash
+      env:
+        RUNNER_OS: ${{ runner.os }}
+      run: |
+        # Snapshot the resolved closure. `pip freeze` omits pip/setuptools/wheel
+        # (installer tooling users never receive), and --exclude-editable drops
+        # the editable project, whose git reference otherwise makes pip-audit
+        # fail to build it instead of auditing it.
+        python -m pip freeze --exclude-editable > "${RUNNER_TEMP}/frozen.txt"
+
+        # Install the auditor into its own venv: installing it in the build
+        # environment would mutate the tree that was just snapshotted and is
+        # about to be bundled.
+        python -m venv "${RUNNER_TEMP}/audit-env"
+        if [[ "${RUNNER_OS}" == "Windows" ]]; then
+          AUDIT_PY="${RUNNER_TEMP}/audit-env/Scripts/python.exe"
+        else
+          AUDIT_PY="${RUNNER_TEMP}/audit-env/bin/python"
+        fi
+        "${AUDIT_PY}" -m pip install --quiet --upgrade pip "pip-audit==2.10.1"
+
+        # --strict: a dependency-collection failure fails the build rather than
+        # looking like a clean audit.
+        "${AUDIT_PY}" -m pip_audit -r "${RUNNER_TEMP}/frozen.txt" --strict
+
     - name: Validate icon assets
       if: env.SKIP_BUILD != 'true'
       shell: bash
