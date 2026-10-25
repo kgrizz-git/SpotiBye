@@ -75,7 +75,8 @@ rg -q "Needs Deployment: NO" "${output_file}"
 env_file="${tmp_dir}/desktop.env"
 printf '%s\r\n' \
   "export SPOTIBYE_PRODUCTION_BACKEND_URL = \"http://127.0.0.1:${port}\" # prod" \
-  "SPOTIBYE_DEV_BACKEND_URL=http://127.0.0.1:${port}   # dev" \
+  "SPOTIBYE_DEV_BACKEND_URL=http://127.0.0.1:1   # superseded below" \
+  "SPOTIBYE_DEV_BACKEND_URL='http://127.0.0.1:${port}'   # dev, last wins" \
   > "${env_file}"
 for target in prod dev; do
   env -u SPOTIBYE_PRODUCTION_BACKEND_URL -u SPOTIBYE_DEV_BACKEND_URL \
