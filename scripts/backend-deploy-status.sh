@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.desktop.env.local"
+ENV_FILE="${SPOTIBYE_DESKTOP_ENV_FILE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.desktop.env.local}"
 
 # Read KEY from the environment, falling back to .desktop.env.local.
 # Parses KEY=value lines only; the file is never executed. Handles an
 # optional `export`, spaces around `=`, CRLF endings, single or double
 # quotes, and trailing `# comments`. The last matching line wins.
+# SPOTIBYE_DESKTOP_ENV_FILE overrides the file path (used by tests).
 env_url() {
   local key="$1" value="${!1:-}" line k v
   if [[ -z "${value}" && -f "${ENV_FILE}" ]]; then
@@ -17,6 +18,9 @@ env_url() {
       [[ "${k}" == "${key}" ]] || continue
       if [[ "${v}" =~ ^\"([^\"]*)\" || "${v}" =~ ^\'([^\']*)\' ]]; then
         v="${BASH_REMATCH[1]}"
+      elif [[ "${v}" == [\"\'#]* ]]; then
+        # Unterminated quote or comment-only value: treat as unset.
+        v=""
       else
         v="${v%%[[:space:]]#*}"
         v="${v%"${v##*[![:space:]]}"}"
