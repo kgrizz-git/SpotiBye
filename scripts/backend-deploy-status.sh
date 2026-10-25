@@ -1,11 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND_URL="${1:-${SPOTIBYE_BACKEND_URL:-}}"
+ENV_FILE="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.desktop.env.local"
+
+# Read KEY from the environment, falling back to .desktop.env.local.
+# Parses KEY=value lines only; the file is never executed.
+env_url() {
+  local key="$1" value="${!1:-}"
+  if [[ -z "${value}" && -f "${ENV_FILE}" ]]; then
+    value="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "${ENV_FILE}" | tail -n 1 | cut -d= -f2-)"
+    value="${value%\"}"; value="${value#\"}"
+    value="${value%\'}"; value="${value#\'}"
+  fi
+  printf '%s' "${value}"
+}
+
+case "${1:-}" in
+  prod|production) BACKEND_URL="$(env_url SPOTIBYE_PRODUCTION_BACKEND_URL)" ;;
+  dev|development) BACKEND_URL="$(env_url SPOTIBYE_DEV_BACKEND_URL)" ;;
+  "") BACKEND_URL="$(env_url SPOTIBYE_BACKEND_URL)" ;;
+  *) BACKEND_URL="$1" ;;
+esac
 
 if [[ -z "${BACKEND_URL}" ]]; then
-  echo "Usage: $0 <backend-url>" >&2
-  echo "Or set SPOTIBYE_BACKEND_URL." >&2
+  echo "Usage: $0 [prod|dev|<backend-url>]" >&2
+  echo "URLs come from the environment or ${ENV_FILE}:" >&2
+  echo "  prod -> SPOTIBYE_PRODUCTION_BACKEND_URL, dev -> SPOTIBYE_DEV_BACKEND_URL," >&2
+  echo "  no argument -> SPOTIBYE_BACKEND_URL." >&2
   exit 2
 fi
 

@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-25 — backend-deploy-status.sh reads URLs from .desktop.env.local
+
+PR: TBD
+Scope: `scripts/backend-deploy-status.sh`, `AGENTS.md`, `CLAUDE.md`
+The deploy-status script now accepts `prod` / `dev` shorthands and falls back to `.desktop.env.local` for `SPOTIBYE_*_BACKEND_URL` when the variables are not exported. The file is parsed for `KEY=value` lines, never sourced. Internal-only tooling; no CHANGELOG entry.
+
 ## 2026-10-25 — PR #65 review round 2: pkg_resources bundling removed, option-line bypass closed
 
 PR: #65
