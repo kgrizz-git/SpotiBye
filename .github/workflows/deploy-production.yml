@@ -25,14 +25,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
 
+      # Full-history scan. A base/head diff scan cannot work here: this
+      # workflow is dispatched on main, so base and head are the same commit
+      # and TruffleHog exits 1 without scanning. Mirrors the full-history step
+      # in security.yml, including its Lob false-positive exclusions.
       - name: TruffleHog Secret Scan
         uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9
         with:
           path: ./
-          base: main
-          head: HEAD
-          extra_args: --only-verified
+          extra_args: --only-verified --exclude-paths .trufflehog-exclude.txt
 
   test:
     runs-on: ubuntu-latest
