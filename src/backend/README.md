@@ -36,7 +36,8 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
 
 - `npm run dev` - Start local development server with Wrangler
 - `npm run build` - Compile TypeScript to JavaScript
-- `npm run deploy` - Deploy to Cloudflare Workers
+- `npm run deploy:dev` - Deploy the development Worker (`spotibye-backend-development`)
+- `npm run deploy:prod` - Deploy the production Worker (`spotibye-backend-production`)
 - `npm run lint` - Run ESLint on TypeScript files
 - `npm run format` - Format code with Prettier
 
@@ -105,8 +106,11 @@ For local development, these use preview IDs. For production, you'll need to cre
 
 4. **Deploy**
    ```bash
-   npm run deploy
+   npm run deploy:dev    # or deploy:prod
    ```
+
+   There is no default target. A bare `wrangler deploy` would create a
+   stray top-level `spotibye-backend` Worker outside both environments.
 
 ## Development Tips
 
