@@ -16,10 +16,10 @@ env_url() {
       [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
       k="${BASH_REMATCH[2]}"; v="${BASH_REMATCH[3]}"
       [[ "${k}" == "${key}" ]] || continue
-      if [[ "${v}" =~ ^\"([^\"]*)\" || "${v}" =~ ^\'([^\']*)\' ]]; then
+      if [[ "${v}" =~ ^\"([^\"]*)\"[[:space:]]*(#.*)?$ || "${v}" =~ ^\'([^\']*)\'[[:space:]]*(#.*)?$ ]]; then
         v="${BASH_REMATCH[1]}"
       elif [[ "${v}" == [\"\'#]* ]]; then
-        # Unterminated quote or comment-only value: treat as unset.
+        # Malformed quoted value or comment-only value: treat as unset.
         v=""
       else
         v="${v%%[[:space:]]#*}"

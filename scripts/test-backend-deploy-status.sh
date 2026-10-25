@@ -92,8 +92,12 @@ SPOTIBYE_DEV_BACKEND_URL="http://127.0.0.1:${port}" \
   ./scripts/backend-deploy-status.sh dev > "${output_file}"
 rg -q "Backend URL: http://127.0.0.1:${port}$" "${output_file}"
 
-# Comment-only and unterminated values count as unset: usage error, exit 2.
-for bad in 'SPOTIBYE_DEV_BACKEND_URL= # disabled' 'SPOTIBYE_DEV_BACKEND_URL="http://broken'; do
+# Comment-only, unterminated, and trailing-junk quoted values count as unset: usage error, exit 2.
+for bad in \
+  'SPOTIBYE_DEV_BACKEND_URL= # disabled' \
+  'SPOTIBYE_DEV_BACKEND_URL="http://broken' \
+  'SPOTIBYE_DEV_BACKEND_URL="http://127.0.0.1:1"junk' \
+  "SPOTIBYE_DEV_BACKEND_URL='http://127.0.0.1:1' junk"; do
   printf '%s\n' "${bad}" > "${env_file}"
   status=0
   env -u SPOTIBYE_DEV_BACKEND_URL SPOTIBYE_DESKTOP_ENV_FILE="${env_file}" \
