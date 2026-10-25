@@ -151,7 +151,9 @@ jobs:
         # three installer tools are excluded explicitly because users never
         # receive them. --exclude-editable drops the editable project, whose git
         # reference otherwise makes pip-audit fail to build it instead of
-        # auditing it.
+        # auditing it. The spec excludes setuptools and pkg_resources, and
+        # nothing in the app's import graph imports pkg_resources, so the
+        # audited frozen set matches what actually ships.
         python -m pip freeze --exclude-editable --exclude pip --exclude setuptools --exclude wheel > "${RUNNER_TEMP}/frozen.txt"
 
         # Install the auditor into its own venv: installing it in the build

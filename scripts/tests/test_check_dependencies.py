@@ -160,9 +160,13 @@ class TestParseRequirementsFile:
         req.write_text(
             "# a comment\n\n--index-url https://example.invalid\n"
             "--extra-index-url=https://example.invalid\n"
-            "--trusted-host example.invalid\n--no-cache-dir\n"
+            "--trusted-host example.invalid\n"
             "-i https://example.invalid/simple\n"
-            "-ihttps://example.invalid/glued\npillow==13.0.0\n"
+            "-ihttps://example.invalid/glued\n"
+            "--index-url https://a.example.invalid"
+            " --extra-index-url=https://b.example.invalid"
+            " --trusted-host c.example.invalid\n"
+            "pillow==13.0.0\n"
         )
         assert _mod.parse_requirements_file(req) == {
             "pillow": _mod.Requirement((), "==13.0.0")
@@ -182,6 +186,11 @@ class TestParseRequirementsFile:
             "--find-links https://example.invalid",
             "-f https://example.invalid",
             "--prefer-binary",
+            "--no-cache-dir",
+            "--index-url https://example.invalid -r other.txt",
+            "--index-url=https://example.invalid --pre",
+            "--trusted-host example.invalid --find-links https://example.invalid",
+            "-ihttps://example.invalid -r other.txt",
         ],
     )
     def test_rejects_options_that_hide_dependencies(

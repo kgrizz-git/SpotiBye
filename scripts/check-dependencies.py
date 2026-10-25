@@ -139,31 +139,44 @@ def _parse_requirement(line: str) -> tuple[str, Requirement] | None:
 
 
 #: The only requirements-file options accepted. Each one selects where packages
-#: come from, never which packages or versions are installed. Every unlisted
-#: option is rejected, so resolution-changing flags (``--pre``, ``--find-links``,
-#: ``--requirement``, ``--constraint``, ``--editable``, ...) cannot smuggle
-#: dependencies past the drift comparison.
+#: come from, never which packages or versions are installed. Every option
+#: token on a line is validated, so an allowed option cannot be paired with a
+#: resolution-changing one (``--pre``, ``--find-links``, ``--requirement``,
+#: ``--constraint``, ``--editable``, ...) to smuggle dependencies past the drift
+#: comparison. ``--no-cache-dir`` is an install-time flag, not a requirements
+#: file option, so it is rejected too.
 _ALLOWED_LONG_OPTIONS = (
     "--index-url",
     "--extra-index-url",
     "--trusted-host",
-    "--no-cache-dir",
 )
 _ALLOWED_SHORT_OPTIONS = ("-i",)
 
 
 def _is_allowed_option(line: str) -> bool:
-    option = re.split(r"[\s=]", line, maxsplit=1)[0]
-    if option.startswith("--"):
-        return option in _ALLOWED_LONG_OPTIONS
-    # Short options may be glued to their value, e.g. ``-ihttps://host``.
-    return option[:2] in _ALLOWED_SHORT_OPTIONS
+    """Return True only when every option token on ``line`` is allow-listed."""
+    try:
+        tokens = shlex.split(line)
+    except ValueError:
+        return False
+    for token in tokens:
+        option = token.split("=", maxsplit=1)[0]
+        if not option.startswith("-"):
+            # This token is the value of the preceding option.
+            continue
+        if option.startswith("--"):
+            if option not in _ALLOWED_LONG_OPTIONS:
+                return False
+        elif option[:2] not in _ALLOWED_SHORT_OPTIONS:
+            # Short options may be glued to their value, e.g. ``-ihttps://host``.
+            return False
+    return True
 
 
 def parse_requirements_file(path: Path) -> dict[str, Requirement]:
     """Return ``{normalized_name: Requirement}`` for a requirements.txt file.
 
-    Only allow-listed installer options are skipped; any other option, a
+    Every option token on a line must be allow-listed; any other option, a
     duplicate normalized name, or a line that is not a named requirement raises
     ``ValueError`` so nothing escapes the comparison.
     """

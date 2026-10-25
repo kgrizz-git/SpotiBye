@@ -55,6 +55,7 @@ snapshot and the re-resolving audit command.
 Why each part is load-bearing (the original recipe was verified locally on 2026-10-24):
 
 - `pip freeze` excludes `pip`, `setuptools` and `wheel` explicitly — users never receive installer tooling in the bundled app. Modern pip auto-excludes only `pip` on Python 3.13, so `setuptools` and `wheel` would otherwise leak into the snapshot if installed.
+- **Post-review amendment (2026-10-25):** `spotibye.spec` no longer lists the dead `pkg_resources.py2_warn` / `pkg_resources.markers` hidden imports and now excludes `pkg_resources`, because nothing in the app or its dependencies imports it and a local macOS build (setuptools 79 build env) shipped zero `pkg_resources` files — keeping the audited frozen set equal to the shipped set on every runner.
 - `--no-deps --disable-pip` audit exactly the captured versions: the frozen file is already fully pinned, so without them `pip-audit` re-resolves and reinstalls packages instead of auditing the snapshot.
 - `--exclude-editable` is required, not cosmetic: without it the frozen file carries the editable `spotibye` git reference and `pip-audit` fails to build it (`git fetch … not our ref`), so the audit errors out instead of auditing.
 - `--strict` means "fail the entire audit if dependency collection fails"; without it a collection failure can look like a pass.

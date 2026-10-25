@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-25 — PR #65 review round 2: pkg_resources bundling removed, option-line bypass closed
+
+PR: #65
+Scope: `spotibye.spec`, `.github/workflows/build.yml`, `scripts/check-dependencies.py`, `scripts/tests/test_check_dependencies.py`, `dev-docs/exec-plans/completed/2026-10-24-python-dependency-integrity.md`
+Addressed the second CodeRabbit round on #65 (orchestrator diagnosis, consensus with deepseek-flash via qoder, deepseek implementation, orchestrator verification). `spotibye.spec` no longer lists the dead `pkg_resources.py2_warn` / `pkg_resources.markers` hidden imports (PyInstaller 3.x-era workarounds; the module names no longer exist in setuptools ≥ ~67, and on older setuptools they would bundle unaudited pkg_resources code while the frozen audit excludes setuptools) and now excludes `pkg_resources` outright. Verified locally: nothing in the app or its 12 runtime dependency trees references pkg_resources, importing every runtime dep leaves it out of `sys.modules`, and a full macOS PyInstaller build (setuptools 79.0.1 build env) ships zero pkg_resources/setuptools files — so the audited frozen set equals the shipped set on every matrix runner regardless of the runner's setuptools version. The requirements-file option gate now validates every option token on a line via shlex (pip parses all tokens of an option line and honors a nested `-r` on the same line as an allowed option — confirmed against pip's `req_file.parse_line` and a live `pip install --dry-run`), and `--no-cache-dir` moved out of the allowlist because pip rejects it in requirements files (`no such option`), which would turn a passing drift check into a failed build. Regression tests cover the compound-line bypasses and the `--no-cache-dir` rejection. Internal-only (CI/build tooling); no CHANGELOG entry.
+
 ## 2026-10-24 — PR #65 review: fail-closed option allow-list, duplicate-pin rejection, exact-version audit
 
 PR: #65
