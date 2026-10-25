@@ -12,7 +12,7 @@
 
 ## 2026-10-25 — Production deploy secret gate scans full history
 
-PR: TBD
+PR: #66
 Scope: `.github/workflows/deploy-production.yml`
 The Deploy Production TruffleHog step passed `base: main` / `head: HEAD` while being dispatched on main, so TruffleHog refused to run ("BASE and HEAD commits are the same") and the gate blocked every production deploy. It now does a full-history scan with `fetch-depth: 0`, matching the full-history step in `security.yml`. Internal-only CI; no CHANGELOG entry.
 
