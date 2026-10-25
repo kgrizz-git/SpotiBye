@@ -146,11 +146,13 @@ jobs:
       env:
         RUNNER_OS: ${{ runner.os }}
       run: |
-        # Snapshot the resolved closure. `pip freeze` omits pip/setuptools/wheel
-        # (installer tooling users never receive), and --exclude-editable drops
-        # the editable project, whose git reference otherwise makes pip-audit
-        # fail to build it instead of auditing it.
-        python -m pip freeze --exclude-editable > "${RUNNER_TEMP}/frozen.txt"
+        # Snapshot the resolved closure. Modern pip auto-excludes only pip, so
+        # setuptools and wheel would leak into the snapshot if installed; all
+        # three installer tools are excluded explicitly because users never
+        # receive them. --exclude-editable drops the editable project, whose git
+        # reference otherwise makes pip-audit fail to build it instead of
+        # auditing it.
+        python -m pip freeze --exclude-editable --exclude pip --exclude setuptools --exclude wheel > "${RUNNER_TEMP}/frozen.txt"
 
         # Install the auditor into its own venv: installing it in the build
         # environment would mutate the tree that was just snapshotted and is
@@ -164,8 +166,10 @@ jobs:
         "${AUDIT_PY}" -m pip install --quiet --upgrade pip "pip-audit==2.10.1"
 
         # --strict: a dependency-collection failure fails the build rather than
-        # looking like a clean audit.
-        "${AUDIT_PY}" -m pip_audit -r "${RUNNER_TEMP}/frozen.txt" --strict
+        # looking like a clean audit. The frozen file is fully pinned, so
+        # --no-deps --disable-pip audit exactly the captured versions without
+        # pip-audit re-resolving or reinstalling packages.
+        "${AUDIT_PY}" -m pip_audit -r "${RUNNER_TEMP}/frozen.txt" --strict --no-deps --disable-pip
 
     - name: Validate icon assets
       if: env.SKIP_BUILD != 'true'

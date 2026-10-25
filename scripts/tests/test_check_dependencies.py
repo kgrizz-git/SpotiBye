@@ -159,7 +159,10 @@ class TestParseRequirementsFile:
         req = tmp_path / "requirements.txt"
         req.write_text(
             "# a comment\n\n--index-url https://example.invalid\n"
-            "--extra-index-url=https://example.invalid\npillow==13.0.0\n"
+            "--extra-index-url=https://example.invalid\n"
+            "--trusted-host example.invalid\n--no-cache-dir\n"
+            "-i https://example.invalid/simple\n"
+            "-ihttps://example.invalid/glued\npillow==13.0.0\n"
         )
         assert _mod.parse_requirements_file(req) == {
             "pillow": _mod.Requirement((), "==13.0.0")
@@ -175,15 +178,26 @@ class TestParseRequirementsFile:
             "--constraint constraints.txt",
             "-e .",
             "--editable git+https://example.invalid/widget.git#egg=widget",
+            "--pre",
+            "--find-links https://example.invalid",
+            "-f https://example.invalid",
+            "--prefer-binary",
         ],
     )
     def test_rejects_options_that_hide_dependencies(
         self, tmp_path: Path, line: str
     ) -> None:
-        # Skipping these would let packages bypass the drift comparison.
+        # Any unlisted option could change resolution or pull in packages
+        # outside the drift comparison, so it is rejected rather than skipped.
         req = tmp_path / "requirements.txt"
         req.write_text(f"pillow==13.0.0\n{line}\n")
         with pytest.raises(ValueError, match="unsupported option"):
+            _mod.parse_requirements_file(req)
+
+    def test_rejects_duplicate_normalized_names(self, tmp_path: Path) -> None:
+        req = tmp_path / "requirements.txt"
+        req.write_text("pillow==12.3.0\nPillow==13.0.0\n")
+        with pytest.raises(ValueError, match="duplicate"):
             _mod.parse_requirements_file(req)
 
     def test_rejects_unnamed_requirement(self, tmp_path: Path) -> None:
@@ -231,6 +245,14 @@ class TestParsePyprojectDependencies:
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text('[project]\nname = "spotibye"\n')
         assert _mod.parse_pyproject_dependencies(pyproject) == {}
+
+    def test_rejects_duplicate_normalized_dependencies(self, tmp_path: Path) -> None:
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\ndependencies = ["pillow==12.3.0", "Pillow==13.0.0"]\n'
+        )
+        with pytest.raises(ValueError, match="duplicate"):
+            _mod.parse_pyproject_dependencies(pyproject)
 
     def test_rejects_unparseable_dependency(self, tmp_path: Path) -> None:
         pyproject = tmp_path / "pyproject.toml"

@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-24 — PR #65 review: fail-closed option allow-list, duplicate-pin rejection, exact-version audit
+
+PR: #65
+Scope: `.github/workflows/build.yml`, `scripts/check-dependencies.py`, `scripts/tests/test_check_dependencies.py`, `dev-docs/exec-plans/completed/2026-10-24-python-dependency-integrity.md`
+Addressed the CodeRabbit and Greptile review findings on #65. The bundled-closure audit now passes `--no-deps --disable-pip` so `pip-audit` checks exactly the versions captured by `pip freeze` instead of re-resolving and reinstalling them, and the freeze snapshot excludes `pip`, `setuptools` and `wheel` explicitly (Python 3.13 auto-excludes only `pip`, so the other two could leak into the audit). The requirements-file option handler switched from a deny-list to an allow-list (`--index-url`/`-i`, `--extra-index-url`, `--trusted-host`, `--no-cache-dir`): resolution-changing options such as `--pre` and `--find-links` are now rejected instead of silently skipped, through the existing error path. Both manifest parsers reject a duplicate normalized package name before the dict write, so a later pin can no longer overwrite an earlier one. Regression tests cover all four behaviors, and the completed plan's recipe and `pip freeze` explanation were corrected with a post-review amendment note. Internal-only (CI/tooling); no CHANGELOG entry.
+
 ## 2026-10-24 — Python dependency integrity: exact pins, manifest drift gate, shipped-closure audit
 
 PR: #65

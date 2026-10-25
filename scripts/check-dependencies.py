@@ -138,25 +138,34 @@ def _parse_requirement(line: str) -> tuple[str, Requirement] | None:
     return normalize_name(name), Requirement(extras, rest.strip())
 
 
-#: Options that pull in packages or versions the drift check cannot see. They
-#: are rejected rather than skipped so a dependency cannot hide behind them.
-_UNSUPPORTED_LONG_OPTIONS = ("--requirement", "--constraint", "--editable")
-_UNSUPPORTED_SHORT_OPTIONS = ("-r", "-c", "-e")
+#: The only requirements-file options accepted. Each one selects where packages
+#: come from, never which packages or versions are installed. Every unlisted
+#: option is rejected, so resolution-changing flags (``--pre``, ``--find-links``,
+#: ``--requirement``, ``--constraint``, ``--editable``, ...) cannot smuggle
+#: dependencies past the drift comparison.
+_ALLOWED_LONG_OPTIONS = (
+    "--index-url",
+    "--extra-index-url",
+    "--trusted-host",
+    "--no-cache-dir",
+)
+_ALLOWED_SHORT_OPTIONS = ("-i",)
 
 
-def _is_unsupported_option(line: str) -> bool:
+def _is_allowed_option(line: str) -> bool:
     option = re.split(r"[\s=]", line, maxsplit=1)[0]
     if option.startswith("--"):
-        return option in _UNSUPPORTED_LONG_OPTIONS
-    # Short options may be glued to their value, e.g. ``-rbase.txt``.
-    return option[:2] in _UNSUPPORTED_SHORT_OPTIONS
+        return option in _ALLOWED_LONG_OPTIONS
+    # Short options may be glued to their value, e.g. ``-ihttps://host``.
+    return option[:2] in _ALLOWED_SHORT_OPTIONS
 
 
 def parse_requirements_file(path: Path) -> dict[str, Requirement]:
     """Return ``{normalized_name: Requirement}`` for a requirements.txt file.
 
-    Raises ``ValueError`` for an include, constraint or editable option, or for
-    a line that is not a named requirement, so nothing escapes the comparison.
+    Only allow-listed installer options are skipped; any other option, a
+    duplicate normalized name, or a line that is not a named requirement raises
+    ``ValueError`` so nothing escapes the comparison.
     """
     requirements: dict[str, Requirement] = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -164,12 +173,14 @@ def parse_requirements_file(path: Path) -> dict[str, Requirement]:
         if not line:
             continue
         if line.startswith("-"):
-            if _is_unsupported_option(line):
+            if not _is_allowed_option(line):
                 raise ValueError(f"{path.name}: unsupported option '{line}'")
             continue
         parsed = _parse_requirement(line)
         if parsed is None:
             raise ValueError(f"{path.name}: cannot parse requirement '{line}'")
+        if parsed[0] in requirements:
+            raise ValueError(f"{path.name}: duplicate requirement for '{parsed[0]}'")
         requirements[parsed[0]] = parsed[1]
     return requirements
 
@@ -179,7 +190,8 @@ def parse_pyproject_dependencies(path: Path) -> dict[str, Requirement]:
 
     ``[project.optional-dependencies]`` is deliberately excluded: developer
     tooling (ruff, black, bandit, pytest, ...) legitimately exists only there
-    and is never bundled into the released application.
+    and is never bundled into the released application. A duplicate normalized
+    name raises ``ValueError`` rather than silently overwriting an earlier pin.
     """
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     dependencies: dict[str, Requirement] = {}
@@ -187,6 +199,8 @@ def parse_pyproject_dependencies(path: Path) -> dict[str, Requirement]:
         parsed = _parse_requirement(entry.strip())
         if parsed is None:
             raise ValueError(f"{path.name}: cannot parse dependency '{entry}'")
+        if parsed[0] in dependencies:
+            raise ValueError(f"{path.name}: duplicate dependency for '{parsed[0]}'")
         dependencies[parsed[0]] = parsed[1]
     return dependencies
 

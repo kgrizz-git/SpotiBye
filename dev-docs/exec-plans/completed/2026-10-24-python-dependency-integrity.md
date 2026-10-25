@@ -41,15 +41,21 @@ v1 claimed a single root cause: "no exact Python version exists anywhere in the 
 The v1 command (`python -m pip_audit --skip-editable`) was wrong: it audits the whole interpreter including tooling. The verified recipe audits exactly what PyInstaller bundles:
 
 ```bash
-python -m pip freeze --exclude-editable > "${RUNNER_TEMP}/frozen.txt"
+python -m pip freeze --exclude-editable --exclude pip --exclude setuptools --exclude wheel > "${RUNNER_TEMP}/frozen.txt"
 python -m venv "${RUNNER_TEMP}/audit-env"          # auditor lives elsewhere
 "${AUDIT_PY}" -m pip install "pip-audit==2.10.1"
-"${AUDIT_PY}" -m pip_audit -r "${RUNNER_TEMP}/frozen.txt" --strict
+"${AUDIT_PY}" -m pip_audit -r "${RUNNER_TEMP}/frozen.txt" --strict --no-deps --disable-pip
 ```
 
-Why each part is load-bearing (all verified locally on 2026-10-24):
+**Post-review amendment (2026-10-24):** the `--exclude` snapshot flags and the
+`--no-deps --disable-pip` audit flags were added during PR #65 review. They were
+**not** part of the original local verification; that run used the unexcluded
+snapshot and the re-resolving audit command.
 
-- `pip freeze` omits `pip`, `setuptools` and `wheel` — installer tooling users never receive.
+Why each part is load-bearing (the original recipe was verified locally on 2026-10-24):
+
+- `pip freeze` excludes `pip`, `setuptools` and `wheel` explicitly — users never receive installer tooling in the bundled app. Modern pip auto-excludes only `pip` on Python 3.13, so `setuptools` and `wheel` would otherwise leak into the snapshot if installed.
+- `--no-deps --disable-pip` audit exactly the captured versions: the frozen file is already fully pinned, so without them `pip-audit` re-resolves and reinstalls packages instead of auditing the snapshot.
 - `--exclude-editable` is required, not cosmetic: without it the frozen file carries the editable `spotibye` git reference and `pip-audit` fails to build it (`git fetch … not our ref`), so the audit errors out instead of auditing.
 - `--strict` means "fail the entire audit if dependency collection fails"; without it a collection failure can look like a pass.
 - The auditor is installed into **its own venv** rather than the build environment: installing `pip-audit` there would install its dependencies after the snapshot, mutating the tree that is about to be bundled.
