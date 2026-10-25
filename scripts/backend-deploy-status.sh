@@ -1,11 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND_URL="${1:-${SPOTIBYE_BACKEND_URL:-}}"
+ENV_FILE="${SPOTIBYE_DESKTOP_ENV_FILE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.desktop.env.local}"
+
+# Read KEY from the environment, falling back to .desktop.env.local.
+# Parses KEY=value lines only; the file is never executed. Handles an
+# optional `export`, spaces around `=`, CRLF endings, single or double
+# quotes, and trailing `# comments`. The last matching line wins.
+# SPOTIBYE_DESKTOP_ENV_FILE overrides the file path (used by tests).
+env_url() {
+  local key="$1" value="${!1:-}" line k v
+  if [[ -z "${value}" && -f "${ENV_FILE}" ]]; then
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+      line="${line%$'\r'}"
+      [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+      k="${BASH_REMATCH[2]}"; v="${BASH_REMATCH[3]}"
+      [[ "${k}" == "${key}" ]] || continue
+      if [[ "${v}" =~ ^\"([^\"]*)\"[[:space:]]*(#.*)?$ || "${v}" =~ ^\'([^\']*)\'[[:space:]]*(#.*)?$ ]]; then
+        v="${BASH_REMATCH[1]}"
+      elif [[ "${v}" == [\"\'#]* ]]; then
+        # Malformed quoted value or comment-only value: treat as unset.
+        v=""
+      else
+        v="${v%%[[:space:]]#*}"
+        v="${v%"${v##*[![:space:]]}"}"
+      fi
+      value="${v}"
+    done < "${ENV_FILE}"
+  fi
+  printf '%s' "${value}"
+}
+
+case "${1:-}" in
+  prod|production) BACKEND_URL="$(env_url SPOTIBYE_PRODUCTION_BACKEND_URL)" ;;
+  dev|development) BACKEND_URL="$(env_url SPOTIBYE_DEV_BACKEND_URL)" ;;
+  "") BACKEND_URL="$(env_url SPOTIBYE_BACKEND_URL)" ;;
+  *) BACKEND_URL="$1" ;;
+esac
 
 if [[ -z "${BACKEND_URL}" ]]; then
-  echo "Usage: $0 <backend-url>" >&2
-  echo "Or set SPOTIBYE_BACKEND_URL." >&2
+  echo "Usage: $0 [prod|dev|<backend-url>]" >&2
+  echo "URLs come from the environment or ${ENV_FILE}:" >&2
+  echo "  prod -> SPOTIBYE_PRODUCTION_BACKEND_URL, dev -> SPOTIBYE_DEV_BACKEND_URL," >&2
+  echo "  no argument -> SPOTIBYE_BACKEND_URL." >&2
   exit 2
 fi
 
