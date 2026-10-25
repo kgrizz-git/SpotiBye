@@ -133,10 +133,10 @@ KIVY_WINDOW=headless KIVY_NO_ENV_CONFIG=1 .venv/bin/pytest src/frontend/tests/ -
 Before saying backend changes are deployed, or when asked whether backend deployment is needed, run:
 
 ```bash
-./scripts/backend-deploy-status.sh <backend-url>
+./scripts/backend-deploy-status.sh prod   # or: dev, or an explicit <backend-url>
 ```
 
-Use the production or development Worker URL that matches the question. If `Needs Deployment: YES`, tell the user which committed or uncommitted backend/workflow files differ from the live `release_sha` and ask before deploying. Treat `src/backend/.deployed-commit.json` as a local cache only; the live `/health` metadata is the source of truth.
+`prod` and `dev` resolve to `SPOTIBYE_PRODUCTION_BACKEND_URL` and `SPOTIBYE_DEV_BACKEND_URL`, read from the environment or `.desktop.env.local`. Use the environment that matches the question. If `Needs Deployment: YES`, tell the user which committed or uncommitted backend/workflow files differ from the live `release_sha` and ask before deploying. Treat `src/backend/.deployed-commit.json` as a local cache only; the live `/health` metadata is the source of truth.
 
 Run the script from a fresh local checkout of the target branch, normally `main` after pulling. Detached HEADs, stale branches, and feature branches can make the `release_sha..HEAD` comparison look different from the deployment branch.
 

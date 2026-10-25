@@ -71,4 +71,38 @@ rg -q "Environment: test" "${output_file}"
 rg -q "Live release SHA: ${head_sha}" "${output_file}"
 rg -q "Needs Deployment: NO" "${output_file}"
 
+# prod/dev shorthands resolve URLs from the env file, never sourcing it.
+env_file="${tmp_dir}/desktop.env"
+printf '%s\r\n' \
+  "export SPOTIBYE_PRODUCTION_BACKEND_URL = \"http://127.0.0.1:${port}\" # prod" \
+  "SPOTIBYE_DEV_BACKEND_URL=http://127.0.0.1:1   # superseded below" \
+  "SPOTIBYE_DEV_BACKEND_URL='http://127.0.0.1:${port}'   # dev, last wins" \
+  > "${env_file}"
+for target in prod dev; do
+  env -u SPOTIBYE_PRODUCTION_BACKEND_URL -u SPOTIBYE_DEV_BACKEND_URL \
+    SPOTIBYE_DESKTOP_ENV_FILE="${env_file}" \
+    ./scripts/backend-deploy-status.sh "${target}" > "${output_file}"
+  rg -q "Backend URL: http://127.0.0.1:${port}$" "${output_file}"
+  rg -q "Needs Deployment: NO" "${output_file}"
+done
+
+# The environment wins over the file.
+SPOTIBYE_DEV_BACKEND_URL="http://127.0.0.1:${port}" \
+  SPOTIBYE_DESKTOP_ENV_FILE=/nonexistent \
+  ./scripts/backend-deploy-status.sh dev > "${output_file}"
+rg -q "Backend URL: http://127.0.0.1:${port}$" "${output_file}"
+
+# Comment-only, unterminated, and trailing-junk quoted values count as unset: usage error, exit 2.
+for bad in \
+  'SPOTIBYE_DEV_BACKEND_URL= # disabled' \
+  'SPOTIBYE_DEV_BACKEND_URL="http://broken' \
+  'SPOTIBYE_DEV_BACKEND_URL="http://127.0.0.1:1"junk' \
+  "SPOTIBYE_DEV_BACKEND_URL='http://127.0.0.1:1' junk"; do
+  printf '%s\n' "${bad}" > "${env_file}"
+  status=0
+  env -u SPOTIBYE_DEV_BACKEND_URL SPOTIBYE_DESKTOP_ENV_FILE="${env_file}" \
+    ./scripts/backend-deploy-status.sh dev > /dev/null 2>&1 || status=$?
+  [[ "${status}" -eq 2 ]] || { echo "expected exit 2 for: ${bad} (got ${status})" >&2; exit 1; }
+done
+
 echo "backend-deploy-status functional test passed"
