@@ -30,8 +30,8 @@ This project uses multiple security scanning tools integrated into CI/CD:
 ## CI/CD Security Workflow
 
 Security scans run on:
-- Every push to `main` or `develop` branches
-- Every pull request to `main` or `develop`
+- Every push to the `main` branch
+- Every pull request to `main`, `develop` or `WIP`
 - Weekly scheduled scans (Mondays at midnight UTC)
 - Manual workflow dispatch
 
@@ -128,7 +128,7 @@ pre-commit --version
 
 ### Pre-commit Hooks (run on every commit)
 
-Fast checks that run on staged files:
+Fast checks that run on staged files. Security-relevant subset — see `.pre-commit-config.yaml` for the full list:
 
 | Hook | Purpose |
 |------|---------|
@@ -144,7 +144,7 @@ Fast checks that run on staged files:
 
 ### Pre-push Hooks (run before every push)
 
-Longer-running checks that ensure code quality:
+Longer-running checks that ensure code quality. Security-relevant subset — see `.pre-commit-config.yaml` for the full list:
 
 | Hook | Purpose |
 |------|---------|
@@ -153,8 +153,21 @@ Longer-running checks that ensure code quality:
 | `semgrep-sast` | Full SAST scan (OWASP Top 10, CWE Top 25) |
 | `bandit-full` | Full-tree Python SAST scan (project `pyproject.toml` policy) |
 | `osv-scanner` | Dependency vulnerability scan (OSV-Scanner; pre-commit bootstraps Go, no Docker needed) |
-| `security-scan` | Dependency security check (`check-dependencies.py --security --ci`) |
 | `basedpyright` | Python type checking of `src/frontend` and `src/shared` (`--level error`) |
+
+### What each dependency check covers
+
+No single check sees the whole picture, so the layers are deliberate:
+
+| Layer | Runs where | Covers | Limitation |
+|-------|-----------|--------|-----------|
+| OSV-Scanner | pre-push + Security Scan (PR, push to `main`, weekly) | advisories for the npm lockfile and for exactly pinned Python requirements | **cannot evaluate a `>=` range** — a floored package reports "no issues" even when every version it admits is vulnerable; skips `.venv` via `.gitignore` |
+| Manifest drift (`check-dependencies.py --manifests`) | `./scripts/verify-all.sh` + CI `hygiene` job | `requirements.txt` vs `pyproject.toml` divergence (specifier, extras, one-sided declarations) | compares declared specs only; does not know installed versions |
+| Shipped-closure audit (pip-audit) | `build.yml`, every matrix OS | the exact environment PyInstaller bundles, including the Windows-only `kivy-deps.*` wheels | runs at release build time, not per PR |
+| Code SAST (Bandit, Semgrep) | pre-push + CI | unsafe source patterns | says nothing about dependency versions |
+| Secrets (TruffleHog) | pre-push + weekly full history | committed credentials | not dependencies |
+
+Corollary worth remembering: **"OSV-Scanner is green" does not mean the dependency set is clean.** It means no *exactly pinned* package matched an advisory. Ranges, unpinned transitives, and stale local environments are outside what it can see.
 
 ### Manual Usage
 
@@ -189,10 +202,10 @@ Dependabot runs **only on GitHub** — there is no supported way to run the full
 | What Dependabot does | Local equivalent |
 |----------------------|------------------|
 | **Version updates** (monthly PRs for outdated deps) | `python scripts/check-dependencies.py --outdated` — uses `pip-review` and `npm outdated` |
-| **Security updates** (CVE PRs; enable in repo settings) | `python scripts/check-dependencies.py --security` — uses `pip-audit` and `npm audit` today; OSV-Scanner (pre-push + CI) is the planned replacement |
+| **Security updates** (CVE PRs; enable in repo settings) | OSV-Scanner (pre-push + CI) is the enforced scanner; `python scripts/check-dependencies.py --security` runs pip-audit and npm audit ad hoc |
 | **Apply updates yourself** | Python: `pip-review --local --auto` · Node: `npm update` or `npx npm-check-updates -i` in `src/backend/` |
 
-OSV-Scanner (once wired per the security tooling plan) is the best local CVE scan — it covers Python and Node lockfiles in one pass:
+OSV-Scanner is the enforced local and CI dependency scan — it covers the Node lockfile and the exactly pinned Python requirements in one pass:
 
 ```bash
 # Run the OSV-Scanner pre-push hook directly (pre-commit bootstraps Go for you):
@@ -202,14 +215,22 @@ pre-commit run --hook-stage pre-push osv-scanner
 osv-scanner scan source -r .
 ```
 
-Until OSV-Scanner lands, the existing script is the one-command local check:
+The script is not a hook — it complements OSV-Scanner for ad hoc use:
 
 ```bash
-pip install -e ".[development]"
-python scripts/check-dependencies.py --security    # CVEs only
+python scripts/check-dependencies.py --manifests   # requirements.txt ↔ pyproject.toml drift (also in verify-all + CI)
+python scripts/check-dependencies.py --security    # CVEs only (pip-audit against a fresh resolution)
 python scripts/check-dependencies.py --outdated    # version drift only
-python scripts/check-dependencies.py               # both
-python scripts/check-dependencies.py --security --ci  # blocking (pre-push uses this)
+python scripts/check-dependencies.py               # all checks
+python scripts/check-dependencies.py --ci          # blocking exit code for every check
+```
+
+`--manifests` is the exception to "ad hoc": it gates locally and in CI, and unlike the other modes it exits non-zero on drift with or without `--ci`.
+
+For the environment you are actually running, audit the interpreter rather than the manifest:
+
+```bash
+.venv/bin/python -m pip_audit    # installed packages, not a hypothetical resolution
 ```
 
 ## Local Dependency Checking

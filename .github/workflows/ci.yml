@@ -112,3 +112,9 @@ jobs:
       # Warn-only until its gate flips to errors; surfaces drift in the log.
       - name: Docs hygiene (warn-only)
         run: python scripts/check_docs_hygiene.py
+
+      # CI installs from pyproject.toml while build.yml installs from
+      # requirements.txt; divergence ships a different dependency set than the
+      # one CI tested.
+      - name: Dependency manifests agree
+        run: python scripts/check-dependencies.py --manifests

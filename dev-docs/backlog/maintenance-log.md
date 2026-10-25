@@ -10,6 +10,24 @@
 
 ---
 
+## 2026-10-25 — PR #65 review round 2: pkg_resources bundling removed, option-line bypass closed
+
+PR: #65
+Scope: `spotibye.spec`, `.github/workflows/build.yml`, `scripts/check-dependencies.py`, `scripts/tests/test_check_dependencies.py`, `dev-docs/exec-plans/completed/2026-10-24-python-dependency-integrity.md`
+Addressed the second CodeRabbit round on #65 (orchestrator diagnosis, consensus with deepseek-flash via qoder, deepseek implementation, orchestrator verification). `spotibye.spec` no longer lists the dead `pkg_resources.py2_warn` / `pkg_resources.markers` hidden imports (PyInstaller 3.x-era workarounds; the module names no longer exist in setuptools ≥ ~67, and on older setuptools they would bundle unaudited pkg_resources code while the frozen audit excludes setuptools) and now excludes `pkg_resources` outright. Verified locally: nothing in the app or its 12 runtime dependency trees references pkg_resources, importing every runtime dep leaves it out of `sys.modules`, and a full macOS PyInstaller build (setuptools 79.0.1 build env) ships zero pkg_resources/setuptools files — so the audited frozen set equals the shipped set on every matrix runner regardless of the runner's setuptools version. The requirements-file option gate now validates every option token on a line via shlex (pip parses all tokens of an option line and honors a nested `-r` on the same line as an allowed option — confirmed against pip's `req_file.parse_line` and a live `pip install --dry-run`), and `--no-cache-dir` moved out of the allowlist because pip rejects it in requirements files (`no such option`), which would turn a passing drift check into a failed build. Regression tests cover the compound-line bypasses and the `--no-cache-dir` rejection. Internal-only (CI/build tooling); no CHANGELOG entry.
+
+## 2026-10-24 — PR #65 review: fail-closed option allow-list, duplicate-pin rejection, exact-version audit
+
+PR: #65
+Scope: `.github/workflows/build.yml`, `scripts/check-dependencies.py`, `scripts/tests/test_check_dependencies.py`, `dev-docs/exec-plans/completed/2026-10-24-python-dependency-integrity.md`
+Addressed the CodeRabbit and Greptile review findings on #65. The bundled-closure audit now passes `--no-deps --disable-pip` so `pip-audit` checks exactly the versions captured by `pip freeze` instead of re-resolving and reinstalling them, and the freeze snapshot excludes `pip`, `setuptools` and `wheel` explicitly (Python 3.13 auto-excludes only `pip`, so the other two could leak into the audit). The requirements-file option handler switched from a deny-list to an allow-list (`--index-url`/`-i`, `--extra-index-url`, `--trusted-host`, `--no-cache-dir`): resolution-changing options such as `--pre` and `--find-links` are now rejected instead of silently skipped, through the existing error path. Both manifest parsers reject a duplicate normalized package name before the dict write, so a later pin can no longer overwrite an earlier one. Regression tests cover all four behaviors, and the completed plan's recipe and `pip freeze` explanation were corrected with a post-review amendment note. Internal-only (CI/tooling); no CHANGELOG entry.
+
+## 2026-10-24 — Python dependency integrity: exact pins, manifest drift gate, shipped-closure audit
+
+PR: #65
+Scope: `requirements.txt`, `pyproject.toml`, `scripts/check-dependencies.py`, `scripts/tests/test_check_dependencies.py`, `scripts/verify-all.sh`, `.github/workflows/build.yml`, `.github/workflows/ci.yml`, `.github/workflows/security.yml`, `SECURITY.md`, `dev-docs/guides/osv-scanner-findings-playbook.md`, `dev-docs/exec-plans/completed/2026-10-24-python-dependency-integrity.md`, `dev-docs/backlog/TO_DO.md`
+Pinned `pillow==13.0.0` and `urllib3==2.8.0` exactly in both manifests (and `kivy==2.3.1` in `pyproject.toml`, previously bare) so OSV-Scanner, the GitHub dependency graph and Dependabot can evaluate them — GitHub previously recorded these packages with no version at all. Added a `--manifests` mode to `check-dependencies.py` that fails on specifier, extras, one-sided or wrong-manifest drift between `requirements.txt` and `pyproject.toml`; wired into `verify-all.sh` and the CI hygiene job. Added a fail-closed audit of the environment `build.yml` bundles (`pip freeze --exclude-editable` → isolated `pip-audit -r … --strict`, every matrix OS) and widened `security.yml` path filters to cover `pyproject.toml`. `SECURITY.md` no longer claims a pre-push `security-scan` hook that does not exist, and now records what each dependency layer can and cannot see. Review trail: cursor grok-4.7 (high) caught that the drift check printed FAIL but exited 0 at both wired call sites; claude-opus-5-5 (medium) caught an allowlisted package passing when declared in both manifests and parser lines being silently skipped. Both fixed with regression tests.
+
 ## 2026-10-24 — undici override raised to 7.30.1; Pillow moved to 13.0.0 with Python 3.11 floor
 
 PR: #64
