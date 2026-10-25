@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_FILE="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.desktop.env.local"
+ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.desktop.env.local"
 
 # Read KEY from the environment, falling back to .desktop.env.local.
-# Parses KEY=value lines only; the file is never executed.
+# Parses KEY=value lines only; the file is never executed. Handles an
+# optional `export`, spaces around `=`, CRLF endings, single or double
+# quotes, and trailing `# comments`. The last matching line wins.
 env_url() {
-  local key="$1" value="${!1:-}"
+  local key="$1" value="${!1:-}" line k v
   if [[ -z "${value}" && -f "${ENV_FILE}" ]]; then
-    value="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "${ENV_FILE}" | tail -n 1 | cut -d= -f2-)"
-    value="${value%\"}"; value="${value#\"}"
-    value="${value%\'}"; value="${value#\'}"
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+      line="${line%$'\r'}"
+      [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+      k="${BASH_REMATCH[2]}"; v="${BASH_REMATCH[3]}"
+      [[ "${k}" == "${key}" ]] || continue
+      if [[ "${v}" =~ ^\"([^\"]*)\" || "${v}" =~ ^\'([^\']*)\' ]]; then
+        v="${BASH_REMATCH[1]}"
+      else
+        v="${v%%[[:space:]]#*}"
+        v="${v%"${v##*[![:space:]]}"}"
+      fi
+      value="${v}"
+    done < "${ENV_FILE}"
   fi
   printf '%s' "${value}"
 }
