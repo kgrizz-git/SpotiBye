@@ -119,7 +119,7 @@ tracks for 1 hour.
 - `401` / `429` with an `EXPORT_*` code: Spotify returned 401 or 429. `details.upstream_status` shows which.
 - `503` with `details.cpu_limited: true`: The Worker hit its CPU time limit. Use the stepped jobs API (`POST /export/jobs`, then `POST /export/jobs/:jobId/step`) for large exports.
 - `409 EXPORT_JOB_CONFLICT`: A step request carried a stale cursor or resume token. Re-read `/export/jobs/:jobId/status` and resume from there.
-- `500 EXPORT_FAILED`, `EXPORT_START_FAILED`, `EXPORT_BATCH_FAILED`, `EXPORT_JOB_STEP_FAILED`: Unexpected failure. Check `wrangler tail`.
+- `500 EXPORT_FAILED`, `EXPORT_START_FAILED`, `EXPORT_BATCH_FAILED`, `EXPORT_JOB_STEP_FAILED`: Unexpected failure. Check `wrangler tail --env <env>`.
 
 #### Download Failures
 **Symptoms**: 404 or 409 on a download route
@@ -133,7 +133,7 @@ tracks for 1 hour.
 ### Analysis Issues
 
 - `404 ANALYSIS_NOT_FOUND` / `ANALYSIS_RESULTS_NOT_FOUND`: No job or cached result exists for that playlist. Results expire after `ANALYSIS_RESULTS_TTL_SECONDS` (default 24 hours).
-- A job stuck in a non-terminal status usually means the queue consumer failed. Look for `QUEUE_JOB_FAILED` or `QUEUE_MARK_FAILED_THREW` in `wrangler tail`. Messages are retried 3 times, then go to the dead-letter queue (`spotibye-analysis-dlq` or `spotibye-analysis-dev-dlq`).
+- A job stuck in a non-terminal status usually means the queue consumer failed. Look for `QUEUE_JOB_FAILED` or `QUEUE_MARK_FAILED_THREW` in `wrangler tail --env <env>`. Messages are retried 3 times, then go to the dead-letter queue (`spotibye-analysis-dlq` or `spotibye-analysis-dev-dlq`).
 
 ### KV Namespace Issues
 
@@ -237,7 +237,7 @@ wrangler kv key delete --binding CACHE_KV --env production --remote "<key>"
 ## Prevention Strategies
 
 ### Monitoring Setup
-- Watch `wrangler tail` error rates after each deploy
+- Watch `wrangler tail --env production` error rates after each deploy
 - Track KV operation failures
 - Watch Spotify API quota usage
 

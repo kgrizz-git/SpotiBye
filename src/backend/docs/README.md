@@ -117,5 +117,5 @@ The backend has no rate limiting of its own. `429` responses pass through Spotif
 ### Validation
 Use an OpenAPI validator to check the spec:
 ```bash
-npx @apidevtools/swagger-parser validate src/backend/docs/openapi.yaml
+npx @redocly/cli lint src/backend/docs/openapi.yaml
 ```

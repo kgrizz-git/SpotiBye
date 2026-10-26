@@ -182,7 +182,7 @@ KV, Durable Object, and Queue bindings are not checked.
 
 #### Missing Environment Variables
 - **Symptom**: Every request, including `/health`, returns `500` with code `INTERNAL_ERROR`
-- **Log**: `Invalid Worker environment bindings: JWT_SECRET: ...` in `wrangler tail`
+- **Log**: `Invalid Worker environment bindings: JWT_SECRET: ...` in `wrangler tail --env <env>`
 - **Solution**: Set the missing variable using `wrangler secret put <NAME> --env <environment>`
 
 #### KV Namespace Not Bound
