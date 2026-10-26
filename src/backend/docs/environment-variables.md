@@ -18,7 +18,7 @@ The SpotiBye backend uses environment variables for configuration, API keys, and
 #### `ENVIRONMENT`
 - **Type**: String
 - **Required**: Yes
-- **Values**: `development`, `staging`, `production`
+- **Values**: `development`, `production`
 - **Description**: Current deployment environment
 - **Example**: `ENVIRONMENT=production`
 - **Notes**: Affects logging levels, error reporting, and feature flags
@@ -74,31 +74,10 @@ The SpotiBye backend uses environment variables for configuration, API keys, and
 ### `wrangler.toml`
 The main configuration file for Cloudflare Workers:
 
-```toml
-name = "spotibye-api"
-main = "src/index.ts"
-compatibility_date = "2023-12-01"
-
-[env.production]
-name = "spotibye-api"
-vars = { ENVIRONMENT = "production" }
-
-[env.development]
-name = "spotibye-api-dev"
-vars = { ENVIRONMENT = "development" }
-
-[[kv_namespaces]]
-binding = "CACHE_KV"
-id = "your-cache-kv-namespace-id"
-preview_id = "your-cache-kv-preview-id"
-
-[[kv_namespaces]]
-binding = "SESSIONS_KV"
-id = "your-sessions-kv-namespace-id"
-preview_id = "your-sessions-kv-preview-id"
-
-# Do not put secrets in this file. Set them with `wrangler secret put`.
-```
+The file defines `development` and `production` environments. Wrangler names
+the Workers `spotibye-backend-development` and `spotibye-backend-production`.
+See `src/backend/wrangler.toml` for the bindings. Do not put secrets in that
+file. Set them with `wrangler secret put`.
 
 ## Environment Setup
 
@@ -130,9 +109,9 @@ preview_id = "your-sessions-kv-preview-id"
 
 1. **Set secrets via Wrangler CLI**:
    ```bash
-   wrangler secret put SPOTIFY_CLIENT_ID
-   wrangler secret put SPOTIFY_CLIENT_SECRET
-   wrangler secret put JWT_SECRET
+   wrangler secret put SPOTIFY_CLIENT_ID --env production
+   wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+   wrangler secret put JWT_SECRET --env production
    ```
 
 2. **Set non-secret environment variables** in `wrangler.toml` under the
@@ -141,14 +120,8 @@ preview_id = "your-sessions-kv-preview-id"
 
 3. **Deploy with environment**:
    ```bash
-   wrangler deploy --env production
+   npm run deploy:prod   # or deploy:dev
    ```
-
-### Staging Deployment
-
-```bash
-wrangler deploy --env staging
-```
 
 ## Security Considerations
 
@@ -186,7 +159,7 @@ const requiredVars = [
 ```
 
 ### Variable Format Validation
-- `ENVIRONMENT`: Must be one of `development`, `staging`, `production`
+- `ENVIRONMENT`: Must be one of `development`, `production`
 - `JWT_SECRET`: Must be at least 32 characters long
 - `SPOTIFY_CLIENT_ID`: Must match Spotify client ID format
 - `SPOTIFY_CLIENT_SECRET`: Must be non-empty string
@@ -247,9 +220,8 @@ This will:
 
 ### Updating Environment Variables
 1. **Test changes in development first**
-2. **Update staging environment**
-3. **Plan production deployment during low-traffic periods**
-4. **Have rollback plan ready**
+2. **Plan production deployment during low-traffic periods**
+3. **Have rollback plan ready**
 
 ### Adding New Variables
 1. **Update type definitions in `types/env.ts`**

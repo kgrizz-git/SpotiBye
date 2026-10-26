@@ -5,9 +5,16 @@ This guide helps diagnose and resolve common issues with the SpotiBye Cloudflare
 ## Quick Diagnosis
 
 ### Health Check
+Set the backend URL once per shell. Your value is in `.desktop.env.local`.
+
 ```bash
-curl https://spotibye-api.workers.dev/health
+export SPOTIBYE_PRODUCTION_BACKEND_URL=https://spotibye-backend-production.<your-subdomain>.workers.dev
+
+curl "${SPOTIBYE_PRODUCTION_BACKEND_URL:?set SPOTIBYE_PRODUCTION_BACKEND_URL first}/health"
 ```
+
+The `:?` guard stops the command when the variable is unset, instead of
+requesting a bare `/health`.
 
 Expected response:
 ```json
@@ -467,7 +474,7 @@ const monitoredHandler = withPerformanceMonitoring(handleRequest);
 ### Emergency Rollback
 ```bash
 # List recent deployments
-wrangler deployments list
+wrangler deployments list --env production
 
 # Rollback to previous version
 wrangler rollback --env production <deployment-id>
@@ -490,10 +497,10 @@ done < kv-backup.txt
 ### Service Recovery
 ```bash
 # Check service health
-curl -f https://spotibye-api.workers.dev/health || echo "Service down"
+curl -f "${SPOTIBYE_PRODUCTION_BACKEND_URL:?set SPOTIBYE_PRODUCTION_BACKEND_URL first}/health" || echo "Service down"
 
-# Restart service (deploy same version)
-wrangler deploy --env production
+# Redeploy the current checkout (from src/backend)
+npm run deploy:prod
 
 # Clear problematic cache
 wrangler kv:key delete --namespace-id your-cache-namespace "problematic-key"
@@ -522,7 +529,7 @@ wrangler kv:key delete --namespace-id your-cache-namespace "problematic-key"
 ## Contact Support
 
 When reporting issues, include:
-- Environment (development/staging/production)
+- Environment (development/production)
 - Error messages and codes
 - Request/response logs
 - Steps to reproduce

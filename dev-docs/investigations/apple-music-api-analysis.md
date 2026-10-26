@@ -996,9 +996,9 @@ describe('AppleMusicPlaylistService', () => {
 - [ ] **Create Environment Variables for Cloudflare**:
   ```bash
   # Set secrets for production
-  wrangler secret put APPLE_MUSIC_KEY_ID
-  wrangler secret put APPLE_MUSIC_TEAM_ID
-  wrangler secret put APPLE_MUSIC_PRIVATE_KEY
+  wrangler secret put APPLE_MUSIC_KEY_ID --env production
+  wrangler secret put APPLE_MUSIC_TEAM_ID --env production
+  wrangler secret put APPLE_MUSIC_PRIVATE_KEY --env production
 
   # For development
   wrangler secret put APPLE_MUSIC_KEY_ID --env development
@@ -1012,7 +1012,7 @@ describe('AppleMusicPlaylistService', () => {
   wrangler deploy --env development
 
   # Deploy to production
-  wrangler deploy
+  wrangler deploy --env production
   ```
 
 #### Cloudflare Pages Setup (Frontend)

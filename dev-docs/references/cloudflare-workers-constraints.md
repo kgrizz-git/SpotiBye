@@ -61,9 +61,9 @@ Defined in `package.json` scripts:
 
 | Command | Target |
 |---------|--------|
-| `npm run deploy` | Default (workers.dev) |
-| `npm run deploy:dev` | Development environment |
-| `npm run deploy:prod` | Production environment |
+| `npm run deploy` | Refuses with an error; there is no default target |
+| `npm run deploy:dev` | Development environment (`spotibye-backend-development`) |
+| `npm run deploy:prod` | Production environment (`spotibye-backend-production`) |
 
 ---
 
