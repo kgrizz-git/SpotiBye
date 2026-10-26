@@ -1,5 +1,10 @@
-Debug test 2 with longer content
 # Export Formats Implementation Guide
+
+> **Historical plan.** This document describes the original v2 desktop exporter
+> (pandas, `main_screen.py`) and is not kept in sync with the code. Exports are
+> now built by the backend. The live column list is `getTrackHeaders()` in
+> `src/backend/services/export-format-helpers.ts`, and the per-track values come
+> from `mapTrackForExport()` in `src/backend/services/export-tracks.ts`.
 
 ## Overview
 
@@ -161,7 +166,6 @@ The CSV export will include all existing fields:
       "Track": "Track Title",
       "Duration": "MM:SS",
       "Spotify URL": "https://open.spotify.com/track/xxxxxxxx",
-      "Spotify URI": "spotify:track:xxxxxxxx",
       "Tempo": 120.0,
       "Key": "C major",
       "Danceability": 0.8,
@@ -172,7 +176,8 @@ The CSV export will include all existing fields:
       "Liveness": 0.1,
       "Speechiness": 0.05,
       "Loudness": -5.2,
-      "Time Signature": 4
+      "Time Signature": "N/A",
+      "ISRC": "USUG12103683"
     }
   ]
 }
@@ -326,7 +331,7 @@ def _prepare_playlist_track_rows(self)  # Potentially enhance for JSON
 - **Malformed API Responses**: Validate data structure before processing
 
 #### Export Format-Specific Errors
-- **CSV Export**: Handle delimiter conflicts, quote escaping issues
+- **CSV Export**: Handle delimiter conflicts, quote escaping issues. `escapeCsvValue()` quotes cells containing `"`, `,`, `\r`, or `\n`, and prefixes cells that start with `=`, `+`, `@`, a tab, a carriage return, or a non-numeric `-` with `'` so spreadsheets do not run them as formulas
 - **JSON Export**: Handle circular references, non-serializable objects
 - **XLSX Export**: Handle worksheet size limits, formatting errors
 
@@ -536,7 +541,6 @@ The current export system creates rows with the following columns:
 - `Track` - Track title
 - `Duration` - Formatted duration (MM:SS format)
 - `Spotify URL` - External Spotify URL for the track
-- `Spotify URI` - Spotify URI for the track
 
 **Audio Features (from Reccobeats API):**
 - `Tempo` - BPM (rounded to 2 decimal places)
@@ -549,7 +553,8 @@ The current export system creates rows with the following columns:
 - `Liveness` - Liveness score (0-1, rounded to 3 decimal places)
 - `Speechiness` - Speechiness score (0-1, rounded to 3 decimal places)
 - `Loudness` - Loudness in dB (rounded to 1 decimal place)
-- `Time Signature` - Time signature (e.g., 4, 3, etc.)
+- `Time Signature` - Always `N/A`: ReccoBeats does not provide it
+- `ISRC` - International Standard Recording Code, the last column. Filled from ReccoBeats only for enriched exports with a well-formed ISRC, and empty (not `N/A`) otherwise, because importers such as SpotiByeMatcher treat any non-empty value as a lookup key
 
 **Internal Fields (removed before export):**
 - `_duration_ms` - Raw duration in milliseconds
@@ -589,7 +594,6 @@ The current export system creates rows with the following columns:
 
 2. Spotify identifiers:
    - `Spotify URL` - External Spotify URL
-   - `Spotify URI` - Spotify URI
 
 3. Audio features (grouped logically):
    - `Tempo` - BPM
@@ -602,7 +606,9 @@ The current export system creates rows with the following columns:
    - `Liveness` - Liveness score
    - `Speechiness` - Speechiness score
    - `Loudness` - Loudness in dB
-   - `Time Signature` - Time signature
+   - `Time Signature` - Always `N/A`
+
+4. `ISRC` - Recording code, appended last so existing column positions do not move
 
 **Naming Conventions:**
 - Use PascalCase for column names (consistent with current implementation)

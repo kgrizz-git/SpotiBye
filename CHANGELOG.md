@@ -7,7 +7,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
-- Exports now include an `ISRC` column, filled from ReccoBeats when audio-feature enrichment is on. It is empty for plain exports and for tracks ReccoBeats does not know. The column is last, so existing column positions are unchanged.
+- Exports now include an `ISRC` column, filled from ReccoBeats when audio-feature enrichment is on. Malformed or non-string ISRCs are left empty. It is empty for plain exports and for tracks ReccoBeats does not know. The column is last, so existing column positions are unchanged.
 - macOS `SpotiBye.command` launcher: double-click to run SpotiBye from source (uses `.venv` when present, prints install steps if dependencies are missing). The first run attaches the app icon to the file in Finder.
 - Interactive self-host setup script (`python3 scripts/setup-selfhost.py`) for the local path: checks prerequisites, opens the Spotify Developer Dashboard, validates Spotify credentials via a live token check before writing anything, and generates `src/backend/.dev.vars`. Supports `--check`, `--dry-run`, and `--force`; secret values are never printed. (Cloudflare provisioning/upload/config helpers exist and are unit-tested but not yet wired into the interactive flow.)
 - The backend chooser now starts unconfigured when no saved or explicitly configured endpoint exists. Localhost remains an intentional selectable preset, Cloudflare Dev/Prod presets appear only when their URL variables are configured, and cancelling an unconfigured chooser no longer connects to localhost.
@@ -72,7 +72,8 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Replaced `'as unknown as T'` casts in `spotify.ts` (`getAudioFeatures`, `getArtist`, `getMultipleAudioFeatures`) with typed wrappers that perform runtime shape checks and throw on invalid input.
 
 ### Fixed
-- CSV exports no longer break the playlist metadata row when a playlist name or owner contains a quote, comma, or newline.
+- CSV exports no longer break a row when a playlist name, owner, or other field contains a quote, comma, newline, or carriage return.
+- CSV exports prefix cells that start with `=`, `+`, `@`, a tab, or a non-numeric `-` with `'`, so spreadsheets do not run a track, artist, or playlist name as a formula. Negative numbers such as loudness are unchanged.
 - macOS: launching from Terminal.app (including double-clicking `SpotiBye.command`) no longer crashes at startup. The screen-size check now asks CoreGraphics directly instead of falling back to Tk, which aborted the process, and no longer asks Finder via AppleScript (no Automation permission prompt). With several displays, the window is now sized and centred on the main display instead of across the whole desktop.
 - Fixed spurious "Analysis failed: Analysis results not found" after a successful large-playlist analysis: the app now retries the results fetch through KV replication lag before concluding the cached analysis is stale and re-running the whole job (which previously burned a full second analysis and then surfaced the same error).
 - Reopening a playlist no longer re-runs the full analysis when the cached results are fresh but enrichment-partial (e.g. tracks ReccoBeats has no data for): the backend now serves the cached results, and explicit refresh paths (miss-fill, composition change, Refresh button) enqueue a `refresh` job that reuses the warm per-track cache instead of burning a full job every open.

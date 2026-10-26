@@ -30,6 +30,20 @@ export interface ReccoBeatsExportFeatures {
   isrc?: string;
 }
 
+// ISRC: 2-letter country, 3-character registrant, 2-digit year, 5-digit designation.
+const ISRC_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/;
+
+/**
+ * Return a well-formed ISRC, or undefined. Cached and live ReccoBeats rows do
+ * not validate `isrc`, so non-strings and malformed values are dropped here
+ * rather than exported as lookup keys.
+ */
+export function normalizeIsrc(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const isrc = value.trim().replace(/-/g, '').toUpperCase();
+  return ISRC_PATTERN.test(isrc) ? isrc : undefined;
+}
+
 export function toExportFeatures(row: ReccoBeatsAudioFeature): ReccoBeatsExportFeatures {
   return {
     tempo: row.tempo,
@@ -43,7 +57,7 @@ export function toExportFeatures(row: ReccoBeatsAudioFeature): ReccoBeatsExportF
     liveness: row.liveness,
     speechiness: row.speechiness,
     loudness: row.loudness,
-    isrc: row.isrc ?? undefined,
+    isrc: normalizeIsrc(row.isrc),
   };
 }
 

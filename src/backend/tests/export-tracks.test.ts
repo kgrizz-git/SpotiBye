@@ -5,6 +5,7 @@ import {
   loadAudioFeaturesMap,
   buildExportTracks,
   toExportFeatures,
+  normalizeIsrc,
   type ReccoBeatsExportFeatures,
 } from '../services/export-tracks';
 import type { SpotifyPlaylistTrackItem } from '../types/spotify';
@@ -59,7 +60,7 @@ const afRow = (spotifyId: string) => ({
   valence: 0.5,
   key: 0,
   mode: 1,
-  isrc: `ISRC-${spotifyId}` as string | null,
+  isrc: 'USUG12103683' as string | null,
 });
 
 describe('mapTrackForExport', () => {
@@ -135,7 +136,26 @@ describe('toExportFeatures', () => {
   it('maps a null ReccoBeats isrc to undefined', () => {
     const mapped = toExportFeatures({ ...afRow('track1'), isrc: null });
     expect(mapped.isrc).toBeUndefined();
-    expect(toExportFeatures(afRow('track1')).isrc).toBe('ISRC-track1');
+    expect(toExportFeatures(afRow('track1')).isrc).toBe('USUG12103683');
+  });
+});
+
+describe('normalizeIsrc', () => {
+  it('accepts a well-formed ISRC and normalizes case and hyphens', () => {
+    expect(normalizeIsrc('USUG12103683')).toBe('USUG12103683');
+    expect(normalizeIsrc(' us-ug1-21-03683 ')).toBe('USUG12103683');
+  });
+
+  it.each([null, undefined, 12345, {}, '', 'ISRC-track1', '=HYPERLINK("x")', 'USUG1210368'])(
+    'drops %j',
+    (value) => {
+      expect(normalizeIsrc(value)).toBeUndefined();
+    }
+  );
+
+  it('keeps a non-string ISRC out of the export row', () => {
+    const features = toExportFeatures({ ...afRow('track1'), isrc: 42 } as never);
+    expect(features.isrc).toBeUndefined();
   });
 });
 
@@ -210,7 +230,7 @@ describe('buildExportTracks', () => {
     expect(tracks[0].Danceability).toBe(0.8);
     expect(tracks[0].Energy).toBe(0.9);
     expect(tracks[0]['Time Signature']).toBe('N/A');
-    expect(tracks[0].ISRC).toBe('ISRC-shared-track');
+    expect(tracks[0].ISRC).toBe('USUG12103683');
   });
 });
 

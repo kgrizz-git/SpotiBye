@@ -1,11 +1,23 @@
 import type { ExportData, ResumableExportAssemblyState } from './export-types';
 import { getTrackHeaders } from './export-format-helpers';
 
+/**
+ * Prefix a cell that a spreadsheet would run as a formula (=, +, @, tab, CR,
+ * or a non-numeric leading -) with a quote, per OWASP CSV-injection guidance.
+ * Plain negative numbers such as `-5.2` are left alone.
+ */
+function neutralizeFormula(value: string): string {
+  const isFormulaLike =
+    /^[=+@\t\r]/.test(value) || (value.startsWith('-') && Number.isNaN(Number(value)));
+  return isFormulaLike ? `'${value}` : value;
+}
+
 export function escapeCsvValue(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const safe = neutralizeFormula(value);
+  if (/[",\r\n]/.test(safe)) {
+    return `"${safe.replace(/"/g, '""')}"`;
   }
-  return value;
+  return safe;
 }
 
 export async function generateCsvFile(exportData: ExportData): Promise<ArrayBuffer> {
