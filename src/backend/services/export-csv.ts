@@ -11,7 +11,12 @@ export function escapeCsvValue(value: string): string {
 export async function generateCsvFile(exportData: ExportData): Promise<ArrayBuffer> {
   const headers = getTrackHeaders();
   let csvContent = headers.join(',') + '\n';
-  csvContent += `"Playlist: ${exportData.playlist.name}",,,,"Total Tracks: ${exportData.playlist.total_tracks}",,,,"Owner: ${exportData.playlist.owner}",,,,,,,\n`;
+  // Metadata row padded to the header width; values sit in columns A, E, and I.
+  const metadataRow: string[] = new Array<string>(headers.length).fill('');
+  metadataRow[0] = `"Playlist: ${exportData.playlist.name}"`;
+  metadataRow[4] = `"Total Tracks: ${exportData.playlist.total_tracks}"`;
+  metadataRow[8] = `"Owner: ${exportData.playlist.owner}"`;
+  csvContent += metadataRow.join(',') + '\n';
   csvContent += '\n';
   for (const track of exportData.tracks) {
     const row = headers.map((header) => escapeCsvValue(String(track[header] ?? '')));
