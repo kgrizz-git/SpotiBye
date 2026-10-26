@@ -10,7 +10,7 @@ The backend has two environments. There is no staging environment.
 | Environment | Worker | Deploy command | GitHub workflow |
 |-------------|--------|----------------|-----------------|
 | Development | `spotibye-backend-development` | `npm run deploy:dev` | Deploy Backend (`deploy-backend.yml`), on push to `main` or manual dispatch |
-| Production | `spotibye-backend-production` | `npm run deploy:prod` | Deploy Production (`deploy-production.yml`), manual dispatch only |
+| Production | `spotibye-backend-production` | `npm run deploy:prod` | Deploy Production (`deploy-production.yml`), manual dispatch; also Deploy Backend on a `v*` tag push |
 
 Wrangler derives each Worker name from the top-level `name` (`spotibye-backend`)
 plus the `--env` suffix. A bare `wrangler deploy` targets neither environment.
@@ -73,7 +73,7 @@ Then replace the IDs in every block of `wrangler.toml`.
 
 ## Analysis Queue
 
-Playlist analysis uses Cloudflare Queues in production so large playlists can retry outside the initial HTTP request. The Worker module exports both `fetch` and `queue`; no separate Worker entry point is required.
+Playlist analysis uses Cloudflare Queues in both environments so large playlists can retry outside the initial HTTP request. The Worker module exports both `fetch` and `queue`; no separate Worker entry point is required.
 
 Required queues:
 

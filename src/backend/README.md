@@ -102,8 +102,8 @@ For local development, these use preview IDs. For production, you'll need to cre
 
 2. **Create KV namespaces** (if not already created)
    ```bash
-   wrangler kv:namespace create "CACHE_KV"
-   wrangler kv:namespace create "SESSIONS_KV"
+   wrangler kv namespace create CACHE_KV
+   wrangler kv namespace create SESSIONS_KV
    ```
 
 3. **Update wrangler.toml** with the actual KV namespace IDs

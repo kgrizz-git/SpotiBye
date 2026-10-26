@@ -6,485 +6,220 @@ This guide helps diagnose and resolve common issues with the SpotiBye Cloudflare
 
 ### Health Check
 ```bash
-curl "$SPOTIBYE_PRODUCTION_BACKEND_URL/health"
+curl "$SPOTIBYE_PRODUCTION_BACKEND_URL/health"   # or $SPOTIBYE_DEV_BACKEND_URL
 ```
 
 Expected response:
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2023-12-12T23:00:00Z",
-  "version": "1.0.0"
+  "data": {
+    "status": "healthy",
+    "service": "spotibye-backend",
+    "environment": "production",
+    "release_sha": "<git sha>",
+    "release_version": "<package.json version>",
+    "deployed_at": "2026-01-01T00:00:00Z",
+    "timestamp": "2026-01-01T00:05:00.000Z"
+  }
 }
 ```
 
+The release fields read `unknown` when the Worker was deployed without
+`scripts/deploy-with-metadata.sh`. To compare the live `release_sha` with your
+checkout, run `./scripts/backend-deploy-status.sh prod` (or `dev`) from the repo root.
+
 ### Log Monitoring
 ```bash
-# View real-time logs
-wrangler tail
+cd src/backend
 
-# View specific deployment logs
-wrangler tail --env production
+# View real-time logs
+wrangler tail --env production   # or --env development
+
+# Pretty output, errors only
+wrangler tail --env production --format pretty --status error
 ```
 
+Always pass `--env`. Without it, Wrangler targets a top-level `spotibye-backend`
+Worker that is not deployed.
+
+## Error Response Shape
+
+Errors use this envelope:
+
+```json
+{ "error": { "code": "SESSION_NOT_FOUND", "message": "Session not found" } }
+```
+
+Errors from the global handler and export routes also include `request_id`.
+The global handler adds `timestamp` and `details.path` / `details.method`.
+Unhandled errors return `500` with code `INTERNAL_ERROR` and message
+`Internal Server Error`. The real cause appears only in the `ERROR_OCCURRED` log line.
+
 ## Common Issues
+
+### Every Request Returns 500
+
+**Symptoms**: All routes, including `/health`, return `500 INTERNAL_ERROR`
+**Cause**: A required string binding is missing or empty. `middleware/env.ts`
+checks `ENVIRONMENT`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `JWT_SECRET`,
+and `ALLOWED_REDIRECT_URIS` on the first request in each isolate.
+
+**Diagnostics**: Look for `Invalid Worker environment bindings: <NAME>: ...` in
+`wrangler tail`, then check `wrangler secret list --env production`.
+
+**Solution**: `wrangler secret put <NAME> --env production`. See
+[environment-variables.md](environment-variables.md).
 
 ### Authentication Problems
 
 #### 401 Unauthorized Errors
-**Symptoms**: API calls return 401 status codes
+**Symptoms**: API calls return 401 with code `UNAUTHORIZED` or `AUTH_REQUIRED`
+**Causes** (message from `middleware/auth.ts`):
+- `Missing or invalid authorization header`: The `Authorization: Bearer <jwt>` header is absent.
+- `Invalid token`: The JWT signature is bad or the JWT has expired. It also appears after `JWT_SECRET` rotation.
+- `Session expired or invalid`: The session is gone from `SESSIONS_KV` (30-day TTL, or deleted on logout).
+- `Token expired`: The Spotify token expired and could not be refreshed.
+- `AUTH_REQUIRED`: Spotify rejected the refresh token. The session is deleted, and the user must log in again.
+
+**Solution**: Log in again. App JWTs and sessions both last 30 days.
+`POST /auth/spotify/refresh` reissues the app JWT while the session still exists.
+
+#### OAuth Login and Callback Failures
+**Symptoms**: Login fails before or after Spotify authorization
 **Causes**:
-- Expired JWT token
-- Invalid token format
-- Missing Authorization header
-
-**Solutions**:
-```javascript
-// Check token expiration
-const token = localStorage.getItem('spotibye_token');
-const payload = JSON.parse(atob(token.split('.')[1]));
-const isExpired = payload.exp * 1000 < Date.now();
-
-if (isExpired) {
-  // Refresh token or re-authenticate
-  await refreshToken();
-}
-
-// Verify token format
-if (!token || !token.startsWith('Bearer ')) {
-  throw new Error('Invalid token format');
-}
-```
-
-#### OAuth Callback Failures
-**Symptoms**: Redirect loop or error after Spotify authorization
-**Causes**:
-- State parameter mismatch
-- Invalid redirect URI
-- Spotify app configuration issues
-
-**Solutions**:
-```javascript
-// Verify state parameter
-const storedState = sessionStorage.getItem('spotify_auth_state');
-const receivedState = urlParams.get('state');
-
-if (storedState !== receivedState) {
-  console.error('State mismatch - possible CSRF attack');
-  // Restart authentication flow
-}
-
-// Check redirect URI configuration
-const redirectUri = 'https://your-app-domain.com/callback';
-// Ensure this matches Spotify Developer Dashboard settings
-```
-
-### API Performance Issues
-
-#### Slow Response Times
-**Symptoms**: Requests taking >2 seconds
-**Causes**:
-- Cold starts
-- KV namespace latency
-- Spotify API rate limits
-- Large data processing
-
-**Diagnostics**:
-```javascript
-// Measure response time
-const start = Date.now();
-const response = await fetch(url);
-const duration = Date.now() - start;
-
-if (duration > 2000) {
-  console.warn(`Slow response: ${duration}ms`);
-}
-```
-
-**Solutions**:
-- Implement caching for frequently accessed data
-- Use KV namespace optimization
-- Add request deduplication
-- Monitor Spotify API quota usage
-
-#### Memory Issues
-**Symptoms**: 500 errors or Worker crashes
-**Causes**:
-- Large playlist processing
-- Memory leaks
-- Excessive data storage
-
-**Solutions**:
-```typescript
-// Process large playlists in chunks
-async function processLargePlaylist(tracks: Track[]) {
-  const CHUNK_SIZE = 100;
-  const results = [];
-
-  for (let i = 0; i < tracks.length; i += CHUNK_SIZE) {
-    const chunk = tracks.slice(i, i + CHUNK_SIZE);
-    const chunkResult = await processChunk(chunk);
-    results.push(chunkResult);
-  }
-
-  return results;
-}
-
-// Clean up resources
-function cleanup() {
-  // Clear large objects
-  largeDataArray = null;
-  // Force garbage collection if available
-  if (global.gc) global.gc();
-}
-```
-
-### KV Namespace Issues
-
-#### KV Connection Errors
-**Symptoms**: KV operations failing
-**Causes**:
-- Incorrect namespace binding
-- Namespace not created
-- Permission issues
-
-**Diagnostics**:
-```bash
-# Check KV namespace status
-wrangler kv:namespace list
-
-# Test KV connectivity
-wrangler kv:key get --namespace-id your-namespace-id test-key
-```
-
-**Solutions**:
-```typescript
-// Add KV health check
-async function checkKVHealth(env: Env): Promise<boolean> {
-  try {
-    await env.CACHE_KV.get('health-check');
-    return true;
-  } catch (error) {
-    console.error('KV health check failed:', error);
-    return false;
-  }
-}
-```
-
-#### Cache Invalidation Issues
-**Symptoms**: Stale data being served
-**Causes**:
-- Incorrect TTL settings
-- Cache key conflicts
-- Missing cache updates
-
-**Solutions**:
-```typescript
-// Implement proper cache keys
-function getCacheKey(endpoint: string, params: any): string {
-  const paramString = JSON.stringify(params);
-  return `${endpoint}:${btoa(param-form-urlencoded(param Attacks
-```
-
-@@ -202,7 + + 202 Guest
-
-### Spotify API Issuesaligned with voluntary
- congressional
-
-####积极地
-```O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-O
-
-Ooma
-
-O
-### Spotify API читать
-
-#### Rate Limitassociations
- Waters
-
-**O
-
-O
-
-Oanto
-
-### Spotify APIutar
-
-#### Ratesert
+- `400 MISSING_REDIRECT_URI`: The `POST /auth/spotify/login` body has no valid `redirect_uri`.
+- `400 DISALLOWED_REDIRECT_URI`: The `redirect_uri` is not in `ALLOWED_REDIRECT_URIS` for that environment. Matching is exact.
+- `400 INVALID_CALLBACK`: The callback has no `code` or `state`, or the state has expired. OAuth state lives in `CACHE_KV` for 10 minutes and is single-use.
+- `400 OAUTH_ERROR`: Spotify returned an `error` parameter, such as `access_denied`.
+- `500 OAUTH_CALLBACK_FAILED` / `OAUTH_BAD_REQUEST`: The token exchange or profile fetch failed. Check `details.reason`. A mismatch between the redirect URI and the Spotify Developer Dashboard, or bad client credentials, shows up here.
+
+### Spotify API Issues
 
 #### Rate Limit Errors
-**Symptoms**: 429 status codes
-**Causes**:
-- Exceeding Spotify API limits
-- Concurrent requests
-- Missing rate limiting implementation
+**Symptoms**: 429 responses, such as `SPOTIFY_RATE_LIMITED` from `GET /spotify/playlists`
+**Behavior**: The backend has no rate limiter of its own. `services/spotify.ts`
+waits for Spotify's `Retry-After` and retries up to 3 attempts. Network errors
+back off exponentially (1s, 2s). Other 4xx and 5xx responses are not retried.
 
-**Solutions**:
-```typescript
-// Implement rate limiting
-class RateLimiter {
-  private requests: number = 0;
-  private resetTime: number = 0;
+**Solution**: Wait and retry. Cached responses reduce repeat calls. Playlists and
+playlist tracks are cached for 5 minutes, playlist details for 10 minutes, and
+tracks for 1 hour.
 
-  async checkLimit(): Promise<boolean> {
-    const now = Date.now();
-
-    if (now > this.resetTime) {
-      this.requests = 0;
-      this.resetTime = now + 60000; // 1 minute window
-    }
-
-    if (this.requests >= 100) { // Spotify limit
-      const waitTime = this.resetTime - now;
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-      return this.checkLimit();
-    }
-
-    this.requests++;
-    return true;
-  }
-}
-```
-
-#### Invalid Spotify Credentials
-**Symptoms**: 401 errors from Spotify API
-**Causes**:
-- Expired access token
-- Invalid client credentials
-- App permissions issues
-
-**Solutions**:
-```typescript
-// Refresh Spotify token
-async function refreshSpotifyToken(refreshToken: string): Promise<string> {
-  const response = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${btoa(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: 'grant_type=refresh_token&refresh_token=' + refreshToken
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to refresh Spotify token');
-  }
-
-  const data = await response.json();
-  return data.access_token;
-}
-```
+#### Spotify Token Errors
+**Symptoms**: `401 SPOTIFY_TOKEN_EXPIRED` ("Spotify access token expired. Please log in again.")
+**Cause**: Spotify rejected the access token after the auth middleware passed.
+**Solution**: Log in again. If it recurs for all users, verify the Spotify client credentials.
 
 ### Export Issues
 
-#### Export Generation Failures
-**Symptoms**: 500 errors on export requests
+#### Export Failures
+**Symptoms**: Export start, step, or chunk requests fail
 **Causes**:
-- Large playlist size
-- Memory constraints
-- File format issues
-
-**Solutions**:
-```typescript
-// Implement streaming export
-async function generateExportStream(playlist: Playlist) {
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        // Write header
-        controller.write('Track Name,Artist,Album,Duration\n');
-
-        // Stream tracks
-        for (const track of playlist.tracks) {
-          const row = `${track.name},${track.artist},${track.album},${track.duration}\n`;
-          controller.write(row);
-        }
-
-        controller.close();
-      } catch (error) {
-        controller.error(error);
-      }
-    }
-  });
-
-  return stream;
-}
-```
+- `400 INVALID_PLAYLISTS`: The request body failed validation.
+- `401` / `429` with an `EXPORT_*` code: Spotify returned 401 or 429. `details.upstream_status` shows which.
+- `503` with `details.cpu_limited: true`: The Worker hit its CPU time limit. Use the stepped jobs API (`POST /export/jobs`, then `POST /export/jobs/:jobId/step`) for large exports.
+- `409 EXPORT_JOB_CONFLICT`: A step request carried a stale cursor or resume token. Re-read `/export/jobs/:jobId/status` and resume from there.
+- `500 EXPORT_FAILED`, `EXPORT_START_FAILED`, `EXPORT_BATCH_FAILED`, `EXPORT_JOB_STEP_FAILED`: Unexpected failure. Check `wrangler tail`.
 
 #### Download Failures
-**Symptoms**: 404 or 410 errors on download
+**Symptoms**: 404 or 409 on a download route
 **Causes**:
-- Expired export files
-- Incorrect export ID
-- File cleanup issues
+- `404 EXPORT_NOT_FOUND`, `EXPORT_JOB_NOT_FOUND`, or `EXPORT_DATA_NOT_FOUND`: The ID is wrong, or the export expired. Export status, data, and files are kept in `CACHE_KV` for 1 hour.
+- `409 EXPORT_NOT_READY`: The job is not `completed` yet. Poll the status route first.
+- `503 EXPORT_DOWNLOAD_FAILED` / `EXPORT_JOB_DOWNLOAD_FAILED`: Rendering the file failed.
 
-**Solutions**:
-```typescript
-// Check export validity
-async function validateExport(env: Env, exportId: string): Promise<boolean> {
-  const exportData = await env.EXPORT_KV.get(exportId);
+**Solution**: Re-run the export if it expired.
 
-  if (!exportData) {
-    return false;
-  }
+### Analysis Issues
 
-  const { expiresAt } = JSON.parse(exportData);
-  return Date.now() < expiresAt;
-}
+- `404 ANALYSIS_NOT_FOUND` / `ANALYSIS_RESULTS_NOT_FOUND`: No job or cached result exists for that playlist. Results expire after `ANALYSIS_RESULTS_TTL_SECONDS` (default 24 hours).
+- A job stuck in a non-terminal status usually means the queue consumer failed. Look for `QUEUE_JOB_FAILED` or `QUEUE_MARK_FAILED_THREW` in `wrangler tail`. Messages are retried 3 times, then go to the dead-letter queue (`spotibye-analysis-dlq` or `spotibye-analysis-dev-dlq`).
+
+### KV Namespace Issues
+
+**Symptoms**: Routes that read or write KV fail with 500
+**Causes**:
+- Wrong namespace ID in the `[env.*]` block of `wrangler.toml`
+- Namespace deleted or created in another account
+
+**Diagnostics**:
+```bash
+cd src/backend
+
+# List namespaces in the account
+wrangler kv namespace list
+
+# Read a key from the deployed namespace (Wrangler defaults to local storage without --remote)
+wrangler kv key get --binding CACHE_KV --env production --remote "<key>"
 ```
 
 ## Debugging Tools
 
 ### Local Development
 ```bash
-# Start local development server
-wrangler dev
+cd src/backend
 
-# Enable debug logging
-export LOG_LEVEL=debug
+# Start local development server (reads .dev.vars)
+npm run dev
 
-# Test with specific environment
+# Use the development environment's bindings
 wrangler dev --env development
 ```
 
 ### Remote Debugging
 ```bash
-# View live logs
-wrangler tail --format=pretty
-
-# Filter logs by level
-wrangler tail --log-level=error
-
-# View specific function logs
-wrangler tail --function-name=handleRequest
+# Filter by text, method, or Worker version
+wrangler tail --env production --search "OAUTH_CALLBACK_FAILED"
+wrangler tail --env production --method POST
+wrangler tail --env production --version-id <version-id>
 ```
 
-### Performance Analysis
-```javascript
-// Add performance monitoring
-function withPerformanceMonitoring(fn: Function) {
-  return async (...args: any[]) => {
-    const start = performance.now();
-    const result = await fn(...args);
-    const duration = performance.now() - start;
-
-    console.log(`Function ${fn.name} took ${duration.toFixed(2)}ms`);
-    return result;
-  };
-}
-
-// Usage
-const monitoredHandler = withPerformanceMonitoring(handleRequest);
-```
+Backend logs are structured JSON lines with an `event` field, such as
+`ERROR_OCCURRED`, `TOKEN_REFRESH_FAILED`, and `SESSION_DELETED`. Search for the event name.
 
 ## Error Codes Reference
 
 ### HTTP Status Codes
 - `200` - Success
-- `400` - Bad Request (validation error)
-- `401` - Unauthorized (authentication required)
-- `403` - Forbidden (insufficient permissions)
-- `404` - Not Found (resource doesn't exist)
-- `429` - Too Many Requests (rate limited)
-- `500` - Internal Server Error (unexpected error)
-- `503` - Service Unavailable (dependency failure)
+- `400` - Bad Request (validation error, bad OAuth callback)
+- `401` - Unauthorized (missing or invalid JWT, expired session, Spotify 401)
+- `404` - Not Found (unknown route, session, export, or analysis)
+- `409` - Conflict (export not ready, stale export cursor)
+- `429` - Too Many Requests (Spotify rate limit passed through)
+- `500` - Internal Server Error (unexpected error, missing bindings)
+- `503` - Service Unavailable (Worker CPU limit, export download failure)
 
-### Custom Error Codes
-- `AUTH_001` - Invalid JWT token
-- `AUTH_002` - Expired session
-- `SPOTIFY_001` - Spotify API error
-- `SPOTIFY_002` - Rate limit exceeded
-- `KV_001` - KV namespace error
-- `EXPORT_001` - Export generation failed
-- `EXPORT_002` - Export file expired
+### Common Error Codes
+- `INTERNAL_ERROR`, `VALIDATION_ERROR`, `NOT_FOUND`, `UNAUTHORIZED`, `AUTH_REQUIRED` - Global handler and auth middleware
+- `MISSING_REDIRECT_URI`, `DISALLOWED_REDIRECT_URI`, `INVALID_CALLBACK`, `OAUTH_ERROR`, `OAUTH_INIT_FAILED`, `OAUTH_CALLBACK_FAILED`, `OAUTH_BAD_REQUEST`, `OAUTH_TOKEN_EXPIRED`, `SESSION_NOT_FOUND`, `TOKEN_REFRESH_FAILED`, `LOGOUT_FAILED`, `USER_INFO_FAILED` - `routes/auth.ts`
+- `SPOTIFY_TOKEN_EXPIRED`, `SPOTIFY_RATE_LIMITED`, `PLAYLISTS_FETCH_FAILED`, `PLAYLIST_FETCH_FAILED`, `PLAYLIST_TRACKS_FETCH_FAILED`, `TRACK_FETCH_FAILED` - `routes/spotify.ts`
+- `ANALYSIS_*` - `routes/analysis.ts`
+- `EXPORT_*`, `INVALID_PLAYLISTS` - `routes/export/`
 
 ## Recovery Procedures
 
 ### Emergency Rollback
 ```bash
+cd src/backend
+
 # List recent deployments
 wrangler deployments list --env production
 
-# Rollback to previous version
-wrangler rollback --env production <deployment-id>
+# Roll back to a specific version
+wrangler rollback --env production <version-id>
 
-# Quick rollback to last known good
+# Roll back to the previous version
 wrangler rollback --env production
 ```
 
-### Data Recovery
-```bash
-# Backup KV data
-wrangler kv:key list --namespace-id your-namespace-id > kv-backup.txt
+After a rollback, `/health` reports the older `release_sha`.
 
-# Restore KV data
-while read key; do
-  wrangler kv:key get --namespace-id your-namespace-id "$key" > "$key.backup"
-done < kv-backup.txt
+### Data Recovery
+KV data here is cache and session state with TTLs. There is no backup to restore.
+To inspect keys:
+
+```bash
+wrangler kv key list --binding CACHE_KV --env production --remote --prefix "<prefix>"
 ```
 
 ### Service Recovery
@@ -492,45 +227,37 @@ done < kv-backup.txt
 # Check service health
 curl -f "$SPOTIBYE_PRODUCTION_BACKEND_URL/health" || echo "Service down"
 
-# Restart service (deploy same version, from src/backend)
+# Redeploy the current checkout (from src/backend)
 npm run deploy:prod
 
-# Clear problematic cache
-wrangler kv:key delete --namespace-id your-cache-namespace "problematic-key"
+# Clear a problematic cache entry
+wrangler kv key delete --binding CACHE_KV --env production --remote "<key>"
 ```
 
 ## Prevention Strategies
 
 ### Monitoring Setup
-- Set up alerts for error rates > 1%
-- Monitor response times > 1 second
+- Watch `wrangler tail` error rates after each deploy
 - Track KV operation failures
 - Watch Spotify API quota usage
 
 ### Regular Maintenance
 - Rotate secrets quarterly
-- Clean up expired exports weekly
-- Review logs for anomalies daily
+- Review logs for anomalies
 - Update dependencies monthly
 
 ### Testing Practices
-- Run integration tests before deployment
+- Run `npm run test:run` and `npm run lint` before deployment
 - Test with large playlists
 - Verify error handling paths
-- Validate rate limiting behavior
 
 ## Contact Support
 
 When reporting issues, include:
 - Environment (development/production)
-- Error messages and codes
+- Error code, message, and `request_id`
 - Request/response logs
 - Steps to reproduce
-- Browser/client information
+- Client and app version
 
-### Support Channels
-- **GitHub Issues**: Code and deployment problems
-- **Email**: security and urgent issues
-- **Slack**: real-time troubleshooting
-
-This troubleshooting guide helps quickly identify and resolve common issues with the SpotiBye API backend.
+Report code and deployment problems in GitHub Issues.

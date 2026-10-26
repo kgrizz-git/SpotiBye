@@ -13,26 +13,33 @@ This document provides practical examples of how to use the SpotiBye API endpoin
 
 ## Authentication Flow
 
+All examples use one base URL. Replace the placeholder with your Worker's URL.
+
+```javascript
+const API_BASE = 'https://spotibye-backend-production.<your-subdomain>.workers.dev';
+```
+
 ### Step 1: Initiate Spotify OAuth
+
+`redirect_uri` must exactly match an entry in the Worker's `ALLOWED_REDIRECT_URIS`. The backend generates `state` and the PKCE verifier itself and keeps them in KV for 10 minutes.
 
 ```javascript
 // Request
-const response = await fetch('https://spotibye-api.workers.dev/auth/spotify/login', {
+const response = await fetch(`${API_BASE}/auth/spotify/login`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    redirect_uri: 'http://localhost:3000/callback',
-    state: 'random-state-string-123'
+    redirect_uri: 'http://localhost:3000/callback'
   })
 });
 
 // Response (200 OK)
 {
   "data": {
-    "auth_url": "https://accounts.spotify.com/authorize?response_type=code&client_id=your-client-id&scope=user-read-private%20user-read-email%20playlist-read-private%20playlist-read-collaborative&redirect_uri=http://localhost:3000/callback&state=random-state-string-123",
-    "state": "random-state-string-123"
+    "auth_url": "https://accounts.spotify.com/authorize?response_type=code&client_id=your-client-id&scope=user-read-private+user-read-email+playlist-read-private+playlist-read-collaborative&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback&state=<uuid>&code_challenge_method=S256&code_challenge=<challenge>",
+    "state": "<uuid>"
   }
 }
 ```
@@ -46,83 +53,86 @@ const urlParams = new URLSearchParams(window.location.search);
 const code = urlParams.get('code');
 const state = urlParams.get('state');
 
-// Exchange code for JWT tokens
-const response = await fetch('https://spotibye-api.workers.dev/auth/spotify/callback', {
-  method: 'GET',
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
+// Exchange code for a SpotiBye JWT
+const response = await fetch(
+  `${API_BASE}/auth/spotify/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
+);
 
 // Response (200 OK)
 {
   "data": {
-    "access_token": "[JWT_TOKEN]",
-    "refresh_token": "refresh-token-string",
-    "expires_in": 3600,
+    "token": "[JWT_TOKEN]",
     "user": {
       "id": "user-123",
       "display_name": "Test User",
-      "email": "test@example.com"
-    }
+      "email": "test@example.com",
+      "images": []
+    },
+    "expires_in": 2592000,
+    "spotify_access_expires_in": 3600
   }
 }
 ```
 
+`user` is the Spotify profile. `expires_in` is the JWT and session lifetime (30 days). The Spotify refresh token stays server-side, and the auth middleware refreshes the Spotify access token transparently. `POST /auth/spotify/refresh` (with the current Bearer token) issues a new JWT as `data.access_token`.
+
 ### Step 3: Use JWT Token
 
 ```javascript
-// Store token securely (e.g., in httpOnly cookie or secure storage)
-localStorage.setItem('spotibye_token', accessToken);
+// Store the token (e.g., in secure OS storage for a desktop client)
+localStorage.setItem('spotibye_token', token);
 
-// Include token in subsequent requests
-const response = await fetch('https://spotibye-api.workers.dev/spotify/playlists', {
+// Send it as a Bearer token on every authenticated request
+const response = await fetch(`${API_BASE}/spotify/playlists`, {
   headers: {
-    'Authorization': `Bearer ${accessToken}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   }
 });
 ```
 
+Other auth routes: `GET /auth/me` returns the JWT's user claims, and `POST /auth/logout` deletes the session.
+
 ## Spotify Data
+
+Spotify routes return Spotify objects as `data`, plus `meta.timestamp`. Cached responses also carry `meta.cached: true`. Pass `force_refresh=true` to skip the cache on playlist details and items.
 
 ### Get User Playlists
 
+The backend aggregates every page of the user's playlists and caches the list for 5 minutes. The route takes no pagination parameters.
+
 ```javascript
-// Basic request
-const response = await fetch('https://spotibye-api.workers.dev/spotify/playlists', {
+const response = await fetch(`${API_BASE}/spotify/playlists`, {
   headers: {
-    'Authorization': `Bearer ${accessToken}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   }
 });
 
-// Response (200 OK)
+// Response (200 OK) — `data` is an array of Spotify playlist objects
 {
-  "data": {
-    "playlists": [
-      {
-        "id": "playlist-123",
-        "name": "My Favorite Songs",
-        "description": "All my favorite tracks",
-        "tracks_count": 100,
-        "owner": "Test User",
-        "followers": 42,
-        "public": true,
-        "collaborative": false,
-        "images": [
-          {
-            "url": "https://i.scdn.co/image/ab67616d0000b2736e9c5b3b3b3b3b3b3b3b3b3b",
-            "height": 300,
-            "width": 300
-          }
-        ]
-      }
-    ],
-    "total": 1,
-    "limit": 50,
-    "offset": 0
-  }
+  "data": [
+    {
+      "id": "playlist-123",
+      "name": "My Favorite Songs",
+      "description": "All my favorite tracks",
+      "snapshot_id": "snapshot-abc",
+      "public": true,
+      "collaborative": false,
+      "owner": { "id": "user-123", "display_name": "Test User" },
+      "items": { "href": "https://api.spotify.com/v1/playlists/playlist-123/items", "total": 100 },
+      "images": [
+        {
+          "url": "https://i.scdn.co/image/ab67616d0000b2736e9c5b3b3b3b3b3b3b3b3b3b",
+          "height": 300,
+          "width": 300
+        }
+      ],
+      "external_urls": { "spotify": "https://open.spotify.com/playlist/playlist-123" },
+      "uri": "spotify:playlist:playlist-123"
+    }
+  ],
+  "meta": { "timestamp": "2026-07-07T12:00:00.000Z" }
 }
 ```
 
@@ -130,38 +140,34 @@ const response = await fetch('https://spotibye-api.workers.dev/spotify/playlists
 
 ```javascript
 const playlistId = 'playlist-123';
-const response = await fetch(`https://spotibye-api.workers.dev/spotify/playlists/${playlistId}`, {
+const response = await fetch(`${API_BASE}/spotify/playlists/${playlistId}`, {
   headers: {
-    'Authorization': `Bearer ${accessToken}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   }
 });
 
-// Response (200 OK)
+// Response (200 OK) — `data` is the Spotify playlist object (cached for 10 minutes)
 {
   "data": {
-    "playlist": {
-      "id": "playlist-123",
-      "name": "My Favorite Songs",
-      "description": "All my favorite tracks",
-      "tracks_count": 100,
-      "owner": "Test User",
-      "followers": 42,
-      "public": true,
-      "collaborative": false,
-      "images": [
-        {
-          "url": "https://i.scdn.co/image/ab67616d0000b2736e9c5b3b3b3b3b3b3b3b3b3b",
-          "height": 300,
-          "width": 300
-        }
-      ]
-    }
-  }
+    "id": "playlist-123",
+    "name": "My Favorite Songs",
+    "description": "All my favorite tracks",
+    "public": true,
+    "collaborative": false,
+    "owner": { "id": "user-123", "display_name": "Test User" },
+    "followers": { "total": 42 },
+    "images": [],
+    "external_urls": { "spotify": "https://open.spotify.com/playlist/playlist-123" },
+    "uri": "spotify:playlist:playlist-123"
+  },
+  "meta": { "timestamp": "2026-07-07T12:00:00.000Z", "cached": false }
 }
 ```
 
-### Get Playlist Tracks (with Pagination)
+### Get Playlist Items (with Pagination)
+
+`GET /spotify/playlists/:id/items` is the primary route. `/tracks` is a backward-compatible alias. `limit` is 1–50 (default 50) and `offset` defaults to 0.
 
 ```javascript
 const playlistId = 'playlist-123';
@@ -169,10 +175,10 @@ const limit = 50;
 const offset = 0;
 
 const response = await fetch(
-  `https://spotibye-api.workers.dev/spotify/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}`,
+  `${API_BASE}/spotify/playlists/${playlistId}/items?limit=${limit}&offset=${offset}`,
   {
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
   }
@@ -181,48 +187,55 @@ const response = await fetch(
 // Response (200 OK)
 {
   "data": {
-    "tracks": [
+    "href": "https://api.spotify.com/v1/playlists/playlist-123/items?offset=0&limit=50",
+    "total": 100,
+    "rawCount": 50,
+    "items": [
       {
-        "id": "track-123",
-        "name": "Example Song",
-        "artists": [
-          {
-            "id": "artist-123",
-            "name": "Example Artist"
-          }
-        ],
-        "album": {
-          "id": "album-123",
-          "name": "Example Album"
-        },
-        "duration_ms": 180000,
-        "track_number": 1,
-        "explicit": false,
-        "preview_url": "https://p.scdn.co/mp3-preview/abcdef123456",
-        "external_urls": {
-          "spotify": "https://open.spotify.com/track/track-123"
+        "added_at": "2026-01-01T00:00:00Z",
+        "added_by": { "id": "user-123" },
+        "track": {
+          "id": "track-123",
+          "name": "Example Song",
+          "artists": [
+            {
+              "id": "artist-123",
+              "name": "Example Artist"
+            }
+          ],
+          "album": {
+            "id": "album-123",
+            "name": "Example Album"
+          },
+          "duration_ms": 180000,
+          "explicit": false,
+          "preview_url": null,
+          "external_urls": {
+            "spotify": "https://open.spotify.com/track/track-123"
+          },
+          "uri": "spotify:track:track-123"
         }
       }
-    ],
-    "total": 100,
-    "limit": 50,
-    "offset": 0
-  }
+    ]
+  },
+  "meta": { "timestamp": "2026-07-07T12:00:00.000Z", "cached": false }
 }
 ```
 
+Items without a track ID (local or unavailable tracks) are dropped from `items`. Advance `offset` by `rawCount`, not by `items.length`.
+
 ## Playlist Analysis
 
-Analysis is asynchronous: POST starts (or resumes) a job and returns a status record; poll `GET .../status` until `status` is `completed`, then fetch `GET .../results`. The request body is currently ignored.
+Analysis is asynchronous: POST starts (or resumes) a job and returns a status record; poll `GET .../status` until `status` is `completed`, then fetch `GET .../results`. The optional JSON body (or query string) accepts `force_enrichment: true`, which clears cached status and results before re-running, and `refresh: true`, which re-runs while reusing per-track cache. Without either flag, POST returns the existing status if a job is queued, processing, or completed with current-schema results.
 
 ### Step 1: Start Analysis
 
 ```javascript
 const playlistId = 'playlist-123';
-const response = await fetch(`https://spotibye-api.workers.dev/analysis/playlist/${playlistId}`, {
+const response = await fetch(`${API_BASE}/analysis/playlist/${playlistId}`, {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${accessToken}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   }
 });
@@ -244,8 +257,8 @@ const response = await fetch(`https://spotibye-api.workers.dev/analysis/playlist
 ### Step 2: Poll Status
 
 ```javascript
-const statusResponse = await fetch(`https://spotibye-api.workers.dev/analysis/playlist/${playlistId}/status`, {
-  headers: { 'Authorization': `Bearer ${accessToken}` }
+const statusResponse = await fetch(`${API_BASE}/analysis/playlist/${playlistId}/status`, {
+  headers: { 'Authorization': `Bearer ${token}` }
 });
 
 // Response (200 OK) while running
@@ -261,13 +274,13 @@ const statusResponse = await fetch(`https://spotibye-api.workers.dev/analysis/pl
 }
 ```
 
-`status` progresses through `queued` → `processing` (possibly `retrying`) → `completed` or `failed`. `progress` moves 20 → 50 → 65 → 70 → 85 → 95 → 100.
+`status` progresses through `queued` → `processing` (possibly `retrying`) → `completed` or `failed`. `progress` is a 0–100 percentage that only increases. A failed job carries an `error` string. `GET .../status` returns `404 ANALYSIS_NOT_FOUND` when no job exists. `DELETE /analysis/playlist/:id` clears status and results.
 
 ### Step 3: Fetch Results
 
 ```javascript
-const resultsResponse = await fetch(`https://spotibye-api.workers.dev/analysis/playlist/${playlistId}/results`, {
-  headers: { 'Authorization': `Bearer ${accessToken}` }
+const resultsResponse = await fetch(`${API_BASE}/analysis/playlist/${playlistId}/results`, {
+  headers: { 'Authorization': `Bearer ${token}` }
 });
 
 // Response (200 OK)
@@ -340,79 +353,59 @@ const resultsResponse = await fetch(`https://spotibye-api.workers.dev/analysis/p
 
 ## Export Functionality
 
+`POST /export/playlist/:id` builds the export synchronously and returns the completed status record. `format` is `csv`, `json`, or `xlsx`, and any other value falls back to `xlsx`. `include_audio_features: true` adds ReccoBeats per-track enrichment columns. The status, export data, and file bytes are cached for 1 hour. A repeat POST with the same format and enrichment flag returns the cached record.
+
 ### Generate CSV Export
 
 ```javascript
 const playlistId = 'playlist-123';
-const response = await fetch(`https://spotibye-api.workers.dev/export/playlist/${playlistId}`, {
+const response = await fetch(`${API_BASE}/export/playlist/${playlistId}`, {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${accessToken}`,
+    'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
     format: 'csv',
-    include_audio_features: true,
-    include_analysis: false
+    include_audio_features: true
   })
 });
 
 // Response (200 OK)
 {
   "data": {
-    "export_id": "export-123",
-    "format": "csv",
-    "estimated_size": 1024000,
-    "expires_at": "2023-12-13T23:00:00Z",
-    "download_url": "/export/playlist/playlist-123/download?export_id=export-123"
-  }
-}
-```
-
-### Generate JSON Export
-
-```javascript
-const response = await fetch(`https://spotibye-api.workers.dev/export/playlist/${playlistId}`, {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${accessToken}`,
-    'Content-Type': 'application/json'
+    "job_id": "job-123",
+    "playlist_id": "playlist-123",
+    "user_id": "user-123",
+    "status": "completed",
+    "started_at": "2026-07-07T12:00:00.000Z",
+    "completed_at": "2026-07-07T12:00:04.000Z",
+    "progress": 100,
+    "file_url": "/export/playlist/playlist-123/download",
+    "file_format": "csv",
+    "include_audio_features": true,
+    "file_size": 1024000,
+    "track_count": 100
   },
-  body: JSON.stringify({
-    format: 'json',
-    include_audio_features: true,
-    include_analysis: true
-  })
-});
-
-// Response (200 OK)
-{
-  "data": {
-    "export_id": "export-456",
-    "format": "json",
-    "estimated_size": 2048000,
-    "expires_at": "2023-12-13T23:00:00Z",
-    "download_url": "/export/playlist/playlist-123/download?export_id=export-456"
-  }
+  "meta": { "timestamp": "2026-07-07T12:00:04.000Z", "request_id": "<uuid>" }
 }
 ```
+
+`GET /export/playlist/:id/status` returns the same record, or `404 EXPORT_NOT_FOUND`. `DELETE /export/playlist/:id` clears the cached export.
 
 ### Download Export File
 
+The download route serves the most recent export for the playlist. It takes no export ID. The response is the file itself with a `Content-Disposition: attachment` header, or `404 EXPORT_DATA_NOT_FOUND` if nothing is cached.
+
 ```javascript
-const exportId = 'export-123';
 const playlistId = 'playlist-123';
 
-const response = await fetch(
-  `https://spotibye-api.workers.dev/export/playlist/${playlistId}/download?export_id=${exportId}`,
-  {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`
-    }
+const response = await fetch(`${API_BASE}/export/playlist/${playlistId}/download`, {
+  headers: {
+    'Authorization': `Bearer ${token}`
   }
-);
+});
 
-// For CSV export
 if (response.ok) {
   const blob = await response.blob();
   const url = window.URL.createObjectURL(blob);
@@ -424,21 +417,19 @@ if (response.ok) {
   window.URL.revokeObjectURL(url);
   document.body.removeChild(a);
 }
-
-// For JSON export
-if (response.ok) {
-  const data = await response.json();
-  console.log('Export data:', data);
-}
 ```
 
 ## Error Handling
 
+Errors use the envelope `{ "error": { "code", "message", ... } }`. Middleware errors also include `timestamp`, `request_id`, and `details: { path, method }`.
+
 ### Authentication Errors
+
+A missing, invalid, or expired JWT returns `401` with code `UNAUTHORIZED`. A Spotify refresh token that Spotify rejects returns `401 AUTH_REQUIRED`, and the user must log in again.
 
 ```javascript
 try {
-  const response = await fetch('https://spotibye-api.workers.dev/spotify/playlists', {
+  const response = await fetch(`${API_BASE}/spotify/playlists`, {
     headers: {
       'Authorization': `Bearer ${invalidToken}`,
       'Content-Type': 'application/json'
@@ -454,8 +445,8 @@ try {
         // Redirect to login
         break;
       case 429:
-        console.error('Rate limit exceeded - please try again later');
-        // Show rate limit message
+        console.error('Spotify rate limit hit - please try again later');
+        // e.g. SPOTIFY_RATE_LIMITED
         break;
       case 500:
         console.error('Server error - please try again later');
@@ -478,35 +469,32 @@ try {
 ### Validation Errors
 
 ```javascript
-const response = await fetch('https://spotibye-api.workers.dev/auth/spotify/login', {
+const response = await fetch(`${API_BASE}/auth/spotify/login`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    // Missing required redirect_uri
-    state: 'random-state'
+    redirect_uri: ''
   })
 });
 
 if (!response.ok) {
   const error = await response.json();
   console.error('Validation error:', error.error.message);
-  // Output: "Validation error: redirect_uri is required"
+  // Output: "Validation error: redirect_uri: redirect_uri is required"
 }
 
 // Response (400 Bad Request)
 {
   "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "redirect_uri is required",
-    "details": {
-      "field": "redirect_uri",
-      "value": null
-    }
+    "code": "MISSING_REDIRECT_URI",
+    "message": "redirect_uri: redirect_uri is required"
   }
 }
 ```
+
+Request validation failures return `400` with a route-specific code or `VALIDATION_ERROR`. A `redirect_uri` outside the allowlist returns `400 DISALLOWED_REDIRECT_URI`.
 
 ## Complete Examples
 
@@ -514,19 +502,18 @@ if (!response.ok) {
 
 ```javascript
 class SpotiByeAPI {
-  constructor(baseURL = 'https://spotibye-api.workers.dev') {
+  constructor(baseURL = API_BASE) {
     this.baseURL = baseURL;
     this.token = null;
   }
 
   // Authentication flow
   async authenticate(redirectUri) {
-    // Step 1: Get auth URL
-    const state = this.generateState();
+    // Step 1: Get auth URL (the backend generates state)
     const loginResponse = await fetch(`${this.baseURL}/auth/spotify/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ redirect_uri: redirectUri, state })
+      body: JSON.stringify({ redirect_uri: redirectUri })
     });
 
     const { data } = await loginResponse.json();
@@ -538,11 +525,11 @@ class SpotiByeAPI {
   // Handle callback and get token
   async handleCallback(code, state) {
     const callbackResponse = await fetch(
-      `${this.baseURL}/auth/spotify/callback?code=${code}&state=${state}`
+      `${this.baseURL}/auth/spotify/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
     );
 
     const { data } = await callbackResponse.json();
-    this.token = data.access_token;
+    this.token = data.token;
 
     // Store token
     localStorage.setItem('spotibye_token', this.token);
@@ -550,28 +537,24 @@ class SpotiByeAPI {
     return data.user;
   }
 
-  // Get user playlists
-  async getPlaylists(limit = 50, offset = 0) {
-    const response = await fetch(
-      `${this.baseURL}/spotify/playlists?limit=${limit}&offset=${offset}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${this.token}`,
-          'Content-Type': 'application/json'
-        }
+  // Get user playlists (the backend returns every page in one array)
+  async getPlaylists() {
+    const response = await fetch(`${this.baseURL}/spotify/playlists`, {
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json'
       }
-    );
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch playlists: ${response.status}`);
     }
 
     const { data } = await response.json();
-    return data.playlists;
+    return data;
   }
 
   // Analyze playlist: start (or resume) the job, poll status, return results.
-  // The request body is ignored by the backend.
   async analyzePlaylist(playlistId, { pollIntervalMs = 2000, maxWaitMs = 120000 } = {}) {
     const start = await fetch(`${this.baseURL}/analysis/playlist/${playlistId}`, {
       method: 'POST',
@@ -624,7 +607,6 @@ class SpotiByeAPI {
       body: JSON.stringify({
         format,
         include_audio_features: true,
-        include_analysis: false,
         ...options
       })
     });
@@ -637,27 +619,19 @@ class SpotiByeAPI {
     return data;
   }
 
-  // Download export
-  async downloadExport(playlistId, exportId) {
-    const response = await fetch(
-      `${this.baseURL}/export/playlist/${playlistId}/download?export_id=${exportId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
+  // Download the most recent export
+  async downloadExport(playlistId) {
+    const response = await fetch(`${this.baseURL}/export/playlist/${playlistId}/download`, {
+      headers: {
+        'Authorization': `Bearer ${this.token}`
       }
-    );
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to download export: ${response.status}`);
     }
 
     return response.blob();
-  }
-
-  // Utility methods
-  generateState() {
-    return Math.random().toString(36).substring(2, 15);
   }
 
   // Check if authenticated
@@ -704,7 +678,7 @@ if (!api.isAuthenticated()) {
       console.log('Export ready:', exportData);
 
       // Download the export
-      const blob = await api.downloadExport(firstPlaylist.id, exportData.export_id);
+      const blob = await api.downloadExport(firstPlaylist.id);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -753,7 +727,7 @@ function useSpotiByeAPI() {
     setError(null);
 
     try {
-      const response = await fetch('https://spotibye-api.workers.dev/auth/spotify/login', {
+      const response = await fetch(`${API_BASE}/auth/spotify/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ redirect_uri: redirectUri })
@@ -774,13 +748,13 @@ function useSpotiByeAPI() {
 
     try {
       const response = await fetch(
-        `https://spotibye-api.workers.dev/auth/spotify/callback?code=${code}&state=${state}`
+        `${API_BASE}/auth/spotify/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
       );
 
       const { data } = await response.json();
-      setToken(data.access_token);
+      setToken(data.token);
       setUser(data.user);
-      localStorage.setItem('spotibye_token', data.access_token);
+      localStorage.setItem('spotibye_token', data.token);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -789,29 +763,26 @@ function useSpotiByeAPI() {
   }, []);
 
   // Get playlists
-  const getPlaylists = useCallback(async (limit = 50, offset = 0) => {
+  const getPlaylists = useCallback(async () => {
     if (!token) throw new Error('Not authenticated');
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(
-        `https://spotibye-api.workers.dev/spotify/playlists?limit=${limit}&offset=${offset}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+      const response = await fetch(`${API_BASE}/spotify/playlists`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      );
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch playlists: ${response.status}`);
       }
 
       const { data } = await response.json();
-      return data.playlists;
+      return data;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -864,7 +835,7 @@ function PlaylistManager() {
 
   return (
     <div>
-      <h2>Welcome, {user.display_name}!</h2>
+      <h2>Welcome{user ? `, ${user.display_name}` : ''}!</h2>
       <button onClick={logout}>Logout</button>
 
       {loading && <p>Loading...</p>}
@@ -874,7 +845,7 @@ function PlaylistManager() {
       <ul>
         {playlists.map(playlist => (
           <li key={playlist.id}>
-            {playlist.name} ({playlist.tracks_count} tracks)
+            {playlist.name} ({(playlist.items ?? playlist.tracks)?.total ?? 0} tracks)
           </li>
         ))}
       </ul>
@@ -886,8 +857,8 @@ function PlaylistManager() {
 ## Best Practices
 
 ### Token Management
-- Store tokens securely (httpOnly cookies recommended)
-- Implement token refresh logic
+- Store tokens securely (the API reads only the `Authorization: Bearer` header, not cookies)
+- Call `POST /auth/spotify/refresh` to renew the JWT before it expires
 - Handle token expiration gracefully
 - Clear tokens on logout
 
@@ -904,7 +875,7 @@ function PlaylistManager() {
 - Use loading states for better UX
 
 ### Security
-- Never expose tokens in client-side code
+- Never log tokens or commit them to source
 - Use HTTPS in production
 - Validate all user inputs
 - Implement rate limiting on client side
@@ -924,14 +895,14 @@ class MockSpotiByeAPI extends SpotiByeAPI {
       {
         id: 'mock-playlist-1',
         name: 'Mock Playlist 1',
-        tracks_count: 25,
-        owner: 'Test User'
+        items: { total: 25 },
+        owner: { id: 'user-123', display_name: 'Test User' }
       },
       {
         id: 'mock-playlist-2',
         name: 'Mock Playlist 2',
-        tracks_count: 50,
-        owner: 'Test User'
+        items: { total: 50 },
+        owner: { id: 'user-123', display_name: 'Test User' }
       }
     ];
   }
