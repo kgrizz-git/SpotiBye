@@ -27,6 +27,7 @@ export interface ReccoBeatsExportFeatures {
   liveness?: number;
   speechiness?: number;
   loudness?: number;
+  isrc?: string;
 }
 
 export function toExportFeatures(row: ReccoBeatsAudioFeature): ReccoBeatsExportFeatures {
@@ -42,6 +43,7 @@ export function toExportFeatures(row: ReccoBeatsAudioFeature): ReccoBeatsExportF
     liveness: row.liveness,
     speechiness: row.speechiness,
     loudness: row.loudness,
+    isrc: row.isrc ?? undefined,
   };
 }
 
@@ -90,6 +92,9 @@ export function mapTrackForExport(
     Loudness: typeof audioFeatures?.loudness === 'number' ? Number(audioFeatures.loudness.toFixed(1)) : 'N/A',
     // ReccoBeats does not expose time_signature — permanent N/A for export.
     'Time Signature': 'N/A',
+    // Empty, not 'N/A', when unknown: importers such as SpotiByeMatcher treat
+    // any non-empty ISRC as a lookup key.
+    ISRC: audioFeatures?.isrc || '',
   };
 }
 

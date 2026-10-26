@@ -55,6 +55,7 @@ export async function generateCombinedExcelFileFromAssemblyLite(
       { key: 'N', width: 12 },
       { key: 'O', width: 12 },
       { key: 'P', width: 14 },
+      { key: 'Q', width: 16 },
     ];
 
     sheet.addRow([worksheet.playlist_name]);

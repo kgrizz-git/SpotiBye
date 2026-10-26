@@ -31,6 +31,7 @@ const sampleExportData: ExportData = {
       Speechiness: 0.05,
       Loudness: -5,
       'Time Signature': 4,
+      ISRC: 'USUG12103683',
     },
   ],
   total_duration_ms: 201000,

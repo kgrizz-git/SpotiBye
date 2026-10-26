@@ -102,6 +102,7 @@ export async function generateCombinedExcelFile(exportDataList: ExportData[]): P
       { key: 'N', width: 12 },
       { key: 'O', width: 12 },
       { key: 'P', width: 14 },
+      { key: 'Q', width: 16 },
     ];
 
     sheet.getCell('A1').value = exportData.playlist.name;

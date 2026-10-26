@@ -27,6 +27,7 @@ export function getTrackHeaders(): string[] {
     'Speechiness',
     'Loudness',
     'Time Signature',
+    'ISRC',
   ];
 }
 

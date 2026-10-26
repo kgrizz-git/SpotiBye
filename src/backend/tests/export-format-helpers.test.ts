@@ -62,11 +62,13 @@ describe('uniquifySheetName', () => {
 });
 
 describe('getTrackHeaders', () => {
-  it('includes all 16 expected headers', () => {
+  it('includes all 17 expected headers', () => {
     const headers = getTrackHeaders();
     expect(headers).toContain('Artist');
     expect(headers).toContain('Spotify URL');
     expect(headers).toContain('Time Signature');
-    expect(headers).toHaveLength(16);
+    expect(headers).toHaveLength(17);
+    // Appended last so existing column positions (E = Spotify URL) stay put.
+    expect(headers[headers.length - 1]).toBe('ISRC');
   });
 });

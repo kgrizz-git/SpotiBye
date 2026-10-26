@@ -7,6 +7,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Exports now include an `ISRC` column, filled from ReccoBeats when audio-feature enrichment is on. It is empty for plain exports and for tracks ReccoBeats does not know. The column is last, so existing column positions are unchanged.
 - macOS `SpotiBye.command` launcher: double-click to run SpotiBye from source (uses `.venv` when present, prints install steps if dependencies are missing). The first run attaches the app icon to the file in Finder.
 - Interactive self-host setup script (`python3 scripts/setup-selfhost.py`) for the local path: checks prerequisites, opens the Spotify Developer Dashboard, validates Spotify credentials via a live token check before writing anything, and generates `src/backend/.dev.vars`. Supports `--check`, `--dry-run`, and `--force`; secret values are never printed. (Cloudflare provisioning/upload/config helpers exist and are unit-tested but not yet wired into the interactive flow.)
 - The backend chooser now starts unconfigured when no saved or explicitly configured endpoint exists. Localhost remains an intentional selectable preset, Cloudflare Dev/Prod presets appear only when their URL variables are configured, and cancelling an unconfigured chooser no longer connects to localhost.
