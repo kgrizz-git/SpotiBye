@@ -40,4 +40,5 @@ def test_every_environment_allows_the_alternate_callback_ports() -> None:
 
 
 def test_production_keeps_the_web_callback() -> None:
-    assert "https://app.spotibye.com" in _allowed_redirect_uris("production")
+    # Exact list membership; count() avoids a CodeQL URL-substring false positive.
+    assert _allowed_redirect_uris("production").count("https://app.spotibye.com") == 1
