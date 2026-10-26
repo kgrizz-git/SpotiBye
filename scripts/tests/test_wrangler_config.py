@@ -13,7 +13,7 @@ DESKTOP_CALLBACK_URI = "http://127.0.0.1:8080/callback"
 
 
 def _allowed_redirect_uris(env: str) -> list[str]:
-    config = tomllib.loads(WRANGLER_TOML.read_text())
+    config = tomllib.loads(WRANGLER_TOML.read_text(encoding="utf-8"))
     raw = config["env"][env]["vars"]["ALLOWED_REDIRECT_URIS"]
     return [uri.strip() for uri in raw.split(",") if uri.strip()]
 
