@@ -196,14 +196,6 @@ export class SpotifyService {
 }
 
 /**
- * Parse the `Retry-After` header value into a non-negative integer of
- * seconds to wait. Per RFC 9110, the header is either an integer
- * (delta-seconds) or an HTTP-date. Returns 1 second as a safe fallback
- * when the value is missing or unparseable.
- *
- * Exported for direct unit testing.
- */
-/**
  * Encode a caller-supplied ID as one URL path segment, so a value like
  * `../me` cannot point the request at a different Spotify endpoint.
  *
@@ -217,6 +209,14 @@ export function pathSegment(id: string): string {
   return encodeURIComponent(id);
 }
 
+/**
+ * Parse the `Retry-After` header value into a non-negative integer of
+ * seconds to wait. Per RFC 9110, the header is either an integer
+ * (delta-seconds) or an HTTP-date. Returns 1 second as a safe fallback
+ * when the value is missing or unparseable.
+ *
+ * Exported for direct unit testing.
+ */
 export function parseRetryAfter(header: string | null | undefined): number {
   if (!header) {
     return 1;
