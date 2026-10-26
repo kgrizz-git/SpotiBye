@@ -536,3 +536,51 @@ def test_open_portal_dry_run_does_not_open_browser() -> None:
     with mock.patch.object(_mod.webbrowser, "open") as opener:
         _mod.open_portal("https://example.com", dry_run=True)
     opener.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Desktop OAuth callback
+# ---------------------------------------------------------------------------
+
+
+def test_desktop_callback_uri_defaults_to_port_8080(monkeypatch) -> None:
+    monkeypatch.delenv("SPOTIBYE_OAUTH_PORT", raising=False)
+    assert _mod.desktop_callback_uri() == "http://127.0.0.1:8080/callback"
+
+
+def test_desktop_callback_uri_follows_oauth_port(monkeypatch) -> None:
+    monkeypatch.setenv("SPOTIBYE_OAUTH_PORT", "9999")
+    assert _mod.desktop_callback_uri() == "http://127.0.0.1:9999/callback"
+
+
+def test_spotify_app_steps_name_the_redirect_uri(monkeypatch, capsys) -> None:
+    monkeypatch.delenv("SPOTIBYE_OAUTH_PORT", raising=False)
+    _mod.print_spotify_app_steps()
+    assert "http://127.0.0.1:8080/callback" in capsys.readouterr().out
+
+
+def test_generate_selfhost_config_allows_desktop_callback_by_default(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.delenv("SPOTIBYE_OAUTH_PORT", raising=False)
+    template = tmp_path / "wrangler.toml"
+    template.write_text(SAMPLE_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert _mod.generate_selfhost_config(template, target, {})
+    assert (
+        'vars = { ALLOWED_REDIRECT_URIS = "http://127.0.0.1:8080/callback" }'
+        in target.read_text()
+    )
+
+
+def test_generate_selfhost_config_warns_without_desktop_callback(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    monkeypatch.delenv("SPOTIBYE_OAUTH_PORT", raising=False)
+    template = tmp_path / "wrangler.toml"
+    template.write_text(SAMPLE_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert _mod.generate_selfhost_config(
+        template, target, {}, "https://app.example.com"
+    )
+    assert "http://127.0.0.1:8080/callback is not in" in capsys.readouterr().out

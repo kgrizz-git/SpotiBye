@@ -39,6 +39,12 @@ from pathlib import Path
 SPOTIFY_DASHBOARD_URL = "https://developer.spotify.com/dashboard"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 
+
+def desktop_callback_uri() -> str:
+    """The desktop app's OAuth callback. Mirrors src/frontend/config/backend_config.py."""
+    port = os.environ.get("SPOTIBYE_OAUTH_PORT", "8080")
+    return f"http://127.0.0.1:{port}/callback"  # NOSONAR(S5332) loopback OAuth callback
+
 REQUIRED_PYTHON = (3, 11)
 REQUIRED_TOOLS = ("node", "npm", "npx")
 REQUIRED_NODE_MAJOR = 24
@@ -180,6 +186,13 @@ def report_prerequisites(results: list[PrereqResult]) -> bool:
     for result in failed:
         print(f"  - {result.name}: {result.hint}")
     return False
+
+
+def print_spotify_app_steps() -> None:
+    """Tell the user which redirect URI to register in the Spotify app."""
+    print("  In your Spotify app's Settings, under Redirect URIs, add exactly:")
+    print(f"    {desktop_callback_uri()}")
+    print("  Then click Add and Save. Spotify rejects login if this does not match.")
 
 
 def open_portal(url: str, dry_run: bool = False) -> None:
@@ -530,11 +543,23 @@ def generate_selfhost_config(
     template_path: Path,
     output_path: Path,
     kv_ids: dict[str, tuple[str, str]],
-    redirect_uris: str,
+    redirect_uris: str | None = None,
     force: bool = False,
     dry_run: bool = False,
 ) -> bool:
-    """Write a per-user wrangler config. Never touches the tracked file."""
+    """Write a per-user wrangler config. Never touches the tracked file.
+
+    `redirect_uris` defaults to the desktop callback. Without it in the
+    production allowlist, desktop login fails with DISALLOWED_REDIRECT_URI.
+    """
+    if redirect_uris is None:
+        redirect_uris = desktop_callback_uri()
+    allowed = [uri.strip() for uri in redirect_uris.split(",")]
+    if desktop_callback_uri() not in allowed:
+        print(
+            f"  Warning: {desktop_callback_uri()} is not in ALLOWED_REDIRECT_URIS. "
+            "The desktop app cannot log in to this Worker without it."
+        )
     if dry_run:
         print(f"  [dry-run] would write {output_path}")
         return True
@@ -563,6 +588,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print("\nStep 1: register a Spotify app")
     open_portal(SPOTIFY_DASHBOARD_URL, dry_run=config.dry_run)
+    print_spotify_app_steps()
     print("\nStep 2: Spotify credentials")
     try:
         client_id = prompt_client_id()
