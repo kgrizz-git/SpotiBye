@@ -130,6 +130,13 @@ export class SpotifyService {
         });
 
         if (response.status === 429) {
+          // Out of attempts: surface the 429 so routes can return
+          // SPOTIFY_RATE_LIMITED instead of a generic 500. The `HTTP ` prefix
+          // is what extractUpstreamStatus() and the catch below key on.
+          if (i === retries - 1) {
+            const body = await response.text();
+            throw new Error(`HTTP 429: ${body || 'rate limited'}`);
+          }
           // Rate limited - wait and retry. `Retry-After` is either an integer
           // (seconds) or an HTTP-date. NaN would cause a 0ms busy spin.
           const retryAfter = parseRetryAfter(

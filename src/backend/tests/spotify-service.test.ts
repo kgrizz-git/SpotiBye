@@ -111,6 +111,32 @@ describe('SpotifyService artist metadata', () => {
   });
 });
 
+describe('SpotifyService persistent rate limiting', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('throws an HTTP 429 error once retries are exhausted, without a final sleep', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () =>
+      new Response('slow down', { status: 429, headers: { 'Retry-After': '1' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new SpotifyService('access-token');
+    const result = service.getUserPlaylists(50, 0).catch((error: unknown) => error);
+
+    // Two waits between three attempts; no wait after the last one.
+    await vi.advanceTimersByTimeAsync(2000);
+    const error = await result;
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('HTTP 429: slow down');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe('SpotifyService error response handling', () => {
   beforeEach(() => {
     vi.restoreAllMocks();

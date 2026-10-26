@@ -143,6 +143,25 @@ describe('Spotify Routes', () => {
       expect(mockGetUserPlaylists).toHaveBeenNthCalledWith(1, 50, 0);
       expect(mockGetUserPlaylists).toHaveBeenNthCalledWith(2, 50, 50);
     });
+
+    it('returns 429 SPOTIFY_RATE_LIMITED when Spotify keeps rate limiting', async () => {
+      const { SpotifyService } = await import('../services/spotify');
+      vi.mocked(SpotifyService).mockImplementationOnce(
+        function () {
+          return {
+            getUserPlaylists: vi.fn().mockRejectedValue(new Error('HTTP 429: rate limited')),
+            getPlaylist: vi.fn(),
+            getPlaylistTracks: vi.fn(),
+            getTrack: vi.fn(),
+          } as any;
+        } as any
+      );
+
+      const { status, data } = await getJson('/spotify/playlists');
+
+      expect(status).toBe(429);
+      expect(data.error.code).toBe('SPOTIFY_RATE_LIMITED');
+    });
   });
 
   describe('GET /spotify/playlists/:id', () => {
