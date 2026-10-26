@@ -6,10 +6,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Iterator, Tuple
+from unittest.mock import patch
 
 import pytest
 
 from ..auth.backend_auth import BackendAuthenticator
+from ..services.backend_client import BackendAPIError, BackendClient
 
 EXPECTED_STATE = "state-from-this-login"
 
@@ -80,3 +82,25 @@ def test_escapes_error_details_in_the_callback_page(callback_server) -> None:
     assert "<script>" not in body
     assert "&lt;script&gt;" in body
     assert "error" in authenticator.auth_result_container
+
+
+def test_start_spotify_login_fails_closed_without_state() -> None:
+    client = BackendClient("http://localhost:8787")
+    with patch.object(
+        BackendClient, "_make_request", return_value={"auth_url": "https://x"}
+    ):
+        with pytest.raises(BackendAPIError, match="No OAuth state"):
+            client.start_spotify_login("http://127.0.0.1:8080/callback")
+
+
+def test_start_spotify_login_returns_auth_url_and_state() -> None:
+    client = BackendClient("http://localhost:8787")
+    with patch.object(
+        BackendClient,
+        "_make_request",
+        return_value={"auth_url": "https://x", "state": "s1"},
+    ):
+        assert client.start_spotify_login("http://127.0.0.1:8080/callback") == {
+            "auth_url": "https://x",
+            "state": "s1",
+        }

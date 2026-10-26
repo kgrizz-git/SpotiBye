@@ -164,6 +164,50 @@ describe('Spotify Routes', () => {
     });
   });
 
+  describe('upstream Spotify errors on detail routes', () => {
+    const routes = [
+      { path: '/spotify/playlists/playlist1?force_refresh=true', method: 'getPlaylist', fallback: 'PLAYLIST_FETCH_FAILED' },
+      { path: '/spotify/playlists/playlist1/items?force_refresh=true', method: 'getPlaylistTracks', fallback: 'PLAYLIST_TRACKS_FETCH_FAILED' },
+      { path: '/spotify/tracks/track1', method: 'getTrack', fallback: 'TRACK_FETCH_FAILED' },
+    ] as const;
+
+    const mockFailingService = async (method: string, error: Error) => {
+      const { SpotifyService } = await import('../services/spotify');
+      vi.mocked(SpotifyService).mockImplementationOnce(
+        function () {
+          return {
+            getUserPlaylists: vi.fn(),
+            getPlaylist: vi.fn(),
+            getPlaylistTracks: vi.fn(),
+            getTrack: vi.fn(),
+            [method]: vi.fn().mockRejectedValue(error),
+          } as any;
+        } as any
+      );
+    };
+
+    it.each(routes)('$path maps a Spotify 429 to 429 SPOTIFY_RATE_LIMITED', async ({ path, method }) => {
+      await mockFailingService(method, new Error('HTTP 429: rate limited'));
+      const { status, data } = await getJson(path);
+      expect(status).toBe(429);
+      expect(data.error.code).toBe('SPOTIFY_RATE_LIMITED');
+    });
+
+    it.each(routes)('$path maps a Spotify 401 to 401 SPOTIFY_TOKEN_EXPIRED', async ({ path, method }) => {
+      await mockFailingService(method, new Error('HTTP 401: expired'));
+      const { status, data } = await getJson(path);
+      expect(status).toBe(401);
+      expect(data.error.code).toBe('SPOTIFY_TOKEN_EXPIRED');
+    });
+
+    it.each(routes)('$path keeps its own code for other failures', async ({ path, method, fallback }) => {
+      await mockFailingService(method, new Error('HTTP 500: boom'));
+      const { status, data } = await getJson(path);
+      expect(status).toBe(500);
+      expect(data.error.code).toBe(fallback);
+    });
+  });
+
   describe('GET /spotify/playlists/:id', () => {
     it('should return playlist details', async () => {
       const { status, data } = await getJson('/spotify/playlists/playlist1');
