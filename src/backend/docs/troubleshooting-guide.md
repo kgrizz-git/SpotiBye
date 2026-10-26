@@ -70,16 +70,18 @@ Unhandled errors return `500` with code `INTERNAL_ERROR` and message
 
 **Symptoms**: All routes, including `/health`, return `500 INTERNAL_ERROR`
 **Cause**: `ENVIRONMENT`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, or
-`JWT_SECRET` is missing or empty. `middleware/env.ts` checks them on the first
-request in each isolate. An empty `ALLOWED_REDIRECT_URIS` is accepted. It only
-makes login reject every `redirect_uri` with `DISALLOWED_REDIRECT_URI`.
+`JWT_SECRET` is missing or empty, or `ALLOWED_REDIRECT_URIS` is missing
+entirely. `middleware/env.ts` checks them on the first request in each isolate.
+An empty `ALLOWED_REDIRECT_URIS` is accepted. It only makes login reject every
+`redirect_uri` with `DISALLOWED_REDIRECT_URI`.
 
 **Diagnostics**: Look for `Invalid Worker environment bindings: <NAME>: ...` in
 `npx wrangler tail --env <environment>`, then check
 `npx wrangler secret list --env <environment>`.
 
 **Solution**: For a secret, run `npx wrangler secret put <NAME> --env <environment>`.
-For `ENVIRONMENT`, set it in that environment's `vars` in `wrangler.toml`. See
+For `ENVIRONMENT` or `ALLOWED_REDIRECT_URIS`, set it in that environment's
+`vars` in `wrangler.toml`. See
 [environment-variables.md](environment-variables.md).
 
 ### Authentication Problems
