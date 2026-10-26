@@ -31,6 +31,14 @@ export function getTrackHeaders(): string[] {
   ];
 }
 
+// Track-sheet column widths, in getTrackHeaders() order. Shared by the rich and
+// lite XLSX writers.
+const TRACK_COLUMN_WIDTHS: readonly number[] = [30, 40, 40, 15, 60, 12, 14, 12, 12, 12, 12, 16, 12, 12, 12, 14, 16];
+
+export function getTrackColumns(): Array<{ key: string; width: number }> {
+  return TRACK_COLUMN_WIDTHS.map((width, i) => ({ key: String.fromCharCode(65 + i), width }));
+}
+
 export function sanitizeSheetName(name: string): string {
   const cleaned = name.replace(/[\\/*?:[\]]/g, ' ').trim();
   return (cleaned || 'Playlist').slice(0, 31);

@@ -1,42 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { buildWorksheetAssembly } from '../services/export-xlsx-lite';
 import type { ExportData } from '../services/export-types';
+import { makeExportData } from './helpers/export-data';
 
-const sampleExportData: ExportData = {
-  playlist: {
-    id: 'pl1',
-    name: 'Road Trip',
-    description: 'Songs for the highway',
-    total_tracks: 1,
-    owner: 'alice',
-    followers: 42,
-    url: 'https://open.spotify.com/playlist/pl1',
-    cover_image_url: 'https://img/pl1.jpg',
-  },
-  tracks: [
-    {
-      Artist: 'Artist A',
-      Album: 'Album A',
-      Track: 'Track A',
-      Duration: '3:21',
-      'Spotify URL': 'https://open.spotify.com/track/a',
-      Tempo: 120,
-      Key: 'C major',
-      Danceability: 0.8,
-      Energy: 0.9,
-      Valence: 0.5,
-      Acousticness: 0.1,
-      Instrumentalness: 0,
-      Liveness: 0.2,
-      Speechiness: 0.05,
-      Loudness: -5,
-      'Time Signature': 4,
-      ISRC: 'USUG12103683',
-    },
-  ],
-  total_duration_ms: 201000,
-  generated_at: new Date().toISOString(),
-};
+const sampleExportData: ExportData = makeExportData();
 
 describe('buildWorksheetAssembly', () => {
   it('maps ExportTrack rows to header-keyed values', () => {

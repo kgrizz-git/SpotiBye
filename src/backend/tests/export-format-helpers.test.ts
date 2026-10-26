@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDuration, sanitizeSheetName, uniquifySheetName, getTrackHeaders } from '../services/export-format-helpers';
+import { formatDuration, sanitizeSheetName, uniquifySheetName, getTrackColumns, getTrackHeaders } from '../services/export-format-helpers';
 
 describe('formatDuration', () => {
   it('formats 0 ms', () => expect(formatDuration(0)).toBe('0:00'));
@@ -70,5 +70,11 @@ describe('getTrackHeaders', () => {
     expect(headers).toHaveLength(17);
     // Appended last so existing column positions (E = Spotify URL) stay put.
     expect(headers[headers.length - 1]).toBe('ISRC');
+  });
+  it('has one column width per track header, starting at column A', () => {
+    const columns = getTrackColumns();
+    expect(columns).toHaveLength(getTrackHeaders().length);
+    expect(columns[0]).toEqual({ key: 'A', width: 30 });
+    expect(columns.at(-1)).toEqual({ key: 'Q', width: 16 });
   });
 });

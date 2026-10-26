@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { ExportData, ResumableExportAssemblyState, ExportTrack, XlsxRenderMode } from './export-types';
-import { formatDuration, getTrackHeaders, sanitizeSheetName, uniquifySheetName } from './export-format-helpers';
+import { formatDuration, getTrackColumns, getTrackHeaders, sanitizeSheetName, uniquifySheetName } from './export-format-helpers';
 import { generateCombinedExcelFileFromAssemblyLite } from './export-xlsx-lite';
 
 export function arrayBufferToBase64(bytes: ArrayBuffer): string {
@@ -85,25 +85,7 @@ export async function generateCombinedExcelFile(exportDataList: ExportData[]): P
     const sheetName = uniquifySheetName(baseName, usedSheetNames);
 
     const sheet = workbook.addWorksheet(sheetName);
-    sheet.columns = [
-      { key: 'A', width: 30 },
-      { key: 'B', width: 40 },
-      { key: 'C', width: 40 },
-      { key: 'D', width: 15 },
-      { key: 'E', width: 60 },
-      { key: 'F', width: 12 },
-      { key: 'G', width: 14 },
-      { key: 'H', width: 12 },
-      { key: 'I', width: 12 },
-      { key: 'J', width: 12 },
-      { key: 'K', width: 12 },
-      { key: 'L', width: 16 },
-      { key: 'M', width: 12 },
-      { key: 'N', width: 12 },
-      { key: 'O', width: 12 },
-      { key: 'P', width: 14 },
-      { key: 'Q', width: 16 },
-    ];
+    sheet.columns = getTrackColumns();
 
     sheet.getCell('A1').value = exportData.playlist.name;
     sheet.getCell('A1').font = { bold: true, size: 16 };

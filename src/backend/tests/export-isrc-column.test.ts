@@ -1,73 +1,68 @@
 import { describe, it, expect } from 'vitest';
 import ExcelJS from 'exceljs';
 import { generateCsvFile } from '../services/export-csv';
+import { generateCombinedJson } from '../services/export-json';
 import { generateCombinedExcelFile } from '../services/export-xlsx';
-import { buildWorksheetAssembly } from '../services/export-xlsx-lite';
+import { buildWorksheetAssembly, generateCombinedExcelFileFromAssemblyLite } from '../services/export-xlsx-lite';
 import { getTrackHeaders } from '../services/export-format-helpers';
-import type { ExportData, ExportTrack } from '../services/export-types';
+import type { ExportData } from '../services/export-types';
+import { makeExportData, makeExportTrack } from './helpers/export-data';
 
-const track: ExportTrack = {
-  Artist: 'Artist A',
-  Album: 'Album A',
-  Track: 'Track A',
-  Duration: '3:21',
-  'Spotify URL': 'https://open.spotify.com/track/a',
-  Tempo: 120,
-  Key: 'C major',
-  Danceability: 0.8,
-  Energy: 0.9,
-  Valence: 0.5,
-  Acousticness: 0.1,
-  Instrumentalness: 0,
-  Liveness: 0.2,
-  Speechiness: 0.05,
-  Loudness: -5,
-  'Time Signature': 'N/A',
-  ISRC: 'USUG12103683',
-};
+// One track with a known ISRC, one with none.
+const exportData: ExportData = makeExportData({
+  tracks: [makeExportTrack(), makeExportTrack({ Track: 'Track B', ISRC: '' })],
+});
 
-const exportData: ExportData = {
-  playlist: {
-    id: 'pl1',
-    name: 'Road Trip',
-    description: '',
-    total_tracks: 1,
-    owner: 'alice',
-    followers: 0,
-    url: 'https://open.spotify.com/playlist/pl1',
-  },
-  tracks: [track],
-  total_duration_ms: 201000,
-  generated_at: '2026-10-25T00:00:00Z',
-};
+async function loadSheet(bytes: ArrayBuffer): Promise<ExcelJS.Worksheet> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(bytes);
+  const sheet = workbook.worksheets.find((ws) => ws.getCell('A11').value === 'Artist');
+  expect(sheet).toBeDefined();
+  return sheet!;
+}
+
+function expectIsrcInColumnQ(sheet: ExcelJS.Worksheet): void {
+  expect(sheet.getCell('E11').value).toBe('Spotify URL');
+  expect(sheet.getCell('Q11').value).toBe('ISRC');
+  expect(sheet.getCell('Q12').value).toBe('USUG12103683');
+  expect(sheet.getCell('Q13').value ?? '').toBe('');
+}
 
 describe('ISRC export column', () => {
   it('writes ISRC as the last CSV column, with every row the header width', async () => {
-    const text = new TextDecoder().decode(await generateCsvFile(exportData));
-    const lines = text.split('\n');
+    const lines = new TextDecoder().decode(await generateCsvFile(exportData)).split('\n');
     const width = getTrackHeaders().length;
 
     expect(lines[0].split(',').at(-1)).toBe('ISRC');
-    // Metadata row: no commas inside its quoted values here, so a plain split is safe.
+    // The quoted metadata values contain no commas, so a plain split is safe.
     expect(lines[1].split(',')).toHaveLength(width);
-    expect(lines[3].split(',')).toHaveLength(width);
+    for (const line of [lines[3], lines[4]]) {
+      expect(line.split(',')).toHaveLength(width);
+    }
     expect(lines[3].split(',').at(-1)).toBe('USUG12103683');
+    expect(lines[4].split(',').at(-1)).toBe('');
   });
 
-  it('writes ISRC to column Q of the rich XLSX sheet and keeps the URL in column E', async () => {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await generateCombinedExcelFile([exportData]));
-    const sheet = workbook.worksheets.find((ws) => ws.getCell('A11').value === 'Artist');
-
-    expect(sheet).toBeDefined();
-    expect(sheet!.getCell('Q11').value).toBe('ISRC');
-    expect(sheet!.getCell('Q12').value).toBe('USUG12103683');
-    expect(sheet!.getCell('E11').value).toBe('Spotify URL');
+  it('writes ISRC on every JSON track', () => {
+    const payload = JSON.parse(new TextDecoder().decode(generateCombinedJson([exportData])));
+    const tracks = payload.playlists[0].tracks;
+    expect(tracks[0].ISRC).toBe('USUG12103683');
+    expect(tracks[1].ISRC).toBe('');
   });
 
-  it('puts ISRC last in the lite XLSX assembly rows', () => {
-    const result = buildWorksheetAssembly(exportData, new Set());
-    expect(result.headers.at(-1)).toBe('ISRC');
-    expect(result.rows[0].at(-1)).toBe('USUG12103683');
+  it('writes ISRC to column Q of the rich XLSX file', async () => {
+    expectIsrcInColumnQ(await loadSheet(await generateCombinedExcelFile([exportData])));
+  });
+
+  it('writes ISRC to column Q of the lite XLSX file', async () => {
+    const worksheet = buildWorksheetAssembly(exportData, new Set());
+    const bytes = await generateCombinedExcelFileFromAssemblyLite({
+      summary_headers: ['Playlist Name', 'Owner', 'Track Count', 'Duration'],
+      summary_rows: [],
+      csv_chunks: [],
+      next_assemble_index: 1,
+      worksheets: [worksheet],
+    });
+    expectIsrcInColumnQ(await loadSheet(bytes));
   });
 });
