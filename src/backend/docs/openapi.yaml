@@ -1,34 +1,51 @@
 openapi: 3.0.3
 info:
   title: SpotiBye API
-  description: Cloudflare Workers backend for Spotify playlist analysis and export functionality
+  description: >-
+    Cloudflare Workers backend (Hono) for SpotiBye: Spotify OAuth (PKCE),
+    playlist reads, asynchronous playlist analysis with ReccoBeats
+    enrichment, and playlist export to CSV, JSON, or XLSX.
+
+
+    Success responses use a `{ data, meta? }` envelope. Error responses use
+    `{ error: { code, message, ... } }`. Authenticated routes expect an
+    app-issued JWT (from `GET /auth/spotify/callback`) as a Bearer token.
   version: 1.0.0
-  contact:
-    name: SpotiBye Team
-    email: support@spotibye.com
   license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
+    name: GPL-3.0
+    url: https://www.gnu.org/licenses/gpl-3.0.html
 
 servers:
-  - url: https://spotibye-api.workers.dev
-    description: Production server
-  - url: https://spotibye-api-dev.workers.dev
-    description: Development server
+  - url: https://spotibye-backend-production.{subdomain}.workers.dev
+    description: Production Worker (`spotibye-backend-production`)
+    variables:
+      subdomain:
+        default: your-subdomain
+        description: Your Cloudflare account's workers.dev subdomain
+  - url: https://spotibye-backend-development.{subdomain}.workers.dev
+    description: Development Worker (`spotibye-backend-development`)
+    variables:
+      subdomain:
+        default: your-subdomain
+        description: Your Cloudflare account's workers.dev subdomain
   - url: http://localhost:8787
-    description: Local development server
+    description: Local `wrangler dev` server
 
 paths:
   /health:
     get:
       tags:
         - System
-      summary: Health check endpoint
-      description: Returns the current health status of the API
+      summary: Health check and deployment metadata
+      description: >-
+        Returns service health plus the deployment metadata used by
+        `scripts/backend-deploy-status.sh`. Release fields are `"unknown"`
+        when the corresponding Worker vars are unset. No authentication.
       operationId: getHealth
+      security: []
       responses:
         '200':
-          description: API is healthy and ready to serve requests
+          description: API is healthy
           content:
             application/json:
               schema:
@@ -37,17 +54,27 @@ paths:
                 healthy:
                   summary: Healthy response
                   value:
-                    status: healthy
-                    timestamp: "2023-12-12T23:00:00Z"
-                    version: "1.0.0"
+                    data:
+                      status: healthy
+                      service: spotibye-backend
+                      environment: production
+                      release_sha: "5c07151"
+                      release_version: "1.0.0"
+                      deployed_at: "2026-10-25T12:00:00.000Z"
+                      timestamp: "2026-10-25T12:30:00.000Z"
 
   /auth/spotify/login:
     post:
       tags:
         - Authentication
-      summary: Initiate Spotify OAuth flow
-      description: Starts the OAuth authentication process with Spotify
+      summary: Initiate Spotify OAuth (PKCE) flow
+      description: >-
+        Validates `redirect_uri` against the `ALLOWED_REDIRECT_URIS`
+        allowlist (exact match, fail-closed when unset), generates `state`
+        and a PKCE verifier, stores them in KV for 10 minutes, and returns
+        the Spotify authorization URL.
       operationId: spotifyLogin
+      security: []
       requestBody:
         required: true
         content:
@@ -58,8 +85,7 @@ paths:
               standard:
                 summary: Standard login request
                 value:
-                  redirect_uri: "http://localhost:3000/callback"
-                  state: "random-state-string"
+                  redirect_uri: "http://127.0.0.1:8080/callback"
       responses:
         '200':
           description: OAuth URL generated successfully
@@ -72,16 +98,18 @@ paths:
                   summary: Successful login initiation
                   value:
                     data:
-                      auth_url: "https://accounts.spotify.com/authorize?response_type=code&client_id=..."
-                      state: "random-state-string"
+                      auth_url: "https://accounts.spotify.com/authorize?response_type=code&client_id=...&code_challenge_method=S256&code_challenge=..."
+                      state: "generated-state-string"
         '400':
-          description: Invalid request parameters
+          description: >-
+            Missing or empty `redirect_uri` (`MISSING_REDIRECT_URI`), or a
+            `redirect_uri` not in the allowlist (`DISALLOWED_REDIRECT_URI`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Internal server error
+          description: Failed to initiate OAuth flow (`OAUTH_INIT_FAILED`)
           content:
             application/json:
               schema:
@@ -92,27 +120,31 @@ paths:
       tags:
         - Authentication
       summary: Handle Spotify OAuth callback
-      description: Processes the OAuth callback from Spotify and returns JWT tokens
+      description: >-
+        Looks up the stored `state`, exchanges `code` for Spotify tokens
+        using the stored PKCE verifier, creates a server-side session, and
+        returns an app-issued JWT. The `state` entry is single-use.
       operationId: spotifyCallback
+      security: []
       parameters:
         - name: code
           in: query
-          required: true
+          required: false
           schema:
             type: string
-          description: Authorization code from Spotify
+          description: Authorization code from Spotify. Required unless `error` is present.
         - name: state
           in: query
           required: false
           schema:
             type: string
-          description: State parameter for CSRF protection
+          description: State returned by `POST /auth/spotify/login`. Required unless `error` is present.
         - name: error
           in: query
           required: false
           schema:
             type: string
-          description: Error parameter if OAuth failed
+          description: Error parameter Spotify sends when the user denies access or OAuth fails
       responses:
         '200':
           description: Authentication successful
@@ -125,21 +157,117 @@ paths:
                   summary: Successful authentication
                   value:
                     data:
-                      access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                      refresh_token: "refresh-token-string"
-                      expires_in: 3600
+                      token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                       user:
                         id: "user-123"
                         display_name: "Test User"
                         email: "test@example.com"
+                        images: []
+                      expires_in: 2592000
+                      spotify_access_expires_in: 3600
         '400':
-          description: Invalid callback parameters
+          description: >-
+            Spotify returned `error` (`OAUTH_ERROR`), or `code`/`state` is
+            missing, unknown, or expired (`INVALID_CALLBACK`).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: >-
+            Token exchange or profile fetch failed. Code is
+            `OAUTH_TOKEN_EXPIRED`, `OAUTH_BAD_REQUEST` (Spotify 4xx), or
+            `OAUTH_CALLBACK_FAILED`; `details.reason` carries the upstream
+            message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/spotify/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Re-issue the app JWT
+      description: >-
+        Issues a fresh app JWT for the current session. The Spotify access
+        token itself is refreshed transparently by the auth middleware on any
+        authenticated request once it expires.
+      operationId: refreshToken
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: New JWT issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
         '401':
-          description: Authentication failed
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Session not found (`SESSION_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to refresh token (`TOKEN_REFRESH_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Log out
+      description: Deletes the server-side session.
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              examples:
+                success:
+                  value:
+                    data:
+                      message: Logged out successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to logout (`LOGOUT_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user
+      description: Returns the user context decoded from the JWT.
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to get user info (`USER_INFO_FAILED`)
           content:
             application/json:
               schema:
@@ -149,29 +277,15 @@ paths:
     get:
       tags:
         - Spotify Data
-      summary: Get user's playlists
-      description: Retrieves all playlists for the authenticated user
+      summary: Get all of the user's playlists
+      description: >-
+        Fetches every page of the user's playlists from Spotify (50 per
+        page) and returns them as one array. Results are cached per user for
+        5 minutes; `meta.cached` is `true` on a cache hit. Takes no
+        pagination parameters.
       operationId: getUserPlaylists
       security:
         - bearerAuth: []
-      parameters:
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 50
-            minimum: 1
-            maximum: 50
-          description: Maximum number of playlists to return
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 0
-            minimum: 0
-          description: Offset for pagination
       responses:
         '200':
           description: Playlists retrieved successfully
@@ -179,31 +293,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlaylistsResponse'
-              examples:
-                success:
-                  summary: Successful playlists retrieval
-                  value:
-                    data:
-                      playlists:
-                        - id: "playlist-123"
-                          name: "My Favorite Songs"
-                          tracks_count: 100
-                          owner: "Test User"
-                          images:
-                            - url: "https://example.com/image.jpg"
-                              height: 300
-                              width: 300
-                      total: 1
-                      limit: 50
-                      offset: 0
         '401':
-          description: Unauthorized - invalid or missing token
+          description: >-
+            Missing/invalid JWT or session (see `Unauthorized`), or Spotify
+            rejected the access token (`SPOTIFY_TOKEN_EXPIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Spotify rate-limited the request (`SPOTIFY_RATE_LIMITED`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Internal server error
+          description: Failed to fetch playlists (`PLAYLISTS_FETCH_FAILED`)
           content:
             application/json:
               schema:
@@ -214,23 +319,16 @@ paths:
       tags:
         - Spotify Data
       summary: Get playlist details
-      description: Retrieves detailed information about a specific playlist
+      description: >-
+        Returns the Spotify playlist object, cached per user for 10 minutes.
+        Any upstream failure (including a Spotify 404) is reported as 500
+        `PLAYLIST_FETCH_FAILED`.
       operationId: getPlaylist
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Spotify playlist ID
-        - name: force_refresh
-          in: query
-          required: false
-          schema:
-            type: boolean
-          description: When true, skip backend KV cache and refetch from Spotify
+        - $ref: '#/components/parameters/PlaylistId'
+        - $ref: '#/components/parameters/ForceRefresh'
       responses:
         '200':
           description: Playlist details retrieved successfully
@@ -238,33 +336,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlaylistResponse'
-              examples:
-                success:
-                  summary: Successful playlist retrieval
-                  value:
-                    data:
-                      playlist:
-                        id: "playlist-123"
-                        snapshot_id: "abc123snapshot"
-                        name: "My Favorite Songs"
-                        description: "My favorite tracks"
-                        tracks_count: 100
-                        owner: "Test User"
-                        followers: 42
-                        public: true
-                        collaborative: false
-                        images:
-                          - url: "https://example.com/image.jpg"
-                            height: 300
-                            width: 300
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Playlist not found
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to fetch playlist (`PLAYLIST_FETCH_FAILED`)
           content:
             application/json:
               schema:
@@ -275,8 +352,77 @@ paths:
       tags:
         - Spotify Data
       summary: Get playlist items
-      description: Retrieves playlist items from a specific playlist (Spotify February 2026 naming)
+      description: >-
+        Returns one page of playlist items (Spotify February 2026 `/items`
+        naming). Each entry's track is normalized into `track`, and entries
+        without a track ID are dropped. Cached per user and page for 5
+        minutes.
       operationId: getPlaylistItems
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlaylistId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/ForceRefresh'
+      responses:
+        '200':
+          description: Playlist items retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistItemsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to fetch playlist items (`PLAYLIST_TRACKS_FETCH_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spotify/playlists/{id}/tracks:
+    get:
+      tags:
+        - Spotify Data
+      summary: Get playlist items (legacy alias)
+      description: Backward-compatible alias of `GET /spotify/playlists/{id}/items`, with identical behavior.
+      operationId: getPlaylistTracks
+      deprecated: true
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlaylistId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/ForceRefresh'
+      responses:
+        '200':
+          description: Playlist items retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistItemsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to fetch playlist items (`PLAYLIST_TRACKS_FETCH_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /spotify/tracks/{id}:
+    get:
+      tags:
+        - Spotify Data
+      summary: Get track details
+      description: Returns the Spotify track object, cached for 1 hour.
+      operationId: getTrack
       security:
         - bearerAuth: []
       parameters:
@@ -285,68 +431,20 @@ paths:
           required: true
           schema:
             type: string
-          description: Spotify playlist ID
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 50
-            minimum: 1
-            maximum: 100
-          description: Maximum number of playlist items to return
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 0
-            minimum: 0
-          description: Offset for pagination
-        - name: force_refresh
-          in: query
-          required: false
-          schema:
-            type: boolean
-          description: When true, skip backend KV cache and refetch from Spotify
+          description: Spotify track ID
       responses:
         '200':
-          description: Playlist items retrieved successfully
+          description: Track retrieved successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlaylistItemsResponse'
-              examples:
-                success:
-                  summary: Successful playlist items retrieval
-                  value:
-                    data:
-                      items:
-                        - added_at: "2026-03-01T10:00:00Z"
-                          track:
-                            id: "track-123"
-                            name: "Example Song"
-                            artists:
-                              - name: "Example Artist"
-                                id: "artist-123"
-                            album:
-                              name: "Example Album"
-                              id: "album-123"
-                            duration_ms: 180000
-                            track_number: 1
-                            explicit: false
-                            preview_url: "https://example.com/preview.mp3"
-                            external_urls:
-                              spotify: "https://open.spotify.com/track/track-123"
-                      total: 100
+                $ref: '#/components/schemas/TrackResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Playlist not found
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to fetch track (`TRACK_FETCH_FAILED`)
           content:
             application/json:
               schema:
@@ -358,24 +456,41 @@ paths:
         - Analysis
       summary: Start (or resume) playlist analysis
       description: >-
-        Starts an asynchronous ReccoBeats + Spotify playlist analysis job and
-        returns its status record. The request body is currently ignored —
-        analysis always runs with default settings. If a job for this
-        playlist is already queued, actively processing, or completed with
-        results matching the current schema_version, that existing status is
-        returned instead of enqueuing a duplicate job. A completed status
-        whose results are missing or predate the current schema_version is
-        treated as stale: it is purged and a fresh job is enqueued.
+        Starts an asynchronous ReccoBeats + Spotify playlist analysis job
+        (via Cloudflare Queues) and returns its status record. By default,
+        if a job for this playlist is already queued, actively processing
+        (started under 5 minutes ago), or completed with results matching
+        the current schema_version, that existing status is returned instead
+        of enqueuing a duplicate job. A completed status whose results are
+        missing or predate the current schema_version is treated as stale:
+        it is purged and a fresh job is enqueued.
+
+
+        `force_enrichment` and `refresh` may be sent in the JSON body or as
+        query parameters (`true` or `1`); either source enables the option.
+        Both bypass the short-circuit above. `force_enrichment` also clears
+        the user's status/results and the per-track ReccoBeats cache for the
+        playlist's tracks. `refresh` keeps the per-track cache and current
+        results, so only untried track IDs hit the network.
       operationId: analyzePlaylist
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
+        - $ref: '#/components/parameters/PlaylistId'
+        - name: force_enrichment
+          in: query
+          required: false
           schema:
             type: string
-          description: Spotify playlist ID
+            enum: ['true', '1', 'false', '0']
+          description: Query-string alternative to the body `force_enrichment` flag
+        - name: refresh
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['true', '1', 'false', '0']
+          description: Query-string alternative to the body `refresh` flag
       requestBody:
         required: false
         content:
@@ -402,20 +517,46 @@ paths:
                       progress: 0
                     meta:
                       timestamp: "2026-07-07T12:00:00.000Z"
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Playlist not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/Unauthorized'
         '500':
-          description: Failed to start analysis
+          description: Failed to start analysis (`ANALYSIS_START_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Analysis
+      summary: Delete analysis
+      description: >-
+        Deletes the user's analysis status and results for this playlist.
+        Global per-track ReccoBeats cache entries are not cleared.
+      operationId: deleteAnalysis
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlaylistId'
+      responses:
+        '200':
+          description: Analysis deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              examples:
+                success:
+                  value:
+                    data:
+                      message: Analysis deleted successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to delete analysis (`ANALYSIS_DELETE_FAILED`)
           content:
             application/json:
               schema:
@@ -431,12 +572,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Spotify playlist ID
+        - $ref: '#/components/parameters/PlaylistId'
       responses:
         '200':
           description: Current job status
@@ -456,20 +592,18 @@ paths:
                       progress: 65
                     meta:
                       timestamp: "2026-07-07T12:00:05.000Z"
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: No analysis found for this playlist (ANALYSIS_NOT_FOUND)
+          description: No analysis found for this playlist (`ANALYSIS_NOT_FOUND`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Failed to get analysis status
+          description: Failed to get analysis status (`ANALYSIS_STATUS_FAILED`)
           content:
             application/json:
               schema:
@@ -571,20 +705,18 @@ paths:
                       enrichment_resolved_track_count: 98
                     meta:
                       timestamp: "2026-07-07T12:00:11.000Z"
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: No results found, or cached results are stale (ANALYSIS_RESULTS_NOT_FOUND)
+          description: No results found, or cached results are stale (`ANALYSIS_RESULTS_NOT_FOUND`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Failed to get analysis results
+          description: Failed to get analysis results (`ANALYSIS_RESULTS_FAILED`)
           content:
             application/json:
               schema:
@@ -594,74 +726,138 @@ paths:
     post:
       tags:
         - Export
-      summary: Generate playlist export
-      description: Creates an export file for the specified playlist
+      summary: Export a single playlist
+      description: >-
+        Generates the export synchronously and returns the completed status
+        record. The file bytes are pre-built and cached for 1 hour; fetch
+        them from `GET /export/playlist/{id}/download`. If a completed
+        export with the same format and enrichment option is already cached,
+        that record is returned without regenerating.
       operationId: exportPlaylist
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Spotify playlist ID
+        - $ref: '#/components/parameters/PlaylistId'
+        - $ref: '#/components/parameters/TraceId'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ExportRequest'
             examples:
               csv:
-                summary: CSV export request
+                summary: CSV export with ReccoBeats enrichment columns
                 value:
                   format: "csv"
                   include_audio_features: true
-                  include_analysis: false
-              json:
-                summary: JSON export request
-                value:
-                  format: "json"
-                  include_audio_features: true
-                  include_analysis: true
       responses:
         '200':
-          description: Export generated successfully
+          description: Export generated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExportResponse'
+                $ref: '#/components/schemas/SingleExportStatusResponse'
               examples:
                 success:
-                  summary: Successful export generation
+                  summary: Completed export
                   value:
                     data:
-                      export_id: "export-123"
-                      format: "csv"
-                      estimated_size: 1024000
-                      expires_at: "2023-12-13T23:00:00Z"
-                      download_url: "/export/playlist/playlist-123/download?export_id=export-123"
+                      job_id: "job-123"
+                      playlist_id: "playlist-123"
+                      user_id: "user-123"
+                      status: completed
+                      started_at: "2026-07-07T12:00:00.000Z"
+                      completed_at: "2026-07-07T12:00:04.000Z"
+                      progress: 100
+                      file_url: "/export/playlist/playlist-123/download"
+                      file_format: csv
+                      include_audio_features: true
+                      file_size: 1024000
+                      track_count: 100
+                    meta:
+                      timestamp: "2026-07-07T12:00:04.000Z"
+                      request_id: "req-123"
         '400':
-          description: Invalid export parameters
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/ValidationError'
         '401':
-          description: Unauthorized
+          $ref: '#/components/responses/ExportUpstreamUnauthorized'
+        '429':
+          $ref: '#/components/responses/ExportRateLimited'
+        '500':
+          description: Export failed (`EXPORT_FAILED` or `EXPORT_START_FAILED`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ExportCpuLimited'
+    delete:
+      tags:
+        - Export
+      summary: Delete cached single-playlist export
+      description: >-
+        Clears the cached single-export artifacts (status, data, and file
+        bytes for every format variant). Resumable job and batch keys are
+        not cleared.
+      operationId: deletePlaylistExport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlaylistId'
+      responses:
+        '200':
+          description: Export deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              examples:
+                success:
+                  value:
+                    data:
+                      message: Export deleted successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to delete export (`EXPORT_DELETE_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /export/playlist/{id}/status:
+    get:
+      tags:
+        - Export
+      summary: Get single-playlist export status
+      description: Returns the status record of the most recent single export for this playlist.
+      operationId: getPlaylistExportStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PlaylistId'
+      responses:
+        '200':
+          description: Export status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleExportStatusResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Playlist not found
+          description: Export not found (`EXPORT_NOT_FOUND`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Export generation failed
+          description: Failed to get export status (`EXPORT_STATUS_FAILED`)
           content:
             application/json:
               schema:
@@ -671,62 +867,397 @@ paths:
     get:
       tags:
         - Export
-      summary: Download export file
-      description: Downloads a previously generated export file
-      operationId: downloadExport
+      summary: Download single-playlist export file
+      description: >-
+        Returns the file for the most recent single export of this playlist,
+        in the format it was generated with. Serves the pre-built bytes when
+        cached, otherwise regenerates them from cached export data.
+      operationId: downloadPlaylistExport
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Spotify playlist ID
-        - name: export_id
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Export file ID
+        - $ref: '#/components/parameters/PlaylistId'
       responses:
         '200':
-          description: Export file downloaded successfully
+          $ref: '#/components/responses/ExportFile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/ExportUpstreamUnauthorized'
+        '404':
+          description: Export data not found or expired (`EXPORT_DATA_NOT_FOUND`)
           content:
-            application/octet-stream:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/ExportRateLimited'
+        '503':
+          description: Download failed (`EXPORT_DOWNLOAD_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /export/playlists:
+    post:
+      tags:
+        - Export
+      summary: Export multiple playlists into one file
+      description: >-
+        Generates a combined export for all `playlist_ids` in a single
+        request and returns the completed status record. CSV and JSON bytes
+        are pre-built; XLSX is rendered on download. For large selections
+        prefer `POST /export/playlists/chunk` or `POST /export/jobs`.
+      operationId: exportPlaylistsBatch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchExportRequest'
+      responses:
+        '200':
+          description: Combined export generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchExportStatusResponse'
+        '400':
+          $ref: '#/components/responses/InvalidPlaylists'
+        '401':
+          $ref: '#/components/responses/ExportUpstreamUnauthorized'
+        '429':
+          $ref: '#/components/responses/ExportRateLimited'
+        '500':
+          description: Combined export failed (`EXPORT_BATCH_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ExportCpuLimited'
+
+  /export/playlists/chunk:
+    post:
+      tags:
+        - Export
+      summary: Process one chunk of a combined export
+      description: >-
+        Processes up to `chunk_size` playlists (1-3) starting at `cursor`
+        and persists progress under `job_id`. Repeat the call with the
+        returned `job_id` and `next_cursor` while `continuation_required` is
+        true. Once complete, download from
+        `GET /export/playlists/{jobId}/download`.
+      operationId: exportPlaylistsChunk
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchExportChunkRequest'
+      responses:
+        '200':
+          description: Chunk processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchExportStatusResponse'
+        '400':
+          $ref: '#/components/responses/InvalidPlaylists'
+        '401':
+          $ref: '#/components/responses/ExportUpstreamUnauthorized'
+        '429':
+          $ref: '#/components/responses/ExportRateLimited'
+        '500':
+          description: Chunk failed (`EXPORT_BATCH_CHUNK_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ExportCpuLimited'
+
+  /export/playlists/{jobId}/status:
+    get:
+      tags:
+        - Export
+      summary: Get combined export status
+      operationId: getBatchExportStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Combined export status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchExportStatusResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Combined export not found (`EXPORT_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to get status (`EXPORT_STATUS_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /export/playlists/{jobId}/download:
+    get:
+      tags:
+        - Export
+      summary: Download combined export file
+      operationId: downloadBatchExport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/TraceId'
+      responses:
+        '200':
+          $ref: '#/components/responses/ExportFile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/ExportUpstreamUnauthorized'
+        '404':
+          description: Combined export data not found (`EXPORT_DATA_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/ExportRateLimited'
+        '503':
+          description: Download failed (`EXPORT_DOWNLOAD_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /export/jobs:
+    post:
+      tags:
+        - Export
+      summary: Create a resumable export job
+      description: >-
+        Creates a resumable export job in the `collect` phase and returns
+        its state. Drive it with `POST /export/jobs/{jobId}/step` until
+        `status` is `completed`, then download.
+      operationId: createExportJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchExportRequest'
+      responses:
+        '200':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '400':
+          $ref: '#/components/responses/InvalidPlaylists'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Failed to create job (`EXPORT_JOB_CREATE_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /export/jobs/{jobId}/step:
+    post:
+      tags:
+        - Export
+      summary: Advance a resumable export job by one step
+      description: >-
+        Runs one collect or assemble step. `cursor` and `resume_token` must
+        match the job's `current_cursor` and `current_resume_token`;
+        otherwise the call fails with 409 `EXPORT_JOB_CONFLICT` and
+        `details.latest_cursor` / `details.latest_resume_token`. When the
+        job completes, file bytes are pre-built.
+      operationId: stepExportJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportJobStepRequest'
+      responses:
+        '200':
+          description: Updated job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/ExportUpstreamUnauthorized'
+        '404':
+          description: Export job not found (`EXPORT_JOB_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Stale cursor or resume token (`EXPORT_JOB_CONFLICT`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/ExportRateLimited'
+        '500':
+          description: Step failed (`EXPORT_JOB_STEP_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ExportCpuLimited'
+
+  /export/jobs/{jobId}/status:
+    get:
+      tags:
+        - Export
+      summary: Get resumable export job status
+      description: >-
+        Returns the job state plus `available_render_modes`, which reports
+        which pre-built file variants exist.
+      operationId: getExportJobStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobStatusResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Export job not found (`EXPORT_JOB_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to get job status (`EXPORT_JOB_STATUS_FAILED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /export/jobs/{jobId}/download:
+    get:
+      tags:
+        - Export
+      summary: Download resumable export file
+      description: >-
+        Returns the completed job's file. For XLSX, `mode` selects the rich
+        or lite rendering; `auto` uses the job's `render_mode_hint`. If a
+        rich render fails on regeneration, the lite render is returned with
+        an `X-SpotiBye-Render-Warning` header.
+      operationId: downloadExportJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/TraceId'
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [auto, rich, lite]
+            default: auto
+          description: XLSX render mode. Ignored for CSV and JSON.
+      responses:
+        '200':
+          description: Export file
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: 'attachment; filename="playlists_export_<timestamp>.<ext>"'
+            X-SpotiBye-Render-Mode:
+              schema:
+                type: string
+              description: Render mode actually served (`rich`, `lite`, `auto`, or `csv`). Not set on every fallback path.
+            X-SpotiBye-Render-Warning:
+              schema:
+                type: string
+              description: Present when XLSX rendering degraded to lite
+          content:
+            text/csv:
               schema:
                 type: string
                 format: binary
-              examples:
-                csv:
-                  summary: CSV file download
-                  value:
-                    schema:
-                      type: string
-                      format: binary
-                    headers:
-                      Content-Disposition: "attachment; filename=\"playlist-export.csv\""
-                      Content-Type: "text/csv"
+            application/json:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
         '400':
-          description: Invalid export ID
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/ValidationError'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/ExportUpstreamUnauthorized'
         '404':
-          description: Export file not found or expired
+          description: Export job data not found (`EXPORT_DATA_NOT_FOUND`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '410':
-          description: Export file has expired
+        '409':
+          description: Job not completed yet (`EXPORT_NOT_READY`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/ExportRateLimited'
+        '503':
+          description: Download failed (`EXPORT_JOB_DOWNLOAD_FAILED`)
           content:
             application/json:
               schema:
@@ -738,27 +1269,181 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT token obtained from Spotify OAuth callback
+      description: >-
+        App-issued JWT returned as `data.token` by
+        `GET /auth/spotify/callback` (or `data.access_token` by
+        `POST /auth/spotify/refresh`). It references a server-side session
+        that holds the Spotify tokens.
+
+  parameters:
+    PlaylistId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Spotify playlist ID
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Export job ID returned by the create/chunk call
+    ForceRefresh:
+      name: force_refresh
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: ['true', '1', 'false', '0']
+      description: '`true` or `1` skips the backend KV cache and refetches from Spotify'
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 50
+      description: Maximum number of items to return
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+      description: Offset for pagination
+    TraceId:
+      name: X-SpotiBye-Trace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional client trace ID, echoed into logs and error details
+
+  responses:
+    Unauthorized:
+      description: >-
+        Missing or invalid Bearer token, or expired/invalid session
+        (`UNAUTHORIZED`), or the Spotify refresh token was revoked
+        (`AUTH_REQUIRED`). Produced by the auth middleware via the global
+        error handler, so it includes `timestamp`, `request_id`, and
+        `details.path`/`details.method`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              value:
+                error:
+                  code: UNAUTHORIZED
+                  message: Missing or invalid authorization header
+                  timestamp: "2026-07-07T12:00:00.000Z"
+                  request_id: "6f1c2c1e-0000-4000-8000-000000000000"
+                  details:
+                    path: /spotify/playlists
+                    method: GET
+    ValidationError:
+      description: Request parameter validation failed (`VALIDATION_ERROR`)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidPlaylists:
+      description: '`playlist_ids` is missing, empty, or contains empty strings (`INVALID_PLAYLISTS`)'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ExportUpstreamUnauthorized:
+      description: >-
+        Missing/invalid JWT or session (see `Unauthorized`), or Spotify
+        returned HTTP 401 during export work.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ExportRateLimited:
+      description: Spotify returned HTTP 429 during export work
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ExportCpuLimited:
+      description: The Worker exceeded its CPU time limit (`details.cpu_limited` is true)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ExportFile:
+      description: Export file. Content type matches the export's format.
+      headers:
+        Content-Disposition:
+          schema:
+            type: string
+          description: 'attachment; filename="<name>_export_<timestamp>.<ext>"'
+      content:
+        text/csv:
+          schema:
+            type: string
+            format: binary
+        application/json:
+          schema:
+            type: string
+            format: binary
+        application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+          schema:
+            type: string
+            format: binary
 
   schemas:
     HealthResponse:
       type: object
       properties:
-        status:
-          type: string
-          enum: [healthy, unhealthy]
-          description: Health status of the API
-        timestamp:
-          type: string
-          format: date-time
-          description: Current timestamp
-        version:
-          type: string
-          description: API version
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy]
+            service:
+              type: string
+              example: spotibye-backend
+            environment:
+              type: string
+              enum: [development, production]
+              description: Value of the `ENVIRONMENT` Worker var
+            release_sha:
+              type: string
+              description: Deployed commit SHA, or `unknown`
+            release_version:
+              type: string
+              description: Deployed release version, or `unknown`
+            deployed_at:
+              type: string
+              description: Deployment timestamp, or `unknown`
+            timestamp:
+              type: string
+              format: date-time
+          required:
+            - status
+            - service
+            - environment
+            - release_sha
+            - release_version
+            - deployed_at
+            - timestamp
       required:
-        - status
-        - timestamp
-        - version
+        - data
 
     ErrorResponse:
       type: object
@@ -768,26 +1453,65 @@ components:
           properties:
             code:
               type: string
-              description: Error code
+              description: Machine-readable error code
             message:
               type: string
               description: Human-readable error message
+            timestamp:
+              type: string
+              format: date-time
+              description: Set by the global error handler and the 404 handler
+            request_id:
+              type: string
+              description: Set by the global error handler, the 404 handler, and export routes
             details:
               type: object
-              description: Additional error details
+              additionalProperties: true
+              description: >-
+                Additional context. The global handler sets `path`/`method`;
+                export routes set `upstream`, `upstream_status`,
+                `cpu_limited`, and route-specific fields.
+          required:
+            - code
+            - message
       required:
         - error
+
+    MessageResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+          required:
+            - message
+      required:
+        - data
+
+    ResponseMeta:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        cached:
+          type: boolean
+          description: Present on Spotify data routes; `true` when served from the backend cache
+        request_id:
+          type: string
+          description: Present on export mutation routes
+      required:
+        - timestamp
 
     SpotifyLoginRequest:
       type: object
       properties:
         redirect_uri:
           type: string
-          format: uri
-          description: URL to redirect to after OAuth completion
-        state:
-          type: string
-          description: State parameter for CSRF protection
+          minLength: 1
+          description: Must exactly match an entry in `ALLOWED_REDIRECT_URIS`
       required:
         - redirect_uri
 
@@ -800,10 +1524,13 @@ components:
             auth_url:
               type: string
               format: uri
-              description: Spotify authorization URL
+              description: Spotify authorization URL (includes PKCE `code_challenge`)
             state:
               type: string
-              description: State parameter
+              description: Server-generated state, valid for 10 minutes
+          required:
+            - auth_url
+            - state
       required:
         - data
 
@@ -813,100 +1540,93 @@ components:
         data:
           type: object
           properties:
-            access_token:
+            token:
               type: string
-              description: JWT access token
-            refresh_token:
-              type: string
-              description: JWT refresh token
+              description: App JWT to send as the Bearer token
+            user:
+              $ref: '#/components/schemas/SpotifyUser'
             expires_in:
               type: integer
-              description: Token expiration time in seconds
-            user:
-              type: object
-              properties:
-                id:
-                  type: string
-                  description: Spotify user ID
-                display_name:
-                  type: string
-                  description: User's display name
-                email:
-                  type: string
-                  format: email
-                  description: User's email
-              required:
-                - id
-                - display_name
+              description: App session/JWT lifetime in seconds (30 days)
+            spotify_access_expires_in:
+              type: integer
+              description: Spotify access-token lifetime in seconds
+          required:
+            - token
+            - user
+            - expires_in
+            - spotify_access_expires_in
       required:
         - data
 
-    PlaylistsResponse:
+    TokenRefreshResponse:
       type: object
       properties:
         data:
           type: object
           properties:
-            playlists:
-              type: array
-              items:
-                $ref: '#/components/schemas/Playlist'
-            total:
+            access_token:
+              type: string
+              description: New app JWT
+            expires_in:
               type: integer
-              description: Total number of playlists
-            limit:
+              description: App session/JWT lifetime in seconds (30 days)
+            token_type:
+              type: string
+              enum: [Bearer]
+            spotify_access_expires_in:
               type: integer
-              description: Number of playlists returned
-            offset:
-              type: integer
-              description: Offset for pagination
+              description: Seconds until the stored Spotify access token expires (0 if already expired)
           required:
-            - playlists
-            - total
-            - limit
-            - offset
+            - access_token
+            - expires_in
+            - token_type
+            - spotify_access_expires_in
       required:
         - data
 
-    Playlist:
+    CurrentUserResponse:
       type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              description: Spotify user ID
+            email:
+              type: string
+            name:
+              type: string
+              description: Spotify display name
+            session_id:
+              type: string
+          required:
+            - id
+            - name
+            - session_id
+      required:
+        - data
+
+    SpotifyUser:
+      type: object
+      description: Spotify user object, passed through from Spotify
+      additionalProperties: true
       properties:
         id:
           type: string
-          description: Spotify playlist ID
-        snapshot_id:
+        display_name:
           type: string
-          description: Spotify playlist revision id; changes when track membership changes
-        name:
+        email:
           type: string
-          description: Playlist name
-        description:
+        country:
           type: string
-          description: Playlist description
-        tracks_count:
-          type: integer
-          description: Number of tracks in playlist
-        owner:
-          type: string
-          description: Playlist owner name
-        followers:
-          type: integer
-          description: Number of followers
-        public:
-          type: boolean
-          description: Whether playlist is public
-        collaborative:
-          type: boolean
-          description: Whether playlist is collaborative
         images:
           type: array
           items:
             $ref: '#/components/schemas/Image'
       required:
         - id
-        - name
-        - tracks_count
-        - owner
 
     Image:
       type: object
@@ -914,24 +1634,95 @@ components:
         url:
           type: string
           format: uri
-          description: Image URL
         height:
           type: integer
-          description: Image height in pixels
+          nullable: true
         width:
           type: integer
-          description: Image width in pixels
+          nullable: true
       required:
         - url
+
+    Playlist:
+      type: object
+      description: >-
+        Spotify playlist object, passed through from Spotify. Track counts
+        live in `tracks.total` or, under Spotify's February 2026 naming,
+        `items.total`.
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        snapshot_id:
+          type: string
+          description: Spotify playlist revision id; changes when track membership changes
+        public:
+          type: boolean
+        collaborative:
+          type: boolean
+        owner:
+          $ref: '#/components/schemas/SpotifyUser'
+        tracks:
+          type: object
+          additionalProperties: true
+          properties:
+            href:
+              type: string
+            total:
+              type: integer
+        items:
+          type: object
+          additionalProperties: true
+          properties:
+            href:
+              type: string
+            total:
+              type: integer
+        followers:
+          type: object
+          properties:
+            total:
+              type: integer
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/Image'
+        external_urls:
+          type: object
+          properties:
+            spotify:
+              type: string
+              format: uri
+        uri:
+          type: string
+      required:
+        - id
+        - name
+
+    PlaylistsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Playlist'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+        - data
 
     PlaylistResponse:
       type: object
       properties:
         data:
-          type: object
-          properties:
-            playlist:
-              $ref: '#/components/schemas/Playlist'
+          $ref: '#/components/schemas/Playlist'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
       required:
         - data
 
@@ -941,26 +1732,40 @@ components:
         data:
           type: object
           properties:
+            href:
+              type: string
+            total:
+              type: integer
+              description: Total items in the playlist, as reported by Spotify
+            rawCount:
+              type: integer
+              description: Entries Spotify returned on this page, before dropping entries without a track ID
             items:
               type: array
               items:
                 $ref: '#/components/schemas/PlaylistItem'
-            total:
-              type: integer
-              description: Total number of playlist items
           required:
-            - items
             - total
+            - rawCount
+            - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
       required:
         - data
 
     PlaylistItem:
       type: object
+      description: Spotify playlist item, with the track normalized into `track` (Spotify's `item` field is kept as sent).
+      additionalProperties: true
       properties:
         added_at:
           type: string
           format: date-time
-          description: Timestamp the item was added to the playlist
+        added_by:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/SpotifyUser'
+          nullable: true
         track:
           $ref: '#/components/schemas/Track'
       required:
@@ -968,13 +1773,13 @@ components:
 
     Track:
       type: object
+      description: Spotify track object, passed through from Spotify
+      additionalProperties: true
       properties:
         id:
           type: string
-          description: Spotify track ID
         name:
           type: string
-          description: Track name
         artists:
           type: array
           items:
@@ -983,76 +1788,67 @@ components:
           $ref: '#/components/schemas/Album'
         duration_ms:
           type: integer
-          description: Track duration in milliseconds
-        track_number:
-          type: integer
-          description: Track number on album
         explicit:
           type: boolean
-          description: Whether track is explicit
+        popularity:
+          type: integer
         preview_url:
           type: string
           format: uri
-          description: Preview URL for track
+          nullable: true
         external_urls:
           type: object
           properties:
             spotify:
               type: string
               format: uri
-              description: Spotify URL for track
+        uri:
+          type: string
       required:
         - id
         - name
         - artists
         - album
-        - duration_ms
+
+    TrackResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Track'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+        - data
 
     Artist:
       type: object
+      additionalProperties: true
       properties:
         id:
           type: string
-          description: Spotify artist ID
         name:
           type: string
-          description: Artist name
       required:
         - id
         - name
 
     Album:
       type: object
+      additionalProperties: true
       properties:
         id:
           type: string
-          description: Spotify album ID
         name:
           type: string
-          description: Album name
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/Image'
+        release_date:
+          type: string
       required:
         - id
         - name
-
-    ApiEnvelope:
-      type: object
-      description: >-
-        Shared success-response shape used across the API: `data` holds the
-        endpoint-specific payload and `meta.timestamp` is always an ISO-8601
-        string. Endpoint-specific response schemas (e.g.
-        AnalysisStartResponse, AnalysisResultsResponse) follow this same
-        envelope with a concrete `data` schema instead of `type: object`.
-      properties:
-        data:
-          type: object
-        meta:
-          type: object
-          properties:
-            timestamp:
-              type: string
-              format: date-time
-      required:
-        - data
 
     AnalysisRequest:
       type: object
@@ -1063,7 +1859,7 @@ components:
         playlist track IDs before refetch. When `refresh` is true, also
         bypasses the short-circuit and enqueues a new job, but preserves
         per-track cache and current results so only untried track IDs hit
-        the network.
+        the network. A body that fails to parse is treated as empty.
       properties:
         force_enrichment:
           type: boolean
@@ -1075,7 +1871,6 @@ components:
           default: false
           description: >-
             Enqueue a refresh job reusing warm per-track cache entries.
-      additionalProperties: false
 
     AnalysisStatusRecord:
       type: object
@@ -1366,63 +2161,343 @@ components:
         - artist
         - count
 
+    ExportFormat:
+      type: string
+      enum: [csv, json, xlsx]
+      description: Export format. Missing or unrecognized values fall back to `xlsx`.
+
     ExportRequest:
       type: object
       properties:
         format:
-          type: string
-          enum: [csv, json, xlsx]
-          description: Export format
+          $ref: '#/components/schemas/ExportFormat'
         include_audio_features:
           type: boolean
-          default: true
-          description: Whether to include audio features
-        include_analysis:
-          type: boolean
           default: false
-          description: Whether to include analysis data
-      required:
-        - format
+          description: >-
+            Include ReccoBeats per-track enrichment columns. Only the literal
+            `true` enables it.
 
-    ExportResponse:
+    SingleExportStatus:
+      type: object
+      properties:
+        job_id:
+          type: string
+        playlist_id:
+          type: string
+        user_id:
+          type: string
+        status:
+          type: string
+          enum: [processing, completed, failed]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        progress:
+          type: integer
+        file_url:
+          type: string
+          description: Relative download path
+        file_format:
+          $ref: '#/components/schemas/ExportFormat'
+        include_audio_features:
+          type: boolean
+        file_size:
+          type: integer
+          description: Approximate size of the export data in bytes (JSON length)
+        track_count:
+          type: integer
+        error:
+          type: string
+          description: Present when `status` is `failed`
+      required:
+        - job_id
+        - playlist_id
+        - user_id
+        - status
+        - started_at
+        - progress
+
+    SingleExportStatusResponse:
       type: object
       properties:
         data:
-          type: object
+          $ref: '#/components/schemas/SingleExportStatus'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+        - data
+
+    BatchExportRequest:
+      type: object
+      properties:
+        playlist_ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            minLength: 1
+        format:
+          $ref: '#/components/schemas/ExportFormat'
+        include_audio_features:
+          type: boolean
+          default: false
+          description: Include ReccoBeats per-track enrichment columns (literal `true` only)
+      required:
+        - playlist_ids
+
+    BatchExportChunkRequest:
+      allOf:
+        - $ref: '#/components/schemas/BatchExportRequest'
+        - type: object
           properties:
-            export_id:
+            job_id:
               type: string
-              description: Unique export file ID
-            format:
-              type: string
-              description: Export format
-            estimated_size:
+              description: Job ID from a previous chunk call. Omit on the first call.
+            cursor:
               type: integer
-              description: Estimated file size in bytes
-            expires_at:
-              type: string
-              format: date-time
-              description: When export file expires
-            download_url:
-              type: string
-              description: URL to download the export
-          required:
-            - export_id
-            - format
-            - estimated_size
-            - expires_at
-            - download_url
+              minimum: 0
+              default: 0
+              description: Index of the next playlist to process
+            chunk_size:
+              type: integer
+              minimum: 1
+              maximum: 3
+              default: 1
+              description: Playlists to process in this call (clamped to 1-3)
+
+    BatchExportStatus:
+      type: object
+      properties:
+        job_id:
+          type: string
+        user_id:
+          type: string
+        status:
+          type: string
+          enum: [processing, completed, failed]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        progress:
+          type: integer
+        file_url:
+          type: string
+          description: Relative download path, set once completed
+        file_format:
+          $ref: '#/components/schemas/ExportFormat'
+        file_size:
+          type: integer
+        playlist_count:
+          type: integer
+        processed_count:
+          type: integer
+          description: Chunked exports only
+        track_count:
+          type: integer
+        playlist_ids:
+          type: array
+          items:
+            type: string
+        next_cursor:
+          type: integer
+          description: Chunked exports only
+        continuation_required:
+          type: boolean
+          description: Chunked exports only; true while more chunks remain
+        error:
+          type: string
+      required:
+        - job_id
+        - user_id
+        - status
+        - started_at
+        - progress
+        - file_format
+        - playlist_count
+        - track_count
+        - playlist_ids
+
+    BatchExportStatusResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/BatchExportStatus'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+        - data
+
+    ExportJobStepRequest:
+      type: object
+      properties:
+        cursor:
+          type: string
+          description: The job's current `current_cursor`
+        resume_token:
+          type: string
+          description: The job's current `current_resume_token`
+        max_playlists_per_step:
+          type: integer
+          minimum: 1
+          maximum: 3
+          default: 1
+          description: Playlists to process per step (clamped to 1-3)
+        chunk_size:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Alias used when `max_playlists_per_step` is absent
+
+    ExportJobState:
+      type: object
+      additionalProperties: true
+      properties:
+        job_id:
+          type: string
+        user_id:
+          type: string
+        status:
+          type: string
+          enum: [running, assembling, completed, failed]
+        phase:
+          type: string
+          enum: [collect, assemble]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        playlist_ids:
+          type: array
+          items:
+            type: string
+        playlist_count:
+          type: integer
+        processed_count:
+          type: integer
+        track_count:
+          type: integer
+        file_format:
+          $ref: '#/components/schemas/ExportFormat'
+        include_audio_features:
+          type: boolean
+        current_cursor:
+          type: string
+        current_resume_token:
+          type: string
+        next_playlist_index:
+          type: integer
+        current_track_offset:
+          type: integer
+        assemble_index:
+          type: integer
+        track_page_size:
+          type: integer
+        playlist_progress:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              next_offset:
+                type: integer
+              total_tracks:
+                type: integer
+              collected_tracks:
+                type: integer
+              done:
+                type: boolean
+        continuation_required:
+          type: boolean
+        progress:
+          type: integer
+        file_url:
+          type: string
+        file_size:
+          type: integer
+        last_error:
+          type: string
+        trace_id:
+          type: string
+        render_mode_hint:
+          type: string
+          enum: [rich, lite]
+        render_warning:
+          type: string
+      required:
+        - job_id
+        - user_id
+        - status
+        - phase
+        - created_at
+        - updated_at
+        - playlist_ids
+        - playlist_count
+        - processed_count
+        - track_count
+        - file_format
+        - include_audio_features
+        - current_cursor
+        - current_resume_token
+        - continuation_required
+        - progress
+
+    ExportJobResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ExportJobState'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+        - data
+
+    ExportJobStatusResponse:
+      type: object
+      properties:
+        data:
+          allOf:
+            - $ref: '#/components/schemas/ExportJobState'
+            - type: object
+              properties:
+                available_render_modes:
+                  type: object
+                  properties:
+                    default:
+                      type: boolean
+                    lite:
+                      type: boolean
+                    rich:
+                      type: boolean
+                  required:
+                    - default
+                    - lite
+                    - rich
+              required:
+                - available_render_modes
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
       required:
         - data
 
 tags:
   - name: System
-    description: System health and status endpoints
+    description: System health and deployment metadata
   - name: Authentication
-    description: Spotify OAuth authentication endpoints
+    description: Spotify OAuth (PKCE) and session endpoints
   - name: Spotify Data
     description: Endpoints for retrieving Spotify data
   - name: Analysis
-    description: Playlist analysis and insights endpoints
+    description: Asynchronous playlist analysis endpoints
   - name: Export
-    description: Playlist export functionality endpoints
+    description: Single, combined, chunked, and resumable playlist export endpoints

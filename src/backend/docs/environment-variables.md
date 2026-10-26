@@ -18,10 +18,29 @@ The SpotiBye backend uses environment variables for configuration, API keys, and
 #### `ENVIRONMENT`
 - **Type**: String
 - **Required**: Yes
-- **Values**: `development`, `staging`, `production`
+- **Values**: `development`, `production` (set in `wrangler.toml` `[env.<name>.vars]`)
 - **Description**: Current deployment environment
 - **Example**: `ENVIRONMENT=production`
-- **Notes**: Affects logging levels, error reporting, and feature flags
+- **Notes**: Reported in the `/health` response. It does not change logging or behavior.
+
+#### `ALLOWED_REDIRECT_URIS`
+- **Type**: String (comma-separated)
+- **Required**: Yes (may be empty, but then every login is rejected)
+- **Description**: Exact-match allowlist of `redirect_uri` values accepted by `POST /auth/spotify/login`
+- **Example**: `ALLOWED_REDIRECT_URIS=http://localhost:3000,http://127.0.0.1:8080/callback`
+- **Notes**: Set per environment in `wrangler.toml`. A URI not in the list returns `400 DISALLOWED_REDIRECT_URI`.
+
+#### `ANALYSIS_RESULTS_TTL_SECONDS`
+- **Type**: String (positive integer)
+- **Required**: No
+- **Description**: TTL for cached analysis results
+- **Default**: `86400` (from `utils/constants.ts`) when unset or not a positive number
+
+#### `RELEASE_SHA`, `RELEASE_VERSION`, `DEPLOYED_AT`
+- **Type**: String
+- **Required**: No
+- **Description**: Deployment metadata injected by `scripts/deploy-with-metadata.sh` and the deploy workflows
+- **Notes**: Reported in `/health`. Each falls back to `unknown` when unset.
 
 #### `JWT_SECRET`
 - **Type**: String (Secret)
@@ -54,51 +73,35 @@ The SpotiBye backend uses environment variables for configuration, API keys, and
 #### `CACHE_KV`
 - **Type**: KV Namespace Binding
 - **Required**: Yes
-- **Description**: KV namespace for caching Spotify API responses and analysis results
+- **Description**: KV namespace for cached Spotify responses, export jobs and files, analysis results, and OAuth state
 - **Binding Name**: `CACHE_KV`
-- **TTL**: Default 1 hour, configurable per cache entry
+- **TTL**: Set per entry. Examples: playlists 5 minutes, export data 1 hour, analysis results 24 hours, OAuth state 10 minutes.
 - **Usage**: Reduces API calls to Spotify, improves response times
 - **Setup**: Create KV namespace in Cloudflare Dashboard and bind to worker
 
 #### `SESSIONS_KV`
 - **Type**: KV Namespace Binding
 - **Required**: Yes
-- **Description**: KV namespace for storing user sessions and OAuth state
+- **Description**: KV namespace for user sessions (Spotify tokens keyed by session ID)
 - **Binding Name**: `SESSIONS_KV`
-- **TTL**: Default 24 hours for sessions, 10 minutes for OAuth state
-- **Usage**: Manages user authentication state and OAuth flow
+- **TTL**: 30 days for sessions. A 60-second marker blocks repeated failed token refreshes.
+- **Usage**: Manages user authentication state
 - **Setup**: Create KV namespace in Cloudflare Dashboard and bind to worker
+
+### Other Bindings
+
+- `ANALYSIS_STATUS`: Durable Object namespace (`AnalysisStatusObject`) that tracks analysis job status.
+- `ANALYSIS_QUEUE`: Queue producer for analysis jobs. The Worker also consumes the queue (`spotibye-analysis-dev` in development, `spotibye-analysis` in production).
 
 ## Configuration Files
 
 ### `wrangler.toml`
 The main configuration file for Cloudflare Workers:
 
-```toml
-name = "spotibye-api"
-main = "src/index.ts"
-compatibility_date = "2023-12-01"
-
-[env.production]
-name = "spotibye-api"
-vars = { ENVIRONMENT = "production" }
-
-[env.development]
-name = "spotibye-api-dev"
-vars = { ENVIRONMENT = "development" }
-
-[[kv_namespaces]]
-binding = "CACHE_KV"
-id = "your-cache-kv-namespace-id"
-preview_id = "your-cache-kv-preview-id"
-
-[[kv_namespaces]]
-binding = "SESSIONS_KV"
-id = "your-sessions-kv-namespace-id"
-preview_id = "your-sessions-kv-preview-id"
-
-# Do not put secrets in this file. Set them with `wrangler secret put`.
-```
+The file defines `development` and `production` environments. Wrangler names
+the Workers `spotibye-backend-development` and `spotibye-backend-production`.
+See `src/backend/wrangler.toml` for the bindings. Do not put secrets in that
+file. Set them with `wrangler secret put`.
 
 ## Environment Setup
 
@@ -116,12 +119,12 @@ preview_id = "your-sessions-kv-preview-id"
 2. **Set up KV namespaces**:
    ```bash
    # Create KV namespaces
-   wrangler kv:namespace create "CACHE_KV"
-   wrangler kv:namespace create "SESSIONS_KV"
+   npx wrangler kv namespace create "CACHE_KV"
+   npx wrangler kv namespace create "SESSIONS_KV"
 
    # Create preview namespaces
-   wrangler kv:namespace create "CACHE_KV" --preview
-   wrangler kv:namespace create "SESSIONS_KV" --preview
+   npx wrangler kv namespace create "CACHE_KV" --preview
+   npx wrangler kv namespace create "SESSIONS_KV" --preview
    ```
 
 3. **Update `wrangler.toml`** with the namespace IDs from the commands above
@@ -130,25 +133,19 @@ preview_id = "your-sessions-kv-preview-id"
 
 1. **Set secrets via Wrangler CLI**:
    ```bash
-   wrangler secret put SPOTIFY_CLIENT_ID
-   wrangler secret put SPOTIFY_CLIENT_SECRET
-   wrangler secret put JWT_SECRET
+   npx wrangler secret put SPOTIFY_CLIENT_ID --env production
+   npx wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+   npx wrangler secret put JWT_SECRET --env production
    ```
 
 2. **Set non-secret environment variables** in `wrangler.toml` under the
    appropriate `[env.<name>.vars]` section. This project already defines
-   `ENVIRONMENT` there.
+   `ENVIRONMENT` and `ALLOWED_REDIRECT_URIS` there.
 
 3. **Deploy with environment**:
    ```bash
-   wrangler deploy --env production
+   npm run deploy:prod   # or deploy:dev
    ```
-
-### Staging Deployment
-
-```bash
-wrangler deploy --env staging
-```
 
 ## Security Considerations
 
@@ -170,58 +167,32 @@ wrangler deploy --env staging
 
 ## Variable Validation
 
-### Required Variables Check
-The application validates required variables on startup:
+`middleware/env.ts` validates string bindings once per isolate, on the first
+request, using `validation/schemas/env.ts`:
 
-```typescript
-// Required environment variables
-const requiredVars = [
-  'ENVIRONMENT',
-  'SPOTIFY_CLIENT_ID',
-  'SPOTIFY_CLIENT_SECRET',
-  'JWT_SECRET'
-];
+- `ENVIRONMENT`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and `JWT_SECRET` must be non-empty strings.
+- `ALLOWED_REDIRECT_URIS` must be a string. An empty string is accepted.
+- No format or length rules are enforced. Use a long random `JWT_SECRET` anyway.
 
-// Missing variables will cause startup failure
-```
-
-### Variable Format Validation
-- `ENVIRONMENT`: Must be one of `development`, `staging`, `production`
-- `JWT_SECRET`: Must be at least 32 characters long
-- `SPOTIFY_CLIENT_ID`: Must match Spotify client ID format
-- `SPOTIFY_CLIENT_SECRET`: Must be non-empty string
+KV, Durable Object, and Queue bindings are not checked.
 
 ## Troubleshooting
 
 ### Common Issues
 
 #### Missing Environment Variables
-- **Error**: `Missing required environment variable: SPOTIFY_CLIENT_ID`
-- **Solution**: Set the missing variable using `wrangler secret put`
-
-#### Invalid JWT Secret
-- **Error**: `JWT_SECRET must be at least 32 characters`
-- **Solution**: Generate a new secret with `openssl rand -base64 64`
+- **Symptom**: Every request, including `/health`, returns `500` with code `INTERNAL_ERROR`
+- **Log**: `Invalid Worker environment bindings: JWT_SECRET: ...` in `wrangler tail --env <env>`
+- **Solution**: For `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, or `JWT_SECRET`, run `npx wrangler secret put <NAME> --env <environment>`. For `ENVIRONMENT` or `ALLOWED_REDIRECT_URIS`, add the value to that environment's `vars` in `wrangler.toml` and redeploy. These are not secrets.
 
 #### KV Namespace Not Bound
-- **Error**: `KV binding not found: CACHE_KV`
-- **Solution**: Create and bind KV namespace in `wrangler.toml`
+- **Symptom**: Routes that touch KV fail with `500`
+- **Solution**: Check the `kv_namespaces` entries for that environment in `wrangler.toml`
 
 #### Spotify API Credentials Invalid
-- **Error**: `Invalid Spotify client credentials`
+- **Symptom**: `/auth/spotify/callback` returns `OAUTH_CALLBACK_FAILED` or `OAUTH_BAD_REQUEST`
+- **Log**: `Failed to exchange code for tokens: ...`
 - **Solution**: Verify Spotify app credentials and regenerate if necessary
-
-### Debug Mode
-Enable debug logging by setting:
-```bash
-ENVIRONMENT=development
-```
-
-This will:
-- Log all environment variable loading
-- Show KV namespace binding status
-- Display Spotify API authentication status
-- Enable verbose error messages
 
 ## Best Practices
 
@@ -241,19 +212,17 @@ This will:
 1. **Track secret rotation dates**
 2. **Monitor Spotify API quota usage**
 3. **Watch KV namespace storage limits**
-4. **Log environment variable access patterns**
 
 ## Migration Guide
 
 ### Updating Environment Variables
 1. **Test changes in development first**
-2. **Update staging environment**
-3. **Plan production deployment during low-traffic periods**
-4. **Have rollback plan ready**
+2. **Plan production deployment during low-traffic periods**
+3. **Have rollback plan ready**
 
 ### Adding New Variables
 1. **Update type definitions in `types/env.ts`**
-2. **Add validation logic**
+2. **Add validation logic** in `validation/schemas/env.ts`
 3. **Update documentation**
 4. **Test in all environments**
 
