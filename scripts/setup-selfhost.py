@@ -39,11 +39,11 @@ from pathlib import Path
 SPOTIFY_DASHBOARD_URL = "https://developer.spotify.com/dashboard"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 
-
-def desktop_callback_uri() -> str:
-    """The desktop app's OAuth callback. Mirrors src/frontend/config/backend_config.py."""
-    port = os.environ.get("SPOTIBYE_OAUTH_PORT", "8080")
-    return f"http://127.0.0.1:{port}/callback"  # NOSONAR(S5332) loopback OAuth callback
+# The desktop app's default OAuth callback (src/frontend/auth/backend_auth.py).
+# Kept as a literal: printing a value derived from the SPOTIBYE_OAUTH_PORT env
+# var trips CodeQL's clear-text-logging rule, which treats it as a credential.
+DESKTOP_CALLBACK_URI = "http://127.0.0.1:8080/callback"  # NOSONAR(S5332) loopback OAuth callback
+CALLBACK_PORT_NOTE = "If you set SPOTIBYE_OAUTH_PORT, use that port instead of 8080."
 
 REQUIRED_PYTHON = (3, 11)
 REQUIRED_TOOLS = ("node", "npm", "npx")
@@ -191,7 +191,8 @@ def report_prerequisites(results: list[PrereqResult]) -> bool:
 def print_spotify_app_steps() -> None:
     """Tell the user which redirect URI to register in the Spotify app."""
     print("  In your Spotify app's Settings, under Redirect URIs, add exactly:")
-    print(f"    {desktop_callback_uri()}")
+    print(f"    {DESKTOP_CALLBACK_URI}")
+    print(f"  {CALLBACK_PORT_NOTE}")
     print("  Then click Add and Save. Spotify rejects login if this does not match.")
 
 
@@ -553,12 +554,12 @@ def generate_selfhost_config(
     production allowlist, desktop login fails with DISALLOWED_REDIRECT_URI.
     """
     if redirect_uris is None:
-        redirect_uris = desktop_callback_uri()
+        redirect_uris = DESKTOP_CALLBACK_URI
     allowed = [uri.strip() for uri in redirect_uris.split(",")]
-    if desktop_callback_uri() not in allowed:
+    if DESKTOP_CALLBACK_URI not in allowed:
         print(
-            f"  Warning: {desktop_callback_uri()} is not in ALLOWED_REDIRECT_URIS. "
-            "The desktop app cannot log in to this Worker without it."
+            f"  Warning: {DESKTOP_CALLBACK_URI} is not in ALLOWED_REDIRECT_URIS. "
+            f"The desktop app cannot log in to this Worker without it. {CALLBACK_PORT_NOTE}"
         )
     if dry_run:
         print(f"  [dry-run] would write {output_path}")

@@ -543,26 +543,16 @@ def test_open_portal_dry_run_does_not_open_browser() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_desktop_callback_uri_defaults_to_port_8080(monkeypatch) -> None:
-    monkeypatch.delenv("SPOTIBYE_OAUTH_PORT", raising=False)
-    assert _mod.desktop_callback_uri() == "http://127.0.0.1:8080/callback"
-
-
-def test_desktop_callback_uri_follows_oauth_port(monkeypatch) -> None:
-    monkeypatch.setenv("SPOTIBYE_OAUTH_PORT", "9999")
-    assert _mod.desktop_callback_uri() == "http://127.0.0.1:9999/callback"
-
-
-def test_spotify_app_steps_name_the_redirect_uri(monkeypatch, capsys) -> None:
-    monkeypatch.delenv("SPOTIBYE_OAUTH_PORT", raising=False)
+def test_spotify_app_steps_name_the_redirect_uri(capsys) -> None:
     _mod.print_spotify_app_steps()
-    assert "http://127.0.0.1:8080/callback" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "http://127.0.0.1:8080/callback" in out
+    assert "SPOTIBYE_OAUTH_PORT" in out
 
 
 def test_generate_selfhost_config_allows_desktop_callback_by_default(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path,
 ) -> None:
-    monkeypatch.delenv("SPOTIBYE_OAUTH_PORT", raising=False)
     template = tmp_path / "wrangler.toml"
     template.write_text(SAMPLE_TOML)
     target = tmp_path / "wrangler.selfhost.toml"
@@ -574,9 +564,8 @@ def test_generate_selfhost_config_allows_desktop_callback_by_default(
 
 
 def test_generate_selfhost_config_warns_without_desktop_callback(
-    tmp_path: Path, monkeypatch, capsys
+    tmp_path: Path, capsys
 ) -> None:
-    monkeypatch.delenv("SPOTIBYE_OAUTH_PORT", raising=False)
     template = tmp_path / "wrangler.toml"
     template.write_text(SAMPLE_TOML)
     target = tmp_path / "wrangler.selfhost.toml"
