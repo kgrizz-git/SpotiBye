@@ -69,7 +69,7 @@ name = "ANALYSIS_STATUS"
 class_name = "AnalysisStatusObject"
 
 [env.production]
-vars = { ENVIRONMENT = "production", ALLOWED_REDIRECT_URIS = "https://app.spotibye.com" }
+vars = { ENVIRONMENT = "production", ALLOWED_REDIRECT_URIS = "http://127.0.0.1:8080/callback,https://app.spotibye.com" }
 
 [[env.production.kv_namespaces]]
 binding = "CACHE_KV"
