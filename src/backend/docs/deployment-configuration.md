@@ -10,7 +10,7 @@ The backend has two environments. There is no staging environment.
 | Environment | Worker | Deploy command | GitHub workflow |
 |-------------|--------|----------------|-----------------|
 | Development | `spotibye-backend-development` | `npm run deploy:dev` | Deploy Backend (`deploy-backend.yml`), on push to `main` or manual dispatch |
-| Production | `spotibye-backend-production` | `npm run deploy:prod` | Deploy Production (`deploy-production.yml`), manual dispatch only |
+| Production | `spotibye-backend-production` | `npm run deploy:prod` | Deploy Production (`deploy-production.yml`), manual dispatch; also Deploy Backend on a `v*` tag push |
 
 Wrangler derives each Worker name from the top-level `name` (`spotibye-backend`)
 plus the `--env` suffix. A bare `wrangler deploy` targets neither environment.
@@ -28,9 +28,9 @@ top-level Worker instead.
 
 ```bash
 cd src/backend
-wrangler secret put SPOTIFY_CLIENT_ID --env production
-wrangler secret put SPOTIFY_CLIENT_SECRET --env production
-wrangler secret put JWT_SECRET --env production
+npx wrangler secret put SPOTIFY_CLIENT_ID --env production
+npx wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+npx wrangler secret put JWT_SECRET --env production
 ```
 
 Repeat with `--env development` for the development Worker.
@@ -65,15 +65,20 @@ from the environment or `.desktop.env.local`, then reads `release_sha` from `/he
 `[env.*]` block of `wrangler.toml`. A new account needs its own namespaces:
 
 ```bash
-wrangler kv namespace create CACHE_KV
-wrangler kv namespace create SESSIONS_KV
+npx wrangler kv namespace create CACHE_KV
+npx wrangler kv namespace create SESSIONS_KV
+npx wrangler kv namespace create CACHE_KV --preview
+npx wrangler kv namespace create SESSIONS_KV --preview
 ```
 
-Then replace the IDs in every block of `wrangler.toml`.
+Then replace both `id` and `preview_id` in every `kv_namespaces` block of
+`wrangler.toml`: the top level, `[env.development]`, and `[env.production]`.
+Keep the preview namespaces separate from the deployed ones, so `wrangler dev`
+never writes to live data.
 
 ## Analysis Queue
 
-Playlist analysis uses Cloudflare Queues in production so large playlists can retry outside the initial HTTP request. The Worker module exports both `fetch` and `queue`; no separate Worker entry point is required.
+Playlist analysis uses Cloudflare Queues in both environments so large playlists can retry outside the initial HTTP request. The Worker module exports both `fetch` and `queue`; no separate Worker entry point is required.
 
 Required queues:
 
@@ -109,20 +114,20 @@ new_sqlite_classes = ["AnalysisStatusObject"]
 ## Troubleshooting
 
 1. **KV namespace not found:** Check the namespace IDs in `wrangler.toml`.
-2. **Secret not set:** Run `wrangler secret list --env <development|production>`.
+2. **Secret not set:** Run `npx wrangler secret list --env <development|production>`.
 3. **`/health` reports `release_sha: unknown`:** The Worker was deployed without
    `deploy-with-metadata.sh`, or you are hitting the wrong Worker.
 
 ```bash
-wrangler deployments list --env production
-wrangler tail --env production
+npx wrangler deployments list --env production
+npx wrangler tail --env production
 ```
 
 ## Rollback
 
 ```bash
-wrangler deployments list --env production
-wrangler rollback --env production <version-id>
+npx wrangler deployments list --env production
+npx wrangler rollback --env production <version-id>
 ```
 
 A rollback restores older code, so `/health` reports the older `release_sha`.

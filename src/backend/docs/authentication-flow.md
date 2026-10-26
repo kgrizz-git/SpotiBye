@@ -1,36 +1,41 @@
-# Authentication Flow Guide for Frontend Developers
+# Authentication Flow Guide for Client Developers
 
-This guide provides detailed instructions for implementing the SpotiBye authentication flow in frontend applications. The authentication uses Spotify OAuth 2.0 with JWT tokens for session management.
+This guide describes how a client authenticates against the SpotiBye backend. Authentication uses Spotify OAuth 2.0 (Authorization Code + PKCE), mediated by the backend, and an app-issued JWT for session management.
+
+The reference client is the Python desktop app: `src/frontend/auth/backend_auth.py` (login orchestration and local callback server) and `src/frontend/services/backend_client.py` (HTTP calls). Route handlers live in `src/backend/routes/auth.ts`; the JWT check and Spotify token refresh live in `src/backend/middleware/auth.ts`.
 
 ## Overview
 
 The authentication flow consists of three main steps:
-1. **Initiate OAuth** - Redirect user to Spotify for authorization
-2. **Handle Callback** - Exchange authorization code for JWT tokens
-3. **Maintain Session** - Use JWT token for authenticated requests
+1. **Initiate OAuth** - Ask the backend for a Spotify authorize URL and open it in a browser
+2. **Handle Callback** - Capture `code` and `state` on the client's redirect URI and forward them to the backend, which returns a JWT
+3. **Maintain Session** - Send the JWT as a Bearer token on authenticated requests
+
+Spotify access and refresh tokens never leave the backend. The client only holds the app JWT.
 
 ### PKCE (Authorization Code + PKCE)
 
 The flow is backend-mediated and uses PKCE (RFC 7636) in addition to the
 confidential client secret. PKCE is handled entirely server-side, so the
-frontend does not need to generate or send any verifier/challenge:
+client does not need to generate or send any verifier/challenge:
 
 - On `POST /auth/spotify/login`, the backend generates a `code_verifier`,
   derives the S256 `code_challenge`, appends `code_challenge` and
   `code_challenge_method=S256` to the Spotify authorize URL, and persists the
   verifier alongside the `redirect_uri` under the one-time `oauth_state:<state>`
-  key (KV, 10-minute TTL).
+  key (`CACHE_KV`, 10-minute TTL).
 - On the callback, the backend reads the verifier back from KV and includes it
   as `code_verifier` in the token exchange (still authenticated with the client
   secret via Basic auth).
 
 ## Prerequisites
 
-Before implementing authentication, ensure you have:
-- Registered your application with Spotify Developer Dashboard
-- Configured redirect URIs in Spotify app settings
-- Access to the SpotiBye API endpoints
-- Understanding of OAuth 2.0 and JWT concepts
+- The redirect URI the client will use must be listed in `ALLOWED_REDIRECT_URIS` for the target environment (see `src/backend/wrangler.toml`) **and** registered in the Spotify Developer Dashboard for the app.
+- The backend environment must have `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and `JWT_SECRET` set.
+
+Base URLs used below:
+- Local: `http://localhost:8787` (`npm run dev`)
+- Deployed: `https://spotibye-backend-<environment>.<your-subdomain>.workers.dev`, where `<environment>` is `development` or `production`
 
 ## Step 1: Initiate OAuth Flow
 
@@ -40,611 +45,215 @@ POST /auth/spotify/login
 ```
 
 ### Request Format
-```javascript
-const initiateAuth = async (redirectUri) => {
-  try {
-    const response = await fetch('https://spotibye-api.workers.dev/auth/spotify/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        redirect_uri: redirectUri,
-        state: generateSecureState()
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Authentication initiation failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.data;
-  } catch (error) {
-    console.error('Auth initiation error:', error);
-    throw error;
-  }
-};
+```bash
+curl -X POST https://spotibye-backend-development.<your-subdomain>.workers.dev/auth/spotify/login \
+  -H 'Content-Type: application/json' \
+  -d '{"redirect_uri": "http://127.0.0.1:8080/callback"}'
 ```
 
 ### Parameters
-- `redirect_uri` (required): URL where Spotify will redirect after authorization
-- `state` (optional): CSRF protection token (recommended)
+- `redirect_uri` (required): Where Spotify will redirect the browser after authorization. Must exactly match an entry in `ALLOWED_REDIRECT_URIS`.
+
+The client does not send `state`. The backend generates it (`crypto.randomUUID()`) and returns it.
 
 ### Response
 ```json
 {
   "data": {
-    "auth_url": "https://accounts.spotify.com/authorize?response_type=ilateral=code&Arr=client_id.
-    "yez=client_iduts=client Sub=client_id&redirect_uri=...&state=...",
-    "state": "random-state-string"
+    "auth_url": "https://accounts.spotify.com/authorize?response_type=code&client_id=...&scope=user-read-private+user-read-email+playlist-read-private+playlist-read-collaborative&redirect_uri=...&state=...&code_challenge_method=S256&code_challenge=...",
+    "state": "3f2c1a9e-..."
   }
 }
 ```
 
-### Implementation Example
-```javascript
-// Generate secure state token
-function generateSecureState() {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-}
+Requested scopes: `user-read-private`, `user-read-email`, `playlist-read-private`, `playlist-read-collaborative`.
 
-// Store state in session storage for verification
-function storeState(state) {
-  sessionStorage.setItem('spotify_auth_state', state);
-}
+### Errors
+| Status | `error.code` | Cause |
+|--------|--------------|-------|
+| 400 | `MISSING_REDIRECT_URI` | `redirect_uri` missing or empty |
+| 400 | `DISALLOWED_REDIRECT_URI` | `redirect_uri` not in the allowlist (an empty allowlist rejects everything) |
+| 500 | `OAUTH_INIT_FAILED` | Unexpected failure (for example, missing Spotify credentials) |
 
-// Verify state on callback
-function verifyState(receivedState) {
-  const storedState = sessionStorage.getItem('spotify_auth_state');
-  sessionStorage.removeItem('spotify_auth_state');
-  return storedState === receivedState;
-}
-
-// Complete login function
-async function login() {
-  const redirectUri = `${window.location.origin}/callback`;
-  const state = generateSecureState();
-
-  storeState(state);
-
-  try {
-    const authData = await initiateAuth(redirectUri);
-    // Redirect user to Spotify
-    window.location.href = authData.auth_url;
-  } catch (error) {
-    // Handle error (show user message)
-    showError('Failed to start authentication. Please try again.');
-  }
-}
-```
+### Desktop Client Behaviour
+`BackendAuth.login()` builds `redirect_uri` as `http://127.0.0.1:<OAUTH_CALLBACK_PORT>/callback` (port `8080` by default, overridable with `SPOTIBYE_OAUTH_PORT`), starts a local HTTP server on that address, and opens `auth_url` with `webbrowser.open`.
 
 ## Step 2: Handle OAuth Callback
 
-### Callback URL Setup
-Configure your Spotify app with the callback URL:
+Spotify redirects the browser to the client's `redirect_uri` with `code` and `state` (or `error`) as query parameters. The client then forwards them to the backend.
+
+### API Endpoint
 ```
-https://your-app-domain.com/callback
-```
-
-### Extract Callback Parameters
-```javascript
-// In your callback page/component
-function handleCallback() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get('code');
-  const state = urlParams.get('state');
-  const error = urlParams.get('error');
-
-  // Handle OAuth error
-  if (error) {
-    console.error('OAuth error:', error);
-    // Redirect to login with error message
-    window.location.href = '/login?error=' + encodeURIComponent(error);
-    return;
-  }
-
-  // Verify state for CSRF protection
-  if (!verifyState(state)) {
-    console.error('State verification failed');
-    window.location.href = '/login?error=state_mismatch';
-    return;
-  }
-
-  // Exchange code for tokens
-  exchangeCodeForTokens(code);
-}
+GET /auth/spotify/callback?code=<code>&state=<state>
 ```
 
-### Exchange Code for Tokens
-```javascript
-async function exchangeCodeForTokens(code) {
-  try {
-    const response = await fetch(
-      `https://spotibye-api.workers.dev/auth/spotify/callback?code=${code}&state=${state}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Token exchange failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const { access_token, refresh_token, expires_in, user } = data.data;
-
-    // Store authentication data
-    storeAuthData(access_token, refresh_token, expires_in, user);
-
-    // Redirect to authenticated area
-    window.location.href = '/dashboard';
-  } catch (error) {
-    console.error('Token exchange error:', error);
-    window.location.href = '/login?error=token_exchange_failed';
-  }
-}
+### Request Format
+```python
+# src/frontend/services/backend_client.py
+response = self._make_request(
+    "GET", f"/auth/spotify/callback?code={code}&state={state}"
+)
+token = response.get("token")
 ```
+
+### Backend Processing
+1. Rejects the request if `error` is present, or if `code` or `state` is missing.
+2. Looks up `oauth_state:<state>` in `CACHE_KV`. A missing or expired entry is rejected. This lookup does not tie the callback to the client that started the login, so it is not a full CSRF check. Clients must save the `state` returned by `POST /auth/spotify/login` and compare it with the callback's `state` before forwarding the callback. The desktop app does not do this yet.
+3. Exchanges the code with Spotify using the stored `redirect_uri` and `code_verifier`.
+4. Deletes `oauth_state:<state>` (one-time use) after a successful exchange.
+5. Fetches the Spotify profile (`GET /v1/me`).
+6. Writes a session to `SESSIONS_KV` and signs a JWT (see [Session Storage](#session-storage)).
 
 ### Response Format
 ```json
 {
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "refresh-token-string",
-    "expires_in": 3600,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "user": {
-      "id": "user-123",
+      "id": "spotify-user-id",
       "display_name": "Test User",
       "email": "test@example.com"
-    }
+    },
+    "expires_in": 2592000,
+    "spotify_access_expires_in": 3600
   }
 }
 ```
 
-## Step 3: Token Management
+- `token` is the app JWT. No Spotify token is returned.
+- `user` is the Spotify profile object as returned by Spotify.
+- `expires_in` is the JWT and session lifetime in seconds (30 days).
+- `spotify_access_expires_in` is the Spotify access token lifetime. It is informational; the backend refreshes the Spotify token itself.
 
-### Secure Token Storage
-```javascript
-// Recommended: Use httpOnly cookies for production
-// For development: localStorage with caution
+### Errors
+| Status | `error.code` | Cause |
+|--------|--------------|-------|
+| 400 | `OAUTH_ERROR` | Spotify returned `error` (for example, `access_denied`); `message` holds the Spotify value |
+| 400 | `INVALID_CALLBACK` | Missing `code`/`state`, or unknown/expired state |
+| 500 | `OAUTH_CALLBACK_FAILED` | Token exchange or profile fetch failed |
+| 500 | `OAUTH_BAD_REQUEST` | Spotify returned a 4xx during the exchange |
+| 500 | `OAUTH_TOKEN_EXPIRED` | Upstream error message contained "Token expired" |
 
-function storeAuthData(accessToken, refreshToken, expiresIn, user) {
-  const expiresAt = Date.now() + (expiresIn * 1000);
+The 500 responses include `error.details.reason` with the underlying error message.
 
-  const authData = {
-    accessToken,
-    refreshToken,
-    expiresAt,
-    user
-  };
+## Step 3: Session Management
 
-  // Store in localStorage (development only)
-  localStorage.setItem('spotibye_auth', JSON.stringify(authData));
+### Session Storage
+| Store | Key | Value | TTL |
+|-------|-----|-------|-----|
+| `CACHE_KV` | `oauth_state:<state>` | `{ redirect_uri, code_verifier }` | 600 s |
+| `SESSIONS_KV` | `<session_id>` (random UUID) | `{ user_id, access_token, refresh_token, expires_at }` (Spotify tokens; `expires_at` in ms) | 30 days |
+| `SESSIONS_KV` | `REFRESH_FAILED:<session_id>` | `"1"` (negative cache after a revoked refresh token) | 60 s |
 
-  // Set up token refresh timer
-  setupTokenRefresh(expiresIn);
-}
+### JWT
+- Signed HS256 with `JWT_SECRET` (`src/backend/services/jwt.ts`).
+- Claims: `sub` (Spotify user id), `email`, `name` (display name), `session_id`, `iat`, `exp`.
+- Lifetime: 30 days (`APP_JWT_TTL_SECONDS`, same as the session TTL).
+- Verification checks the signature and `exp`. There is no clock-skew tolerance and no revocation list; deleting the session in KV is what invalidates a token.
 
-function getAuthData() {
-  const stored = localStorage.getItem('spotibye_auth');
-  if (!stored) return null;
+### Client Token Storage
+The desktop client persists the JWT through `cache_manager.save_auth_token(...)` for auto-login. On startup it discards a cached JWT whose `exp` has passed, then calls `GET /auth/me` to confirm the session is still valid.
 
-  const authData = JSON.parse(stored);
+### Spotify Token Refresh (automatic)
+Clients never refresh Spotify tokens. On each authenticated request, `authMiddleware`:
+1. Loads the session for the JWT's `session_id`. A missing or invalid session returns 401.
+2. If the Spotify access token has expired, checks `REFRESH_FAILED:<session_id>`. If present, it returns 401 `AUTH_REQUIRED` without calling Spotify.
+3. Otherwise refreshes with Spotify. Concurrent refreshes for the same session within one isolate share a single request. The updated session is written back with a fresh 30-day TTL.
+4. If Spotify answers `invalid_grant`, it writes the `REFRESH_FAILED` marker, deletes the session, and returns 401 `AUTH_REQUIRED`. Other refresh failures return 401 `UNAUTHORIZED` ("Token expired").
 
-  // Check if token is expired
-  if (Date.now() > authData.expiresAt) {
-    clearAuthData();
-    return null;
-  }
+### Reissuing the JWT
+```
+POST /auth/spotify/refresh
+Authorization: Bearer <jwt>
+```
 
-  return authData;
-}
+This endpoint takes no body. It requires a still-valid JWT and issues a new JWT for the same session. It does not accept a Spotify refresh token. An expired JWT cannot be refreshed; the user must log in again.
 
-function clearAuthData() {
-  localStorage.removeItem('spotibye_auth');
-  // Clear any refresh timers
-  if (window.refreshTimer) {
-    clearTimeout(window.refreshTimer);
+```json
+{
+  "data": {
+    "access_token": "<new app JWT>",
+    "expires_in": 2592000,
+    "token_type": "Bearer",
+    "spotify_access_expires_in": 3412
   }
 }
 ```
 
-### Token Refresh
-```javascript
-async function refreshToken() {
-  const authData = getAuthData();
-  if (!authData?.refreshToken) {
-    throw new Error('No refresh token available');
-  }
+Note that the new JWT is returned as `access_token` here, while the callback returns it as `token`. The desktop client accepts either.
 
-  try {
-    const response = await fetch('https://spotibye-api.workers.dev/auth/refresh', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        refresh_token: authData.refreshToken
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Token refresh failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const { access_token, expires_in } = data.data;
-
-    // Update stored auth data
-    authData.accessToken = access_token;
-    authData.expiresAt = Date.now() + (expires_in * 1000);
-    localStorage.setItem('spotibye_auth', JSON.stringify(authData));
-
-    return access_token;
-  } catch (error) {
-    console.error('Token refresh error:', error);
-    // Clear auth data and redirect to login
-    clearAuthData();
-    window.location.href = '/login?error=session_expired';
-    throw error;
-  }
-}
-
-function setupTokenRefresh(expiresIn) {
-  // Refresh 5 minutes before expiration
-  const refreshTime = (expiresIn - 300) * 1000;
-
-  window.refreshTimer = setTimeout(() => {
-    refreshToken().catch(console.error);
-  }, refreshTime);
-}
-```
+### Other Auth Endpoints
+- `GET /auth/me` returns `{ "data": { "id", "email", "name", "session_id" } }` from the JWT claims.
+- `POST /auth/logout` deletes the session and its `REFRESH_FAILED` marker, then returns `{ "data": { "message": "Logged out successfully" } }`. Any JWT for that session stops working.
 
 ## Step 4: Authenticated API Requests
 
-### Request Interceptor
-```javascript
-// Create API client with authentication
-class SpotiByeAPI {
-  constructor(baseURL = 'https://spotibye-api.workers.dev') {
-    this.baseURL = baseURL;
-  }
+Send the JWT on every request to `/auth/me`, `/auth/logout`, `/auth/spotify/refresh`, `/spotify/*`, `/analysis/*`, and `/export/*`:
 
-  async request(endpoint, options = {}) {
-    const authData = getAuthData();
+```
+Authorization: Bearer <jwt>
+```
 
-    if (!authData) {
-      throw new Error('Not authenticated');
-    }
+### Auth Error Responses
+Auth failures in the middleware go through the global error handler:
 
-    // Check if token needs refresh
-    if (Date.now() > authData.expiresAt - 60000) { // 1 minute buffer
-      await refreshToken();
-    }
-
-    const config = {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${authData.accessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      }
-    };
-
-    const response = await fetch(`${this.baseURL}${endpoint}`, config);
-
-    if (response.status === 401) {
-      // Token might be expired, try refresh
-      try {
-        await refreshToken();
-        // Retry request with new token
-        const newAuthData = getAuthData();
-        config.headers.Authorization = `Bearer ${newAuthData.accessToken}`;
-        return fetch(`${this.baseURL}${endpoint}`, config);
-      } catch (refreshError) {
-        // Refresh failed, clear auth and redirect
-        clearAuthData();
-        window.location.href = '/login?error=session_expired';
-        throw refreshError;
-      }
-    }
-
-    return response;
-  }
-
-  // Example authenticated methods
-  async getPlaylists() {
-    const response = await this.request('/spotify/playlists');
-    return response.json();
-  }
-
-  async analyzePlaylist(playlistId, options = {}) {
-    const response = await this.request(`/analysis/playlist/${playlistId}`, {
-      method: 'POST',
-      body: JSON.stringify(options)
-    });
-    return response.json();
+```json
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Session expired or invalid",
+    "timestamp": "2026-01-01T00:00:00.000Z",
+    "request_id": "...",
+    "details": { "path": "/spotify/playlists", "method": "GET" }
   }
 }
 ```
 
-## React Implementation
+| Status | `error.code` | `message` |
+|--------|--------------|-----------|
+| 401 | `UNAUTHORIZED` | `Missing or invalid authorization header` |
+| 401 | `UNAUTHORIZED` | `Invalid token` (bad signature, malformed, or expired JWT) |
+| 401 | `UNAUTHORIZED` | `Session expired or invalid` (no session in KV) |
+| 401 | `UNAUTHORIZED` | `Token expired` (Spotify refresh failed for a non-revocation reason) |
+| 401 | `AUTH_REQUIRED` | `Refresh token expired or revoked` |
 
-### Custom Hook
-```javascript
-import { useState, useEffect, useCallback } from 'react';
+On any of these, the client should clear its stored JWT and start a new login. The desktop client detects `AUTH_REQUIRED` with `BackendClient.is_auth_required_error()`.
 
-function useAuthentication() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+## Security Notes
 
-  // Check authentication status on mount
-  useEffect(() => {
-    const authData = getAuthData();
-    if (authData) {
-      setUser(authData.user);
-    }
-    setLoading(false);
-  }, []);
+### State
+- The backend generates `state` and stores it server-side. It is single-use and expires after 10 minutes.
+- A callback whose `state` is not in KV is rejected. That stops forged states, and it stops replay once a state has been consumed.
+- The lookup does not bind the callback to the client that started the login, so it is not a CSRF defense on its own. Clients must compare the callback's `state` with the value returned by `POST /auth/spotify/login` before forwarding it. The desktop app does not do this yet.
 
-  const login = useCallback(async () => {
-    try {
-      await initiateLogin();
-    } catch (err) {
-      setError(err.message);
-    }
-  }, []);
+### Redirect URIs
+`ALLOWED_REDIRECT_URIS` is a comma-separated exact-match allowlist. It fails closed when empty. Current values in `wrangler.toml`:
 
-  const logout = useCallback(() => {
-    clearAuthData();
-    setUser(null);
-    window.location.href = '/login';
-  }, []);
+| Environment | Values |
+|-------------|--------|
+| Top-level (local `wrangler dev`) and `development` | `http://localhost:3000`, `http://localhost:3000/callback`, `http://localhost:8080`, `http://127.0.0.1:8080/callback` |
+| `production` | `https://app.spotibye.com` |
 
-  const handleCallback = useCallback(async (code, state) => {
-    try {
-      await exchangeCodeForTokens(code, state);
-      const authData = getAuthData();
-      setUser(authData.user);
-    } catch (err) {
-      setError(err.message);
-    }
-  }, []);
+The same URI must also be registered in the Spotify Developer Dashboard. If you change `SPOTIBYE_OAUTH_PORT`, add the matching `http://127.0.0.1:<port>/callback` to both.
 
-  return {
-    user,
-    loading,
-    error,
-    isAuthenticated: !!user,
-    login,
-    logout,
-    handleCallback
-  };
-}
-
-// Usage in component
-function AuthenticatedApp() {
-  const { user, isAuthenticated, loading, login, logout } = useAuthentication();
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (!isAuthenticated) {
-    return <LoginPage onLogin={login} />;
-  }
-
-  return (
-    <div>
-      <header>
-        <h1>Welcome, {user.display_name}!</h1>
-        <button onClick={logout}>Logout</button>
-      </header>
-      <main>
-        {/* Your authenticated content */}
-      </main>
-    </div>
-  );
-}
-```
-
-### Callback Component
-```javascript
-function CallbackPage() {
-  const { handleCallback } = useAuthentication();
-  const [status, setStatus] = useState('processing');
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
-
-    if (error) {
-      setStatus('error');
-      setTimeout(() => {
-        window.location.href = '/login?error=' + encodeURIComponent(error);
-      }, 3000);
-      return;
-    }
-
-    if (code && state) {
-      handleCallback(code, state)
-        .then(() => setStatus('success'))
-        .catch(() => setStatus('error'));
-    } else {
-      setStatus('error');
-    }
-  }, [handleCallback]);
-
-  return (
-    <div className="callback-container">
-      {status === 'processing' && (
-        <div>
-          <h2>Authenticating...</h2>
-          <p>Please wait while we complete your login.</p>
-        </div>
-      )}
-      {status === 'success' && (
-        <div>
-          <h2>Login Successful!</h2>
-          <p>Redirecting you to your dashboard...</p>
-        </div>
-      )}
-      {status === 'error' && (
-        <div>
-          <h2>Login Failed</h2>
-          <p>There was an error during authentication. Redirecting...</p>
-        </div>
-      )}
-    </div>
-  );
-}
-```
-
-## Security Best Practices
-
-### State Management
-- Always use cryptographically secure random state tokens
-- Store state in session storage (cleared on tab close)
-- Verify state on callback to prevent CSRF attacks
-
-### Token Storage
-- **Production**: Use httpOnly, secure cookies
-- **Development**: localStorage with caution
-- Never store tokens in URL or localStorage without encryption
-
-### Error Handling
-- Never expose detailed error messages to users
-- Log errors securely for debugging
-- Implement graceful degradation
-
-### Token Refresh
-- Refresh tokens before expiration
-- Handle refresh failures gracefully
-- Clear auth data on refresh failure
-
-### Redirect Handling
-- Validate redirect URIs in Spotify app settings
-- Use HTTPS for all redirect URIs
-- Limit redirect URIs to your domain
+### Token Handling
+- Spotify tokens stay in `SESSIONS_KV`. Only the app JWT reaches the client.
+- Treat the JWT as a 30-day bearer credential. Call `POST /auth/logout` to revoke it server-side.
 
 ## Common Issues and Solutions
 
-### State Mismatch Error
-**Problem**: State verification fails
-**Solution**: Ensure state is stored in session storage and not modified
+### `DISALLOWED_REDIRECT_URI`
+**Problem**: Login initiation returns 400
+**Solution**: Add the exact `redirect_uri` (scheme, host, port, and path) to `ALLOWED_REDIRECT_URIS` for the environment
 
-### Token Expired
-**Problem**: API calls return 401 errors
-**Solution**: Implement automatic token refresh before making requests
+### `INVALID_CALLBACK` with "Missing or expired OAuth state"
+**Problem**: The callback was forwarded more than 10 minutes after login started, was already used, or hit a different environment than the login request
+**Solution**: Restart the login flow against the same backend
 
-### CORS Issues
-**Problem**: Cross-origin requests blocked
-**Solution**: Ensure API allows your domain in CORS headers
+### Spotify `INVALID_CLIENT: Invalid redirect URI`
+**Problem**: Spotify rejects the authorize URL
+**Solution**: Register the redirect URI in the Spotify Developer Dashboard
 
-### Redirect Loop
-**Problem**: Continuous redirect between login and callback
-**Solution**: Check authentication status before redirecting
-
-### Safari/Privacy Issues
-**Problem**: Third-party cookies blocked in Safari
-**Solution**: Use localStorage or implement token-based auth
-
-## Testing Authentication
-
-### Mock Authentication
-```javascript
-// For testing without Spotify
-class MockAuthAPI extends SpotiByeAPI {
-  async initiateAuth() {
-    return {
-      auth_url: 'http://localhost:3000/mock-auth',
-      state: 'mock-state'
-    };
-  }
-
-  async exchangeCodeForTokens(code, state) {
-    return {
-      access_token: 'mock-token',
-      refresh_token: 'mock-refresh',
-      expires_in: 3600,
-      user: {
-        id: 'mock-user',
-        display_name: 'Test User',
-        email: 'test@example.com'
-      }
-    };
-  }
-}
-```
-
-### Integration Testing
-```javascript
-// Test authentication flow
-describe('Authentication Flow', () => {
-  test('should initiate OAuth flow', async () => {
-    const authData = await initiateAuth('http://localhost:3000/callback');
-    expect(authData.auth_url).toContain('accounts.spotify.com');
-    expect(authData.state).toBeDefined();
-  });
-
-  test('should handle callback correctly', async () => {
-    const mockCode = 'test-auth-code';
-    const mockState = 'test-state';
-
-    const userData = await exchangeCodeForTokens(mockCode, mockState);
-    expect(userData.access_token).toBeDefined();
-    expect(userData.user).toBeDefined();
-  });
-});
-```
-
-## Production Considerations
-
-### Environment Configuration
-```javascript
-const config = {
-  development: {
-    apiURL: 'http://localhost:8787',
-    redirectURI: 'http://localhost:3000/callback'
-  },
-  staging: {
-    apiURL: 'https://spotibye-api-dev.workers.dev',
-    redirectURI: 'https://staging.spotibye.com/callback'
-  },
-  production: {
-    apiURL: 'https://spotibye-api.workers.dev',
-    redirectURI: 'https://app.spotibye.com/callback'
-  }
-};
-
-const currentConfig = config[process.env.NODE_ENV] || config.development;
-```
-
-### Monitoring and Analytics
-```javascript
-// Track authentication events
-function trackAuthEvent(event, properties = {}) {
-  if (typeof gtag !== 'undefined') {
-    gtag('event', event, {
-      category: 'Authentication',
-      ...properties
-    });
-  }
-}
-
-// Usage in auth flow
-trackAuthEvent('login_initiated');
-trackAuthEvent('login_completed', { user_id: user.id });
-trackAuthEvent('login_failed', { error: error.message });
-```
-
-This comprehensive guide provides everything frontend developers need to implement secure, robust authentication with the SpotiBye API.
+### Repeated `AUTH_REQUIRED`
+**Problem**: The Spotify refresh token was revoked (for example, the user removed app access)
+**Solution**: Clear the stored JWT and log in again

@@ -5,7 +5,7 @@ Cloudflare Workers backend for the SpotiBye Spotify Playlist Exporter applicatio
 ## Quick Start
 
 ### Prerequisites
-- Node.js (v18 or higher)
+- Node.js 24 (pinned in `.nvmrc`)
 - npm or yarn
 - Cloudflare account (for deployment)
 
@@ -91,19 +91,19 @@ For local development, these use preview IDs. For production, you'll need to cre
 
 1. **Set up production secrets**
    ```bash
-   wrangler secret put SPOTIFY_CLIENT_ID --env production
-   wrangler secret put SPOTIFY_CLIENT_SECRET --env production
-   wrangler secret put JWT_SECRET --env production
+   npx wrangler secret put SPOTIFY_CLIENT_ID --env production
+   npx wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+   npx wrangler secret put JWT_SECRET --env production
    ```
 
-   Without `--env production`, secrets attach to the top-level
-   `spotibye-backend` Worker, not the `spotibye-backend-production`
-   Worker that `deploy:prod` deploys.
+   Repeat with `--env development` for the development Worker.
+   Without `--env`, secrets attach to the top-level
+   `spotibye-backend` Worker, which neither deploy script deploys.
 
 2. **Create KV namespaces** (if not already created)
    ```bash
-   wrangler kv:namespace create "CACHE_KV"
-   wrangler kv:namespace create "SESSIONS_KV"
+   npx wrangler kv namespace create CACHE_KV
+   npx wrangler kv namespace create SESSIONS_KV
    ```
 
 3. **Update wrangler.toml** with the actual KV namespace IDs

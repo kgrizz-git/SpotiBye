@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-10-25 — Backend docs audited against code
+
+PR: #69
+Scope: `src/backend/docs/*`, `src/backend/README.md`, `.skills/*`, `AGENTS.md`, `CLAUDE.md`
+Most of `src/backend/docs/` described an API that does not exist. It had invented endpoints, response shapes, error codes, KV keys, TTLs, log levels, and a staging environment. Part of `troubleshooting-guide.md` was corrupted text. Each doc was rewritten against the routes, services, and `wrangler.toml`. `openapi.yaml` gained 15 missing operations and still passes `tests/openapi-schema.test.ts`. The Cloudflare Worker agent skill no longer tells agents to run a bare `wrangler deploy` or set secrets without `--env`. The `export-formats`, `spotify-api`, `testing`, and `security` skills were deleted. They were June scaffolding that described code that never existed, such as `services/auth.ts`, `npm run test:watch`, and made-up CSV and JSON export columns. The security rules they listed live in `.cursor/rules/`. Documentation-only; no CHANGELOG entry.
+
 ## 2026-10-25 — Removed the bare backend deploy target; deleted stray Worker
 
 PR: #68

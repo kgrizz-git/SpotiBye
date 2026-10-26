@@ -78,7 +78,7 @@ For context-heavy analysis tasks, use sub-agents to prevent context rot:
 
 Sub-agents return condensed findings with citations, keeping parent context clean.
 
-Skills (progressive disclosure) live in `.skills/` — check for a skill matching the task (e.g. Spotify API, Cloudflare Worker, testing, export formats, dependency analysis, security) before improvising.
+Skills (progressive disclosure) live in `.skills/` — check for a skill matching the task (Cloudflare Worker deploys, dependency analysis) before improvising.
 
 ## Context Budget
 
