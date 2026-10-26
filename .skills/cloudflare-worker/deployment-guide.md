@@ -59,14 +59,19 @@ The Worker binds `CACHE_KV` and `SESSIONS_KV`. A new account needs its own:
 ```bash
 npx wrangler kv namespace create CACHE_KV
 npx wrangler kv namespace create SESSIONS_KV
+npx wrangler kv namespace create CACHE_KV --preview
+npx wrangler kv namespace create SESSIONS_KV --preview
 ```
 
-Then update the IDs in every block of `wrangler.toml`. The analysis queues are
+Then replace both `id` and `preview_id` in every `kv_namespaces` block of
+`wrangler.toml`: the top level, `[env.development]`, and `[env.production]`.
+Keep the preview namespaces separate from the deployed ones, so `wrangler dev`
+never writes to live data. The analysis queues are
 listed in `src/backend/docs/deployment-configuration.md`.
 
 ## Common Issues
 
-- **Secrets not available:** Check `wrangler secret list --env <env>`. Secrets
+- **Secrets not available:** Check `npx wrangler secret list --env <env>`. Secrets
   set without `--env` land on the stray top-level Worker.
 - **`/health` reports `release_sha: unknown`:** The Worker was deployed without
   `deploy-with-metadata.sh`.

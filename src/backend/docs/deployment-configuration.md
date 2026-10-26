@@ -67,9 +67,14 @@ from the environment or `.desktop.env.local`, then reads `release_sha` from `/he
 ```bash
 npx wrangler kv namespace create CACHE_KV
 npx wrangler kv namespace create SESSIONS_KV
+npx wrangler kv namespace create CACHE_KV --preview
+npx wrangler kv namespace create SESSIONS_KV --preview
 ```
 
-Then replace the IDs in every block of `wrangler.toml`.
+Then replace both `id` and `preview_id` in every `kv_namespaces` block of
+`wrangler.toml`: the top level, `[env.development]`, and `[env.production]`.
+Keep the preview namespaces separate from the deployed ones, so `wrangler dev`
+never writes to live data.
 
 ## Analysis Queue
 
@@ -109,7 +114,7 @@ new_sqlite_classes = ["AnalysisStatusObject"]
 ## Troubleshooting
 
 1. **KV namespace not found:** Check the namespace IDs in `wrangler.toml`.
-2. **Secret not set:** Run `wrangler secret list --env <development|production>`.
+2. **Secret not set:** Run `npx wrangler secret list --env <development|production>`.
 3. **`/health` reports `release_sha: unknown`:** The Worker was deployed without
    `deploy-with-metadata.sh`, or you are hitting the wrong Worker.
 

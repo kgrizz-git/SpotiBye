@@ -444,13 +444,10 @@ try {
         console.error('Unauthorized - please log in again');
         // Redirect to login
         break;
-      case 429:
-        console.error('Spotify rate limit hit - please try again later');
-        // e.g. SPOTIFY_RATE_LIMITED
-        break;
       case 500:
+        // Persistent Spotify rate limiting also lands here, as
+        // PLAYLISTS_FETCH_FAILED: the backend retries 429s, then fails with no status.
         console.error('Server error - please try again later');
-        // Show server error message
         break;
       default:
         console.error('Error:', error.error.message);

@@ -183,7 +183,7 @@ KV, Durable Object, and Queue bindings are not checked.
 #### Missing Environment Variables
 - **Symptom**: Every request, including `/health`, returns `500` with code `INTERNAL_ERROR`
 - **Log**: `Invalid Worker environment bindings: JWT_SECRET: ...` in `wrangler tail --env <env>`
-- **Solution**: Set the missing variable using `wrangler secret put <NAME> --env <environment>`
+- **Solution**: For `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, or `JWT_SECRET`, run `npx wrangler secret put <NAME> --env <environment>`. For `ENVIRONMENT` or `ALLOWED_REDIRECT_URIS`, add the value to that environment's `vars` in `wrangler.toml` and redeploy. These are not secrets.
 
 #### KV Namespace Not Bound
 - **Symptom**: Routes that touch KV fail with `500`

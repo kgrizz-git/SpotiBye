@@ -223,7 +223,8 @@ On any of these, the client should clear its stored JWT and start a new login. T
 
 ### State
 - The backend generates `state` and stores it server-side. It is single-use and expires after 10 minutes.
-- A callback whose `state` is not in KV is rejected, which covers CSRF and replay.
+- A callback whose `state` is not in KV is rejected. That stops forged states, and it stops replay once a state has been consumed.
+- The lookup does not bind the callback to the client that started the login, so it is not a CSRF defense on its own. Clients must compare the callback's `state` with the value returned by `POST /auth/spotify/login` before forwarding it. The desktop app does not do this yet.
 
 ### Redirect URIs
 `ALLOWED_REDIRECT_URIS` is a comma-separated exact-match allowlist. It fails closed when empty. Current values in `wrangler.toml`:

@@ -54,8 +54,8 @@ Files with no dependents (except tests and entry points) may be dead code:
 
 ```typescript
 function getDeadCode(): string[] {
-  const allFiles = Object.keys(graph)
-  const allDeps = new Set(Object.values(graph).flat())
+  const allFiles = Object.keys(graph).filter(f => f !== '_meta')
+  const allDeps = new Set(allFiles.flatMap(f => graph[f]))
   return allFiles.filter(f => !allDeps.has(f))
 }
 ```

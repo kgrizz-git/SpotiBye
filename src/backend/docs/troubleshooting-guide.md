@@ -69,14 +69,17 @@ Unhandled errors return `500` with code `INTERNAL_ERROR` and message
 ### Every Request Returns 500
 
 **Symptoms**: All routes, including `/health`, return `500 INTERNAL_ERROR`
-**Cause**: A required string binding is missing or empty. `middleware/env.ts`
-checks `ENVIRONMENT`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `JWT_SECRET`,
-and `ALLOWED_REDIRECT_URIS` on the first request in each isolate.
+**Cause**: `ENVIRONMENT`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, or
+`JWT_SECRET` is missing or empty. `middleware/env.ts` checks them on the first
+request in each isolate. An empty `ALLOWED_REDIRECT_URIS` is accepted. It only
+makes login reject every `redirect_uri` with `DISALLOWED_REDIRECT_URI`.
 
 **Diagnostics**: Look for `Invalid Worker environment bindings: <NAME>: ...` in
-`wrangler tail`, then check `wrangler secret list --env production`.
+`npx wrangler tail --env <environment>`, then check
+`npx wrangler secret list --env <environment>`.
 
-**Solution**: `wrangler secret put <NAME> --env production`. See
+**Solution**: For a secret, run `npx wrangler secret put <NAME> --env <environment>`.
+For `ENVIRONMENT`, set it in that environment's `vars` in `wrangler.toml`. See
 [environment-variables.md](environment-variables.md).
 
 ### Authentication Problems
@@ -105,10 +108,11 @@ and `ALLOWED_REDIRECT_URIS` on the first request in each isolate.
 ### Spotify API Issues
 
 #### Rate Limit Errors
-**Symptoms**: 429 responses, such as `SPOTIFY_RATE_LIMITED` from `GET /spotify/playlists`
-**Behavior**: The backend has no rate limiter of its own. `services/spotify.ts`
-waits for Spotify's `Retry-After` and retries up to 3 attempts. Network errors
-back off exponentially (1s, 2s). Other 4xx and 5xx responses are not retried.
+**Symptoms**: `500` with a `*_FETCH_FAILED` or `EXPORT_*` code and a `Max retries exceeded` log line
+**Behavior**: The backend has no rate limiter of its own. `services/spotify.ts` absorbs Spotify 429s: it waits for `Retry-After` and retries, then throws `Max retries exceeded` without a status. The
+routes therefore return `500`, not `429`. Their `SPOTIFY_RATE_LIMITED` and
+`EXPORT_*` 429 branches are unreachable today. Network errors back off
+exponentially (1s, 2s). Other 4xx and 5xx responses are not retried.
 
 **Solution**: Wait and retry. Cached responses reduce repeat calls. Playlists and
 playlist tracks are cached for 5 minutes, playlist details for 10 minutes, and
@@ -125,7 +129,7 @@ tracks for 1 hour.
 **Symptoms**: Export start, step, or chunk requests fail
 **Causes**:
 - `400 INVALID_PLAYLISTS`: The request body failed validation.
-- `401` / `429` with an `EXPORT_*` code: Spotify returned 401 or 429. `details.upstream_status` shows which.
+- `401` with an `EXPORT_*` code: Spotify returned 401. `details.upstream_status` shows it. Persistent Spotify rate limiting surfaces as a `500`, not a `429`.
 - `503` with `details.cpu_limited: true`: The Worker hit its CPU time limit. Use the stepped jobs API (`POST /export/jobs`, then `POST /export/jobs/:jobId/step`) for large exports.
 - `409 EXPORT_JOB_CONFLICT`: A step request carried a stale cursor or resume token. Re-read `/export/jobs/:jobId/status` and resume from there.
 - `500 EXPORT_FAILED`, `EXPORT_START_FAILED`, `EXPORT_BATCH_FAILED`, `EXPORT_JOB_STEP_FAILED`: Unexpected failure. Check `wrangler tail --env <env>`.
@@ -194,7 +198,6 @@ Backend logs are structured JSON lines with an `event` field, such as
 - `401` - Unauthorized (missing or invalid JWT, expired session, Spotify 401)
 - `404` - Not Found (unknown route, session, export, or analysis)
 - `409` - Conflict (export not ready, stale export cursor)
-- `429` - Too Many Requests (Spotify rate limit passed through)
 - `500` - Internal Server Error (unexpected error, missing bindings)
 - `503` - Service Unavailable (Worker CPU limit, export download failure)
 
