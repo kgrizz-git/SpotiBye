@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SpotifyService, parseRetryAfter } from '../services/spotify';
+import { SpotifyService, parseRetryAfter, pathSegment } from '../services/spotify';
 
 const artistResponse = (id: string) => ({
   id,
@@ -108,6 +108,28 @@ describe('SpotifyService artist metadata', () => {
       'https://api.spotify.com/v1/artists/artist1',
       expect.any(Object)
     );
+  });
+});
+
+describe('SpotifyService path segments', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('encodes IDs so they cannot traverse to another Spotify endpoint', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ id: 'x', name: 'n', owner: { id: 'o' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new SpotifyService('access-token').getPlaylist('../me');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.spotify.com/v1/playlists/..%2Fme',
+      expect.any(Object)
+    );
+  });
+
+  it('leaves ordinary Spotify IDs unchanged', () => {
+    expect(pathSegment('37i9dQZF1DXcBWIGoYBM5M')).toBe('37i9dQZF1DXcBWIGoYBM5M');
   });
 });
 

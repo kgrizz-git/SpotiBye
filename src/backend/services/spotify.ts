@@ -51,14 +51,14 @@ export class SpotifyService {
   }
 
   async getPlaylist(playlistId: string): Promise<SpotifyPlaylist> {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/playlists/${playlistId}`);
+    const response = await this.fetchWithRetry(`${this.baseUrl}/playlists/${pathSegment(playlistId)}`);
     const rawData = await response.json();
     parseSpotifyResponse<SpotifyPlaylistResponse>(rawData, ['id', 'name', 'owner']);
     return rawData as SpotifyPlaylist;
   }
 
   async getPlaylistTracks(playlistId: string, limit: number = 50, offset: number = 0): Promise<NormalizedPlaylistItemsResponse> {
-    const url = new URL(`${this.baseUrl}/playlists/${playlistId}/items`);
+    const url = new URL(`${this.baseUrl}/playlists/${pathSegment(playlistId)}/items`);
     url.searchParams.set('limit', limit.toString());
     url.searchParams.set('offset', offset.toString());
 
@@ -97,7 +97,7 @@ export class SpotifyService {
   }
 
   async getTrack(trackId: string): Promise<SpotifyTrack> {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/tracks/${trackId}`);
+    const response = await this.fetchWithRetry(`${this.baseUrl}/tracks/${pathSegment(trackId)}`);
     const rawData = await response.json();
     parseSpotifyResponse<SpotifyTrackResponse>(rawData, ['id', 'name', 'artists', 'album']);
     return rawData as SpotifyTrack;
@@ -105,7 +105,7 @@ export class SpotifyService {
 
 
   async getArtist(artistId: string): Promise<SpotifyArtistFull> {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${artistId}`);
+    const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${pathSegment(artistId)}`);
     const rawData = await response.json();
     parseSpotifyResponse<Record<string, unknown>>(rawData, ['id', 'name']);
     return asArtistFull(rawData);
@@ -203,6 +203,14 @@ export class SpotifyService {
  *
  * Exported for direct unit testing.
  */
+/**
+ * Encode a caller-supplied ID as one URL path segment, so a value like
+ * `../me` cannot point the request at a different Spotify endpoint.
+ */
+export function pathSegment(id: string): string {
+  return encodeURIComponent(id);
+}
+
 export function parseRetryAfter(header: string | null | undefined): number {
   if (!header) {
     return 1;
