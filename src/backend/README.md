@@ -91,10 +91,14 @@ For local development, these use preview IDs. For production, you'll need to cre
 
 1. **Set up production secrets**
    ```bash
-   wrangler secret put SPOTIFY_CLIENT_ID
-   wrangler secret put SPOTIFY_CLIENT_SECRET
-   wrangler secret put JWT_SECRET
+   wrangler secret put SPOTIFY_CLIENT_ID --env production
+   wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+   wrangler secret put JWT_SECRET --env production
    ```
+
+   Without `--env production`, secrets attach to the top-level
+   `spotibye-backend` Worker, not the `spotibye-backend-production`
+   Worker that `deploy:prod` deploys.
 
 2. **Create KV namespaces** (if not already created)
    ```bash
