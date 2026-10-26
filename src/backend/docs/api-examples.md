@@ -678,7 +678,14 @@ const api = new SpotiByeAPI();
 // Finish a login if Spotify just redirected back here
 const params = new URLSearchParams(window.location.search);
 if (params.has('code')) {
-  await api.handleCallback(params.get('code'), params.get('state'));
+  try {
+    await api.handleCallback(params.get('code'), params.get('state'));
+  } catch (error) {
+    console.error('Login failed:', error); // falls through to a fresh login below
+  } finally {
+    // Drop code and state so a reload does not replay a consumed callback.
+    history.replaceState(null, '', window.location.pathname);
+  }
 }
 
 if (!api.isAuthenticated()) {
