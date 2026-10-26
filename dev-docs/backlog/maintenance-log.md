@@ -12,7 +12,7 @@
 
 ## 2026-10-25 — Backend docs audited against code
 
-PR: TBD
+PR: #69
 Scope: `src/backend/docs/*`, `src/backend/README.md`, `.skills/cloudflare-worker/*`
 Most of `src/backend/docs/` described an API that does not exist. It had invented endpoints, response shapes, error codes, KV keys, TTLs, log levels, and a staging environment. Part of `troubleshooting-guide.md` was corrupted text. Each doc was rewritten against the routes, services, and `wrangler.toml`. `openapi.yaml` gained 15 missing operations and still passes `tests/openapi-schema.test.ts`. The Cloudflare Worker agent skill no longer tells agents to run a bare `wrangler deploy` or set secrets without `--env`. Documentation-only; no CHANGELOG entry.
 
