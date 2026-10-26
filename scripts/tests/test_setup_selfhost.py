@@ -557,8 +557,10 @@ def test_generate_selfhost_config_allows_desktop_callback_by_default(
     template.write_text(SAMPLE_TOML)
     target = tmp_path / "wrangler.selfhost.toml"
     assert _mod.generate_selfhost_config(template, target, {})
+    # The template's web callback is kept, and the desktop callback is added.
     assert (
-        'vars = { ALLOWED_REDIRECT_URIS = "http://127.0.0.1:8080/callback" }'
+        'vars = { ALLOWED_REDIRECT_URIS = '
+        '"https://app.spotibye.com,http://127.0.0.1:8080/callback" }'
         in target.read_text()
     )
 
@@ -573,3 +575,14 @@ def test_generate_selfhost_config_warns_without_desktop_callback(
         template, target, {}, "https://app.example.com"
     )
     assert "http://127.0.0.1:8080/callback is not in" in capsys.readouterr().out
+
+
+def test_with_desktop_callback_does_not_duplicate() -> None:
+    uris = "http://127.0.0.1:8080/callback,https://app.example.com"
+    assert _mod.with_desktop_callback(uris) == uris
+    assert _mod.with_desktop_callback("") == "http://127.0.0.1:8080/callback"
+
+
+def test_production_allowlist_reads_the_template() -> None:
+    assert _mod.production_allowlist(SAMPLE_TOML) == "https://app.spotibye.com"
+    assert _mod.production_allowlist('name = "x"\n') == ""

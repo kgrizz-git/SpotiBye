@@ -6,11 +6,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Iterator, Tuple
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ..auth.backend_auth import BackendAuthenticator
+from ..auth.backend_auth import BackendAuthenticator, CallbackHandler
 from ..services.backend_client import BackendAPIError, BackendClient
 
 EXPECTED_STATE = "state-from-this-login"
@@ -81,6 +81,8 @@ def test_escapes_error_details_in_the_callback_page(callback_server) -> None:
     assert status == 400
     assert "<script>" not in body
     assert "&lt;script&gt;" in body
+    assert "<b>x</b>" not in body
+    assert "&lt;b&gt;x&lt;/b&gt;" in body
     assert "error" in authenticator.auth_result_container
 
 
@@ -104,3 +106,22 @@ def test_start_spotify_login_returns_auth_url_and_state() -> None:
             "auth_url": "https://x",
             "state": "s1",
         }
+
+
+def test_write_failure_on_forged_callback_records_nothing() -> None:
+    """A sender that hangs up mid-response must not end the login."""
+    handler = CallbackHandler.__new__(CallbackHandler)  # skip socket setup
+    handler.auth_result_container = {}
+    handler.expected_state = EXPECTED_STATE
+    handler.path = "/callback?code=attacker-code&state=forged"
+    handler.send_response = MagicMock()
+    handler.send_header = MagicMock()
+    handler.end_headers = MagicMock()
+    handler.wfile = MagicMock()
+    handler.wfile.write.side_effect = BrokenPipeError()
+
+    handler.do_GET()
+
+    handler.wfile.write.assert_called_once()
+    assert handler.auth_result_container == {}
+

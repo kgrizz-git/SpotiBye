@@ -128,6 +128,16 @@ describe('SpotifyService path segments', () => {
     );
   });
 
+  it.each(['.', '..'])('rejects the dot segment %s without calling Spotify', async (id) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(new SpotifyService('access-token').getPlaylistTracks(id)).rejects.toThrow(
+      'Invalid Spotify ID'
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('leaves ordinary Spotify IDs unchanged', () => {
     expect(pathSegment('37i9dQZF1DXcBWIGoYBM5M')).toBe('37i9dQZF1DXcBWIGoYBM5M');
   });

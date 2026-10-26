@@ -15,7 +15,7 @@ new_sqlite_classes = ["AnalysisStatusObject"]
 
 [vars]
 ENVIRONMENT = "development"
-ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080,http://127.0.0.1:8080/callback"
+ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080,http://127.0.0.1:8080/callback,http://127.0.0.1:5000/callback,http://127.0.0.1:5001/callback,http://127.0.0.1:5002/callback,http://127.0.0.1:5003/callback,http://127.0.0.1:8001/callback,http://127.0.0.1:8101/callback,http://127.0.0.1:8202/callback,http://127.0.0.1:8303/callback,http://127.0.0.1:8888/callback"
 
 # KV Namespaces
 [[kv_namespaces]]
@@ -40,8 +40,11 @@ max_retries = 3
 dead_letter_queue = "spotibye-analysis-dlq"
 
 # Environment-specific configuration
+# The 127.0.0.1 callbacks cover the desktop app's default port (8080) and the
+# alternates registered in the Spotify app, for users who set SPOTIBYE_OAUTH_PORT.
+# Keep this list in sync with the Spotify Developer Dashboard.
 [env.development]
-vars = { ENVIRONMENT = "development", ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080,http://127.0.0.1:8080/callback" }
+vars = { ENVIRONMENT = "development", ALLOWED_REDIRECT_URIS = "http://localhost:3000,http://localhost:3000/callback,http://localhost:8080,http://127.0.0.1:8080/callback,http://127.0.0.1:5000/callback,http://127.0.0.1:5001/callback,http://127.0.0.1:5002/callback,http://127.0.0.1:5003/callback,http://127.0.0.1:8001/callback,http://127.0.0.1:8101/callback,http://127.0.0.1:8202/callback,http://127.0.0.1:8303/callback,http://127.0.0.1:8888/callback" }
 
 [[env.development.kv_namespaces]]
 binding = "CACHE_KV"
@@ -69,7 +72,7 @@ name = "ANALYSIS_STATUS"
 class_name = "AnalysisStatusObject"
 
 [env.production]
-vars = { ENVIRONMENT = "production", ALLOWED_REDIRECT_URIS = "http://127.0.0.1:8080/callback,https://app.spotibye.com" }
+vars = { ENVIRONMENT = "production", ALLOWED_REDIRECT_URIS = "http://127.0.0.1:8080/callback,http://127.0.0.1:5000/callback,http://127.0.0.1:5001/callback,http://127.0.0.1:5002/callback,http://127.0.0.1:5003/callback,http://127.0.0.1:8001/callback,http://127.0.0.1:8101/callback,http://127.0.0.1:8202/callback,http://127.0.0.1:8303/callback,http://127.0.0.1:8888/callback,https://app.spotibye.com" }
 
 [[env.production.kv_namespaces]]
 binding = "CACHE_KV"

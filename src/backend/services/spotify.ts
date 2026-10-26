@@ -206,8 +206,14 @@ export class SpotifyService {
 /**
  * Encode a caller-supplied ID as one URL path segment, so a value like
  * `../me` cannot point the request at a different Spotify endpoint.
+ *
+ * `.` and `..` are rejected outright. Encoding cannot help with them: URL
+ * parsing treats `%2e%2e` as `..` too, and would collapse the path.
  */
 export function pathSegment(id: string): string {
+  if (id === '.' || id === '..') {
+    throw new Error(`Invalid Spotify ID: ${id}`);
+  }
   return encodeURIComponent(id);
 }
 

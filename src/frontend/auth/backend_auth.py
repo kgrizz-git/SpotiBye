@@ -55,16 +55,21 @@ class CallbackHandler(BaseHTTPRequestHandler):
             # Ignore callbacks from any other login, such as a page that
             # redirects here with an attacker's code. Keep waiting for ours.
             if not self._state_matches(query_params):
-                self.send_response(400)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(
-                    b"<html><head><title>Authentication Failed</title></head>"
-                    b"<body><h1>Authentication Failed</h1>"
-                    b"<p>This callback does not match the login SpotiBye started.</p>"
-                    b"</body></html>"
-                )
                 logger.warning("Ignored OAuth callback with mismatched state")
+                try:
+                    self.send_response(400)
+                    self.send_header("Content-type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(
+                        b"<html><head><title>Authentication Failed</title></head>"
+                        b"<body><h1>Authentication Failed</h1>"
+                        b"<p>This callback does not match the login SpotiBye started.</p>"
+                        b"</body></html>"
+                    )
+                except OSError:
+                    # The sender hung up. Record nothing, so the outer handler
+                    # cannot turn a forged request into a failed login.
+                    logger.debug("Client disconnected during mismatched-state response")
                 return
 
             if "code" in query_params:

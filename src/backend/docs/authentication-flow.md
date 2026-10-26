@@ -231,10 +231,10 @@ On any of these, the client should clear its stored JWT and start a new login. T
 
 | Environment | Values |
 |-------------|--------|
-| Top-level (local `wrangler dev`) and `development` | `http://localhost:3000`, `http://localhost:3000/callback`, `http://localhost:8080`, `http://127.0.0.1:8080/callback` |
-| `production` | `http://127.0.0.1:8080/callback`, `https://app.spotibye.com` |
+| Top-level (local `wrangler dev`) and `development` | `http://localhost:3000`, `http://localhost:3000/callback`, `http://localhost:8080`, and `http://127.0.0.1:<port>/callback` for port `8080` plus `5000`–`5003`, `8001`, `8101`, `8202`, `8303`, `8888` |
+| `production` | `http://127.0.0.1:<port>/callback` for port `8080` plus `5000`–`5003`, `8001`, `8101`, `8202`, `8303`, `8888`, and `https://app.spotibye.com` |
 
-The same URI must also be registered in the Spotify Developer Dashboard. If you change `SPOTIBYE_OAUTH_PORT`, add the matching `http://127.0.0.1:<port>/callback` to both.
+The same URI must also be registered in the Spotify Developer Dashboard. The alternate ports exist for users who set `SPOTIBYE_OAUTH_PORT`. Any other port needs its `http://127.0.0.1:<port>/callback` added to both.
 
 ### Token Handling
 - Spotify tokens stay in `SESSIONS_KV`. Only the app JWT reaches the client.

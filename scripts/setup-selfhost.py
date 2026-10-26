@@ -27,6 +27,7 @@ import secrets
 import shutil
 import subprocess  # nosec B404 - subprocess is needed for tool checks
 import sys
+import tomllib
 import tempfile
 import urllib.error
 import urllib.parse
@@ -540,6 +541,21 @@ def patch_allowlist(toml_text: str, uris: str) -> str:
     return "\n".join(out) + "\n"
 
 
+def production_allowlist(toml_text: str) -> str:
+    """Return the template's [env.production] ALLOWED_REDIRECT_URIS, or ""."""
+    config = tomllib.loads(toml_text)
+    production = config.get("env", {}).get("production", {})
+    return str(production.get("vars", {}).get("ALLOWED_REDIRECT_URIS", ""))
+
+
+def with_desktop_callback(uris: str) -> str:
+    """Append the desktop callback to a comma-separated allowlist if missing."""
+    allowed = [uri.strip() for uri in uris.split(",") if uri.strip()]
+    if DESKTOP_CALLBACK_URI not in allowed:
+        allowed.append(DESKTOP_CALLBACK_URI)
+    return ",".join(allowed)
+
+
 def generate_selfhost_config(
     template_path: Path,
     output_path: Path,
@@ -550,11 +566,15 @@ def generate_selfhost_config(
 ) -> bool:
     """Write a per-user wrangler config. Never touches the tracked file.
 
-    `redirect_uris` defaults to the desktop callback. Without it in the
-    production allowlist, desktop login fails with DISALLOWED_REDIRECT_URI.
+    `redirect_uris` defaults to the template's production allowlist plus the
+    desktop callback, so existing web callbacks are kept. Without the desktop
+    callback, desktop login fails with DISALLOWED_REDIRECT_URI.
     """
     if redirect_uris is None:
-        redirect_uris = DESKTOP_CALLBACK_URI
+        template_text = (
+            template_path.read_text(encoding="utf-8") if template_path.exists() else ""
+        )
+        redirect_uris = with_desktop_callback(production_allowlist(template_text))
     allowed = [uri.strip() for uri in redirect_uris.split(",")]
     if DESKTOP_CALLBACK_URI not in allowed:
         print(
