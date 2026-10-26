@@ -684,7 +684,7 @@ if (params.has('code')) {
     console.error('Login failed:', error); // falls through to a fresh login below
   } finally {
     // Drop code and state so a reload does not replay a consumed callback.
-    history.replaceState(null, '', window.location.pathname);
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
   }
 }
 
