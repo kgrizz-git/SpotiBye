@@ -36,6 +36,11 @@ const response = await fetch(`${API_BASE}/auth/spotify/login`, {
     redirect_uri: 'http://localhost:3000/callback'
   })
 });
+const { data } = await response.json();
+
+// Save the backend's state so the callback can be checked against it.
+sessionStorage.setItem('spotibye_oauth_state', data.state);
+window.location.href = data.auth_url;
 
 // Response (200 OK)
 {
@@ -55,10 +60,20 @@ const urlParams = new URLSearchParams(window.location.search);
 const code = urlParams.get('code');
 const state = urlParams.get('state');
 
+// Reject a callback from any login this page did not start. The backend only
+// checks that the state exists, not that this client created it.
+const expectedState = sessionStorage.getItem('spotibye_oauth_state');
+sessionStorage.removeItem('spotibye_oauth_state');
+if (!state || !expectedState || state !== expectedState) {
+  throw new Error('OAuth state mismatch: restart login');
+}
+
 // Exchange code for a SpotiBye JWT
 const response = await fetch(
   `${API_BASE}/auth/spotify/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
 );
+const { data } = await response.json();
+const token = data.token;
 
 // Response (200 OK)
 {
@@ -80,10 +95,18 @@ const response = await fetch(
 
 ### Step 3: Use JWT Token
 
-```javascript
-// Store the token (e.g., in secure OS storage for a desktop client)
-localStorage.setItem('spotibye_token', token);
+Keep the JWT out of `localStorage` and `sessionStorage`. Any script on the page
+can read them, so one XSS bug leaks a 30-day bearer token. Safer options:
 
+- **Desktop or mobile client:** store it in the OS keychain or credential store.
+- **Browser app:** keep it in memory only, and log in again after a reload. For
+  persistence, put a small backend-for-frontend in front of SpotiBye that holds
+  the JWT and gives the browser an `HttpOnly`, `Secure`, `SameSite` session
+  cookie. The SpotiBye backend does not set cookies itself.
+
+The examples below keep the token in a variable.
+
+```javascript
 // Send it as a Bearer token on every authenticated request
 const response = await fetch(`${API_BASE}/spotify/playlists`, {
   headers: {
@@ -517,21 +540,26 @@ class SpotiByeAPI {
 
     const { data } = await loginResponse.json();
 
-    // Redirect user to Spotify
+    // Save the state to check on callback, then redirect user to Spotify
+    sessionStorage.setItem('spotibye_oauth_state', data.state);
     window.location.href = data.auth_url;
   }
 
   // Handle callback and get token
   async handleCallback(code, state) {
+    const expectedState = sessionStorage.getItem('spotibye_oauth_state');
+    sessionStorage.removeItem('spotibye_oauth_state');
+    if (!state || !expectedState || state !== expectedState) {
+      throw new Error('OAuth state mismatch: restart login');
+    }
+
     const callbackResponse = await fetch(
       `${this.baseURL}/auth/spotify/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
     );
 
     const { data } = await callbackResponse.json();
+    // Kept in memory only; see "Step 3: Use JWT Token" for storage trade-offs.
     this.token = data.token;
-
-    // Store token
-    localStorage.setItem('spotibye_token', this.token);
 
     return data.user;
   }
@@ -638,23 +666,20 @@ class SpotiByeAPI {
     return !!this.token;
   }
 
-  // Load token from storage
-  loadToken() {
-    this.token = localStorage.getItem('spotibye_token');
-  }
-
   // Clear token
   logout() {
     this.token = null;
-    localStorage.removeItem('spotibye_token');
   }
 }
 
 // Usage example
 const api = new SpotiByeAPI();
 
-// Check if already authenticated
-api.loadToken();
+// Finish a login if Spotify just redirected back here
+const params = new URLSearchParams(window.location.search);
+if (params.has('code')) {
+  await api.handleCallback(params.get('code'), params.get('state'));
+}
 
 if (!api.isAuthenticated()) {
   // Start authentication flow
@@ -712,13 +737,7 @@ function useSpotiByeAPI() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialize token from localStorage
-  useEffect(() => {
-    const savedToken = localStorage.getItem('spotibye_token');
-    if (savedToken) {
-      setToken(savedToken);
-    }
-  }, []);
+  // The token lives in React state only; see "Step 3: Use JWT Token".
 
   // Login function
   const login = useCallback(async (redirectUri) => {
@@ -733,6 +752,7 @@ function useSpotiByeAPI() {
       });
 
       const { data } = await response.json();
+      sessionStorage.setItem('spotibye_oauth_state', data.state);
       window.location.href = data.auth_url;
     } catch (err) {
       setError(err.message);
@@ -746,6 +766,12 @@ function useSpotiByeAPI() {
     setError(null);
 
     try {
+      const expectedState = sessionStorage.getItem('spotibye_oauth_state');
+      sessionStorage.removeItem('spotibye_oauth_state');
+      if (!state || !expectedState || state !== expectedState) {
+        throw new Error('OAuth state mismatch: restart login');
+      }
+
       const response = await fetch(
         `${API_BASE}/auth/spotify/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
       );
@@ -753,7 +779,6 @@ function useSpotiByeAPI() {
       const { data } = await response.json();
       setToken(data.token);
       setUser(data.user);
-      localStorage.setItem('spotibye_token', data.token);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -794,7 +819,6 @@ function useSpotiByeAPI() {
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
-    localStorage.removeItem('spotibye_token');
   }, []);
 
   return {
@@ -874,6 +898,8 @@ function PlaylistManager() {
 - Use loading states for better UX
 
 ### Security
+- Do not keep the JWT in `localStorage` or `sessionStorage`. Any script on the page can read them. See [Step 3](#step-3-use-jwt-token) for safer storage.
+- Save the `state` from `POST /auth/spotify/login` and reject a callback whose `state` does not match
 - Never log tokens or commit them to source
 - Use HTTPS in production
 - Validate all user inputs
