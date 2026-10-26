@@ -102,7 +102,7 @@ class MockBackendHandler(BaseHTTPRequestHandler):
         auth_url = (
             f"{redirect_uri}{separator}code=test_code_12345&state=test_state_12345"
         )
-        response = {"auth_url": auth_url}
+        response = {"auth_url": auth_url, "state": "test_state_12345"}
         self._send_json_response(200, response)
 
     def _handle_spotify_callback(

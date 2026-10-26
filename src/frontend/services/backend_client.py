@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
+
+
+class SpotifyLoginStart(TypedDict):
+    """Result of starting the Spotify OAuth flow."""
+
+    auth_url: str
+    # The backend-generated OAuth state. The callback must carry this exact value.
+    state: str
 
 
 class BackendAPIError(Exception):
@@ -193,12 +201,13 @@ class BackendClient:
             )
 
     # Authentication endpoints
-    def initiate_spotify_login(self, redirect_uri: str) -> str:
+    def start_spotify_login(self, redirect_uri: str) -> SpotifyLoginStart:
         """
-        Initiate Spotify OAuth login flow.
+        Start the Spotify OAuth login flow.
 
         Returns:
-            Authorization URL for user to visit
+            The authorization URL for the user to visit, and the OAuth state
+            the callback must carry.
         """
         response = self._make_request(
             "POST", "/auth/spotify/login", json={"redirect_uri": redirect_uri}
@@ -206,7 +215,10 @@ class BackendClient:
         auth_url = response.get("auth_url")
         if not auth_url:
             raise BackendAPIError("No authorization URL received from backend")
-        return auth_url
+        state = response.get("state")
+        if not state:
+            raise BackendAPIError("No OAuth state received from backend")
+        return {"auth_url": auth_url, "state": state}
 
     def handle_spotify_callback(self, code: str, state: str) -> Dict[str, Any]:
         """

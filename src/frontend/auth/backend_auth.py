@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+import html
 import logging
 import threading
 import time
@@ -25,9 +27,23 @@ class ReusableHTTPServer(HTTPServer):
 class CallbackHandler(BaseHTTPRequestHandler):
     """HTTP server handler for OAuth callback."""
 
-    def __init__(self, auth_result_container: Dict[str, str], *args, **kwargs):
+    def __init__(
+        self,
+        auth_result_container: Dict[str, str],
+        expected_state: str,
+        *args,
+        **kwargs,
+    ):
         self.auth_result_container = auth_result_container
+        self.expected_state = expected_state
         super().__init__(*args, **kwargs)
+
+    def _state_matches(self, query_params: Dict[str, list[str]]) -> bool:
+        """Return True when the callback carries the state this login started with."""
+        received = query_params.get("state", [""])[0]
+        return hmac.compare_digest(
+            received.encode("utf-8"), self.expected_state.encode("utf-8")
+        )
 
     def do_GET(self):
         """Handle GET request for OAuth callback."""
@@ -36,7 +52,22 @@ class CallbackHandler(BaseHTTPRequestHandler):
             parsed_url = urllib.parse.urlparse(self.path)
             query_params = urllib.parse.parse_qs(parsed_url.query)
 
-            if "code" in query_params and "state" in query_params:
+            # Ignore callbacks from any other login, such as a page that
+            # redirects here with an attacker's code. Keep waiting for ours.
+            if not self._state_matches(query_params):
+                self.send_response(400)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(
+                    b"<html><head><title>Authentication Failed</title></head>"
+                    b"<body><h1>Authentication Failed</h1>"
+                    b"<p>This callback does not match the login SpotiBye started.</p>"
+                    b"</body></html>"
+                )
+                logger.warning("Ignored OAuth callback with mismatched state")
+                return
+
+            if "code" in query_params:
                 # Store the authorization code
                 self.auth_result_container["code"] = query_params["code"][0]
                 self.auth_result_container["state"] = query_params["state"][0]
@@ -69,6 +100,8 @@ class CallbackHandler(BaseHTTPRequestHandler):
                 error_description = query_params.get(
                     "error_description", ["Unknown error"]
                 )[0]
+                safe_error = html.escape(error)
+                safe_description = html.escape(error_description)
 
                 self.send_response(400)
                 self.send_header("Content-type", "text/html")
@@ -79,8 +112,8 @@ class CallbackHandler(BaseHTTPRequestHandler):
                 <head><title>Authentication Failed</title></head>
                 <body>
                     <h1>Authentication Failed</h1>
-                    <p>Error: {error}</p>
-                    <p>Description: {error_description}</p>
+                    <p>Error: {safe_error}</p>
+                    <p>Description: {safe_description}</p>
                     <p>You can now close this window and return to the application.</p>
                 </body>
                 </html>
@@ -162,11 +195,12 @@ class BackendAuthenticator:
             # Get authorization URL from backend
             # Intentional loopback for Spotify PKCE OAuth callback
             redirect_uri = f"http://{self.callback_host}:{self.callback_port}/callback"  # NOSONAR(S5332)
-            auth_url = self.backend_client.initiate_spotify_login(redirect_uri)
+            login_start = self.backend_client.start_spotify_login(redirect_uri)
+            auth_url = login_start["auth_url"]
             logger.info(f"Got authorization URL: {auth_url}")
 
             # Start local HTTP server to handle callback
-            if not self._start_callback_server():
+            if not self._start_callback_server(login_start["state"]):
                 if on_error:
                     on_error("Failed to start callback server")
                 return False
@@ -224,8 +258,13 @@ class BackendAuthenticator:
                 on_error(f"Login error: {e}")
             return False
 
-    def _start_callback_server(self) -> bool:
-        """Start local HTTP server to handle OAuth callback."""
+    def _start_callback_server(self, expected_state: str) -> bool:
+        """Start local HTTP server to handle OAuth callback.
+
+        Args:
+            expected_state: OAuth state returned when this login started.
+                Callbacks carrying any other state are ignored.
+        """
         try:
             # Ensure a stale server from a previous login attempt is fully released.
             self._stop_callback_server()
@@ -235,7 +274,9 @@ class BackendAuthenticator:
 
             # Create HTTP server
             def handler(*args, **kwargs):
-                return CallbackHandler(self.auth_result_container, *args, **kwargs)
+                return CallbackHandler(
+                    self.auth_result_container, expected_state, *args, **kwargs
+                )
 
             self.http_server = ReusableHTTPServer(
                 (self.callback_host, self.callback_port), handler
