@@ -492,7 +492,7 @@ done < kv-backup.txt
 # Check service health
 curl -f "$SPOTIBYE_PRODUCTION_BACKEND_URL/health" || echo "Service down"
 
-# Restart service (deploy same version, from src/backend)
+# Redeploy the current checkout (from src/backend)
 npm run deploy:prod
 
 # Clear problematic cache
