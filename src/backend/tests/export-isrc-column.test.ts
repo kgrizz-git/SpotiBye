@@ -43,6 +43,15 @@ describe('ISRC export column', () => {
     expect(lines[4].split(',').at(-1)).toBe('');
   });
 
+  it('escapes quotes, commas, and newlines in the CSV metadata row', async () => {
+    const tricky = makeExportData({
+      playlist: { ...makeExportData().playlist, name: 'Road "Trip", Vol. 1\nB-sides', owner: 'a,b' },
+    });
+    const text = new TextDecoder().decode(await generateCsvFile(tricky));
+    // The quoted name spans a newline, so check the raw text rather than splitting lines.
+    expect(text).toContain('"Playlist: Road ""Trip"", Vol. 1\nB-sides",,,,Total Tracks: 1,,,,"Owner: a,b"');
+  });
+
   it('writes ISRC on every JSON track', () => {
     const payload = JSON.parse(new TextDecoder().decode(generateCombinedJson([exportData])));
     const tracks = payload.playlists[0].tracks;

@@ -13,9 +13,9 @@ export async function generateCsvFile(exportData: ExportData): Promise<ArrayBuff
   let csvContent = headers.join(',') + '\n';
   // Metadata row padded to the header width; values sit in columns A, E, and I.
   const metadataRow: string[] = new Array<string>(headers.length).fill('');
-  metadataRow[0] = `"Playlist: ${exportData.playlist.name}"`;
-  metadataRow[4] = `"Total Tracks: ${exportData.playlist.total_tracks}"`;
-  metadataRow[8] = `"Owner: ${exportData.playlist.owner}"`;
+  metadataRow[0] = escapeCsvValue(`Playlist: ${exportData.playlist.name}`);
+  metadataRow[4] = escapeCsvValue(`Total Tracks: ${exportData.playlist.total_tracks}`);
+  metadataRow[8] = escapeCsvValue(`Owner: ${exportData.playlist.owner}`);
   csvContent += metadataRow.join(',') + '\n';
   csvContent += '\n';
   for (const track of exportData.tracks) {
