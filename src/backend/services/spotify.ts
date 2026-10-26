@@ -122,56 +122,49 @@ export class SpotifyService {
 
   private async fetchWithRetry(url: string, retries: number = 3): Promise<Response> {
     for (let i = 0; i < retries; i++) {
+      const isLastAttempt = i === retries - 1;
+      let response: Response;
       try {
-        const response = await fetch(url, {
+        response = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`
           }
         });
-
-        if (response.status === 429) {
-          // Out of attempts: surface the 429 so routes can return
-          // SPOTIFY_RATE_LIMITED instead of a generic 500. The `HTTP ` prefix
-          // is what extractUpstreamStatus() and the catch below key on.
-          if (i === retries - 1) {
-            const body = await response.text();
-            throw new Error(`HTTP 429: ${body || 'rate limited'}`);
-          }
-          // Rate limited - wait and retry. `Retry-After` is either an integer
-          // (seconds) or an HTTP-date. NaN would cause a 0ms busy spin.
-          const retryAfter = parseRetryAfter(
-            response.headers.get('Retry-After')
-          );
-          await this.sleep(retryAfter * 1000);
-          continue;
-        }
-
-        if (!response.ok) {
-          // Read the body so diagnostic details (e.g. Spotify's JSON error
-          // message) are not discarded. Non-429 errors are not retried
-          // because (a) 4xx is deterministic and (b) consuming the body
-          // would prevent reading it again on retry.
-          const body = await response.text();
-          throw new Error(`HTTP ${response.status}: ${body}`);
-        }
-
-        return response;
       } catch (error) {
-        // Non-recoverable: 4xx response (or other non-429 failure) was
-        // already thrown with a meaningful message — propagate immediately.
-        if (error instanceof Error && error.message.startsWith('HTTP ')) {
-          throw error;
-        }
-
-        if (i === retries - 1) throw error;
-
-        // Exponential backoff
-        const delay = Math.pow(2, i) * 1000;
-        await this.sleep(delay);
+        // Network failure: exponential backoff, then retry.
+        if (isLastAttempt) throw error;
+        await this.sleep(Math.pow(2, i) * 1000);
+        continue;
       }
+
+      if (response.status === 429 && !isLastAttempt) {
+        // Rate limited - wait and retry. `Retry-After` is either an integer
+        // (seconds) or an HTTP-date. NaN would cause a 0ms busy spin.
+        await this.sleep(parseRetryAfter(response.headers.get('Retry-After')) * 1000);
+        continue;
+      }
+
+      return this.ensureOk(response);
     }
 
     throw new Error('Max retries exceeded');
+  }
+
+  /**
+   * Return a successful response, or throw `HTTP <status>: <body>`.
+   *
+   * Non-429 errors are not retried: 4xx is deterministic, and reading the
+   * body (kept for Spotify's diagnostic message) consumes it. A 429 lands
+   * here only on the last attempt. Routes key on the `HTTP <status>` prefix
+   * (extractUpstreamStatus) to return SPOTIFY_RATE_LIMITED / SPOTIFY_TOKEN_EXPIRED.
+   */
+  private async ensureOk(response: Response): Promise<Response> {
+    if (response.ok) {
+      return response;
+    }
+    const body = await response.text();
+    const detail = response.status === 429 ? body || 'rate limited' : body;
+    throw new Error(`HTTP ${response.status}: ${detail}`);
   }
 
   private sleep(ms: number): Promise<void> {
