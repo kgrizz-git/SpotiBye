@@ -63,10 +63,12 @@ const state = urlParams.get('state');
 // Reject a callback from any login this page did not start. The backend only
 // checks that the state exists, not that this client created it.
 const expectedState = sessionStorage.getItem('spotibye_oauth_state');
-sessionStorage.removeItem('spotibye_oauth_state');
 if (!state || !expectedState || state !== expectedState) {
   throw new Error('OAuth state mismatch: restart login');
 }
+// Consume the saved state only on a match, so a forged callback cannot
+// spend it before the real one arrives.
+sessionStorage.removeItem('spotibye_oauth_state');
 
 // Exchange code for a SpotiBye JWT
 const response = await fetch(
@@ -548,10 +550,12 @@ class SpotiByeAPI {
   // Handle callback and get token
   async handleCallback(code, state) {
     const expectedState = sessionStorage.getItem('spotibye_oauth_state');
-    sessionStorage.removeItem('spotibye_oauth_state');
     if (!state || !expectedState || state !== expectedState) {
       throw new Error('OAuth state mismatch: restart login');
     }
+    // Consume the saved state only on a match, so a forged callback cannot
+    // spend it before the real one arrives.
+    sessionStorage.removeItem('spotibye_oauth_state');
 
     const callbackResponse = await fetch(
       `${this.baseURL}/auth/spotify/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
@@ -677,18 +681,31 @@ const api = new SpotiByeAPI();
 
 // Finish a login if Spotify just redirected back here
 const params = new URLSearchParams(window.location.search);
-if (params.has('code')) {
+const clearCallbackParams = () =>
+  history.replaceState(null, '', window.location.pathname + window.location.hash);
+let loginFailed = false;
+
+if (params.has('error')) {
+  // The user denied access, or Spotify failed. There is no code to exchange.
+  console.error('Spotify login failed:', params.get('error'));
+  loginFailed = true;
+  clearCallbackParams();
+} else if (params.has('code')) {
   try {
     await api.handleCallback(params.get('code'), params.get('state'));
   } catch (error) {
-    console.error('Login failed:', error); // falls through to a fresh login below
+    console.error('Login failed:', error);
+    loginFailed = true;
   } finally {
     // Drop code and state so a reload does not replay a consumed callback.
-    history.replaceState(null, '', window.location.pathname + window.location.hash);
+    clearCallbackParams();
   }
 }
 
-if (!api.isAuthenticated()) {
+if (loginFailed) {
+  // Show a "Log in with Spotify" button here. Redirecting straight back to
+  // Spotify after a denial would loop.
+} else if (!api.isAuthenticated()) {
   // Start authentication flow
   await api.authenticate('http://localhost:3000/callback');
 } else {
@@ -774,10 +791,12 @@ function useSpotiByeAPI() {
 
     try {
       const expectedState = sessionStorage.getItem('spotibye_oauth_state');
-      sessionStorage.removeItem('spotibye_oauth_state');
       if (!state || !expectedState || state !== expectedState) {
         throw new Error('OAuth state mismatch: restart login');
       }
+      // Consume the saved state only on a match, so a forged callback cannot
+      // spend it before the real one arrives.
+      sessionStorage.removeItem('spotibye_oauth_state');
 
       const response = await fetch(
         `${API_BASE}/auth/spotify/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
