@@ -91,9 +91,9 @@ For local development, these use preview IDs. For production, you'll need to cre
 
 1. **Set up production secrets**
    ```bash
-   wrangler secret put SPOTIFY_CLIENT_ID --env production
-   wrangler secret put SPOTIFY_CLIENT_SECRET --env production
-   wrangler secret put JWT_SECRET --env production
+   npx wrangler secret put SPOTIFY_CLIENT_ID --env production
+   npx wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+   npx wrangler secret put JWT_SECRET --env production
    ```
 
    Repeat with `--env development` for the development Worker.
@@ -102,8 +102,8 @@ For local development, these use preview IDs. For production, you'll need to cre
 
 2. **Create KV namespaces** (if not already created)
    ```bash
-   wrangler kv namespace create CACHE_KV
-   wrangler kv namespace create SESSIONS_KV
+   npx wrangler kv namespace create CACHE_KV
+   npx wrangler kv namespace create SESSIONS_KV
    ```
 
 3. **Update wrangler.toml** with the actual KV namespace IDs

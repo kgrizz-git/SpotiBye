@@ -46,7 +46,7 @@ POST /auth/spotify/login
 
 ### Request Format
 ```bash
-curl -X POST https://spotibye-backend-production.<your-subdomain>.workers.dev/auth/spotify/login \
+curl -X POST https://spotibye-backend-development.<your-subdomain>.workers.dev/auth/spotify/login \
   -H 'Content-Type: application/json' \
   -d '{"redirect_uri": "http://127.0.0.1:8080/callback"}'
 ```
@@ -98,7 +98,7 @@ token = response.get("token")
 
 ### Backend Processing
 1. Rejects the request if `error` is present, or if `code` or `state` is missing.
-2. Looks up `oauth_state:<state>` in `CACHE_KV`. A missing or expired entry is rejected. This lookup is the CSRF check; the client does not need to verify `state` itself.
+2. Looks up `oauth_state:<state>` in `CACHE_KV`. A missing or expired entry is rejected. This lookup does not tie the callback to the client that started the login, so it is not a full CSRF check. Clients must save the `state` returned by `POST /auth/spotify/login` and compare it with the callback's `state` before forwarding the callback. The desktop app does not do this yet.
 3. Exchanges the code with Spotify using the stored `redirect_uri` and `code_verifier`.
 4. Deletes `oauth_state:<state>` (one-time use) after a successful exchange.
 5. Fetches the Spotify profile (`GET /v1/me`).

@@ -119,12 +119,12 @@ file. Set them with `wrangler secret put`.
 2. **Set up KV namespaces**:
    ```bash
    # Create KV namespaces
-   wrangler kv namespace create "CACHE_KV"
-   wrangler kv namespace create "SESSIONS_KV"
+   npx wrangler kv namespace create "CACHE_KV"
+   npx wrangler kv namespace create "SESSIONS_KV"
 
    # Create preview namespaces
-   wrangler kv namespace create "CACHE_KV" --preview
-   wrangler kv namespace create "SESSIONS_KV" --preview
+   npx wrangler kv namespace create "CACHE_KV" --preview
+   npx wrangler kv namespace create "SESSIONS_KV" --preview
    ```
 
 3. **Update `wrangler.toml`** with the namespace IDs from the commands above
@@ -133,9 +133,9 @@ file. Set them with `wrangler secret put`.
 
 1. **Set secrets via Wrangler CLI**:
    ```bash
-   wrangler secret put SPOTIFY_CLIENT_ID --env production
-   wrangler secret put SPOTIFY_CLIENT_SECRET --env production
-   wrangler secret put JWT_SECRET --env production
+   npx wrangler secret put SPOTIFY_CLIENT_ID --env production
+   npx wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+   npx wrangler secret put JWT_SECRET --env production
    ```
 
 2. **Set non-secret environment variables** in `wrangler.toml` under the

@@ -42,10 +42,10 @@ checkout, run `./scripts/backend-deploy-status.sh prod` (or `dev`) from the repo
 cd src/backend
 
 # View real-time logs
-wrangler tail --env production   # or --env development
+npx wrangler tail --env production   # or --env development
 
 # Pretty output, errors only
-wrangler tail --env production --format pretty --status error
+npx wrangler tail --env production --format pretty --status error
 ```
 
 Always pass `--env`. Without it, Wrangler targets a top-level `spotibye-backend`
@@ -142,7 +142,7 @@ tracks for 1 hour.
 ### Analysis Issues
 
 - `404 ANALYSIS_NOT_FOUND` / `ANALYSIS_RESULTS_NOT_FOUND`: No job or cached result exists for that playlist. Results expire after `ANALYSIS_RESULTS_TTL_SECONDS` (default 24 hours).
-- A job stuck in a non-terminal status usually means the queue consumer failed. Look for `QUEUE_JOB_FAILED` or `QUEUE_MARK_FAILED_THREW` in `wrangler tail --env <env>`. Messages are retried 3 times, then go to the dead-letter queue (`spotibye-analysis-dlq` or `spotibye-analysis-dev-dlq`).
+- A job stuck in a non-terminal status usually means the queue consumer failed. Look for `QUEUE_JOB_FAILED` or `QUEUE_MARK_FAILED_THREW` in `wrangler tail --env <env>`. On the third attempt the consumer marks the job failed and acks the message, so these failures do not reach the dead-letter queue. Non-retryable errors are acked on the first attempt. Only messages whose invocation dies before acking, such as on a CPU-limit kill, exhaust delivery retries and land in `spotibye-analysis-dlq` or `spotibye-analysis-dev-dlq`.
 
 ### KV Namespace Issues
 
@@ -156,10 +156,10 @@ tracks for 1 hour.
 cd src/backend
 
 # List namespaces in the account
-wrangler kv namespace list
+npx wrangler kv namespace list
 
 # Read a key from the deployed namespace (Wrangler defaults to local storage without --remote)
-wrangler kv key get --binding CACHE_KV --env production --remote "<key>"
+npx wrangler kv key get --binding CACHE_KV --env production --remote "<key>"
 ```
 
 ## Debugging Tools
@@ -172,15 +172,15 @@ cd src/backend
 npm run dev
 
 # Use the development environment's bindings
-wrangler dev --env development
+npx wrangler dev --env development
 ```
 
 ### Remote Debugging
 ```bash
 # Filter by text, method, or Worker version
-wrangler tail --env production --search "OAUTH_CALLBACK_FAILED"
-wrangler tail --env production --method POST
-wrangler tail --env production --version-id <version-id>
+npx wrangler tail --env production --search "OAUTH_CALLBACK_FAILED"
+npx wrangler tail --env production --method POST
+npx wrangler tail --env production --version-id <version-id>
 ```
 
 Backend logs are structured JSON lines with an `event` field, such as
@@ -212,13 +212,13 @@ Backend logs are structured JSON lines with an `event` field, such as
 cd src/backend
 
 # List recent deployments
-wrangler deployments list --env production
+npx wrangler deployments list --env production
 
 # Roll back to a specific version
-wrangler rollback --env production <version-id>
+npx wrangler rollback --env production <version-id>
 
 # Roll back to the previous version
-wrangler rollback --env production
+npx wrangler rollback --env production
 ```
 
 After a rollback, `/health` reports the older `release_sha`.
@@ -228,7 +228,7 @@ KV data here is cache and session state with TTLs. There is no backup to restore
 To inspect keys:
 
 ```bash
-wrangler kv key list --binding CACHE_KV --env production --remote --prefix "<prefix>"
+npx wrangler kv key list --binding CACHE_KV --env production --remote --prefix "<prefix>"
 ```
 
 ### Service Recovery
@@ -240,7 +240,7 @@ curl -f "${SPOTIBYE_PRODUCTION_BACKEND_URL:?set SPOTIBYE_PRODUCTION_BACKEND_URL 
 npm run deploy:prod
 
 # Clear a problematic cache entry
-wrangler kv key delete --binding CACHE_KV --env production --remote "<key>"
+npx wrangler kv key delete --binding CACHE_KV --env production --remote "<key>"
 ```
 
 ## Prevention Strategies

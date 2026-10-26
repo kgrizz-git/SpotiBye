@@ -111,6 +111,8 @@ Worker is behind the current branch, run from the repo root:
 ## Queue Failures
 
 The analysis queue consumer retries a failed message up to 3 times. After the
-third attempt, it marks the job failed and acks the message. Messages that
-exhaust queue retries go to the dead-letter queue: `spotibye-analysis-dlq` in
-production and `spotibye-analysis-dev-dlq` in development.
+third attempt, it marks the job failed and acks the message, so these failures
+never reach the dead-letter queue. Look for them in the logs instead. Only
+messages whose invocation dies before acking, such as on a CPU-limit kill,
+exhaust delivery retries and land in `spotibye-analysis-dlq` in production or
+`spotibye-analysis-dev-dlq` in development.

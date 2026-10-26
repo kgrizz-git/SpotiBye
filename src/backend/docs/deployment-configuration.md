@@ -28,9 +28,9 @@ top-level Worker instead.
 
 ```bash
 cd src/backend
-wrangler secret put SPOTIFY_CLIENT_ID --env production
-wrangler secret put SPOTIFY_CLIENT_SECRET --env production
-wrangler secret put JWT_SECRET --env production
+npx wrangler secret put SPOTIFY_CLIENT_ID --env production
+npx wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+npx wrangler secret put JWT_SECRET --env production
 ```
 
 Repeat with `--env development` for the development Worker.
@@ -65,8 +65,8 @@ from the environment or `.desktop.env.local`, then reads `release_sha` from `/he
 `[env.*]` block of `wrangler.toml`. A new account needs its own namespaces:
 
 ```bash
-wrangler kv namespace create CACHE_KV
-wrangler kv namespace create SESSIONS_KV
+npx wrangler kv namespace create CACHE_KV
+npx wrangler kv namespace create SESSIONS_KV
 ```
 
 Then replace the IDs in every block of `wrangler.toml`.
@@ -114,15 +114,15 @@ new_sqlite_classes = ["AnalysisStatusObject"]
    `deploy-with-metadata.sh`, or you are hitting the wrong Worker.
 
 ```bash
-wrangler deployments list --env production
-wrangler tail --env production
+npx wrangler deployments list --env production
+npx wrangler tail --env production
 ```
 
 ## Rollback
 
 ```bash
-wrangler deployments list --env production
-wrangler rollback --env production <version-id>
+npx wrangler deployments list --env production
+npx wrangler rollback --env production <version-id>
 ```
 
 A rollback restores older code, so `/health` reports the older `release_sha`.

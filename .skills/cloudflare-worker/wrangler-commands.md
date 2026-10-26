@@ -1,6 +1,7 @@
 # Common Wrangler Commands
 
-Run these from `src/backend`. The project has two environments, `development`
+Run these from `src/backend`. Wrangler is a local dev dependency, so call it
+with `npx wrangler` after `npm ci`. The project has two environments, `development`
 and `production`, which map to the `spotibye-backend-development` and
 `spotibye-backend-production` Workers. Always pass `--env` to commands that
 touch a deployed Worker. Without it, Wrangler targets a stray top-level
@@ -13,7 +14,7 @@ touch a deployed Worker. Without it, Wrangler targets a stray top-level
 npm run dev
 
 # Tail logs from a deployed worker
-wrangler tail --env production   # or --env development
+npx wrangler tail --env production   # or --env development
 ```
 
 ## Deployment
@@ -24,7 +25,7 @@ npm run deploy:dev
 npm run deploy:prod
 
 # Compile and check without uploading
-wrangler deploy --env production --dry-run
+npx wrangler deploy --env production --dry-run
 ```
 
 `npm run deploy` deliberately fails. A raw `wrangler deploy --env <env>` skips
@@ -34,33 +35,33 @@ reports.
 ## Deployments and Rollback
 
 ```bash
-wrangler deployments list --env production
-wrangler rollback --env production <version-id>
+npx wrangler deployments list --env production
+npx wrangler rollback --env production <version-id>
 ```
 
 ## Secrets
 
 ```bash
-wrangler secret list --env production
-wrangler secret put SECRET_NAME --env production
-wrangler secret delete SECRET_NAME --env production
-wrangler secret bulk secrets.json --env production
+npx wrangler secret list --env production
+npx wrangler secret put SECRET_NAME --env production
+npx wrangler secret delete SECRET_NAME --env production
+npx wrangler secret bulk secrets.json --env production
 ```
 
 ## KV Namespaces
 
 ```bash
 # Create namespace
-wrangler kv namespace create NAMESPACE_NAME
+npx wrangler kv namespace create NAMESPACE_NAME
 
 # List, get, and put keys
-wrangler kv key list --namespace-id=NAMESPACE_ID
-wrangler kv key get "KEY" --namespace-id=NAMESPACE_ID
-wrangler kv key put "KEY" "VALUE" --namespace-id=NAMESPACE_ID
+npx wrangler kv key list --namespace-id=NAMESPACE_ID
+npx wrangler kv key get "KEY" --namespace-id=NAMESPACE_ID
+npx wrangler kv key put "KEY" "VALUE" --namespace-id=NAMESPACE_ID
 ```
 
 ## Account
 
 ```bash
-wrangler whoami
+npx wrangler whoami
 ```

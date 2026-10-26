@@ -48,17 +48,17 @@ Production workflow, which runs tests and the security gate first.
 
 Set secrets per environment:
 ```bash
-wrangler secret put SPOTIFY_CLIENT_ID --env production
-wrangler secret put SPOTIFY_CLIENT_SECRET --env production
-wrangler secret put JWT_SECRET --env production
+npx wrangler secret put SPOTIFY_CLIENT_ID --env production
+npx wrangler secret put SPOTIFY_CLIENT_SECRET --env production
+npx wrangler secret put JWT_SECRET --env production
 ```
 
 ## KV Namespaces
 
 The Worker binds `CACHE_KV` and `SESSIONS_KV`. A new account needs its own:
 ```bash
-wrangler kv namespace create CACHE_KV
-wrangler kv namespace create SESSIONS_KV
+npx wrangler kv namespace create CACHE_KV
+npx wrangler kv namespace create SESSIONS_KV
 ```
 
 Then update the IDs in every block of `wrangler.toml`. The analysis queues are
