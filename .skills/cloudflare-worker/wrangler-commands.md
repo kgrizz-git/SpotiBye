@@ -1,72 +1,67 @@
 # Common Wrangler Commands
 
+Run these from `src/backend`. Wrangler is a local dev dependency, so call it
+with `npx wrangler` after `npm ci`. The project has two environments, `development`
+and `production`, which map to the `spotibye-backend-development` and
+`spotibye-backend-production` Workers. Always pass `--env` to commands that
+touch a deployed Worker. Without it, Wrangler targets a stray top-level
+`spotibye-backend` Worker that belongs to neither environment.
+
 ## Development
 
 ```bash
 # Start local development server
-wrangler dev
+npm run dev
 
-# Start with specific environment
-wrangler dev --env staging
-
-# Tail logs from deployed worker
-wrangler tail
+# Tail logs from a deployed worker
+npx wrangler tail --env production   # or --env development
 ```
 
 ## Deployment
 
 ```bash
-# Deploy to production
-wrangler deploy
+# Deploy with release metadata (preferred)
+npm run deploy:dev
+npm run deploy:prod
 
-# Deploy to specific environment
-wrangler deploy --env staging
+# Compile and check without uploading
+npx wrangler deploy --env production --dry-run
+```
 
-# Deploy without prompting
-wrangler deploy --yes
+`npm run deploy` deliberately fails. A raw `wrangler deploy --env <env>` skips
+the `RELEASE_SHA`, `RELEASE_VERSION`, and `DEPLOYED_AT` metadata that `/health`
+reports.
+
+## Deployments and Rollback
+
+```bash
+npx wrangler deployments list --env production
+npx wrangler rollback --env production <version-id>
 ```
 
 ## Secrets
 
 ```bash
-# List all secrets
-wrangler secret list
-
-# Set a secret
-wrangler secret put SECRET_NAME
-
-# Delete a secret
-wrangler secret delete SECRET_NAME
-
-# Bulk put secrets from file
-wrangler secret bulk < secrets.txt
+npx wrangler secret list --env production
+npx wrangler secret put SECRET_NAME --env production
+npx wrangler secret delete SECRET_NAME --env production
+npx wrangler secret bulk secrets.json --env production
 ```
 
 ## KV Namespaces
 
 ```bash
 # Create namespace
-wrangler kv:namespace create "NAMESPACE_NAME"
+npx wrangler kv namespace create NAMESPACE_NAME
 
-# Create preview namespace
-wrangler kv:namespace create "NAMESPACE_NAME" --preview
-
-# List keys in namespace
-wrangler kv:key list --namespace-id=NAMESPACE_ID
-
-# Put value
-wrangler kv:key put "KEY" "VALUE" --namespace-id=NAMESPACE_ID
-
-# Get value
-wrangler kv:key get "KEY" --namespace-id=NAMESPACE_ID
+# List, get, and put keys
+npx wrangler kv key list --namespace-id=NAMESPACE_ID
+npx wrangler kv key get "KEY" --namespace-id=NAMESPACE_ID
+npx wrangler kv key put "KEY" "VALUE" --namespace-id=NAMESPACE_ID
 ```
 
-## Configuration
+## Account
 
 ```bash
-# Validate wrangler.toml
-wrangler validate
-
-# Show current configuration
-wrangler whoami
+npx wrangler whoami
 ```

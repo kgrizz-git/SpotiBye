@@ -10,6 +10,18 @@
 
 ---
 
+## 2026-10-25 — Backend docs audited against code
+
+PR: #69
+Scope: `src/backend/docs/*`, `src/backend/README.md`, `.skills/*`, `AGENTS.md`, `CLAUDE.md`
+Most of `src/backend/docs/` described an API that does not exist. It had invented endpoints, response shapes, error codes, KV keys, TTLs, log levels, and a staging environment. Part of `troubleshooting-guide.md` was corrupted text. Each doc was rewritten against the routes, services, and `wrangler.toml`. `openapi.yaml` gained 15 missing operations and still passes `tests/openapi-schema.test.ts`. The Cloudflare Worker agent skill no longer tells agents to run a bare `wrangler deploy` or set secrets without `--env`. The `export-formats`, `spotify-api`, `testing`, and `security` skills were deleted. They were June scaffolding that described code that never existed, such as `services/auth.ts`, `npm run test:watch`, and made-up CSV and JSON export columns. The security rules they listed live in `.cursor/rules/`. Documentation-only; no CHANGELOG entry.
+
+## 2026-10-25 — Removed the bare backend deploy target; deleted stray Worker
+
+PR: #68
+Scope: `src/backend/package.json`, `src/backend/README.md`, `dev-docs/references/cloudflare-workers-constraints.md`, `src/backend/docs/{deployment-configuration,environment-variables,troubleshooting-guide}.md`, `dev-docs/investigations/apple-music-api-analysis.md`
+`npm run deploy` ran a bare `wrangler deploy`, which targets the top-level `spotibye-backend` Worker instead of the `development` or `production` environment. That stray Worker had last been deployed on 2026-05-03 and served stale code without release metadata. It was deleted with `wrangler delete`. `npm run deploy` now exits with an error that points to `deploy:dev` / `deploy:prod`. Production is `spotibye-backend-production`. The backend docs also described a nonexistent staging environment, `spotibye-api*` Worker names and URLs, and a made-up `wrangler.toml`. `deployment-configuration.md` was rewritten around the real two environments and deploy scripts, and the other docs now use `--env` on secrets and deploys. Internal-only tooling; no CHANGELOG entry.
+
 ## 2026-10-25 — backend-deploy-status.sh reads URLs from .desktop.env.local
 
 PR: #67
