@@ -585,4 +585,49 @@ def test_with_desktop_callback_does_not_duplicate() -> None:
 
 def test_production_allowlist_reads_the_template() -> None:
     assert _mod.production_allowlist(SAMPLE_TOML) == "https://app.spotibye.com"
-    assert _mod.production_allowlist('name = "x"\n') == ""
+    assert _mod.production_allowlist('name = "x"\n') is None
+    assert _mod.production_allowlist("not = [valid") is None
+    assert (
+        _mod.production_allowlist("[env.production]\nvars = { ALLOWED_REDIRECT_URIS = 1 }\n")
+        is None
+    )
+
+
+NO_PROD_ALLOWLIST_TOML = """\
+name = "x"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+"""
+
+EMPTY_PROD_ALLOWLIST_TOML = """\
+name = "x"
+
+[env.production]
+vars = { ALLOWED_REDIRECT_URIS = "" }
+"""
+
+
+def test_generate_refuses_to_widen_a_missing_or_empty_allowlist(
+    tmp_path: Path, capsys
+) -> None:
+    for name, body in (("missing", NO_PROD_ALLOWLIST_TOML), ("empty", EMPTY_PROD_ALLOWLIST_TOML)):
+        template = tmp_path / f"{name}.toml"
+        template.write_text(body)
+        target = tmp_path / f"{name}.selfhost.toml"
+        assert not _mod.generate_selfhost_config(template, target, {})
+        assert not target.exists()
+        assert "[FAIL]" in capsys.readouterr().out
+
+
+def test_generate_fails_when_the_production_key_cannot_be_patched(
+    tmp_path: Path, capsys
+) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(NO_PROD_ALLOWLIST_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert not _mod.generate_selfhost_config(
+        template, target, {}, "http://127.0.0.1:8080/callback"
+    )
+    assert not target.exists()
+    assert "could not set ALLOWED_REDIRECT_URIS" in capsys.readouterr().out

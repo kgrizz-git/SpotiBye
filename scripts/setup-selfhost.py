@@ -541,11 +541,19 @@ def patch_allowlist(toml_text: str, uris: str) -> str:
     return "\n".join(out) + "\n"
 
 
-def production_allowlist(toml_text: str) -> str:
-    """Return the template's [env.production] ALLOWED_REDIRECT_URIS, or ""."""
-    config = tomllib.loads(toml_text)
+def production_allowlist(toml_text: str) -> str | None:
+    """Return the [env.production] ALLOWED_REDIRECT_URIS value.
+
+    Returns None when the TOML is malformed or the key is missing or not a
+    string. Callers treat that, and an empty value, as deny-all.
+    """
+    try:
+        config = tomllib.loads(toml_text)
+    except tomllib.TOMLDecodeError:
+        return None
     production = config.get("env", {}).get("production", {})
-    return str(production.get("vars", {}).get("ALLOWED_REDIRECT_URIS", ""))
+    value = production.get("vars", {}).get("ALLOWED_REDIRECT_URIS")
+    return value if isinstance(value, str) else None
 
 
 def with_desktop_callback(uris: str) -> str:
@@ -569,12 +577,23 @@ def generate_selfhost_config(
     `redirect_uris` defaults to the template's production allowlist plus the
     desktop callback, so existing web callbacks are kept. Without the desktop
     callback, desktop login fails with DISALLOWED_REDIRECT_URI.
+
+    A missing, empty, or malformed inherited allowlist is deny-all. It is not
+    widened with a hardcoded callback: pass `redirect_uris` explicitly instead.
+    Generation fails if the template has no production allowlist to patch.
     """
     if redirect_uris is None:
         template_text = (
             template_path.read_text(encoding="utf-8") if template_path.exists() else ""
         )
-        redirect_uris = with_desktop_callback(production_allowlist(template_text))
+        inherited = production_allowlist(template_text)
+        if not inherited or not inherited.strip():
+            print(
+                "  [FAIL] the template's [env.production] ALLOWED_REDIRECT_URIS is "
+                "missing, empty, or unreadable. Pass the redirect URIs explicitly."
+            )
+            return False
+        redirect_uris = with_desktop_callback(inherited)
     allowed = [uri.strip() for uri in redirect_uris.split(",")]
     if DESKTOP_CALLBACK_URI not in allowed:
         print(
@@ -593,6 +612,12 @@ def generate_selfhost_config(
     text = template_path.read_text(encoding="utf-8")
     text = patch_kv_ids(text, kv_ids)
     text = patch_allowlist(text, redirect_uris)
+    if production_allowlist(text) != redirect_uris:
+        print(
+            "  [FAIL] could not set ALLOWED_REDIRECT_URIS in the template's "
+            "[env.production] block. Add the key there, then re-run."
+        )
+        return False
     output_path.write_text(text, encoding="utf-8")
     print(f"  Wrote {output_path}")
     return True
