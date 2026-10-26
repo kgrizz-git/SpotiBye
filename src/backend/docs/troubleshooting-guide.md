@@ -110,11 +110,11 @@ For `ENVIRONMENT` or `ALLOWED_REDIRECT_URIS`, set it in that environment's
 ### Spotify API Issues
 
 #### Rate Limit Errors
-**Symptoms**: `500` with a `*_FETCH_FAILED` or `EXPORT_*` code and a `Max retries exceeded` log line
-**Behavior**: The backend has no rate limiter of its own. `services/spotify.ts` absorbs Spotify 429s: it waits for `Retry-After` and retries, then throws `Max retries exceeded` without a status. The
-routes therefore return `500`, not `429`. Their `SPOTIFY_RATE_LIMITED` and
-`EXPORT_*` 429 branches are unreachable today. Network errors back off
-exponentially (1s, 2s). Other 4xx and 5xx responses are not retried.
+**Symptoms**: `429` responses: `SPOTIFY_RATE_LIMITED` from any `/spotify/*` route, or an `EXPORT_*` code with `details.upstream_status: 429`
+**Behavior**: The backend has no rate limiter of its own. `services/spotify.ts`
+waits for Spotify's `Retry-After` and retries, up to 3 attempts. If Spotify is
+still rate limiting on the last attempt, the route returns `429`. Network errors
+back off exponentially (1s, 2s). Other 4xx and 5xx responses are not retried.
 
 **Solution**: Wait and retry. Cached responses reduce repeat calls. Playlists and
 playlist tracks are cached for 5 minutes, playlist details for 10 minutes, and
@@ -131,7 +131,7 @@ tracks for 1 hour.
 **Symptoms**: Export start, step, or chunk requests fail
 **Causes**:
 - `400 INVALID_PLAYLISTS`: The request body failed validation.
-- `401` with an `EXPORT_*` code: Spotify returned 401. `details.upstream_status` shows it. Persistent Spotify rate limiting surfaces as a `500`, not a `429`.
+- `401` / `429` with an `EXPORT_*` code: Spotify returned 401 or 429. `details.upstream_status` shows which.
 - `503` with `details.cpu_limited: true`: The Worker hit its CPU time limit. Use the stepped jobs API (`POST /export/jobs`, then `POST /export/jobs/:jobId/step`) for large exports.
 - `409 EXPORT_JOB_CONFLICT`: A step request carried a stale cursor or resume token. Re-read `/export/jobs/:jobId/status` and resume from there.
 - `500 EXPORT_FAILED`, `EXPORT_START_FAILED`, `EXPORT_BATCH_FAILED`, `EXPORT_JOB_STEP_FAILED`: Unexpected failure. Check `wrangler tail --env <env>`.
@@ -200,6 +200,7 @@ Backend logs are structured JSON lines with an `event` field, such as
 - `401` - Unauthorized (missing or invalid JWT, expired session, Spotify 401)
 - `404` - Not Found (unknown route, session, export, or analysis)
 - `409` - Conflict (export not ready, stale export cursor)
+- `429` - Too Many Requests (Spotify kept rate limiting after retries)
 - `500` - Internal Server Error (unexpected error, missing bindings)
 - `503` - Service Unavailable (Worker CPU limit, export download failure)
 

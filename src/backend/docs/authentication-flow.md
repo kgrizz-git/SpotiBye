@@ -98,7 +98,7 @@ token = response.get("token")
 
 ### Backend Processing
 1. Rejects the request if `error` is present, or if `code` or `state` is missing.
-2. Looks up `oauth_state:<state>` in `CACHE_KV`. A missing or expired entry is rejected. This lookup does not tie the callback to the client that started the login, so it is not a full CSRF check. Clients must save the `state` returned by `POST /auth/spotify/login` and compare it with the callback's `state` before forwarding the callback. The desktop app does not do this yet.
+2. Looks up `oauth_state:<state>` in `CACHE_KV`. A missing or expired entry is rejected. This lookup does not tie the callback to the client that started the login, so it is not a full CSRF check. Clients must save the `state` returned by `POST /auth/spotify/login` and compare it with the callback's `state` before forwarding the callback. The desktop app does this in `src/frontend/auth/backend_auth.py`: its callback server ignores any request whose `state` does not match.
 3. Exchanges the code with Spotify using the stored `redirect_uri` and `code_verifier`.
 4. Deletes `oauth_state:<state>` (one-time use) after a successful exchange.
 5. Fetches the Spotify profile (`GET /v1/me`).
@@ -224,7 +224,7 @@ On any of these, the client should clear its stored JWT and start a new login. T
 ### State
 - The backend generates `state` and stores it server-side. It is single-use and expires after 10 minutes.
 - A callback whose `state` is not in KV is rejected. That stops forged states, and it stops replay once a state has been consumed.
-- The lookup does not bind the callback to the client that started the login, so it is not a CSRF defense on its own. Clients must compare the callback's `state` with the value returned by `POST /auth/spotify/login` before forwarding it. The desktop app does not do this yet.
+- The lookup does not bind the callback to the client that started the login, so it is not a CSRF defense on its own. Clients must compare the callback's `state` with the value returned by `POST /auth/spotify/login` before forwarding it. The desktop app does, with a constant-time compare.
 
 ### Redirect URIs
 `ALLOWED_REDIRECT_URIS` is a comma-separated exact-match allowlist. It fails closed when empty. Current values in `wrangler.toml`:
@@ -232,7 +232,7 @@ On any of these, the client should clear its stored JWT and start a new login. T
 | Environment | Values |
 |-------------|--------|
 | Top-level (local `wrangler dev`) and `development` | `http://localhost:3000`, `http://localhost:3000/callback`, `http://localhost:8080`, `http://127.0.0.1:8080/callback` |
-| `production` | `https://app.spotibye.com` |
+| `production` | `http://127.0.0.1:8080/callback`, `https://app.spotibye.com` |
 
 The same URI must also be registered in the Spotify Developer Dashboard. If you change `SPOTIBYE_OAUTH_PORT`, add the matching `http://127.0.0.1:<port>/callback` to both.
 
