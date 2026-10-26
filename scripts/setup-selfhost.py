@@ -556,9 +556,20 @@ def production_allowlist(toml_text: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def with_desktop_callback(uris: str) -> str:
-    """Append the desktop callback to a comma-separated allowlist if missing."""
-    allowed = [uri.strip() for uri in uris.split(",") if uri.strip()]
+def parse_allowlist(uris: str) -> list[str]:
+    """Split a comma-separated allowlist into its nonempty entries."""
+    return [uri.strip() for uri in uris.split(",") if uri.strip()]
+
+
+def with_desktop_callback(uris: str) -> str | None:
+    """Append the desktop callback to an allowlist if missing.
+
+    Returns None when `uris` has no nonempty entries (e.g. "" or ",,"): that
+    allowlist is deny-all, and is not widened with a hardcoded callback.
+    """
+    allowed = parse_allowlist(uris)
+    if not allowed:
+        return None
     if DESKTOP_CALLBACK_URI not in allowed:
         allowed.append(DESKTOP_CALLBACK_URI)
     return ",".join(allowed)
@@ -582,40 +593,44 @@ def generate_selfhost_config(
     widened with a hardcoded callback: pass `redirect_uris` explicitly instead.
     Generation fails if the template has no production allowlist to patch.
     """
+    template_text = (
+        template_path.read_text(encoding="utf-8") if template_path.exists() else None
+    )
     if redirect_uris is None:
-        template_text = (
-            template_path.read_text(encoding="utf-8") if template_path.exists() else ""
-        )
-        inherited = production_allowlist(template_text)
-        if not inherited or not inherited.strip():
+        inherited = production_allowlist(template_text or "")
+        widened = with_desktop_callback(inherited) if inherited else None
+        if widened is None:
             print(
                 "  [FAIL] the template's [env.production] ALLOWED_REDIRECT_URIS is "
                 "missing, empty, or unreadable. Pass the redirect URIs explicitly."
             )
             return False
-        redirect_uris = with_desktop_callback(inherited)
-    allowed = [uri.strip() for uri in redirect_uris.split(",")]
-    if DESKTOP_CALLBACK_URI not in allowed:
+        redirect_uris = widened
+    if DESKTOP_CALLBACK_URI not in parse_allowlist(redirect_uris):
         print(
             f"  Warning: {DESKTOP_CALLBACK_URI} is not in ALLOWED_REDIRECT_URIS. "
             f"The desktop app cannot log in to this Worker without it. {CALLBACK_PORT_NOTE}"
         )
+    # Build and validate the config the same way for dry runs and real writes.
+    text: str | None = None
+    if template_text is not None:
+        text = patch_allowlist(patch_kv_ids(template_text, kv_ids), redirect_uris)
+        if production_allowlist(text) != redirect_uris:
+            print(
+                "  [FAIL] could not set ALLOWED_REDIRECT_URIS in the template's "
+                "[env.production] block. Add the key there, then re-run."
+            )
+            return False
     if dry_run:
         print(f"  [dry-run] would write {output_path}")
         return True
+    if text is None:
+        print(f"  [FAIL] template not found: {template_path}")
+        return False
     if output_path.exists() and not force:
         print(
             f"  {output_path} already exists. Re-run with --force to "
             "overwrite, or edit it by hand."
-        )
-        return False
-    text = template_path.read_text(encoding="utf-8")
-    text = patch_kv_ids(text, kv_ids)
-    text = patch_allowlist(text, redirect_uris)
-    if production_allowlist(text) != redirect_uris:
-        print(
-            "  [FAIL] could not set ALLOWED_REDIRECT_URIS in the template's "
-            "[env.production] block. Add the key there, then re-run."
         )
         return False
     output_path.write_text(text, encoding="utf-8")

@@ -580,7 +580,11 @@ def test_generate_selfhost_config_warns_without_desktop_callback(
 def test_with_desktop_callback_does_not_duplicate() -> None:
     uris = "http://127.0.0.1:8080/callback,https://app.example.com"
     assert _mod.with_desktop_callback(uris) == uris
-    assert _mod.with_desktop_callback("") == "http://127.0.0.1:8080/callback"
+
+
+def test_with_desktop_callback_keeps_an_empty_allowlist_deny_all() -> None:
+    for uris in ("", ",", " , ,", ",,"):
+        assert _mod.with_desktop_callback(uris) is None
 
 
 def test_production_allowlist_reads_the_template() -> None:
@@ -631,3 +635,47 @@ def test_generate_fails_when_the_production_key_cannot_be_patched(
     )
     assert not target.exists()
     assert "could not set ALLOWED_REDIRECT_URIS" in capsys.readouterr().out
+
+
+COMMA_ONLY_PROD_ALLOWLIST_TOML = """\
+name = "x"
+
+[env.production]
+vars = { ALLOWED_REDIRECT_URIS = ",," }
+"""
+
+
+def test_generate_refuses_a_comma_only_allowlist(tmp_path: Path, capsys) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(COMMA_ONLY_PROD_ALLOWLIST_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert not _mod.generate_selfhost_config(template, target, {})
+    assert not target.exists()
+    assert "[FAIL]" in capsys.readouterr().out
+
+
+def test_dry_run_validates_the_patched_template(tmp_path: Path, capsys) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(NO_PROD_ALLOWLIST_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert not _mod.generate_selfhost_config(
+        template, target, {}, "http://127.0.0.1:8080/callback", dry_run=True
+    )
+    assert "could not set ALLOWED_REDIRECT_URIS" in capsys.readouterr().out
+    assert not target.exists()
+
+
+def test_dry_run_succeeds_on_a_valid_template(tmp_path: Path) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(SAMPLE_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert _mod.generate_selfhost_config(template, target, {}, dry_run=True)
+    assert not target.exists()
+
+
+def test_real_write_fails_without_a_template(tmp_path: Path, capsys) -> None:
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert not _mod.generate_selfhost_config(
+        tmp_path / "missing.toml", target, {}, "http://127.0.0.1:8080/callback"
+    )
+    assert "template not found" in capsys.readouterr().out
