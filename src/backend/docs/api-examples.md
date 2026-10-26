@@ -14,9 +14,11 @@ This document provides practical examples of how to use the SpotiBye API endpoin
 ## Authentication Flow
 
 All examples use one base URL. Replace the placeholder with your Worker's URL.
+They use the development Worker, because its `ALLOWED_REDIRECT_URIS` includes the
+`http://localhost:3000/callback` redirect used below. Production's allowlist does not.
 
 ```javascript
-const API_BASE = 'https://spotibye-backend-production.<your-subdomain>.workers.dev';
+const API_BASE = 'https://spotibye-backend-development.<your-subdomain>.workers.dev';
 ```
 
 ### Step 1: Initiate Spotify OAuth
