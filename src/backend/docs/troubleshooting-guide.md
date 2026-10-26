@@ -5,9 +5,18 @@ This guide helps diagnose and resolve common issues with the SpotiBye Cloudflare
 ## Quick Diagnosis
 
 ### Health Check
+Set the backend URL once per shell. Your value is in `.desktop.env.local`.
+
 ```bash
-curl "$SPOTIBYE_PRODUCTION_BACKEND_URL/health"   # or $SPOTIBYE_DEV_BACKEND_URL
+export SPOTIBYE_PRODUCTION_BACKEND_URL=https://spotibye-backend-production.<your-subdomain>.workers.dev
+
+curl "${SPOTIBYE_PRODUCTION_BACKEND_URL:?set SPOTIBYE_PRODUCTION_BACKEND_URL first}/health"
 ```
+
+Use `SPOTIBYE_DEV_BACKEND_URL` the same way for the development Worker.
+
+The `:?` guard stops the command when the variable is unset, instead of
+requesting a bare `/health`.
 
 Expected response:
 ```json
@@ -225,7 +234,7 @@ wrangler kv key list --binding CACHE_KV --env production --remote --prefix "<pre
 ### Service Recovery
 ```bash
 # Check service health
-curl -f "$SPOTIBYE_PRODUCTION_BACKEND_URL/health" || echo "Service down"
+curl -f "${SPOTIBYE_PRODUCTION_BACKEND_URL:?set SPOTIBYE_PRODUCTION_BACKEND_URL first}/health" || echo "Service down"
 
 # Redeploy the current checkout (from src/backend)
 npm run deploy:prod
