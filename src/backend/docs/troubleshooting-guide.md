@@ -6,7 +6,7 @@ This guide helps diagnose and resolve common issues with the SpotiBye Cloudflare
 
 ### Health Check
 ```bash
-curl https://spotibye-api.workers.dev/health
+curl "$SPOTIBYE_PRODUCTION_BACKEND_URL/health"
 ```
 
 Expected response:
@@ -467,7 +467,7 @@ const monitoredHandler = withPerformanceMonitoring(handleRequest);
 ### Emergency Rollback
 ```bash
 # List recent deployments
-wrangler deployments list
+wrangler deployments list --env production
 
 # Rollback to previous version
 wrangler rollback --env production <deployment-id>
@@ -490,10 +490,10 @@ done < kv-backup.txt
 ### Service Recovery
 ```bash
 # Check service health
-curl -f https://spotibye-api.workers.dev/health || echo "Service down"
+curl -f "$SPOTIBYE_PRODUCTION_BACKEND_URL/health" || echo "Service down"
 
-# Restart service (deploy same version)
-wrangler deploy --env production
+# Restart service (deploy same version, from src/backend)
+npm run deploy:prod
 
 # Clear problematic cache
 wrangler kv:key delete --namespace-id your-cache-namespace "problematic-key"
@@ -522,7 +522,7 @@ wrangler kv:key delete --namespace-id your-cache-namespace "problematic-key"
 ## Contact Support
 
 When reporting issues, include:
-- Environment (development/staging/production)
+- Environment (development/production)
 - Error messages and codes
 - Request/response logs
 - Steps to reproduce

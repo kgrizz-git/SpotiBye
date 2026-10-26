@@ -1012,7 +1012,7 @@ describe('AppleMusicPlaylistService', () => {
   wrangler deploy --env development
 
   # Deploy to production
-  wrangler deploy
+  wrangler deploy --env production
   ```
 
 #### Cloudflare Pages Setup (Frontend)
