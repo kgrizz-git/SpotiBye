@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { escapeCsvValue, generateCombinedCsvFromAssembly } from '../services/export-csv';
+import { escapeCsvValue, generateCombinedCsvFromAssembly, generateCsvFile } from '../services/export-csv';
+import { makeExportData, makeExportTrack } from './helpers/export-data';
 import type { ResumableExportAssemblyState } from '../services/export-types';
 
 describe('escapeCsvValue', () => {
@@ -18,6 +19,22 @@ describe('escapeCsvValue', () => {
 
   it('wraps in quotes when value contains a newline', () => {
     expect(escapeCsvValue('line1\nline2')).toBe('"line1\nline2"');
+  });
+
+  it.each([
+    ['safe;=1+1;tail', `"safe;'=1+1;tail"`],
+    ['a;+1', `"a;'+1"`],
+    ['a;@cmd', `"a;'@cmd"`],
+    ['a;-x', `"a;'-x"`],
+    ['a;\uFF1D1', `"a;'\uFF1D1"`],
+  ])('neutralizes a formula after a semicolon in %j', (input, expected) => {
+    expect(escapeCsvValue(input)).toBe(expected);
+  });
+
+  it('leaves ordinary text and numbers after a semicolon alone', () => {
+    expect(escapeCsvValue('a;b')).toBe('"a;b"');
+    expect(escapeCsvValue('a;-5')).toBe('"a;-5"');
+    expect(escapeCsvValue('a; =1')).toBe('"a; =1"');
   });
 
   it('quotes a value containing a semicolon', () => {
@@ -83,5 +100,21 @@ describe('generateCombinedCsvFromAssembly', () => {
     const buffer = await generateCombinedCsvFromAssembly(state);
     const text = new TextDecoder().decode(buffer);
     expect(text).toBe('');
+  });
+});
+
+describe('CSV output read with a semicolon list separator', () => {
+  it('exposes no formula cell when Excel splits a row on ;', async () => {
+    const data = makeExportData({
+      tracks: [makeExportTrack({ Track: 'safe;=1+1;tail', Artist: 'x;@SUM(A1)' })],
+    });
+    const lines = new TextDecoder().decode(await generateCsvFile(data)).split('\n');
+    const trackRow = lines[3];
+    // A semicolon-locale Excel splits on ; and ignores commas and mid-field quotes.
+    const cells = trackRow.split(';');
+    expect(cells.length).toBeGreaterThan(1);
+    for (const cell of cells) {
+      expect(cell).not.toMatch(/^[=+@\uFF1D\uFF0B\uFF20]/);
+    }
   });
 });

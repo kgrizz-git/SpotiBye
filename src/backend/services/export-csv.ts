@@ -1,17 +1,29 @@
 import type { ExportData, ResumableExportAssemblyState } from './export-types';
 import { getTrackHeaders } from './export-format-helpers';
 
+// A formula trigger: =, +, @, tab, CR, LF, or their full-width forms.
+const FORMULA_TRIGGER = '[=+@\\t\\r\\n\\uFF1D\\uFF0B\\uFF20]';
+
+// A `;` followed by a formula trigger, or by - / － that does not start a number.
+const SEMICOLON_FORMULA = new RegExp(`;(?=${FORMULA_TRIGGER}|[-\\uFF0D](?![\\d.]))`, 'g');
+
 /**
  * Prefix a cell that a spreadsheet would run as a formula with a quote, per
- * OWASP CSV-injection guidance. That covers =, +, @, tab, CR, LF, their
- * full-width forms (＝ ＋ ＠), and a non-numeric leading - or －. Plain
+ * OWASP CSV-injection guidance. That covers a leading =, +, @, tab, CR, LF,
+ * their full-width forms (＝ ＋ ＠), and a non-numeric leading - or －. Plain
  * negative numbers such as `-5.2` are left alone.
+ *
+ * Excel in a locale whose list separator is `;` splits each line on `;` and
+ * ignores the commas, and a quote only counts at the start of a field. So the
+ * text after any `;` in a cell can become its own cell. Insert a quote after
+ * each `;` that is followed by a formula trigger, too.
  */
 function neutralizeFormula(value: string): string {
   const isFormulaLike =
-    /^[=+@\t\r\n\uFF1D\uFF0B\uFF20]/.test(value) ||
+    new RegExp(`^${FORMULA_TRIGGER}`).test(value) ||
     (/^[-\uFF0D]/.test(value) && Number.isNaN(Number(value)));
-  return isFormulaLike ? `'${value}` : value;
+  const leading = isFormulaLike ? `'${value}` : value;
+  return leading.replace(SEMICOLON_FORMULA, ";'");
 }
 
 export function escapeCsvValue(value: string): string {
