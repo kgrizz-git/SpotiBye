@@ -26,6 +26,32 @@ function extractUpstreamStatus(error: unknown): number | null {
   return Number.isFinite(status) ? status : null;
 }
 
+/**
+ * Map a SpotifyService failure to a response: Spotify 401 → 401
+ * SPOTIFY_TOKEN_EXPIRED, Spotify 429 → 429 SPOTIFY_RATE_LIMITED, anything
+ * else → 500 with the route's own code.
+ */
+function spotifyErrorResponse(
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  error: unknown,
+  fallback: { code: string; message: string },
+) {
+  const upstreamStatus = extractUpstreamStatus(error);
+  if (upstreamStatus === 401) {
+    return c.json(
+      { error: { code: 'SPOTIFY_TOKEN_EXPIRED', message: 'Spotify access token expired. Please log in again.' } },
+      { status: 401 as ContentfulStatusCode }
+    );
+  }
+  if (upstreamStatus === 429) {
+    return c.json(
+      { error: { code: 'SPOTIFY_RATE_LIMITED', message: 'Spotify API rate limited request. Please retry shortly.' } },
+      { status: 429 as ContentfulStatusCode }
+    );
+  }
+  return c.json({ error: fallback }, { status: 500 as ContentfulStatusCode });
+}
+
 // Apply auth middleware to all routes
 app.use('*', authMiddleware);
 
@@ -90,20 +116,7 @@ app.get('/playlists', async (c) => {
     return c.json({ data: playlists, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get playlists:', error);
-    const upstreamStatus = extractUpstreamStatus(error);
-    if (upstreamStatus === 401) {
-      return c.json(
-        { error: { code: 'SPOTIFY_TOKEN_EXPIRED', message: 'Spotify access token expired. Please log in again.' } },
-        { status: 401 as ContentfulStatusCode }
-      );
-    }
-    if (upstreamStatus === 429) {
-      return c.json(
-        { error: { code: 'SPOTIFY_RATE_LIMITED', message: 'Spotify API rate limited request. Please retry shortly.' } },
-        { status: 429 as ContentfulStatusCode }
-      );
-    }
-    return c.json({ error: { code: 'PLAYLISTS_FETCH_FAILED', message: 'Failed to fetch playlists' } }, { status: 500 as ContentfulStatusCode });
+    return spotifyErrorResponse(c, error, { code: 'PLAYLISTS_FETCH_FAILED', message: 'Failed to fetch playlists' });
   }
 });
 
@@ -140,7 +153,7 @@ app.get(
     return c.json({ data: playlist, meta: { timestamp: new Date().toISOString(), cached: false } });
   } catch (error) {
     console.error('Failed to get playlist:', error);
-    return c.json({ error: { code: 'PLAYLIST_FETCH_FAILED', message: 'Failed to fetch playlist' } }, { status: 500 as ContentfulStatusCode });
+    return spotifyErrorResponse(c, error, { code: 'PLAYLIST_FETCH_FAILED', message: 'Failed to fetch playlist' });
   }
 });
 
@@ -176,7 +189,7 @@ const handleGetPlaylistItems = async (
     return c.json({ data: tracks, meta: { timestamp: new Date().toISOString(), cached: false } });
   } catch (error) {
     console.error('Failed to get playlist tracks:', error);
-    return c.json({ error: { code: 'PLAYLIST_TRACKS_FETCH_FAILED', message: 'Failed to fetch playlist tracks' } }, { status: 500 as ContentfulStatusCode });
+    return spotifyErrorResponse(c, error, { code: 'PLAYLIST_TRACKS_FETCH_FAILED', message: 'Failed to fetch playlist tracks' });
   }
 };
 
@@ -229,7 +242,7 @@ app.get('/tracks/:id', zValidator('param', IdParamSchema), async (c) => {
     return c.json({ data: track, meta: { timestamp: new Date().toISOString() } });
   } catch (error) {
     console.error('Failed to get track:', error);
-    return c.json({ error: { code: 'TRACK_FETCH_FAILED', message: 'Failed to fetch track' } }, { status: 500 as ContentfulStatusCode });
+    return spotifyErrorResponse(c, error, { code: 'TRACK_FETCH_FAILED', message: 'Failed to fetch track' });
   }
 });
 

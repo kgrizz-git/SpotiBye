@@ -10,6 +10,18 @@
 
 ---
 
+## 2026-10-26 — Self-host config helper keeps and validates the production allowlist
+
+PR: #70
+Scope: `scripts/setup-selfhost.py`
+`generate_selfhost_config()` now defaults to the template's `[env.production]` allowlist plus the desktop callback, instead of replacing it. A missing, empty, comma-only, or unreadable inherited allowlist is deny-all, so generation fails rather than widening it. Dry runs patch and validate the template like real writes. The helper is unit-tested but not yet called from `main()`, so this does not change what users run. Internal-only; no CHANGELOG entry.
+
+## 2026-10-26 — Vitest restores stubbed globals after each test
+
+PR: #70
+Scope: `src/backend/vitest.config.ts`
+Set `unstubGlobals: true`, so a `vi.stubGlobal('fetch', ...)` in one test can no longer leak into the next. No test relied on a stub persisting across tests. Internal-only; no CHANGELOG entry.
+
 ## 2026-10-25 — Backend docs audited against code
 
 PR: #69

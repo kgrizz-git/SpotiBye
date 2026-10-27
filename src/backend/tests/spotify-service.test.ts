@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SpotifyService, parseRetryAfter } from '../services/spotify';
+import { SpotifyService, parseRetryAfter, pathSegment } from '../services/spotify';
 
 const artistResponse = (id: string) => ({
   id,
@@ -108,6 +108,64 @@ describe('SpotifyService artist metadata', () => {
       'https://api.spotify.com/v1/artists/artist1',
       expect.any(Object)
     );
+  });
+});
+
+describe('SpotifyService path segments', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('encodes IDs so they cannot traverse to another Spotify endpoint', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ id: 'x', name: 'n', owner: { id: 'o' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new SpotifyService('access-token').getPlaylist('../me');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.spotify.com/v1/playlists/..%2Fme',
+      expect.any(Object)
+    );
+  });
+
+  it.each(['.', '..'])('rejects the dot segment %s without calling Spotify', async (id) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(new SpotifyService('access-token').getPlaylistTracks(id)).rejects.toThrow(
+      'Invalid Spotify ID'
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('leaves ordinary Spotify IDs unchanged', () => {
+    expect(pathSegment('37i9dQZF1DXcBWIGoYBM5M')).toBe('37i9dQZF1DXcBWIGoYBM5M');
+  });
+});
+
+describe('SpotifyService persistent rate limiting', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('throws an HTTP 429 error once retries are exhausted, without a final sleep', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () =>
+      new Response('slow down', { status: 429, headers: { 'Retry-After': '1' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new SpotifyService('access-token');
+    const result = service.getUserPlaylists(50, 0).catch((error: unknown) => error);
+
+    // Two waits between three attempts; no wait after the last one.
+    await vi.advanceTimersByTimeAsync(2000);
+    const error = await result;
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('HTTP 429: slow down');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 

@@ -27,9 +27,9 @@ class TestAuthenticationFlow:
         self.authenticator = BackendAuthenticator(self.backend_client)
 
     def test_spotify_login_initiation(self):
-        auth_url = self.backend_client.initiate_spotify_login(TEST_REDIRECT_URI)
-        assert auth_url, "No auth URL returned"
-        assert auth_url.startswith("http"), "Invalid auth URL format"
+        login_start = self.backend_client.start_spotify_login(TEST_REDIRECT_URI)
+        assert login_start["auth_url"].startswith("http"), "Invalid auth URL format"
+        assert login_start["state"] == TEST_OAUTH_STATE, "No OAuth state returned"
 
     def test_spotify_callback_handling(self):
         token_response = self.backend_client.handle_spotify_callback(

@@ -5,6 +5,8 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    // Undo vi.stubGlobal (e.g. fetch) after each test so stubs cannot leak.
+    unstubGlobals: true,
     typecheck: {
       enabled: true,
       checker: 'tsc',
