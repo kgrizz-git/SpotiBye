@@ -20,6 +20,10 @@ describe('escapeCsvValue', () => {
     expect(escapeCsvValue('line1\nline2')).toBe('"line1\nline2"');
   });
 
+  it('quotes a value containing a semicolon', () => {
+    expect(escapeCsvValue('a;b')).toBe('"a;b"');
+  });
+
   it('quotes a value containing a bare carriage return', () => {
     expect(escapeCsvValue('a\rb')).toBe('"a\rb"');
   });
@@ -30,6 +34,10 @@ describe('escapeCsvValue', () => {
     ['@cmd', "'@cmd"],
     ['-x+1', "'-x+1"],
     ['\t=1', "'\t=1"],
+    ['\uFF1DSUM(A1)', "'\uFF1DSUM(A1)"],
+    ['\uFF0B1', "'\uFF0B1"],
+    ['\uFF20cmd', "'\uFF20cmd"],
+    ['\uFF0D1', "'\uFF0D1"],
   ])('neutralizes the formula-like value %j', (input, expected) => {
     expect(escapeCsvValue(input)).toBe(expected);
   });
@@ -37,6 +45,7 @@ describe('escapeCsvValue', () => {
   it('quotes a neutralized value that also needs CSV quoting', () => {
     expect(escapeCsvValue('=a,b')).toBe(`"'=a,b"`);
     expect(escapeCsvValue('\r=1')).toBe(`"'\r=1"`);
+    expect(escapeCsvValue('\n=1')).toBe(`"'\n=1"`);
   });
 
   it('leaves plain negative numbers alone', () => {

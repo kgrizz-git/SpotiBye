@@ -2,19 +2,22 @@ import type { ExportData, ResumableExportAssemblyState } from './export-types';
 import { getTrackHeaders } from './export-format-helpers';
 
 /**
- * Prefix a cell that a spreadsheet would run as a formula (=, +, @, tab, CR,
- * or a non-numeric leading -) with a quote, per OWASP CSV-injection guidance.
- * Plain negative numbers such as `-5.2` are left alone.
+ * Prefix a cell that a spreadsheet would run as a formula with a quote, per
+ * OWASP CSV-injection guidance. That covers =, +, @, tab, CR, LF, their
+ * full-width forms (＝ ＋ ＠), and a non-numeric leading - or －. Plain
+ * negative numbers such as `-5.2` are left alone.
  */
 function neutralizeFormula(value: string): string {
   const isFormulaLike =
-    /^[=+@\t\r]/.test(value) || (value.startsWith('-') && Number.isNaN(Number(value)));
+    /^[=+@\t\r\n\uFF1D\uFF0B\uFF20]/.test(value) ||
+    (/^[-\uFF0D]/.test(value) && Number.isNaN(Number(value)));
   return isFormulaLike ? `'${value}` : value;
 }
 
 export function escapeCsvValue(value: string): string {
   const safe = neutralizeFormula(value);
-  if (/[",\r\n]/.test(safe)) {
+  // `;` too: Excel uses it as the list separator in many locales.
+  if (/[",;\r\n]/.test(safe)) {
     return `"${safe.replaceAll('"', '""')}"`;
   }
   return safe;
