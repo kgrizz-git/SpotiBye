@@ -4,74 +4,41 @@ import { makeExportData, makeExportTrack } from './helpers/export-data';
 import type { ResumableExportAssemblyState } from '../services/export-types';
 
 describe('escapeCsvValue', () => {
-  it('passes through plain values unchanged', () => {
-    expect(escapeCsvValue('hello')).toBe('hello');
-    expect(escapeCsvValue('123')).toBe('123');
-  });
+  // [why, input, expected output]
+  const cases: Array<[string, string, string]> = [
+    ['plain text', 'hello', 'hello'],
+    ['plain number', '123', '123'],
+    ['negative number', '-5.2', '-5.2'],
+    ['negative integer', '-60', '-60'],
+    ['comma', 'a,b', '"a,b"'],
+    ['semicolon', 'a;b', '"a;b"'],
+    ['double quote', 'say "hi"', '"say ""hi"""'],
+    ['only quotes', '"quoted"', '"""quoted"""'],
+    ['newline', 'line1\nline2', '"line1\nline2"'],
+    ['bare carriage return', 'a\rb', '"a\rb"'],
+    ['leading =', '=SUM(A1:A2)', "'=SUM(A1:A2)"],
+    ['leading +', '+1+1', "'+1+1"],
+    ['leading @', '@cmd', "'@cmd"],
+    ['leading non-numeric -', '-x+1', "'-x+1"],
+    ['leading tab', '\t=1', "'\t=1"],
+    ['leading full-width =', '\uFF1DSUM(A1)', "'\uFF1DSUM(A1)"],
+    ['leading full-width +', '\uFF0B1', "'\uFF0B1"],
+    ['leading full-width @', '\uFF20cmd', "'\uFF20cmd"],
+    ['leading full-width -', '\uFF0D1', "'\uFF0D1"],
+    ['neutralized and quoted', '=a,b', `"'=a,b"`],
+    ['leading CR then =', '\r=1', `"'\r=1"`],
+    ['leading LF then =', '\n=1', `"'\n=1"`],
+    ['= after ;', 'safe;=1+1;tail', `"safe;'=1+1;tail"`],
+    ['+ after ;', 'a;+1', `"a;'+1"`],
+    ['@ after ;', 'a;@cmd', `"a;'@cmd"`],
+    ['non-numeric - after ;', 'a;-x', `"a;'-x"`],
+    ['full-width = after ;', 'a;\uFF1D1', `"a;'\uFF1D1"`],
+    ['number after ;', 'a;-5', '"a;-5"'],
+    ['space before = after ;', 'a; =1', '"a; =1"'],
+  ];
 
-  it('wraps in quotes when value contains a comma', () => {
-    expect(escapeCsvValue('a,b')).toBe('"a,b"');
-  });
-
-  it('wraps in quotes when value contains a double quote', () => {
-    expect(escapeCsvValue('say "hi"')).toBe('"say ""hi"""');
-  });
-
-  it('wraps in quotes when value contains a newline', () => {
-    expect(escapeCsvValue('line1\nline2')).toBe('"line1\nline2"');
-  });
-
-  it.each([
-    ['safe;=1+1;tail', `"safe;'=1+1;tail"`],
-    ['a;+1', `"a;'+1"`],
-    ['a;@cmd', `"a;'@cmd"`],
-    ['a;-x', `"a;'-x"`],
-    ['a;\uFF1D1', `"a;'\uFF1D1"`],
-  ])('neutralizes a formula after a semicolon in %j', (input, expected) => {
+  it.each(cases)('%s', (_why, input, expected) => {
     expect(escapeCsvValue(input)).toBe(expected);
-  });
-
-  it('leaves ordinary text and numbers after a semicolon alone', () => {
-    expect(escapeCsvValue('a;b')).toBe('"a;b"');
-    expect(escapeCsvValue('a;-5')).toBe('"a;-5"');
-    expect(escapeCsvValue('a; =1')).toBe('"a; =1"');
-  });
-
-  it('quotes a value containing a semicolon', () => {
-    expect(escapeCsvValue('a;b')).toBe('"a;b"');
-  });
-
-  it('quotes a value containing a bare carriage return', () => {
-    expect(escapeCsvValue('a\rb')).toBe('"a\rb"');
-  });
-
-  it.each([
-    ['=SUM(A1:A2)', "'=SUM(A1:A2)"],
-    ['+1+1', "'+1+1"],
-    ['@cmd', "'@cmd"],
-    ['-x+1', "'-x+1"],
-    ['\t=1', "'\t=1"],
-    ['\uFF1DSUM(A1)', "'\uFF1DSUM(A1)"],
-    ['\uFF0B1', "'\uFF0B1"],
-    ['\uFF20cmd', "'\uFF20cmd"],
-    ['\uFF0D1', "'\uFF0D1"],
-  ])('neutralizes the formula-like value %j', (input, expected) => {
-    expect(escapeCsvValue(input)).toBe(expected);
-  });
-
-  it('quotes a neutralized value that also needs CSV quoting', () => {
-    expect(escapeCsvValue('=a,b')).toBe(`"'=a,b"`);
-    expect(escapeCsvValue('\r=1')).toBe(`"'\r=1"`);
-    expect(escapeCsvValue('\n=1')).toBe(`"'\n=1"`);
-  });
-
-  it('leaves plain negative numbers alone', () => {
-    expect(escapeCsvValue('-5.2')).toBe('-5.2');
-    expect(escapeCsvValue('-60')).toBe('-60');
-  });
-
-  it('doubles embedded double quotes', () => {
-    expect(escapeCsvValue('"quoted"')).toBe('"""quoted"""');
   });
 });
 

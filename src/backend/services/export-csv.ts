@@ -2,10 +2,10 @@ import type { ExportData, ResumableExportAssemblyState } from './export-types';
 import { getTrackHeaders } from './export-format-helpers';
 
 // A formula trigger: =, +, @, tab, CR, LF, or their full-width forms.
-const FORMULA_TRIGGER = '[=+@\\t\\r\\n\\uFF1D\\uFF0B\\uFF20]';
+const FORMULA_TRIGGER = String.raw`[=+@\t\r\n\uFF1D\uFF0B\uFF20]`;
 
 // A `;` followed by a formula trigger, or by - / － that does not start a number.
-const SEMICOLON_FORMULA = new RegExp(`;(?=${FORMULA_TRIGGER}|[-\\uFF0D](?![\\d.]))`, 'g');
+const SEMICOLON_FORMULA = new RegExp(String.raw`;(?=${FORMULA_TRIGGER}|[-\uFF0D](?![\d.]))`, 'g');
 
 /**
  * Prefix a cell that a spreadsheet would run as a formula with a quote, per
