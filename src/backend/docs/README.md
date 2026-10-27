@@ -98,9 +98,10 @@ Common HTTP statuses:
 - `400` - Bad Request (invalid parameters)
 - `401` - Unauthorized (missing/invalid token, or `AUTH_REQUIRED`)
 - `404` - Not Found (resource doesn't exist)
+- `429` - Spotify kept rate limiting the request after retries (`SPOTIFY_RATE_LIMITED`)
 - `500` - Internal Server Error
 
-The backend has no rate limiting of its own. `services/spotify.ts` absorbs Spotify 429s: it waits for `Retry-After` and retries, then throws `Max retries exceeded` without a status. Routes then return `500`, so the `429` / `SPOTIFY_RATE_LIMITED` responses in `openapi.yaml` are not reachable today.
+The backend has no rate limiting of its own. `429` responses pass Spotify's throttling through after `services/spotify.ts` has retried.
 
 ## Response Formats
 - JSON for API responses, wrapped in `{ "data": ... }`

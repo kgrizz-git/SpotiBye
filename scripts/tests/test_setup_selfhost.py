@@ -536,3 +536,146 @@ def test_open_portal_dry_run_does_not_open_browser() -> None:
     with mock.patch.object(_mod.webbrowser, "open") as opener:
         _mod.open_portal("https://example.com", dry_run=True)
     opener.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Desktop OAuth callback
+# ---------------------------------------------------------------------------
+
+
+def test_spotify_app_steps_name_the_redirect_uri(capsys) -> None:
+    _mod.print_spotify_app_steps()
+    out = capsys.readouterr().out
+    assert "http://127.0.0.1:8080/callback" in out
+    assert "SPOTIBYE_OAUTH_PORT" in out
+
+
+def test_generate_selfhost_config_allows_desktop_callback_by_default(
+    tmp_path: Path,
+) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(SAMPLE_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert _mod.generate_selfhost_config(template, target, {})
+    # The template's web callback is kept, and the desktop callback is added.
+    assert (
+        'vars = { ALLOWED_REDIRECT_URIS = '
+        '"https://app.spotibye.com,http://127.0.0.1:8080/callback" }'
+        in target.read_text()
+    )
+
+
+def test_generate_selfhost_config_warns_without_desktop_callback(
+    tmp_path: Path, capsys
+) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(SAMPLE_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert _mod.generate_selfhost_config(
+        template, target, {}, "https://app.example.com"
+    )
+    assert "http://127.0.0.1:8080/callback is not in" in capsys.readouterr().out
+
+
+def test_with_desktop_callback_does_not_duplicate() -> None:
+    uris = "http://127.0.0.1:8080/callback,https://app.example.com"
+    assert _mod.with_desktop_callback(uris) == uris
+
+
+def test_with_desktop_callback_keeps_an_empty_allowlist_deny_all() -> None:
+    for uris in ("", ",", " , ,", ",,"):
+        assert _mod.with_desktop_callback(uris) is None
+
+
+def test_production_allowlist_reads_the_template() -> None:
+    assert _mod.production_allowlist(SAMPLE_TOML) == "https://app.spotibye.com"
+    assert _mod.production_allowlist('name = "x"\n') is None
+    assert _mod.production_allowlist("not = [valid") is None
+    assert (
+        _mod.production_allowlist("[env.production]\nvars = { ALLOWED_REDIRECT_URIS = 1 }\n")
+        is None
+    )
+
+
+NO_PROD_ALLOWLIST_TOML = """\
+name = "x"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+"""
+
+EMPTY_PROD_ALLOWLIST_TOML = """\
+name = "x"
+
+[env.production]
+vars = { ALLOWED_REDIRECT_URIS = "" }
+"""
+
+
+def test_generate_refuses_to_widen_a_missing_or_empty_allowlist(
+    tmp_path: Path, capsys
+) -> None:
+    for name, body in (("missing", NO_PROD_ALLOWLIST_TOML), ("empty", EMPTY_PROD_ALLOWLIST_TOML)):
+        template = tmp_path / f"{name}.toml"
+        template.write_text(body)
+        target = tmp_path / f"{name}.selfhost.toml"
+        assert not _mod.generate_selfhost_config(template, target, {})
+        assert not target.exists()
+        assert "[FAIL]" in capsys.readouterr().out
+
+
+def test_generate_fails_when_the_production_key_cannot_be_patched(
+    tmp_path: Path, capsys
+) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(NO_PROD_ALLOWLIST_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert not _mod.generate_selfhost_config(
+        template, target, {}, "http://127.0.0.1:8080/callback"
+    )
+    assert not target.exists()
+    assert "could not set ALLOWED_REDIRECT_URIS" in capsys.readouterr().out
+
+
+COMMA_ONLY_PROD_ALLOWLIST_TOML = """\
+name = "x"
+
+[env.production]
+vars = { ALLOWED_REDIRECT_URIS = ",," }
+"""
+
+
+def test_generate_refuses_a_comma_only_allowlist(tmp_path: Path, capsys) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(COMMA_ONLY_PROD_ALLOWLIST_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert not _mod.generate_selfhost_config(template, target, {})
+    assert not target.exists()
+    assert "[FAIL]" in capsys.readouterr().out
+
+
+def test_dry_run_validates_the_patched_template(tmp_path: Path, capsys) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(NO_PROD_ALLOWLIST_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert not _mod.generate_selfhost_config(
+        template, target, {}, "http://127.0.0.1:8080/callback", dry_run=True
+    )
+    assert "could not set ALLOWED_REDIRECT_URIS" in capsys.readouterr().out
+    assert not target.exists()
+
+
+def test_dry_run_succeeds_on_a_valid_template(tmp_path: Path) -> None:
+    template = tmp_path / "wrangler.toml"
+    template.write_text(SAMPLE_TOML)
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert _mod.generate_selfhost_config(template, target, {}, dry_run=True)
+    assert not target.exists()
+
+
+def test_real_write_fails_without_a_template(tmp_path: Path, capsys) -> None:
+    target = tmp_path / "wrangler.selfhost.toml"
+    assert not _mod.generate_selfhost_config(
+        tmp_path / "missing.toml", target, {}, "http://127.0.0.1:8080/callback"
+    )
+    assert "template not found" in capsys.readouterr().out

@@ -339,7 +339,19 @@ paths:
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: >-
+            Missing/invalid JWT or session (see `Unauthorized`), or Spotify
+            rejected the access token (`SPOTIFY_TOKEN_EXPIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Spotify rate-limited the request (`SPOTIFY_RATE_LIMITED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Failed to fetch playlist (`PLAYLIST_FETCH_FAILED`)
           content:
@@ -375,7 +387,19 @@ paths:
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: >-
+            Missing/invalid JWT or session (see `Unauthorized`), or Spotify
+            rejected the access token (`SPOTIFY_TOKEN_EXPIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Spotify rate-limited the request (`SPOTIFY_RATE_LIMITED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Failed to fetch playlist items (`PLAYLIST_TRACKS_FETCH_FAILED`)
           content:
@@ -408,7 +432,19 @@ paths:
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: >-
+            Missing/invalid JWT or session (see `Unauthorized`), or Spotify
+            rejected the access token (`SPOTIFY_TOKEN_EXPIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Spotify rate-limited the request (`SPOTIFY_RATE_LIMITED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Failed to fetch playlist items (`PLAYLIST_TRACKS_FETCH_FAILED`)
           content:
@@ -442,7 +478,19 @@ paths:
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: >-
+            Missing/invalid JWT or session (see `Unauthorized`), or Spotify
+            rejected the access token (`SPOTIFY_TOKEN_EXPIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Spotify rate-limited the request (`SPOTIFY_RATE_LIMITED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Failed to fetch track (`TRACK_FETCH_FAILED`)
           content:

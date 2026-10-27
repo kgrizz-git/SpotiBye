@@ -51,14 +51,14 @@ export class SpotifyService {
   }
 
   async getPlaylist(playlistId: string): Promise<SpotifyPlaylist> {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/playlists/${playlistId}`);
+    const response = await this.fetchWithRetry(`${this.baseUrl}/playlists/${pathSegment(playlistId)}`);
     const rawData = await response.json();
     parseSpotifyResponse<SpotifyPlaylistResponse>(rawData, ['id', 'name', 'owner']);
     return rawData as SpotifyPlaylist;
   }
 
   async getPlaylistTracks(playlistId: string, limit: number = 50, offset: number = 0): Promise<NormalizedPlaylistItemsResponse> {
-    const url = new URL(`${this.baseUrl}/playlists/${playlistId}/items`);
+    const url = new URL(`${this.baseUrl}/playlists/${pathSegment(playlistId)}/items`);
     url.searchParams.set('limit', limit.toString());
     url.searchParams.set('offset', offset.toString());
 
@@ -97,7 +97,7 @@ export class SpotifyService {
   }
 
   async getTrack(trackId: string): Promise<SpotifyTrack> {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/tracks/${trackId}`);
+    const response = await this.fetchWithRetry(`${this.baseUrl}/tracks/${pathSegment(trackId)}`);
     const rawData = await response.json();
     parseSpotifyResponse<SpotifyTrackResponse>(rawData, ['id', 'name', 'artists', 'album']);
     return rawData as SpotifyTrack;
@@ -105,7 +105,7 @@ export class SpotifyService {
 
 
   async getArtist(artistId: string): Promise<SpotifyArtistFull> {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${artistId}`);
+    const response = await this.fetchWithRetry(`${this.baseUrl}/artists/${pathSegment(artistId)}`);
     const rawData = await response.json();
     parseSpotifyResponse<Record<string, unknown>>(rawData, ['id', 'name']);
     return asArtistFull(rawData);
@@ -122,49 +122,49 @@ export class SpotifyService {
 
   private async fetchWithRetry(url: string, retries: number = 3): Promise<Response> {
     for (let i = 0; i < retries; i++) {
+      const isLastAttempt = i === retries - 1;
+      let response: Response;
       try {
-        const response = await fetch(url, {
+        response = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`
           }
         });
-
-        if (response.status === 429) {
-          // Rate limited - wait and retry. `Retry-After` is either an integer
-          // (seconds) or an HTTP-date. NaN would cause a 0ms busy spin.
-          const retryAfter = parseRetryAfter(
-            response.headers.get('Retry-After')
-          );
-          await this.sleep(retryAfter * 1000);
-          continue;
-        }
-
-        if (!response.ok) {
-          // Read the body so diagnostic details (e.g. Spotify's JSON error
-          // message) are not discarded. Non-429 errors are not retried
-          // because (a) 4xx is deterministic and (b) consuming the body
-          // would prevent reading it again on retry.
-          const body = await response.text();
-          throw new Error(`HTTP ${response.status}: ${body}`);
-        }
-
-        return response;
       } catch (error) {
-        // Non-recoverable: 4xx response (or other non-429 failure) was
-        // already thrown with a meaningful message — propagate immediately.
-        if (error instanceof Error && error.message.startsWith('HTTP ')) {
-          throw error;
-        }
-
-        if (i === retries - 1) throw error;
-
-        // Exponential backoff
-        const delay = Math.pow(2, i) * 1000;
-        await this.sleep(delay);
+        // Network failure: exponential backoff, then retry.
+        if (isLastAttempt) throw error;
+        await this.sleep(Math.pow(2, i) * 1000);
+        continue;
       }
+
+      if (response.status === 429 && !isLastAttempt) {
+        // Rate limited - wait and retry. `Retry-After` is either an integer
+        // (seconds) or an HTTP-date. NaN would cause a 0ms busy spin.
+        await this.sleep(parseRetryAfter(response.headers.get('Retry-After')) * 1000);
+        continue;
+      }
+
+      return this.ensureOk(response);
     }
 
     throw new Error('Max retries exceeded');
+  }
+
+  /**
+   * Return a successful response, or throw `HTTP <status>: <body>`.
+   *
+   * Non-429 errors are not retried: 4xx is deterministic, and reading the
+   * body (kept for Spotify's diagnostic message) consumes it. A 429 lands
+   * here only on the last attempt. Routes key on the `HTTP <status>` prefix
+   * (extractUpstreamStatus) to return SPOTIFY_RATE_LIMITED / SPOTIFY_TOKEN_EXPIRED.
+   */
+  private async ensureOk(response: Response): Promise<Response> {
+    if (response.ok) {
+      return response;
+    }
+    const body = await response.text();
+    const detail = response.status === 429 ? body || 'rate limited' : body;
+    throw new Error(`HTTP ${response.status}: ${detail}`);
   }
 
   private sleep(ms: number): Promise<void> {
@@ -193,6 +193,20 @@ export class SpotifyService {
     await Promise.all(workers);
     return results;
   }
+}
+
+/**
+ * Encode a caller-supplied ID as one URL path segment, so a value like
+ * `../me` cannot point the request at a different Spotify endpoint.
+ *
+ * `.` and `..` are rejected outright. Encoding cannot help with them: URL
+ * parsing treats `%2e%2e` as `..` too, and would collapse the path.
+ */
+export function pathSegment(id: string): string {
+  if (id === '.' || id === '..') {
+    throw new Error(`Invalid Spotify ID: ${id}`);
+  }
+  return encodeURIComponent(id);
 }
 
 /**
