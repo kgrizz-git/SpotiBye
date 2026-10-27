@@ -2,28 +2,35 @@ import type { ExportData, ResumableExportAssemblyState } from './export-types';
 import { getTrackHeaders } from './export-format-helpers';
 
 // A formula trigger: =, +, @, tab, CR, LF, or their full-width forms.
-const FORMULA_TRIGGER = String.raw`[=+@\t\r\n\uFF1D\uFF0B\uFF20]`;
-
-// A `;` followed by a formula trigger, or by - / － that does not start a number.
-const SEMICOLON_FORMULA = new RegExp(String.raw`;(?=${FORMULA_TRIGGER}|[-\uFF0D](?![\d.]))`, 'g');
+const LEADING_FORMULA_TRIGGER = /^[=+@\t\r\n\uFF1D\uFF0B\uFF20]/;
 
 /**
- * Prefix a cell that a spreadsheet would run as a formula with a quote, per
- * OWASP CSV-injection guidance. That covers a leading =, +, @, tab, CR, LF,
- * their full-width forms (＝ ＋ ＠), and a non-numeric leading - or －. Plain
- * negative numbers such as `-5.2` are left alone.
+ * True when a spreadsheet would run `segment` as a formula: it starts with a
+ * formula trigger, or with - / － and the whole segment is not a number.
+ */
+function isFormulaLike(segment: string): boolean {
+  return (
+    LEADING_FORMULA_TRIGGER.test(segment) ||
+    (/^[-\uFF0D]/.test(segment) && !Number.isFinite(Number(segment)))
+  );
+}
+
+/**
+ * Prefix formula-like text with a quote, per OWASP CSV-injection guidance.
+ * That covers a leading =, +, @, tab, CR, LF, their full-width forms
+ * (＝ ＋ ＠), and a leading - or － unless the text is a plain number such as
+ * `-5.2`.
  *
  * Excel in a locale whose list separator is `;` splits each line on `;` and
- * ignores the commas, and a quote only counts at the start of a field. So the
- * text after any `;` in a cell can become its own cell. Insert a quote after
- * each `;` that is followed by a formula trigger, too.
+ * ignores the commas, and a quote only counts at the start of a field. So
+ * every `;`-separated segment of a cell can become its own cell. Check each
+ * segment the same way as the start of the cell.
  */
 function neutralizeFormula(value: string): string {
-  const isFormulaLike =
-    new RegExp(`^${FORMULA_TRIGGER}`).test(value) ||
-    (/^[-\uFF0D]/.test(value) && Number.isNaN(Number(value)));
-  const leading = isFormulaLike ? `'${value}` : value;
-  return leading.replace(SEMICOLON_FORMULA, ";'");
+  return value
+    .split(';')
+    .map((segment) => (isFormulaLike(segment) ? `'${segment}` : segment))
+    .join(';');
 }
 
 export function escapeCsvValue(value: string): string {

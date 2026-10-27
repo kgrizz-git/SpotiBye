@@ -34,6 +34,10 @@ describe('escapeCsvValue', () => {
     ['non-numeric - after ;', 'a;-x', `"a;'-x"`],
     ['full-width = after ;', 'a;\uFF1D1', `"a;'\uFF1D1"`],
     ['number after ;', 'a;-5', '"a;-5"'],
+    ['decimal after ;', 'a;-.5', '"a;-.5"'],
+    ['formula starting with a digit after ;', 'safe;-1+2', `"safe;'-1+2"`],
+    ['-Infinity is not a number', '-Infinity', "'-Infinity"],
+    ['formula in a middle segment', 'a;=1;b', `"a;'=1;b"`],
     ['space before = after ;', 'a; =1', '"a; =1"'],
   ];
 
