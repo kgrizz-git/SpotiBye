@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { ExportData, ResumableExportAssemblyState, WorksheetAssemblyData } from './export-types';
-import { formatDuration, getTrackHeaders, sanitizeSheetName, uniquifySheetName } from './export-format-helpers';
+import { formatDuration, getTrackColumns, getTrackHeaders, sanitizeSheetName, uniquifySheetName } from './export-format-helpers';
 
 export function buildWorksheetAssembly(exportData: ExportData, usedSheetNames: Set<string>): WorksheetAssemblyData {
   const headers = getTrackHeaders();
@@ -38,24 +38,7 @@ export async function generateCombinedExcelFileFromAssemblyLite(
 
   for (const worksheet of assemblyState.worksheets) {
     const sheet = workbook.addWorksheet(worksheet.sheet_name);
-    sheet.columns = [
-      { key: 'A', width: 30 },
-      { key: 'B', width: 40 },
-      { key: 'C', width: 40 },
-      { key: 'D', width: 15 },
-      { key: 'E', width: 60 },
-      { key: 'F', width: 12 },
-      { key: 'G', width: 14 },
-      { key: 'H', width: 12 },
-      { key: 'I', width: 12 },
-      { key: 'J', width: 12 },
-      { key: 'K', width: 12 },
-      { key: 'L', width: 16 },
-      { key: 'M', width: 12 },
-      { key: 'N', width: 12 },
-      { key: 'O', width: 12 },
-      { key: 'P', width: 14 },
-    ];
+    sheet.columns = getTrackColumns();
 
     sheet.addRow([worksheet.playlist_name]);
     sheet.addRow([`Created by: ${worksheet.playlist_owner}`]);

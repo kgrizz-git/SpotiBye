@@ -5,6 +5,7 @@ import {
   loadAudioFeaturesMap,
   buildExportTracks,
   toExportFeatures,
+  normalizeIsrc,
   type ReccoBeatsExportFeatures,
 } from '../services/export-tracks';
 import type { SpotifyPlaylistTrackItem } from '../types/spotify';
@@ -42,6 +43,7 @@ const fullAudioFeatures: ReccoBeatsExportFeatures = {
   liveness: 0.2,
   speechiness: 0.05,
   loudness: -5.0,
+  isrc: 'USUG12103683',
 };
 
 const afRow = (spotifyId: string) => ({
@@ -58,6 +60,7 @@ const afRow = (spotifyId: string) => ({
   valence: 0.5,
   key: 0,
   mode: 1,
+  isrc: 'USUG12103683' as string | null,
 });
 
 describe('mapTrackForExport', () => {
@@ -71,6 +74,16 @@ describe('mapTrackForExport', () => {
     expect(result.Key).toBe('C major');
     expect(result.Danceability).toBe(0.8);
     expect(result.Energy).toBe(0.9);
+  });
+
+  it('sets ISRC from the ReccoBeats export features', () => {
+    const result = mapTrackForExport(makeTrack(), fullAudioFeatures);
+    expect(result.ISRC).toBe('USUG12103683');
+  });
+
+  it('leaves ISRC empty rather than N/A when it is unknown', () => {
+    expect(mapTrackForExport(makeTrack(), null).ISRC).toBe('');
+    expect(mapTrackForExport(makeTrack(), { tempo: 100 }).ISRC).toBe('');
   });
 
   it('always sets Time Signature to N/A (ReccoBeats has no time_signature)', () => {
@@ -118,6 +131,31 @@ describe('toExportFeatures', () => {
     expect(mapped.tempo).toBe(120.5);
     expect(mapped.danceability).toBe(0.8);
     expect(mapped).not.toHaveProperty('time_signature');
+  });
+
+  it('maps a null ReccoBeats isrc to undefined', () => {
+    const mapped = toExportFeatures({ ...afRow('track1'), isrc: null });
+    expect(mapped.isrc).toBeUndefined();
+    expect(toExportFeatures(afRow('track1')).isrc).toBe('USUG12103683');
+  });
+});
+
+describe('normalizeIsrc', () => {
+  it('accepts a well-formed ISRC and normalizes case and hyphens', () => {
+    expect(normalizeIsrc('USUG12103683')).toBe('USUG12103683');
+    expect(normalizeIsrc(' us-ug1-21-03683 ')).toBe('USUG12103683');
+  });
+
+  it.each([null, undefined, 12345, {}, '', 'ISRC-track1', '=HYPERLINK("x")', 'USUG1210368'])(
+    'drops %j',
+    (value) => {
+      expect(normalizeIsrc(value)).toBeUndefined();
+    }
+  );
+
+  it('keeps a non-string ISRC out of the export row', () => {
+    const features = toExportFeatures({ ...afRow('track1'), isrc: 42 } as never);
+    expect(features.isrc).toBeUndefined();
   });
 });
 
@@ -192,6 +230,7 @@ describe('buildExportTracks', () => {
     expect(tracks[0].Danceability).toBe(0.8);
     expect(tracks[0].Energy).toBe(0.9);
     expect(tracks[0]['Time Signature']).toBe('N/A');
+    expect(tracks[0].ISRC).toBe('USUG12103683');
   });
 });
 

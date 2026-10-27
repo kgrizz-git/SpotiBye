@@ -27,6 +27,21 @@ export interface ReccoBeatsExportFeatures {
   liveness?: number;
   speechiness?: number;
   loudness?: number;
+  isrc?: string;
+}
+
+// ISRC: 2-letter country, 3-character registrant, 2-digit year, 5-digit designation.
+const ISRC_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/;
+
+/**
+ * Return a well-formed ISRC, or undefined. Cached and live ReccoBeats rows do
+ * not validate `isrc`, so non-strings and malformed values are dropped here
+ * rather than exported as lookup keys.
+ */
+export function normalizeIsrc(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const isrc = value.trim().replaceAll('-', '').toUpperCase();
+  return ISRC_PATTERN.test(isrc) ? isrc : undefined;
 }
 
 export function toExportFeatures(row: ReccoBeatsAudioFeature): ReccoBeatsExportFeatures {
@@ -42,6 +57,7 @@ export function toExportFeatures(row: ReccoBeatsAudioFeature): ReccoBeatsExportF
     liveness: row.liveness,
     speechiness: row.speechiness,
     loudness: row.loudness,
+    isrc: normalizeIsrc(row.isrc),
   };
 }
 
@@ -90,6 +106,9 @@ export function mapTrackForExport(
     Loudness: typeof audioFeatures?.loudness === 'number' ? Number(audioFeatures.loudness.toFixed(1)) : 'N/A',
     // ReccoBeats does not expose time_signature — permanent N/A for export.
     'Time Signature': 'N/A',
+    // Empty, not 'N/A', when unknown: importers such as SpotiByeMatcher treat
+    // any non-empty ISRC as a lookup key.
+    ISRC: audioFeatures?.isrc || '',
   };
 }
 

@@ -35,6 +35,10 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 
 
+## Apple Music Matching
+
+- [ ] Integrate SpotiBye with SpotiByeMatcher so exported playlists can be matched to Apple Music and added to Apple Music playlists — in progress 2026-10-25 (ISRC export column done) · [plan](../exec-plans/active/2026-10-25-spotibye-matcher-integration.md)
+
 ## Code Quality / Tech Debt
 
 - [ ] Fix deprecated `AsyncImage` properties (`allow_stretch`, `keep_ratio`)

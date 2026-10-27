@@ -16,6 +16,7 @@ export interface ExportTrack {
   Speechiness: number | string;
   Loudness: number | string;
   'Time Signature': number | string;
+  ISRC: string;
 }
 
 export interface ExportData {
