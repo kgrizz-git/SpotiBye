@@ -15,7 +15,7 @@ function neutralizeFormula(value: string): string {
 export function escapeCsvValue(value: string): string {
   const safe = neutralizeFormula(value);
   if (/[",\r\n]/.test(safe)) {
-    return `"${safe.replace(/"/g, '""')}"`;
+    return `"${safe.replaceAll('"', '""')}"`;
   }
   return safe;
 }

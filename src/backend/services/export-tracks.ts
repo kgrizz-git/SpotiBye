@@ -40,7 +40,7 @@ const ISRC_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/;
  */
 export function normalizeIsrc(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
-  const isrc = value.trim().replace(/-/g, '').toUpperCase();
+  const isrc = value.trim().replaceAll('-', '').toUpperCase();
   return ISRC_PATTERN.test(isrc) ? isrc : undefined;
 }
 

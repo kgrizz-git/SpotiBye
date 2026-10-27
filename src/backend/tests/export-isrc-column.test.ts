@@ -8,8 +8,10 @@ import { getTrackHeaders } from '../services/export-format-helpers';
 import type { ExportData } from '../services/export-types';
 import { makeExportData, makeExportTrack } from './helpers/export-data';
 
-// One track with a known ISRC, one with none.
+// One track with a known ISRC, one with none. No cover image, so the rich XLSX
+// writer does not try to fetch one over the network.
 const exportData: ExportData = makeExportData({
+  playlist: { ...makeExportData().playlist, cover_image_url: undefined },
   tracks: [makeExportTrack(), makeExportTrack({ Track: 'Track B', ISRC: '' })],
 });
 
