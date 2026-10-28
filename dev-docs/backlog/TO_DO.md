@@ -25,7 +25,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Add focused frontend tests for selection/copy behavior
 - [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations — deferred from the enrichment integration plan above; needs separate UI/caching design (Phase 5 in that plan).
 - [ ] Consolidate `SpotifyService.fetchWithRetry` with `utils/http-retry.ts`'s `createFetchWithRetry` (added for ReccoBeats fetches) so there is one retry/backoff implementation instead of two. Deferred from the enrichment integration plan above.
-- [ ] **Optional:** Backend playlist composition manifest KV (`analysis:playlist:{id}:manifest`, 24h) — deferred from [per-track ReccoBeats cache plan](../exec-plans/active/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md) **B2.5** (skipped for B2 PR; not required for correctness).
+- [ ] **Optional:** Backend playlist composition manifest KV (`analysis:playlist:{id}:manifest`, 24h) — deferred from [per-track ReccoBeats cache plan](../exec-plans/completed/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md) **B2.5** (skipped for B2 PR; not required for correctness).
   - [ ] Store `{ track_ids: unique[], snapshot_id }` when analysis completes or tracks are refreshed
   - [ ] Use manifest for a lightweight online composition check before full paginated track fetch
   - [ ] Invalidate on composition change; fall back to tracks/details fetch when manifest missing (current B2 behavior)
@@ -73,8 +73,8 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Decide what history, issues, and release artifacts must be retained
   - [ ] Document the migration decision before creating a new repository
 
-- [ ] Consider releasing as public open-source with instructions on how users can set up their own backend ([plan](../exec-plans/active/2026-09-15-self-host-guides-and-scripts.md)) — docs + setup script shipped; remaining is the hosted-backend evaluation below
-  - [ ] Evaluate if a hosted backend option should be offered for users who don't want to self-host
+- [ ] Evaluate whether to offer a hosted backend for users who don't want to self-host (self-host docs and setup script shipped; [plan](../exec-plans/completed/2026-09-15-self-host-guides-and-scripts.md))
+- [ ] Finish `scripts/setup-selfhost.py` gaps: network and `wrangler` prereq probes, a live end-to-end success check, and wiring the tested Cloudflare helpers into `main()`
 
 - [ ] Public-repo follow-ups (from the [app-icon and public-repo CI plan](../exec-plans/completed/2026-10-18-app-icon-and-source-launcher.md))
   - [ ] `SECURITY.md` still describes the private-era posture
