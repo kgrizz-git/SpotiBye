@@ -1,7 +1,7 @@
 # Plan: Per-Track ReccoBeats Cache, Auto Enrichment & Refresh Controls
 
 **Date:** 2026-07-12
-**Status:** Active
+**Status:** COMPLETED 2026-10-28 — Track A and Phases B0–B4 shipped. B2.5 (optional playlist manifest) and B5 (optional client-side fetch) are deferred and tracked as `TO_DO.md` items. The success criteria below were not re-run individually at closeout; the B2.6, B3.6 and B4.4 test suites cover them.
 **Contract:** [`dev-docs/reccobeats-api-contract.md`](../../reccobeats-api-contract.md)
 **Backlog:** `dev-docs/backlog/TO_DO.md` → enrichment refresh, export ReccoBeats migration, optional client-side fetch (Phase B5)
 
@@ -298,6 +298,6 @@ curl -sS "https://api.reccobeats.com/v1/track?ids=4cOdK2wGLETKBW3PvgPWoT" | pyth
 
 ## When complete
 
-- [ ] Move this plan to `dev-docs/exec-plans/completed/`
-- [ ] Index in `dev-docs/exec-plans/completed/README.md`
-- [ ] Trim related backlog items in `dev-docs/backlog/TO_DO.md`
+- [x] Move this plan to `dev-docs/exec-plans/completed/`
+- [x] Index in `dev-docs/exec-plans/completed/README.md`
+- [x] Trim related backlog items in `dev-docs/backlog/TO_DO.md` (B2.5 manifest and B5 client-side fetch kept as TO_DO items)

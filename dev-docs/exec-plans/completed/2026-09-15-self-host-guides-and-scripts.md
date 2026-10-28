@@ -1,6 +1,6 @@
 # Plan: Complete Self-Host Guides and Setup Scripting
 
-**Status:** in progress — Phases 1–2 implemented on `feat/self-host-guides-and-scripts`; Phase 3 (verification, reviewers, PR) pending
+**Status:** COMPLETED 2026-10-28 — Phases 1–2 merged in PR #9, with setup-script follow-ups in #67 and #70. The unchecked Phase 2 gaps below (network and `wrangler` prereq probes, live end-to-end success check, Cloudflare flow wiring in `main()`) and the hosted-backend evaluation are tracked as `TO_DO.md` one-liners. Phase 3 checkboxes were not updated when #9 merged.
 **Branch:** `feat/self-host-guides-and-scripts`
 **Created:** 2026-09-15
 **Motivation:** Spotify limits unapproved developer apps to a small number of users, so self-hosting is the supported path until a managed hosted option exists. `docs/self-hosting.md` covers the local path end to end, but the Cloudflare path is a pointer, Spotify-app details are thin, and the interactive setup script from `dev-docs/backlog/TO_DO.md` does not exist yet.

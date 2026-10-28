@@ -1,6 +1,6 @@
 # SpotiBye ↔ SpotiByeMatcher Integration Plan
 
-**Status:** IN PROGRESS (Phase 0 complete; Phases 1–3 are a sketch, not yet scheduled)
+**Status:** Phase 0 complete (ISRC export column shipped in PR #71 on 2026-10-26); Phases 1–3 deferred pending decision on Option A vs B
 
 **Date:** 2026-10-25
 

@@ -10,6 +10,24 @@
 
 ---
 
+## 2026-10-28 — Self-host and per-track ReccoBeats cache plans closed out
+
+PR: #73
+Scope: `dev-docs/exec-plans/`, `dev-docs/backlog/TO_DO.md`, `dev-docs/reccobeats-api-contract.md`
+Both plans had shipped but were still in `active/`. The self-host plan (PR #9) moved to `completed/`; its hosted-backend evaluation and the remaining setup-script gaps became TO_DO one-liners. The per-track ReccoBeats cache plan (Track A, B0–B4) moved to `completed/`; the deferred B2.5 manifest and B5 client-side fetch were already TO_DO items and now link to the completed plan. Documentation-only; no CHANGELOG entry.
+
+## 2026-10-27 — File length pre-commit hook flipped to enforcement mode
+
+PR: #73
+Scope: Pre-commit hook
+Removed `--warn` flag from file-length check hook in `.pre-commit-config.yaml`. Hook shipped in warn mode 2026-07-08; Phase 4B enforcement (originally scheduled for 14-day observation window) now active as of 2026-10-27. All exemptions were made permanent in PR #42 (2026-10-13). Verification: dry run with `--ci` passes on current tree. The hook's former `CHANGELOG.md` Added bullet was removed here, because it is internal tooling.
+
+## 2026-10-27 — Docs harness housekeeping plan formally closed out
+
+PR: #73 (closeout; original work merged in #11)
+Scope: Docs/meta-process
+Plan moved to completed/; acceptance criteria updated post-merge. Phase 4 warn→error flip tied to future release tag remains deferred.
+
 ## 2026-10-26 — Self-host config helper keeps and validates the production allowlist
 
 PR: #70

@@ -18,7 +18,7 @@
 - Multiple audio features endpoint: https://reccobeats.com/docs/apis/get-audio-features
 - Uploaded-audio feature extraction endpoint: https://reccobeats.com/docs/documentation/Analysis/audio-features-extraction
 - Coverage probe script: `scripts/test_reccobeats_coverage.py`
-- Active plan using this contract: [`exec-plans/active/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md`](exec-plans/active/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md)
+- Plan that built on this contract (completed): [`exec-plans/completed/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md`](exec-plans/completed/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md)
 
 ## Base URL And Auth
 
@@ -209,7 +209,7 @@ Use the **audio features lookup** + **track metadata** paths:
 
 ## See Also
 
-- [`exec-plans/active/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md`](exec-plans/active/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md) — per-track cache + hotfix plan (includes this verification)
+- [`exec-plans/completed/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md`](exec-plans/completed/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md) — per-track cache + hotfix plan (includes this verification)
 - [`investigations/2026-07-05-reccobeats-enrichment-gaps.md`](investigations/2026-07-05-reccobeats-enrichment-gaps.md) — historical audit of display/aggregation gaps
 - [`investigations/2026-07-09-reccobeats-enrichment-failure.md`](investigations/2026-07-09-reccobeats-enrichment-failure.md) — Worker egress / reliability
 - [`backlog/TO_DO.md`](backlog/TO_DO.md) — export migration and optional client-side fetch

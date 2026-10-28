@@ -25,7 +25,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Add focused frontend tests for selection/copy behavior
 - [ ] Investigate `GET /v1/track/recommendation` for mood/energy-based track recommendations — deferred from the enrichment integration plan above; needs separate UI/caching design (Phase 5 in that plan).
 - [ ] Consolidate `SpotifyService.fetchWithRetry` with `utils/http-retry.ts`'s `createFetchWithRetry` (added for ReccoBeats fetches) so there is one retry/backoff implementation instead of two. Deferred from the enrichment integration plan above.
-- [ ] **Optional:** Backend playlist composition manifest KV (`analysis:playlist:{id}:manifest`, 24h) — deferred from [per-track ReccoBeats cache plan](../exec-plans/active/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md) **B2.5** (skipped for B2 PR; not required for correctness).
+- [ ] **Optional:** Backend playlist composition manifest KV (`analysis:playlist:{id}:manifest`, 24h) — deferred from [per-track ReccoBeats cache plan](../exec-plans/completed/2026-07-12-per-track-reccobeats-cache-and-enrichment-refresh.md) **B2.5** (skipped for B2 PR; not required for correctness).
   - [ ] Store `{ track_ids: unique[], snapshot_id }` when analysis completes or tracks are refreshed
   - [ ] Use manifest for a lightweight online composition check before full paginated track fetch
   - [ ] Invalidate on composition change; fall back to tracks/details fetch when manifest missing (current B2 behavior)
@@ -37,7 +37,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 
 ## Apple Music Matching
 
-- [ ] Integrate SpotiBye with SpotiByeMatcher so exported playlists can be matched to Apple Music and added to Apple Music playlists — in progress 2026-10-25 (ISRC export column done) · [plan](../exec-plans/active/2026-10-25-spotibye-matcher-integration.md)
+- [ ] Integrate SpotiBye with SpotiByeMatcher so exported playlists can be matched to Apple Music and added to Apple Music playlists — Phase 0 (ISRC export column) done in PR #71; Phases 1-3 (verify handoff, decide matching location, write to Apple Music) deferred pending architecture decision · [plan](../exec-plans/active/2026-10-25-spotibye-matcher-integration.md)
 
 ## Code Quality / Tech Debt
 
@@ -51,7 +51,6 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 - [ ] Architecturally resolve the `src/backend/index.ts` routes/middleware imports (previously masked by a mis-scoped `no-restricted-imports` exemption; interim `**/index.ts` glob in place)
   - [ ] Background: `index.ts` is the Worker entry point and wires `./routes/*` and `./middleware/*` directly. The old `eslint.config.mjs` override `files: ['index.ts']` never matched `src/backend/index.ts`, so these imports were unlinted until a real edit surfaced them.
   - [ ] Decide whether the entry point should keep wiring routes/middleware, or whether route wiring belongs in a dedicated bootstrap module so `index.ts` stays thin; document the intent once decided.
-- [ ] Add a pre-commit hook that checks for code files over 700 lines and doc files over 300 lines and gives a warning unless the file is in an exempted list ([plan](../exec-plans/active/2026-07-07-file-length-pre-commit-hook-plan.md))
 - [ ] Apply the shared test helpers (`tests/helpers/spotify.ts`, `tests/helpers/hono.ts`) to `export*.test.ts` — same `track()`/request-builder patterns, not on the Sonar hotspot list yet
 
 ## Repo Cleanup & DevOps
@@ -60,7 +59,7 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
 - [ ] Remove stale references to `src/spotify_playlist_exporter_v2/`
 - [ ] Audit duplicate code candidates and create focused follow-up plans
 - [ ] Review outdated docs now that `docs/` and `dev-docs/` are split
-- [ ] Docs harness housekeeping: TO_DO active-only lifecycle, maintenance log, same-PR gardening ([plan](../exec-plans/active/2026-09-19-docs-harness-housekeeping.md)) — **in progress 2026-09-19**
+- [ ] Flip `scripts/check_docs_hygiene.py` from warn-only to errors at the next release tag, and record the tag in [the docs harness plan](../exec-plans/completed/2026-09-19-docs-harness-housekeeping.md) (deferred Phase 4 item)
 - [ ] Harden `scripts/check_docs_hygiene.py` `check_plan_backlinks` to parse Markdown link destinations and require a normalized `exec-plans/active/<name>.md` destination instead of substring `stem in todo` (CodeRabbit PR #11 follow-up; no false-positive exists today)
 - [ ] Extend `scripts/check_docs_hygiene.py` with a `completed/README.md` sync check mirroring `check_active_readme_sync` (CodeRabbit PR #11 follow-up; needs a distinct link pattern for categorized tables and `superpowers/`/`superseded/` subdirs)
 - [ ] Audit `.gitignore` vs tracked files (venv, node_modules, caches, IDE, `.DS_Store`; verify `.github/` and `.skills/` tracking)
@@ -74,8 +73,8 @@ Active work only; no completed items retained here. Done = log + delete: user-vi
   - [ ] Decide what history, issues, and release artifacts must be retained
   - [ ] Document the migration decision before creating a new repository
 
-- [ ] Consider releasing as public open-source with instructions on how users can set up their own backend ([plan](../exec-plans/active/2026-09-15-self-host-guides-and-scripts.md)) — docs + setup script shipped; remaining is the hosted-backend evaluation below
-  - [ ] Evaluate if a hosted backend option should be offered for users who don't want to self-host
+- [ ] Evaluate whether to offer a hosted backend for users who don't want to self-host (self-host docs and setup script shipped; [plan](../exec-plans/completed/2026-09-15-self-host-guides-and-scripts.md))
+- [ ] Finish `scripts/setup-selfhost.py` gaps: network and `wrangler` prereq probes, a live end-to-end success check, and wiring the tested Cloudflare helpers into `main()`
 
 - [ ] Public-repo follow-ups (from the [app-icon and public-repo CI plan](../exec-plans/completed/2026-10-18-app-icon-and-source-launcher.md))
   - [ ] `SECURITY.md` still describes the private-era posture
