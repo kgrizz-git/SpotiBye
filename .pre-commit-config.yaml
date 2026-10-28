@@ -94,11 +94,11 @@ repos:
         always_run: true
         stages: [pre-commit]
 
-      # File length check (Phase A: warn-only; switches to enforcement after 14 days)
+      # File length check (enforcement mode since 2026-10-27)
       - id: file-length-check
         name: File length check
-        description: Warn when .py/.md files exceed line limits (700 code / 1000 test / 300 doc)
-        entry: .venv/bin/python scripts/check_file_lengths.py --exemptions scripts/file-length-exemptions.json --warn
+        description: Block commits when .py/.md files exceed line limits (700 code / 1000 test / 300 doc)
+        entry: .venv/bin/python scripts/check_file_lengths.py --exemptions scripts/file-length-exemptions.json
         language: system
         files: \.(py|md)$
         types: [file]

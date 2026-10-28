@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-19
 **Branch:** `chore/docs-harness-housekeeping`
-**Status:** draft v5 — all reviewer rounds incorporated (kilo + agy plan reviews; cursor + kilo branch reviews; kimi pre-PR review; deepseek PR review)
+**Status:** SHIPPED in PR #11 on 2026-09-19 — Phases 0–3, 5, 6 complete; Phase 4 warn→error flip deferred to the next release tag (tracked in `TO_DO.md`). Closed out 2026-10-27.
 **Backlog link:** `dev-docs/backlog/TO_DO.md` → "Docs harness housekeeping" entry under Repo Cleanup & DevOps (added 2026-09-19; this plan satisfies its own asymmetric plan↔TODO rule)
 
 ## Goal
@@ -55,8 +55,8 @@ Bash stays for the existing `check-repo-structure.sh` checks. All new cross-file
 
 - [x] New Python check warns (then errors after transition): `[x].*done` lingering in `TO_DO.md`; `active/*.md` fully-checked but not moved; `active/README.md` disagreeing with `active/*.md`; duplicate `###` headings in CHANGELOG Unreleased; active plan with no backlink in `TO_DO.md`; generated `CLAUDE.md` out of sync with its source (see Phase 6).
 - [x] New Python check warns: active plan untouched >30d; `in progress` TODO >14d without update; `dev-docs` file unindexed; `investigations/` note >60d without triage decision.
-- [ ] Record the release tag in the plan when the warn-only gate flips to error (future: next release tag after merge).
-- [ ] Rule carve-out: a plan satisfies the asymmetric linkage if its TO_DO entry is authored anywhere inside the same bootstrap PR that creates it (as this plan did) — authorship ordering, not a CI-evaluated sequence.
+- [ ] Record the release tag in the plan when the warn-only gate flips to error (future: next release tag after merge). — deferred; no tag cut since PR #11 (latest `v0.2.3`, 2026-05-07). Tracked as a `TO_DO.md` one-liner.
+- [x] Rule carve-out: a plan satisfies the asymmetric linkage if its TO_DO entry is authored anywhere inside the same bootstrap PR that creates it (as this plan did) — authorship ordering, not a CI-evaluated sequence. — recorded in the Bootstrap exemption section above.
 
 ## Phase 6 — Entry-point canonicalization (generate, don't point)
 
@@ -79,10 +79,10 @@ Agy review overturned the v3 pointer model: Claude auto-loads `CLAUDE.md` but do
 
 ## Acceptance
 
-- [ ] `TO_DO.md` contains zero `[x]` completed items; header states active-only + log-then-delete.
-- [ ] `maintenance-log.md` exists, indexed, and seeded; guidance forbids internal entries in CHANGELOG.
-- [ ] Same-PR DoD + asymmetric plan↔TODO rule present in `AGENTS.md`, the hook-compiled full-fidelity `CLAUDE.md`, and `dev-docs/README.md` (pointer).
-- [ ] Structure script enforces (or warns with release-tagged flip) the new rules; garden pass clears baseline drift.
-- [ ] Entry-point canonicalization done: `CLAUDE.md` carries a generated-file marker and is byte-identical to hook output (in-sync check green); no hand-maintained paraphrased duplicates of plan/changelog/verify rules; generator trim policy (if any) recorded in hook config.
-- [ ] Kilo reviewer feedback addressed: (1) self-violation fixed via TO_DO entry + authorship-ordering carve-out, (2) bootstrap exemption recorded as one-time ordering, (3) Phase 0 persists to a baseline note with cross-reference table, (4) CHANGELOG merge strategy specified, (5) enforcement gaps enumerated against current script lines, (6) CLAUDE.md audit step added, (7) maintenance-log schema + seed specified, (8) warn→error gate tied to next release tag.
-- [ ] Agy reviewer feedback addressed: (1) pointer model replaced with hook-compiled generation (eager context preserved), (2) new cross-file checks assigned to Python not bash, (3) bootstrap carve-out reworded as authorship ordering, not a CI-evaluated sequence.
+- [x] `TO_DO.md` contains zero `[x]` completed items; header states active-only + log-then-delete. (Confirmed post-merge)
+- [x] `maintenance-log.md` exists, indexed, and seeded; guidance forbids internal entries in CHANGELOG. (Confirmed post-merge)
+- [x] Same-PR DoD + asymmetric plan↔TODO rule present in `AGENTS.md`, the hook-compiled full-fidelity `CLAUDE.md`, and `dev-docs/README.md` (pointer). (Confirmed post-merge)
+- [x] Structure script enforces (or warns with release-tagged flip) the new rules; garden pass clears baseline drift. (check_docs_hygiene.py exists, Phase 4 warn→error flip deferred to future release tag)
+- [x] Entry-point canonicalization done: `CLAUDE.md` carries a generated-file marker and is byte-identical to hook output (in-sync check green); no hand-maintained paraphrased duplicates of plan/changelog/verify rules; generator trim policy (if any) recorded in hook config. (Confirmed post-merge: compile_claude_md.py hook exists)
+- [x] Kilo reviewer feedback addressed: (1) self-violation fixed via TO_DO entry + authorship-ordering carve-out, (2) bootstrap exemption recorded as one-time ordering, (3) Phase 0 persists to a baseline note with cross-reference table, (4) CHANGELOG merge strategy specified, (5) enforcement gaps enumerated against current script lines, (6) CLAUDE.md audit step added, (7) maintenance-log schema + seed specified, (8) warn→error gate tied to next release tag.
+- [x] Agy reviewer feedback addressed: (1) pointer model replaced with hook-compiled generation (eager context preserved), (2) new cross-file checks assigned to Python not bash, (3) bootstrap carve-out reworded as authorship ordering, not a CI-evaluated sequence.
