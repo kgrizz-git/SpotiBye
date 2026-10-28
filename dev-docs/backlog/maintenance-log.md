@@ -12,13 +12,13 @@
 
 ## 2026-10-27 — File length pre-commit hook flipped to enforcement mode
 
-PR: n/a (TODO hygiene cleanup branch)
+PR: #72
 Scope: Pre-commit hook
 Removed `--warn` flag from file-length check hook in `.pre-commit-config.yaml`. Hook shipped in warn mode 2026-07-08; Phase 4B enforcement (originally scheduled for 14-day observation window) now active as of 2026-10-27. All exemptions were made permanent in PR #42 (2026-10-13). Verification: dry run with `--ci` passes on current tree.
 
 ## 2026-10-27 — Docs harness housekeeping plan formally closed out
 
-PR: #11 (original merge)
+PR: #72 (closeout; original work merged in #11)
 Scope: Docs/meta-process
 Plan moved to completed/; acceptance criteria updated post-merge. Phase 4 warn→error flip tied to future release tag remains deferred.
 
