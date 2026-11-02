@@ -1,0 +1,10 @@
+# GHSA-g3hv-75wg-m249: minimatch globparts-amplification DoS. Fixed only in
+# 11.0.1, with no backport to the 3.x/5.x lines. Dev copies (eslint,
+# typescript-eslint) are overridden to ^11 in package.json. The remaining
+# 3.1.5/5.1.9 copies come from exceljs -> archiver (glob@7, readdir-glob),
+# which cannot load minimatch 11. SpotiBye never feeds user input to these
+# glob paths, so the DoS is not reachable. Re-check when exceljs updates.
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-02-01
+reason = "Only unpatchable transitive copies via exceljs/archiver remain; no user-controlled glob patterns reach them."
