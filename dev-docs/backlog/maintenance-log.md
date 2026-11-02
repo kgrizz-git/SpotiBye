@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-11-01 — OSV minimatch advisory resolved for dev deps, suppressed for exceljs
+
+PR: #74
+Scope: `src/backend/package.json`, `src/backend/osv-scanner.toml`
+GHSA-g3hv-75wg-m249 (minimatch DoS, fixed only in 11.0.1) failed the scheduled Security Scan. Nested overrides move eslint and typescript-eslint to minimatch ^11. The exceljs → archiver copies (3.1.5, 5.1.9) cannot take v11 and are ignored until 2027-02-01 with a reason. No user-visible change.
+
 ## 2026-10-28 — Self-host and per-track ReccoBeats cache plans closed out
 
 PR: #73
