@@ -67,7 +67,7 @@ jobs:
           (success() || failure()) && (github.event_name == 'pull_request' ||
           (github.event_name == 'push' && !github.event.forced &&
           github.event.before != '0000000000000000000000000000000000000000'))
-        uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9
+        uses: trufflesecurity/trufflehog@ea68ca03c865c5f324e86e849ced20ed3cf9dbbb
         with:
           path: ./
           base: ${{ github.event_name == 'push' && github.event.before || github.event.repository.default_branch }}
@@ -85,7 +85,7 @@ jobs:
           github.event_name == 'workflow_dispatch' || (github.event_name == 'push' &&
           (github.event.forced ||
           github.event.before == '0000000000000000000000000000000000000000')))
-        uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9
+        uses: trufflesecurity/trufflehog@ea68ca03c865c5f324e86e849ced20ed3cf9dbbb
         with:
           path: ./
           extra_args: --debug --only-verified --exclude-paths .trufflehog-exclude.txt
@@ -115,7 +115,7 @@ jobs:
 
       - name: Set up Python
         if: success() || failure()
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           # zizmor (installed below) requires Python >=3.11.
           python-version: '3.13'
@@ -150,7 +150,7 @@ jobs:
       - name: IaC Security Check (Checkov)
         id: checkov
         if: (success() || failure()) && hashFiles('src/backend/wrangler.toml') != ''
-        uses: bridgecrewio/checkov-action@29be5868bfa968f099ae80169f61f42887494b8f
+        uses: bridgecrewio/checkov-action@45edc9d8856b664db2ec251f5f8632361f0a67aa
         with:
           directory: src/backend/
           framework: cloudformation,terraform
