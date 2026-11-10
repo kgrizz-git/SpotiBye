@@ -24,7 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 development = [
     "black",
-    "ruff==0.15.20",
+    "ruff==0.17.3",
     "basedpyright>=1.39.6",
     "bandit[toml]>=1.7.8",
     "pip-audit>=2.7.0",
