@@ -10,6 +10,13 @@
 
 ---
 
+## 2026-11-21 — Vite dev-server RCE advisory and stale dependency suppressions cleared
+
+PR: #79
+Scope: `src/backend/package.json`, `src/backend/package-lock.json`, `src/backend/osv-scanner.toml`
+AIKIDO-2026-137384 / GHSA-p4f5-76q4-ffq7 (Vite dev-server code injection via crafted `__vite-browser-external:` IDs; affected 8.3.0–8.3.6) flagged the transitive dev-only `vite` 8.3.5 that vitest pulls in. A top-level override moves it to 8.3.8 (fixed in 8.3.7), which also brings rolldown 1.2.16 → 1.2.19; the Vite 8 fix ships in the bundled Rolldown. SpotiBye never runs a Vite dev server, so the advisory was not reachable.
+The same pass bumps `hono` ^4.13.16 → ^4.13.19 (upstream had already taken 4.13.16 for the five moderate hono advisories) and removes `src/backend/osv-scanner.toml`. osv-scanner reported its only entry, GHSA-g3hv-75wg-m249, as unused: the advisory was revised on 2026-11-04 to affect minimatch 7.0.0–11.0.0, and the remaining 3.1.5/5.1.9 copies under exceljs → archiver sit below that range. No user-visible change.
+
 ## 2026-11-01 — OSV minimatch advisory resolved for dev deps, suppressed for exceljs
 
 PR: #74
