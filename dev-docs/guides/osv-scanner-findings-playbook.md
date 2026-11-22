@@ -114,7 +114,7 @@ Rules for suppression entries:
 - **Always set `ignoreUntil`.** Open-ended suppressions accrete. Default to a 30-day window; revisit before expiry.
 - **Always write a specific `reason`.** Not "doesn't apply" — name the code path, attack surface, or usage restriction that makes it non-exploitable.
 - **Re-evaluate on each Dependabot bump.** Often a parent update silently fixes the underlying advisory and the suppression can be deleted.
-- **Track in CHANGELOG.** Adding or removing a suppression is a security-policy change; note it under `### Changed` or `### Fixed`.
+- **Track the change.** Adding or removing a suppression is a security-policy change: record it in `dev-docs/backlog/maintenance-log.md` with the advisory ID, affected range, and rationale. Use `CHANGELOG.md` only when the change is user-visible, per the [AGENTS.md Changelog Rule](../../AGENTS.md#changelog-rule).
 
 When the suppression expires, either re-justify with a fresh `ignoreUntil` and updated reasoning, or move to option 1/2/3 if upstream has since shipped a fix.
 
@@ -126,7 +126,7 @@ When the suppression expires, either re-justify with a fresh `ignoreUntil` and u
 2. **Backend**: `cd src/backend && npm run build && npm run test:run && npm run lint`. All must pass.
 3. **Lockfile audit**: `cd src/backend && npm audit` must report 0 vulnerabilities.
 4. **CI**: after merge, watch the next weekly scheduled run (or trigger `workflow_dispatch` on `main`) and confirm it goes green. The Security Scan job in `security.yml` is the source of truth — the pre-push hook only covers what's in your local checkout path.
-5. **CHANGELOG**: any user-visible bump or suppression gets a `### Fixed` or `### Changed` entry per the repo Changelog Rule.
+5. **Tracking**: record internal-only dependency or suppression changes in `dev-docs/backlog/maintenance-log.md`; use `CHANGELOG.md` only for user-visible changes, per the [AGENTS.md Changelog Rule](../../AGENTS.md#changelog-rule).
 
 ---
 
